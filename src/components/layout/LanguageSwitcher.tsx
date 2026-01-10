@@ -5,6 +5,7 @@ import { useLocale } from "next-intl";
 import { useRouter, usePathname } from "@/i18n/routing";
 import { Globe, Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { setCookie } from "@/lib/utils/cookies";
 import { locales, localeNames, localeFlags, type Locale } from "@/config/i18n";
 
 interface LanguageSwitcherProps {
@@ -49,7 +50,7 @@ export function LanguageSwitcher({ variant = "solid" }: LanguageSwitcherProps) {
 
   const handleLocaleChange = (newLocale: Locale) => {
     // Store locale preference in cookie (expires in 1 year)
-    document.cookie = `NEXT_LOCALE=${newLocale};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
+    setCookie("NEXT_LOCALE", newLocale, 60 * 60 * 24 * 365);
     router.replace(pathname, { locale: newLocale });
     setIsOpen(false);
   };
