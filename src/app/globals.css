@@ -6,8 +6,17 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-playfair);
   --font-mono: var(--font-geist-mono);
+
+  /* Brand Colors */
+  --color-forest-green: var(--forest-green);
+  --color-warm-oak: var(--warm-oak);
+  --color-warm-cream: var(--warm-cream);
+  --color-charcoal: var(--charcoal);
+
+  /* Sidebar */
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -16,11 +25,15 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+
+  /* Charts */
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+
+  /* UI */
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -37,6 +50,8 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
+  /* Radius */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -48,71 +63,88 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+
+  /* Timber International Brand Colors */
+  --forest-green: #1B4332;
+  --warm-oak: #8B5A2B;
+  --warm-cream: #FAF6F1;
+  --charcoal: #2D3436;
+
+  /* Theme - Light Mode (Timber International branding) */
+  --background: #FAF6F1;
+  --foreground: #2D3436;
+  --card: #FFFFFF;
+  --card-foreground: #2D3436;
+  --popover: #FFFFFF;
+  --popover-foreground: #2D3436;
+  --primary: #1B4332;
+  --primary-foreground: #FFFFFF;
+  --secondary: #FAF6F1;
+  --secondary-foreground: #1B4332;
+  --muted: #F0EBE4;
+  --muted-foreground: #636E72;
+  --accent: #8B5A2B;
+  --accent-foreground: #FFFFFF;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --border: #E5DFD7;
+  --input: #E5DFD7;
+  --ring: #1B4332;
+
+  /* Charts */
+  --chart-1: #1B4332;
+  --chart-2: #8B5A2B;
+  --chart-3: #2D3436;
+  --chart-4: #636E72;
+  --chart-5: #A8B2B8;
+
+  /* Sidebar */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #2D3436;
+  --sidebar-primary: #1B4332;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F0EBE4;
+  --sidebar-accent-foreground: #1B4332;
+  --sidebar-border: #E5DFD7;
+  --sidebar-ring: #1B4332;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  /* Dark mode - Timber International branding */
+  --background: #1A1A1A;
+  --foreground: #FAF6F1;
+  --card: #2D3436;
+  --card-foreground: #FAF6F1;
+  --popover: #2D3436;
+  --popover-foreground: #FAF6F1;
+  --primary: #4A9D6E;
+  --primary-foreground: #FFFFFF;
+  --secondary: #3D4447;
+  --secondary-foreground: #FAF6F1;
+  --muted: #3D4447;
+  --muted-foreground: #A8B2B8;
+  --accent: #B8845A;
+  --accent-foreground: #FFFFFF;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --border: #3D4447;
+  --input: #3D4447;
+  --ring: #4A9D6E;
+
+  /* Charts */
+  --chart-1: #4A9D6E;
+  --chart-2: #B8845A;
+  --chart-3: #FAF6F1;
+  --chart-4: #A8B2B8;
+  --chart-5: #636E72;
+
+  /* Sidebar */
+  --sidebar: #2D3436;
+  --sidebar-foreground: #FAF6F1;
+  --sidebar-primary: #4A9D6E;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #3D4447;
+  --sidebar-accent-foreground: #FAF6F1;
+  --sidebar-border: #3D4447;
+  --sidebar-ring: #4A9D6E;
 }
 
 @layer base {
@@ -120,6 +152,18 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+}
+
+/* Typography utilities */
+.font-heading {
+  font-family: var(--font-playfair), serif;
+}
+
+.font-body {
+  font-family: var(--font-inter), sans-serif;
 }
