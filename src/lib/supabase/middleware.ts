@@ -68,6 +68,13 @@ export async function updateSession(request: NextRequest) {
   ) {
     const url = request.nextUrl.clone()
     url.pathname = '/admin/login'
+
+    // Check if user had a session cookie (indicates expired session)
+    const hadSession = request.cookies.getAll().some(c => c.name.includes('auth-token'))
+    if (hadSession) {
+      url.searchParams.set('message', 'session_expired')
+    }
+
     return NextResponse.redirect(url)
   }
 
