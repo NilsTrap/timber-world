@@ -1,0 +1,115 @@
+# generated: 2026-01-10
+# project: Timber-International
+# project_key: timber-international
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-01-10
+project: Timber-International
+project_key: timber-international
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Project Foundation & Core Infrastructure
+  epic-1: done
+  1-1-initialize-nextjs-project-with-core-dependencies: done
+  1-2-configure-supabase-database-and-initial-schema: done
+  1-3-implement-admin-authentication: done
+  1-4-create-core-layout-components: done
+  1-5-set-up-internationalization-infrastructure: done
+  epic-1-retrospective: optional
+
+  # Epic 2: Immersive Homepage & Production Journey
+  epic-2: in-progress
+  2-1-build-homepage-hero-section: done
+  2-2-create-production-journey-scroll-container: done
+  2-3-implement-journeystage-component: backlog
+  2-4-populate-8-production-journey-stages: backlog
+  2-5-add-journey-completion-ctas: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Product Catalog & Discovery
+  epic-3: backlog
+  3-1-create-product-catalog-page-layout: backlog
+  3-2-implement-productfilter-component: backlog
+  3-3-build-products-api-and-data-fetching: backlog
+  3-4-implement-producttable-with-pricing-display: backlog
+  3-5-add-product-selection-for-quote: backlog
+  3-6-implement-responsive-catalog-layout: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Quote Request System
+  epic-4: backlog
+  4-1-create-quote-request-page-layout: backlog
+  4-2-build-quote-request-form: backlog
+  4-3-implement-dual-quote-path-stock-vs-custom: backlog
+  4-4-integrate-ai-chatbot-for-conversational-quotes: backlog
+  4-5-submit-quote-and-send-notifications: backlog
+  4-6-display-quote-confirmation-with-response-timeline: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Content Pages & Multi-Language Support
+  epic-5: backlog
+  5-1-create-industry-resources-page: backlog
+  5-2-build-wood-species-and-quality-content: backlog
+  5-3-create-contact-page: backlog
+  5-4-complete-translation-files-for-all-languages: backlog
+  5-5-implement-language-switcher-functionality: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Admin Content Management
+  epic-6: in-progress
+  6-1-create-admin-dashboard-and-navigation: ready-for-dev
+  6-2-build-csv-upload-for-inventory-and-pricing: ready-for-dev
+  6-3-implement-data-validation-and-anomaly-detection: ready-for-dev
+  6-4-create-review-and-confirm-workflow: ready-for-dev
+  6-5-enable-manual-product-corrections: ready-for-dev
+  epic-6-retrospective: optional
+
+  # Epic 7: Admin Analytics Dashboard
+  epic-7: in-progress
+  7-1-integrate-vercel-analytics: ready-for-dev
+  7-2-build-analytics-dashboard-page: ready-for-dev
+  7-3-display-visitor-and-geographic-metrics: ready-for-dev
+  7-4-show-engagement-and-conversion-metrics: ready-for-dev
+  7-5-enable-time-period-comparison: ready-for-dev
+  epic-7-retrospective: optional
+
+  # Epic 8: Internal Quote Management
+  epic-8: in-progress
+  8-1-build-quote-request-queue: ready-for-dev
+  8-2-create-quote-detail-view: ready-for-dev
+  8-3-implement-quote-response-sending: ready-for-dev
+  8-4-add-acknowledgment-messages: ready-for-dev
+  8-5-implement-status-tracking-and-follow-ups: ready-for-dev
+  epic-8-retrospective: optional
