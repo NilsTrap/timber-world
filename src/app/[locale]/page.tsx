@@ -1,5 +1,5 @@
-import { useTranslations } from "next-intl";
 import { setRequestLocale } from "next-intl/server";
+import { HeroSection } from "@/components/features/home";
 
 type Props = {
   params: Promise<{ locale: string }>;
@@ -9,22 +9,19 @@ export default async function HomePage({ params }: Props) {
   const { locale } = await params;
   setRequestLocale(locale);
 
-  return <HomeContent />;
-}
-
-function HomeContent() {
-  const t = useTranslations("home");
-
   return (
-    <div className="container mx-auto px-4 py-16">
-      <section className="text-center">
-        <h1 className="text-4xl font-bold md:text-5xl lg:text-6xl">
-          {t("heroSlogan")}
-        </h1>
-        <p className="mt-6 text-lg text-muted-foreground md:text-xl">
-          {t("heroDescription")}
+    <>
+      {/* Negative margin to offset layout padding and make hero full-screen */}
+      <div className="-mt-16 md:-mt-20">
+        <HeroSection />
+      </div>
+
+      {/* Placeholder for content below the hero - will be expanded in future stories */}
+      <section className="container mx-auto px-4 py-16">
+        <p className="text-center text-muted-foreground">
+          {/* Content below hero will be added in subsequent stories */}
         </p>
       </section>
-    </div>
+    </>
   );
 }

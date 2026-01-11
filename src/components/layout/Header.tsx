@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { usePathname } from "@/i18n/routing";
 import { Link } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
 import { siteConfig } from "@/config/site";
@@ -8,13 +9,24 @@ import { Button } from "@/components/ui/button";
 import { Navigation } from "./Navigation";
 import { MobileMenu } from "./MobileMenu";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { useScrolledPastHero } from "@/hooks/useScrolledPastHero";
 
 interface HeaderProps {
   variant?: "transparent" | "solid";
 }
 
-export function Header({ variant = "solid" }: HeaderProps) {
+export function Header({ variant: propVariant }: HeaderProps) {
   const t = useTranslations("nav");
+  const pathname = usePathname();
+  const scrolledPast = useScrolledPastHero();
+
+  // On homepage, start with transparent and switch to solid after scrolling
+  const isHomepage = pathname === "/";
+  const variant = isHomepage
+    ? scrolledPast
+      ? "solid"
+      : "transparent"
+    : propVariant || "solid";
 
   return (
     <header
