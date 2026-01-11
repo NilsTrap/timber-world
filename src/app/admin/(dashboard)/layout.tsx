@@ -5,7 +5,7 @@ import { AdminSidebar } from '@/components/admin/AdminSidebar'
 // Force dynamic rendering - this layout requires authentication
 export const dynamic = 'force-dynamic'
 
-export default async function AdminLayout({
+export default async function AdminDashboardLayout({
   children,
 }: {
   children: React.ReactNode
