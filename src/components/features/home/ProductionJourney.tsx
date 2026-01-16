@@ -72,18 +72,21 @@ export function ProductionJourney() {
             t(`journey.${STAGE_KEYS[currentStage - 1]}`)}
       </div>
 
-      <JourneyProgressIndicator
-        currentStage={currentStage}
-        total={8}
-        onStageClick={scrollToStage}
-      />
+      {/* Progress indicator - only visible when a journey stage is in view */}
+      {currentStage > 0 && (
+        <JourneyProgressIndicator
+          currentStage={currentStage}
+          total={8}
+          onStageClick={scrollToStage}
+        />
+      )}
 
       {/* Journey stages with full-screen backgrounds */}
       {STAGE_KEYS.map((stageKey, i) => (
         <JourneyStage
           key={i + 1}
           stageNumber={i + 1}
-          imageFallback={`/images/journey/${stageKey}.svg`}
+          imageFallback={`/images/journey/${stageKey}.jpg`}
           headline={t(`journey.${stageKey}`)}
           subtext={t(`journey.${stageKey}Description`)}
           altText={t("journey.stageAlt", {

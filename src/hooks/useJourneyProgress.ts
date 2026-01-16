@@ -39,14 +39,23 @@ export function useJourneyProgress(): JourneyProgress {
     // Observe individual stages with 50% threshold
     const stageObserver = new IntersectionObserver(
       (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const stageNum = parseInt(
-              entry.target.getAttribute("data-stage") || "0"
-            );
-            setCurrentStage(stageNum);
+        // Check if any stage is intersecting
+        const intersectingEntry = entries.find((entry) => entry.isIntersecting);
+
+        if (intersectingEntry) {
+          const stageNum = parseInt(
+            intersectingEntry.target.getAttribute("data-stage") || "0"
+          );
+          setCurrentStage(stageNum);
+        } else {
+          // Check if all observed stages are above viewport (scrolled back up)
+          const allAbove = entries.every(
+            (entry) => entry.boundingClientRect.top > 0
+          );
+          if (allAbove) {
+            setCurrentStage(0);
           }
-        });
+        }
       },
       { threshold: 0.5 }
     );
