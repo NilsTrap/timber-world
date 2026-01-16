@@ -43,7 +43,11 @@
       "qualityControlDescription": "Ingen kompromiss på kvalitet",
       "delivery": "Levering",
       "deliveryDescription": "Tillit og pålitelighet over hele verden",
-      "stageAlt": "Produksjonssteg {number}: {name}"
+      "stageAlt": "Produksjonssteg {number}: {name}",
+      "ctaHeadline": "Klar til å oppleve forskjellen?",
+      "ctaSubtext": "Oppdag våre premium eikeprodukter eller be om et tilbud for prosjektet ditt.",
+      "viewProducts": "Se produkter",
+      "requestQuote": "Be om tilbud"
     }
   },
   "footer": {

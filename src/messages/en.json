@@ -43,7 +43,11 @@
       "qualityControlDescription": "Zero compromise on quality",
       "delivery": "Delivery",
       "deliveryDescription": "Trust and reliability worldwide",
-      "stageAlt": "Production stage {number}: {name}"
+      "stageAlt": "Production stage {number}: {name}",
+      "ctaHeadline": "Ready to Experience the Difference?",
+      "ctaSubtext": "Discover our premium oak products or get a custom quote for your project.",
+      "viewProducts": "View Products",
+      "requestQuote": "Request Quote"
     }
   },
   "footer": {

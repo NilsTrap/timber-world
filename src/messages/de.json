@@ -43,7 +43,11 @@
       "qualityControlDescription": "Keine Kompromisse bei Qualität",
       "delivery": "Lieferung",
       "deliveryDescription": "Vertrauen und Zuverlässigkeit weltweit",
-      "stageAlt": "Produktionsstufe {number}: {name}"
+      "stageAlt": "Produktionsstufe {number}: {name}",
+      "ctaHeadline": "Bereit, den Unterschied zu erleben?",
+      "ctaSubtext": "Entdecken Sie unsere Premium-Eichenprodukte oder fordern Sie ein Angebot für Ihr Projekt an.",
+      "viewProducts": "Produkte ansehen",
+      "requestQuote": "Angebot anfordern"
     }
   },
   "footer": {

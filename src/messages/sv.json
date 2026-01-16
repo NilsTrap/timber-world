@@ -43,7 +43,11 @@
       "qualityControlDescription": "Inga kompromisser på kvalitet",
       "delivery": "Leverans",
       "deliveryDescription": "Förtroende och pålitlighet världen över",
-      "stageAlt": "Produktionssteg {number}: {name}"
+      "stageAlt": "Produktionssteg {number}: {name}",
+      "ctaHeadline": "Redo att uppleva skillnaden?",
+      "ctaSubtext": "Upptäck våra premium ekprodukter eller begär en offert för ditt projekt.",
+      "viewProducts": "Visa produkter",
+      "requestQuote": "Begär offert"
     }
   },
   "footer": {

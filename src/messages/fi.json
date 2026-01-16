@@ -43,7 +43,11 @@
       "qualityControlDescription": "Ei kompromisseja laadusta",
       "delivery": "Toimitus",
       "deliveryDescription": "Luottamus ja luotettavuus maailmanlaajuisesti",
-      "stageAlt": "Tuotantovaihe {number}: {name}"
+      "stageAlt": "Tuotantovaihe {number}: {name}",
+      "ctaHeadline": "Valmis kokemaan eron?",
+      "ctaSubtext": "Tutustu premium-tammituotteisiimme tai pyydä räätälöity tarjous projektiisi.",
+      "viewProducts": "Näytä tuotteet",
+      "requestQuote": "Pyydä tarjous"
     }
   },
   "footer": {

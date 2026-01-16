@@ -43,7 +43,11 @@
       "qualityControlDescription": "Geen compromissen op kwaliteit",
       "delivery": "Levering",
       "deliveryDescription": "Vertrouwen en betrouwbaarheid wereldwijd",
-      "stageAlt": "Productiefase {number}: {name}"
+      "stageAlt": "Productiefase {number}: {name}",
+      "ctaHeadline": "Klaar om het verschil te ervaren?",
+      "ctaSubtext": "Ontdek onze premium eikenproducten of vraag een offerte aan voor uw project.",
+      "viewProducts": "Bekijk producten",
+      "requestQuote": "Offerte aanvragen"
     }
   },
   "footer": {

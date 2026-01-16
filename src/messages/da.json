@@ -43,7 +43,11 @@
       "qualityControlDescription": "Nul kompromis på kvalitet",
       "delivery": "Levering",
       "deliveryDescription": "Tillid og pålidelighed verden over",
-      "stageAlt": "Produktionsfase {number}: {name}"
+      "stageAlt": "Produktionsfase {number}: {name}",
+      "ctaHeadline": "Klar til at opleve forskellen?",
+      "ctaSubtext": "Opdag vores premium egeprodukter eller anmod om et tilbud til dit projekt.",
+      "viewProducts": "Se produkter",
+      "requestQuote": "Anmod om tilbud"
     }
   },
   "footer": {

@@ -43,7 +43,11 @@
       "qualityControlDescription": "Sin compromisos en calidad",
       "delivery": "Entrega",
       "deliveryDescription": "Confianza y fiabilidad mundial",
-      "stageAlt": "Etapa de producción {number}: {name}"
+      "stageAlt": "Etapa de producción {number}: {name}",
+      "ctaHeadline": "¿Listo para experimentar la diferencia?",
+      "ctaSubtext": "Descubre nuestros productos de roble premium o solicita un presupuesto para tu proyecto.",
+      "viewProducts": "Ver productos",
+      "requestQuote": "Solicitar presupuesto"
     }
   },
   "footer": {

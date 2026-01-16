@@ -4,3 +4,4 @@ export { ProductionJourney } from "./ProductionJourney";
 export { ProductionJourneyWithErrorBoundary } from "./ProductionJourneyWithErrorBoundary";
 export { JourneyProgressIndicator } from "./JourneyProgressIndicator";
 export { JourneyStage } from "./JourneyStage";
+export { JourneyCompletionCTA } from "./JourneyCompletionCTA";

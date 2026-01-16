@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useJourneyProgress } from "@/hooks/useJourneyProgress";
 import { JourneyProgressIndicator } from "./JourneyProgressIndicator";
 import { JourneyStage } from "./JourneyStage";
+import { JourneyCompletionCTA } from "./JourneyCompletionCTA";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 // Translation keys for stage names (matches i18n keys in messages/*.json)
@@ -96,6 +97,9 @@ export function ProductionJourney() {
           priority={i === 0}
         />
       ))}
+
+      {/* CTA section after journey completion */}
+      <JourneyCompletionCTA />
     </section>
   );
 }
