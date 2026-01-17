@@ -132,9 +132,9 @@ export function JourneyStage({
         </div>
       )}
 
-      {/* Gradient Overlay */}
+      {/* Gradient Overlay (z-35 to appear above gallery z-30 but below text z-40) */}
       <div
-        className="absolute inset-0 z-10 pointer-events-none"
+        className="absolute inset-0 z-[35] pointer-events-none"
         style={{
           background:
             "linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 30%, transparent 60%)",
@@ -142,9 +142,9 @@ export function JourneyStage({
         aria-hidden="true"
       />
 
-      {/* Content text - at bottom */}
+      {/* Content text - at bottom (z-40 to appear above gallery which is z-30) */}
       <div
-        className={`absolute inset-x-0 bottom-0 z-20 flex flex-col items-center justify-end pb-24 px-6 text-center pointer-events-none ${
+        className={`absolute inset-x-0 bottom-0 z-40 flex flex-col items-center justify-end pb-24 px-6 text-center pointer-events-none ${
           reducedMotion ? "" : "transition-all duration-[400ms] ease-out"
         } ${
           isInView || reducedMotion
