@@ -520,7 +520,7 @@ So that **I can follow the story from forest to finished product**.
 **When** the visitor scrolls down
 **Then** the page transitions smoothly into the production journey section
 **And** the journey contains 8 distinct stages displayed as full-screen (100vh) sections
-**And** a progress indicator shows current position (e.g., "3 of 8" or dot navigation)
+~~**And** a progress indicator shows current position (e.g., "3 of 8" or dot navigation)~~ **[REMOVED 2026-01-17]** - Removed for cleaner visual design
 **And** scroll behavior is smooth with appropriate easing
 **And** the navigation fades out during downward scroll for immersion
 **And** scrolling up brings the navigation back

@@ -14,7 +14,7 @@ So that **I can follow the story from forest to finished product**.
 
 2. **Given** the journey section is displayed, **Then** the journey contains 8 distinct stages displayed as full-screen (100vh) sections
 
-3. **Given** the journey section is displayed, **Then** a progress indicator shows current position (e.g., "3 of 8" or dot navigation)
+3. ~~**Given** the journey section is displayed, **Then** a progress indicator shows current position (e.g., "3 of 8" or dot navigation)~~ **[REMOVED]** - Progress indicator was removed per user decision (2026-01-17) for cleaner visual design
 
 4. **Given** a visitor is scrolling, **Then** scroll behavior is smooth with appropriate easing
 
@@ -36,16 +36,17 @@ So that **I can follow the story from forest to finished product**.
   - [x] Export from `src/components/features/home/index.ts`
   - [x] Import and render in homepage below HeroSection
 
-- [x] Task 2: Create JourneyProgressIndicator Component (AC: #3)
-  - [x] Create `src/components/features/home/JourneyProgressIndicator.tsx`
-  - [x] Display as fixed-position dot navigation on right side
-  - [x] Show 8 dots, highlight current stage (filled vs. semi-transparent)
-  - [x] Include stage counter text "3 of 8" below dots (hidden on mobile)
-  - [x] Style: white/cream dots with opacity for inactive, full opacity for active
-  - [x] Position fixed, z-20, right-8, centered vertically
-  - [x] Export from barrel file
+- [x] ~~Task 2: Create JourneyProgressIndicator Component (AC: #3)~~ **[REMOVED 2026-01-17]**
+  - ~~[x] Create `src/components/features/home/JourneyProgressIndicator.tsx`~~
+  - ~~[x] Display as fixed-position dot navigation on right side~~
+  - ~~[x] Show 8 dots, highlight current stage (filled vs. semi-transparent)~~
+  - ~~[x] Include stage counter text "3 of 8" below dots (hidden on mobile)~~
+  - ~~[x] Style: white/cream dots with opacity for inactive, full opacity for active~~
+  - ~~[x] Position fixed, z-20, right-8, centered vertically~~
+  - ~~[x] Export from barrel file~~
+  - **Note:** Component was removed per user decision for cleaner visual design. File deleted, export removed from barrel file.
 
-- [x] Task 3: Implement Scroll Position Detection (AC: #3, #5, #6)
+- [x] Task 3: Implement Scroll Position Detection (AC: #5, #6)
   - [x] Create `src/hooks/useJourneyProgress.ts` hook
   - [x] Use IntersectionObserver to track which stage is visible
   - [x] Return `{ currentStage: number, isInJourney: boolean }`
@@ -91,10 +92,11 @@ So that **I can follow the story from forest to finished product**.
   - [x] These will be replaced by JourneyStage components in Story 2-3
   - [x] Structure: `<section id="stage-1" className="h-screen snap-start">...</section>`
 
-- [x] Task 9: Add i18n for Progress Indicator (AC: #3)
-  - [x] Add translation key `home.journeyProgress` with pattern "{current} of {total}"
-  - [x] Add to all 8 locale message files
-  - [x] Use `useTranslations('home')` in JourneyProgressIndicator
+- [x] ~~Task 9: Add i18n for Progress Indicator (AC: #3)~~ **[REMOVED 2026-01-17]**
+  - ~~[x] Add translation key `home.journeyProgress` with pattern "{current} of {total}"~~
+  - ~~[x] Add to all 8 locale message files~~
+  - ~~[x] Use `useTranslations('home')` in JourneyProgressIndicator~~
+  - **Note:** Progress indicator was removed per user decision. i18n keys remain in message files but are no longer used by any component.
 
 - [x] Task 10: Integrate into Homepage (AC: #1)
   - [x] Update `src/app/[locale]/page.tsx`
@@ -111,7 +113,7 @@ So that **I can follow the story from forest to finished product**.
 ```
 src/components/features/home/
   ProductionJourney.tsx         # Container for all 8 stages
-  JourneyProgressIndicator.tsx  # Fixed position dot/counter display
+  # JourneyProgressIndicator.tsx  # [REMOVED 2026-01-17] - Progress indicator removed for cleaner design
   index.ts                      # Updated barrel exports
 ```
 
@@ -582,12 +584,13 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 |------|--------|--------|
 | 2026-01-11 | Enhanced story with detailed implementation patterns from Story 2-1 learnings | Claude |
 | 2026-01-11 | Implemented production journey scroll container with all 10 tasks | Claude |
+| 2026-01-17 | **REMOVED** JourneyProgressIndicator component per user decision for cleaner visual design. Deleted file, removed export from barrel file, updated AC #3 and related tasks as deprecated. | Claude |
 
 ### File List
 
 **Created:**
 - `src/components/features/home/ProductionJourney.tsx` - Main journey container with 8 stages
-- `src/components/features/home/JourneyProgressIndicator.tsx` - Fixed-position dot navigation
+- ~~`src/components/features/home/JourneyProgressIndicator.tsx`~~ - **[DELETED 2026-01-17]** Fixed-position dot navigation removed for cleaner design
 - `src/hooks/useJourneyProgress.ts` - IntersectionObserver-based stage tracking hook
 - `src/hooks/useScrollDirection.ts` - Scroll direction detection hook (useSyncExternalStore)
 
