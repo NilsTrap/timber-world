@@ -1,6 +1,6 @@
 # Story 2.6: Implement Horizontal Gallery for Journey Stages
 
-Status: review
+Status: done
 
 ## Story
 

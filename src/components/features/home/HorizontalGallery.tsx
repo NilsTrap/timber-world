@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
@@ -29,15 +29,6 @@ type HorizontalGalleryProps = {
 
 /**
  * HorizontalGallery - A swipeable horizontal image gallery for journey stages.
- *
- * Features:
- * - Touch swipe support on mobile/tablet
- * - Click/drag support on desktop
- * - Left/right arrow navigation
- * - Dot pagination indicators
- * - Keyboard navigation (arrow keys)
- * - Reduced motion support
- * - Full accessibility (ARIA carousel pattern)
  */
 export function HorizontalGallery({
   images,
@@ -48,61 +39,180 @@ export function HorizontalGallery({
   const t = useTranslations("home");
   const reducedMotion = useReducedMotion();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const galleryRef = useRef<HTMLDivElement>(null);
 
-  // Minimum swipe distance to trigger navigation (pixels)
-  const minSwipeDistance = 50;
+  // Track drag state
+  const dragState = useRef({
+    isDragging: false,
+    startX: 0,
+    currentX: 0,
+  });
+
+  // Debounce wheel events
+  const wheelTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // Add non-passive event listeners for wheel and touchmove to enable preventDefault
+  useEffect(() => {
+    const element = galleryRef.current;
+    if (!element) return;
+
+    const handleWheelNative = (e: WheelEvent) => {
+      // Always prevent horizontal scrolling to stop browser back/forward gesture
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Only navigate if threshold met and not debounced
+        if (Math.abs(e.deltaX) > 20 && !wheelTimeout.current) {
+          if (e.deltaX > 0) {
+            setCurrentIndex((prev) => Math.min(prev + 1, images.length - 1));
+          } else {
+            setCurrentIndex((prev) => Math.max(prev - 1, 0));
+          }
+
+          wheelTimeout.current = setTimeout(() => {
+            wheelTimeout.current = null;
+          }, 300);
+        }
+      }
+    };
+
+    const handleTouchMoveNative = (e: TouchEvent) => {
+      if (!dragState.current.isDragging) return;
+      const touch = e.touches[0];
+      if (touch) {
+        const deltaX = Math.abs(touch.clientX - dragState.current.startX);
+        if (deltaX > 10) {
+          e.preventDefault();
+        }
+        dragState.current.currentX = touch.clientX;
+      }
+    };
+
+    element.addEventListener("wheel", handleWheelNative, { passive: false });
+    element.addEventListener("touchmove", handleTouchMoveNative, { passive: false });
+
+    return () => {
+      element.removeEventListener("wheel", handleWheelNative);
+      element.removeEventListener("touchmove", handleTouchMoveNative);
+    };
+  }, [images.length]);
 
   const goToNext = useCallback(() => {
-    if (currentIndex < images.length - 1) {
-      setCurrentIndex((prev) => prev + 1);
-    }
-  }, [currentIndex, images.length]);
+    setCurrentIndex((prev) => Math.min(prev + 1, images.length - 1));
+  }, [images.length]);
 
   const goToPrevious = useCallback(() => {
-    if (currentIndex > 0) {
-      setCurrentIndex((prev) => prev - 1);
-    }
-  }, [currentIndex]);
+    setCurrentIndex((prev) => Math.max(prev - 1, 0));
+  }, []);
 
   const goToIndex = useCallback((index: number) => {
     setCurrentIndex(index);
   }, []);
 
-  // Touch handlers for swipe
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0]?.clientX ?? null);
+  // Check if event target is a button
+  const isButtonClick = (target: EventTarget | null): boolean => {
+    if (!target || !(target instanceof HTMLElement)) return false;
+    return target.closest("button") !== null;
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0]?.clientX ?? null);
+  // Touch handlers for swipe (mobile)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (isButtonClick(e.target)) return;
+    const touch = e.touches[0];
+    if (touch) {
+      dragState.current = {
+        isDragging: true,
+        startX: touch.clientX,
+        currentX: touch.clientX,
+      };
+    }
+  };
+
+  const handleTouchMove = () => {
+    // Touch move is handled by native event listener for preventDefault support
   };
 
   const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
+    if (!dragState.current.isDragging) return;
+    const { startX, currentX } = dragState.current;
+    const distance = startX - currentX;
+    const minSwipeDistance = 30; // Reduced for easier swiping
 
-    if (isLeftSwipe) {
+    if (distance > minSwipeDistance) {
       goToNext();
-    } else if (isRightSwipe) {
+    } else if (distance < -minSwipeDistance) {
       goToPrevious();
     }
+
+    dragState.current.isDragging = false;
+  };
+
+  // Mouse handlers for desktop drag/swipe
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Focus the gallery for keyboard navigation
+    galleryRef.current?.focus();
+
+    if (isButtonClick(e.target)) return;
+    e.preventDefault(); // Prevent text selection
+    dragState.current = {
+      isDragging: true,
+      startX: e.clientX,
+      currentX: e.clientX,
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!dragState.current.isDragging) return;
+    dragState.current.currentX = e.clientX;
+  };
+
+  const handleMouseUp = () => {
+    if (!dragState.current.isDragging) return;
+    const { startX, currentX } = dragState.current;
+    const distance = startX - currentX;
+    const minSwipeDistance = 30; // Reduced for easier swiping
+
+    if (distance > minSwipeDistance) {
+      goToNext();
+    } else if (distance < -minSwipeDistance) {
+      goToPrevious();
+    }
+
+    dragState.current.isDragging = false;
+  };
+
+  const handleMouseLeave = () => {
+    dragState.current.isDragging = false;
   };
 
   // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowRight") {
       e.preventDefault();
+      e.stopPropagation();
       goToNext();
     } else if (e.key === "ArrowLeft") {
       e.preventDefault();
+      e.stopPropagation();
       goToPrevious();
     }
+  };
+
+  // Button click handlers with stopPropagation
+  const handlePrevClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    goToPrevious();
+  };
+
+  const handleNextClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    goToNext();
+  };
+
+  const handleDotClick = (e: React.MouseEvent, index: number) => {
+    e.stopPropagation();
+    goToIndex(index);
   };
 
   // Don't render gallery controls if only 1 image
@@ -134,10 +244,15 @@ export function HorizontalGallery({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className={`relative w-full h-full outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 ${className}`}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+      style={{ touchAction: "pan-y", overscrollBehaviorX: "contain" }}
+      className={`relative w-full h-full outline-none focus-visible:ring-4 focus-visible:ring-white/50 focus-visible:ring-inset cursor-grab active:cursor-grabbing ${className}`}
     >
       {/* Images container */}
-      <div className="relative w-full h-full overflow-hidden">
+      <div className="relative w-full h-full overflow-hidden select-none">
         {images.map((image, index) => (
           <div
             key={index}
@@ -150,10 +265,11 @@ export function HorizontalGallery({
               src={image.src}
               alt={image.alt}
               fill
-              className="object-cover"
+              className="object-cover pointer-events-none"
               sizes="100vw"
               priority={index === 0}
               unoptimized={image.src.startsWith("http")}
+              draggable={false}
             />
           </div>
         ))}
@@ -165,68 +281,64 @@ export function HorizontalGallery({
       </div>
 
       {/* Left Arrow */}
-      <button
-        onClick={goToPrevious}
-        disabled={isAtStart}
-        aria-label={t("journey.previousImage")}
-        className={`absolute left-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/50 hover:bg-black/70 text-white ${
-          reducedMotion ? "" : "transition-all duration-200"
-        } ${
-          isAtStart
-            ? "opacity-0 pointer-events-none"
-            : "opacity-100 hover:scale-110"
-        } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white`}
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={2}
-          stroke="currentColor"
-          className="w-6 h-6"
-          aria-hidden="true"
+      {!isAtStart && (
+        <button
+          type="button"
+          onClick={handlePrevClick}
+          aria-label={t("journey.previousImage")}
+          className={`absolute left-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/50 hover:bg-black/70 text-white cursor-pointer ${
+            reducedMotion ? "" : "transition-all duration-200 hover:scale-110"
+          } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white`}
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M15.75 19.5L8.25 12l7.5-7.5"
-          />
-        </svg>
-      </button>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={2}
+            stroke="currentColor"
+            className="w-6 h-6"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15.75 19.5L8.25 12l7.5-7.5"
+            />
+          </svg>
+        </button>
+      )}
 
       {/* Right Arrow */}
-      <button
-        onClick={goToNext}
-        disabled={isAtEnd}
-        aria-label={t("journey.nextImage")}
-        className={`absolute right-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/50 hover:bg-black/70 text-white ${
-          reducedMotion ? "" : "transition-all duration-200"
-        } ${
-          isAtEnd
-            ? "opacity-0 pointer-events-none"
-            : "opacity-100 hover:scale-110"
-        } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white`}
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={2}
-          stroke="currentColor"
-          className="w-6 h-6"
-          aria-hidden="true"
+      {!isAtEnd && (
+        <button
+          type="button"
+          onClick={handleNextClick}
+          aria-label={t("journey.nextImage")}
+          className={`absolute right-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/50 hover:bg-black/70 text-white cursor-pointer ${
+            reducedMotion ? "" : "transition-all duration-200 hover:scale-110"
+          } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white`}
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M8.25 4.5l7.5 7.5-7.5 7.5"
-          />
-        </svg>
-      </button>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={2}
+            stroke="currentColor"
+            className="w-6 h-6"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M8.25 4.5l7.5 7.5-7.5 7.5"
+            />
+          </svg>
+        </button>
+      )}
 
       {/* Counter */}
       {showCounter && (
-        <div className="absolute top-4 right-4 z-30 px-3 py-1 rounded-full bg-black/50 text-white text-sm font-medium">
+        <div className="absolute top-4 right-4 z-30 px-3 py-1 rounded-full bg-black/50 text-white text-sm font-medium pointer-events-none">
           {t("journey.imageOf", { current: currentIndex + 1, total: images.length })}
         </div>
       )}
@@ -236,10 +348,11 @@ export function HorizontalGallery({
         {images.map((_, index) => (
           <button
             key={index}
-            onClick={() => goToIndex(index)}
+            type="button"
+            onClick={(e) => handleDotClick(e, index)}
             aria-label={t("journey.goToImage", { number: index + 1 })}
             aria-current={index === currentIndex ? "true" : undefined}
-            className={`w-2.5 h-2.5 rounded-full ${
+            className={`w-2.5 h-2.5 rounded-full cursor-pointer ${
               reducedMotion ? "" : "transition-all duration-200"
             } ${
               index === currentIndex
