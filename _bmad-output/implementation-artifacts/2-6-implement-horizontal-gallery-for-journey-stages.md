@@ -257,15 +257,14 @@ Add to all locale files in `home.journey`:
 
 ## File List
 
-**To Create:**
-- `src/components/ui/HorizontalGallery.tsx` - Gallery component with navigation
-- `src/components/ui/index.ts` - Export barrel (if not exists, modify)
-- `public/images/journey/{stage}/` - Subfolders for additional images per stage
+**Created:**
+- `src/components/features/home/HorizontalGallery.tsx` - Gallery component with navigation, swipe, keyboard support
 
-**To Modify:**
-- `src/components/features/home/JourneyStage.tsx` - Add galleryImages prop support
+**Modified:**
+- `src/components/features/home/JourneyStage.tsx` - Add galleryImages prop support, integrate HorizontalGallery
 - `src/components/features/home/ProductionJourney.tsx` - Pass gallery images to stages
-- `src/messages/en.json` - Add gallery i18n keys
+- `src/components/features/home/index.ts` - Export HorizontalGallery and GalleryImage type
+- `src/messages/en.json` - Add gallery i18n keys (previousImage, nextImage, imageOf, goToImage)
 - `src/messages/fi.json` - Add gallery i18n keys
 - `src/messages/sv.json` - Add gallery i18n keys
 - `src/messages/no.json` - Add gallery i18n keys
@@ -282,7 +281,12 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Completion Notes List
 
-(To be filled during implementation)
+- Created HorizontalGallery component with full swipe, arrow, keyboard, and accessibility support
+- Integrated with JourneyStage - gallery renders when `galleryImages` prop has items
+- Added gap-based gesture detection (40ms threshold) for trackpad swipe consistency
+- Added sliding transition (500ms ease-out) for smooth image changes
+- All 10 Acceptance Criteria implemented and verified
+- i18n keys added to all 8 locale files
 
 ### Change Log
 
@@ -294,3 +298,27 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 | 2026-01-16 | Added i18n translations to all 8 locales | Claude |
 | 2026-01-16 | Integrated with JourneyStage, added placeholder images for Sawmill/Elements/CNC/Finishing | Claude |
 | 2026-01-16 | Build passed, status review | Claude |
+| 2026-01-19 | **CODE REVIEW** Fixed 3 medium issues: M1-corrected File List path, M2/M3-extracted magic numbers to constants (GAP_THRESHOLD_MS, DELTA_THRESHOLD, MIN_SWIPE_DISTANCE) | Claude |
+
+## Code Review (2026-01-19)
+
+**Reviewer:** Claude Opus 4.5 (Adversarial Code Review)
+
+### Issues Found & Fixed
+
+| ID | Severity | Issue | Resolution |
+|----|----------|-------|------------|
+| M1 | Medium | File List showed wrong path (`src/components/ui/`) | Corrected to actual path `src/components/features/home/` |
+| M2 | Medium | Magic numbers for thresholds (40, 5) not extracted | Added constants: `GAP_THRESHOLD_MS`, `DELTA_THRESHOLD` |
+| M3 | Medium | Duplicate `minSwipeDistance = 30` in two functions | Extracted to `MIN_SWIPE_DISTANCE` constant |
+
+### Files Modified
+
+- `src/components/features/home/HorizontalGallery.tsx` - Added named constants for thresholds
+- `_bmad-output/implementation-artifacts/2-6-implement-horizontal-gallery-for-journey-stages.md` - Fixed File List, added Completion Notes
+
+### Verification
+
+- Build passes: Yes
+- All MEDIUM issues resolved: Yes
+- Story status: done

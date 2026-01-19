@@ -27,6 +27,11 @@ type HorizontalGalleryProps = {
   galleryLabel?: string;
 };
 
+// Gallery navigation constants
+const GAP_THRESHOLD_MS = 40; // Gap between events to detect new gesture
+const DELTA_THRESHOLD = 5; // Minimum delta to trigger image change
+const MIN_SWIPE_DISTANCE = 30; // Minimum swipe distance in pixels
+
 /**
  * HorizontalGallery - A swipeable horizontal image gallery for journey stages.
  */
@@ -73,12 +78,12 @@ export function HorizontalGallery({
         lastWheelTimeRef.current = now;
 
         // Gap detected = new gesture, allow new image move
-        if (timeSinceLastEvent > 40) {
+        if (timeSinceLastEvent > GAP_THRESHOLD_MS) {
           hasMovedRef.current = false;
         }
 
         // Move image on first significant delta of each gesture
-        if (!hasMovedRef.current && Math.abs(e.deltaX) > 5) {
+        if (!hasMovedRef.current && Math.abs(e.deltaX) > DELTA_THRESHOLD) {
           hasMovedRef.current = true;
           if (e.deltaX > 0) {
             setCurrentIndex((prev) => Math.min(prev + 1, images.length - 1));
@@ -152,11 +157,10 @@ export function HorizontalGallery({
     if (!dragState.current.isDragging) return;
     const { startX, currentX } = dragState.current;
     const distance = startX - currentX;
-    const minSwipeDistance = 30; // Reduced for easier swiping
 
-    if (distance > minSwipeDistance) {
+    if (distance > MIN_SWIPE_DISTANCE) {
       goToNext();
-    } else if (distance < -minSwipeDistance) {
+    } else if (distance < -MIN_SWIPE_DISTANCE) {
       goToPrevious();
     }
 
@@ -191,11 +195,10 @@ export function HorizontalGallery({
     if (!dragState.current.isDragging) return;
     const { startX, currentX } = dragState.current;
     const distance = startX - currentX;
-    const minSwipeDistance = 30; // Reduced for easier swiping
 
-    if (distance > minSwipeDistance) {
+    if (distance > MIN_SWIPE_DISTANCE) {
       goToNext();
-    } else if (distance < -minSwipeDistance) {
+    } else if (distance < -MIN_SWIPE_DISTANCE) {
       goToPrevious();
     }
 
