@@ -11,6 +11,8 @@ import { HorizontalGallery, type GalleryImage } from "./HorizontalGallery";
 type JourneyStageProps = {
   /** Stage number (1-8) */
   stageNumber: number;
+  /** Total number of stages */
+  totalStages: number;
   /** Optional path to micro-video (WebM format preferred) */
   videoSrc?: string;
   /** Optional path to MP4 fallback (defaults to videoSrc with .mp4 extension) */
@@ -32,9 +34,11 @@ type JourneyStageProps = {
 /**
  * JourneyStage - A full-screen production journey stage with background media,
  * gradient overlay, and scroll-triggered content animations.
+ * Uses stacking cards effect where each stage slides over the previous.
  */
 export function JourneyStage({
   stageNumber,
+  totalStages,
   videoSrc,
   videoSrcMp4,
   imageFallback,
@@ -74,31 +78,26 @@ export function JourneyStage({
     : [];
   const showGallery = allGalleryImages.length > 1;
 
-  // Click to snap - scroll this stage into full view when clicked
-  const handleStageClick = (e: React.MouseEvent) => {
-    // Don't scroll if clicking on a button (gallery navigation)
-    if ((e.target as HTMLElement).closest("button")) return;
+  // Calculate sticky top position - each stage sticks slightly lower
+  // This creates the "peeking" effect where you can see the edge of previous stages
+  const stickyTop = 0;
 
-    const element = stageRef.current;
-    if (!element) return;
-
-    // Get the element's position and scroll to it
-    const rect = element.getBoundingClientRect();
-    const scrollTop = window.scrollY + rect.top;
-
-    window.scrollTo({
-      top: scrollTop,
-      behavior: reducedMotion ? "auto" : "smooth",
-    });
-  };
+  // Calculate bottom value for sticky - this determines when it unsticks
+  // Last stage should not unstick, others unstick when their "slot" is filled
+  const isLastStage = stageNumber === totalStages;
 
   return (
     <div
       ref={stageRef}
       data-stage={stageNumber}
       id={`stage-${stageNumber}`}
-      onClick={handleStageClick}
-      className="relative h-screen w-full snap-start snap-always overflow-hidden cursor-pointer"
+      className="stack-card h-screen w-full overflow-hidden shadow-2xl"
+      style={{
+        zIndex: stageNumber * 10,
+        top: stickyTop,
+        // Use bottom to control when element unsticks (negative value keeps it stuck longer)
+        bottom: isLastStage ? 'auto' : `-${(totalStages - stageNumber) * 100}vh`,
+      }}
     >
       {/* Background Image/Video - only when NOT showing gallery */}
       {!showGallery && (
@@ -132,7 +131,7 @@ export function JourneyStage({
         </div>
       )}
 
-      {/* Gradient Overlay (z-35 to appear above gallery z-30 but below text z-40) */}
+      {/* Gradient Overlay */}
       <div
         className="absolute inset-0 z-[35] pointer-events-none"
         style={{
@@ -142,7 +141,7 @@ export function JourneyStage({
         aria-hidden="true"
       />
 
-      {/* Content text - at bottom (z-40 to appear above gallery which is z-30) */}
+      {/* Content text - at bottom */}
       <div
         className={`absolute inset-x-0 bottom-0 z-40 flex flex-col items-center justify-end pb-24 px-6 text-center pointer-events-none ${
           reducedMotion ? "" : "transition-all duration-[400ms] ease-out"

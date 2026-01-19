@@ -48,8 +48,9 @@ export function HorizontalGallery({
     currentX: 0,
   });
 
-  // Debounce wheel events
-  const wheelTimeout = useRef<NodeJS.Timeout | null>(null);
+  // Gap detection for wheel events (same approach as vertical scrolling)
+  const lastWheelTimeRef = useRef<number>(0);
+  const hasMovedRef = useRef<boolean>(false);
 
   // Add non-passive event listeners for wheel and touchmove to enable preventDefault
   // Use capture phase to intercept before browser processes the gesture
@@ -61,23 +62,29 @@ export function HorizontalGallery({
       // Check if event is within our gallery
       if (!element.contains(e.target as Node)) return;
 
-      // Always prevent horizontal scrolling to stop browser back/forward gesture
+      // Only handle horizontal scrolling
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
 
-        // Only navigate if threshold met and not debounced
-        if (Math.abs(e.deltaX) > 20 && !wheelTimeout.current) {
+        const now = performance.now();
+        const timeSinceLastEvent = now - lastWheelTimeRef.current;
+        lastWheelTimeRef.current = now;
+
+        // Gap detected = new gesture, allow new image move
+        if (timeSinceLastEvent > 40) {
+          hasMovedRef.current = false;
+        }
+
+        // Move image on first significant delta of each gesture
+        if (!hasMovedRef.current && Math.abs(e.deltaX) > 5) {
+          hasMovedRef.current = true;
           if (e.deltaX > 0) {
             setCurrentIndex((prev) => Math.min(prev + 1, images.length - 1));
           } else {
             setCurrentIndex((prev) => Math.max(prev - 1, 0));
           }
-
-          wheelTimeout.current = setTimeout(() => {
-            wheelTimeout.current = null;
-          }, 300);
         }
       }
     };
@@ -264,28 +271,33 @@ export function HorizontalGallery({
       style={{ touchAction: "pan-y", overscrollBehaviorX: "contain" }}
       className={`relative w-full h-full outline-none focus-visible:ring-4 focus-visible:ring-white/50 focus-visible:ring-inset cursor-grab active:cursor-grabbing ${className}`}
     >
-      {/* Images container */}
+      {/* Images container - sliding carousel */}
       <div className="relative w-full h-full overflow-hidden select-none">
-        {images.map((image, index) => (
-          <div
-            key={index}
-            className={`absolute inset-0 ${
-              reducedMotion ? "" : "transition-opacity duration-300 ease-out"
-            } ${index === currentIndex ? "opacity-100" : "opacity-0"}`}
-            aria-hidden={index !== currentIndex}
-          >
-            <Image
-              src={image.src}
-              alt={image.alt}
-              fill
-              className="object-cover pointer-events-none"
-              sizes="100vw"
-              priority={index === 0}
-              unoptimized={image.src.startsWith("http")}
-              draggable={false}
-            />
-          </div>
-        ))}
+        <div
+          className={`flex h-full ${
+            reducedMotion ? "" : "transition-transform duration-500 ease-out"
+          }`}
+          style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+        >
+          {images.map((image, index) => (
+            <div
+              key={index}
+              className="relative w-full h-full flex-shrink-0"
+              aria-hidden={index !== currentIndex}
+            >
+              <Image
+                src={image.src}
+                alt={image.alt}
+                fill
+                className="object-cover pointer-events-none"
+                sizes="100vw"
+                priority={index === 0}
+                unoptimized={image.src.startsWith("http")}
+                draggable={false}
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Screen reader announcement */}

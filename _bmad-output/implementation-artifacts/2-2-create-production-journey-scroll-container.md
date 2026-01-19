@@ -585,6 +585,7 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 | 2026-01-11 | Enhanced story with detailed implementation patterns from Story 2-1 learnings | Claude |
 | 2026-01-11 | Implemented production journey scroll container with all 10 tasks | Claude |
 | 2026-01-17 | **REMOVED** JourneyProgressIndicator component per user decision for cleaner visual design. Deleted file, removed export from barrel file, updated AC #3 and related tasks as deprecated. | Claude |
+| 2026-01-19 | **CODE REVIEW** Fixed 4 issues: H1-deleted orphaned JourneyProgressIndicator.tsx file, M1-removed unused isSnappingRef, M2-unified scroll mechanisms (keyboard now uses goToPage), M3-extracted magic numbers to named constants | Claude |
 
 ### File List
 
@@ -637,3 +638,27 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 - Build passes: Yes
 - Lint passes: Yes
 - All i18n violations resolved: Yes
+
+## Code Review (2026-01-19)
+
+**Reviewer:** Claude Opus 4.5 (Adversarial Code Review)
+
+### Issues Found & Fixed
+
+| ID | Severity | Issue | Resolution |
+|----|----------|-------|------------|
+| H1 | High | JourneyProgressIndicator.tsx still existed on disk after claimed deletion | Deleted the orphaned file |
+| M1 | Medium | Unused `isSnappingRef` declaration in ProductionJourney.tsx | Removed dead code |
+| M2 | Medium | Inconsistent scroll mechanisms (keyboard used scrollIntoView, wheel/touch used window.scrollTo) | Unified to use goToPage callback for all navigation |
+| M3 | Medium | Magic numbers for gap threshold (40) and delta threshold (5) | Extracted to named constants: GAP_THRESHOLD_MS, DELTA_THRESHOLD |
+
+### Files Modified
+
+- `src/components/features/home/ProductionJourney.tsx` - Removed unused ref, unified scroll handling, added constants
+- `src/components/features/home/JourneyProgressIndicator.tsx` - **DELETED** (orphaned file)
+
+### Verification
+
+- Build passes: Yes
+- All HIGH and MEDIUM issues resolved: Yes
+- Story status: done

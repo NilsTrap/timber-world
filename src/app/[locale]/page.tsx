@@ -13,13 +13,12 @@ export default async function HomePage({ params }: Props) {
   setRequestLocale(locale);
 
   return (
-    <div className="snap-y snap-mandatory">
-      {/* Negative margin to offset layout padding and make hero full-screen */}
-      <div className="-mt-16 md:-mt-20 snap-start snap-always">
+    <div className="-mt-16 md:-mt-20">
+      {/* Hero section - sticky at z-0, first journey stage will slide over it */}
+      <div className="stack-card h-screen w-full" style={{ zIndex: 0 }}>
         <HeroSection />
       </div>
-
-      {/* Production Journey - 8 stages scroll container with error boundary */}
+      {/* Production Journey - 8 stages with stacking cards scroll effect */}
       <ProductionJourneyWithErrorBoundary />
     </div>
   );
