@@ -89,28 +89,28 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Admin Content Management
-  epic-6: in-progress
-  6-1-create-admin-dashboard-and-navigation: ready-for-dev
-  6-2-build-csv-upload-for-inventory-and-pricing: ready-for-dev
-  6-3-implement-data-validation-and-anomaly-detection: ready-for-dev
-  6-4-create-review-and-confirm-workflow: ready-for-dev
-  6-5-enable-manual-product-corrections: ready-for-dev
+  epic-6: backlog
+  6-1-create-admin-dashboard-and-navigation: backlog
+  6-2-build-csv-upload-for-inventory-and-pricing: backlog
+  6-3-implement-data-validation-and-anomaly-detection: backlog
+  6-4-create-review-and-confirm-workflow: backlog
+  6-5-enable-manual-product-corrections: backlog
   epic-6-retrospective: optional
 
   # Epic 7: Admin Analytics Dashboard
-  epic-7: in-progress
-  7-1-integrate-vercel-analytics: ready-for-dev
-  7-2-build-analytics-dashboard-page: ready-for-dev
-  7-3-display-visitor-and-geographic-metrics: ready-for-dev
-  7-4-show-engagement-and-conversion-metrics: ready-for-dev
-  7-5-enable-time-period-comparison: ready-for-dev
+  epic-7: backlog
+  7-1-integrate-vercel-analytics: backlog
+  7-2-build-analytics-dashboard-page: backlog
+  7-3-display-visitor-and-geographic-metrics: backlog
+  7-4-show-engagement-and-conversion-metrics: backlog
+  7-5-enable-time-period-comparison: backlog
   epic-7-retrospective: optional
 
   # Epic 8: Internal Quote Management
-  epic-8: in-progress
-  8-1-build-quote-request-queue: ready-for-dev
-  8-2-create-quote-detail-view: ready-for-dev
-  8-3-implement-quote-response-sending: ready-for-dev
-  8-4-add-acknowledgment-messages: ready-for-dev
-  8-5-implement-status-tracking-and-follow-ups: ready-for-dev
+  epic-8: backlog
+  8-1-build-quote-request-queue: backlog
+  8-2-create-quote-detail-view: backlog
+  8-3-implement-quote-response-sending: backlog
+  8-4-add-acknowledgment-messages: backlog
+  8-5-implement-status-tracking-and-follow-ups: backlog
   epic-8-retrospective: optional

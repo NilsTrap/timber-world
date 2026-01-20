@@ -4,21 +4,70 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **BMad Method Framework** installation (v6.0.0-alpha.22) for the **Timber International** website project. BMad (Business Model Architecture Development) is an AI-assisted product development methodology with specialized agents and structured workflows.
+This is a **BMad Method Framework** installation (v6.0.0-alpha.22) for the **Timber World Platform** project. BMad (Business Model Architecture Development) is an AI-assisted product development methodology with specialized agents and structured workflows.
 
-**Current project status:** Implementation phase - Epic 1 (Foundation) complete, Epic 2 (Homepage & Journey) in progress with Stories 2-1 and 2-2 done.
+### IMPORTANT: Architecture Shift (2026-01-20)
+
+**Timber World has evolved from a single marketing website to a B2B Supply Chain Platform.**
+
+The platform will include multiple apps serving different user types:
+- **Marketing App** - Public-facing website (partially implemented)
+- **Client Portal** - B2B customers (orders, tracking, reorder)
+- **Producer Portal** - Factories (production tracking, efficiency, inventory)
+- **Admin Portal(s)** - Internal staff (quotes, orders, analytics)
+- **Supplier Portal** - Raw material suppliers (orders, invoices)
+
+**Key Reference:** `_bmad-output/analysis/platform-vision-capture-2026-01-20.md`
+
+### Current Status
+
+| Component | Status |
+|-----------|--------|
+| Turborepo monorepo structure | ✅ Implemented |
+| Shared packages (@timber/*) | ✅ Implemented |
+| Marketing App (Epic 1-2) | ✅ Complete |
+| Marketing App (Epic 3-8) | 📋 Backlog |
+| Platform Product Brief | ❌ Not yet created |
+| Platform PRD | ❌ Not yet created |
+| Platform Architecture | ❌ Not yet created |
+| Other Apps | ❌ Not yet created |
+
+### Documentation Status
+
+| Document | Scope | Notes |
+|----------|-------|-------|
+| `product-brief-*.md` | Marketing app only | Valid for marketing app |
+| `prd.md` | Marketing app only | Valid for marketing app |
+| `architecture.md` | Marketing app only | **Outdated** - code is now monorepo |
+| `epic-*.yaml` | Marketing app only | Valid for marketing app |
+| `platform-vision-capture-*.md` | Platform overview | **Start here** for platform planning |
 
 ## Directory Structure
 
 ```
+├── apps/                     # Multiple frontend applications
+│   └── marketing/            # Public marketing website (Next.js)
+│   # Planned: client-portal/, producer-portal/, admin/, supplier-portal/
+│
+├── packages/                 # Shared code across all apps
+│   ├── @timber/ui/           # Components + hooks
+│   ├── @timber/auth/         # Authentication
+│   ├── @timber/database/     # Supabase clients + types
+│   ├── @timber/config/       # Configuration + i18n
+│   └── @timber/utils/        # Utilities
+│
+├── supabase/                 # Database (serves ALL apps)
+│
 ├── _bmad/                    # BMad Framework installation
 │   ├── core/                 # Core framework (task engine, brainstorming)
 │   ├── bmm/                  # BMad Method Module (main workflows & agents)
 │   └── bmb/                  # BMad Builder Module (create custom agents/workflows)
-├── _bmad-output/             # Generated artifacts (planning docs, implementation docs)
-│   ├── analysis/             # Brainstorming sessions
-│   ├── planning-artifacts/   # Product Brief, PRD, requirements
-│   └── implementation-artifacts/
+│
+├── _bmad-output/             # Generated artifacts
+│   ├── analysis/             # Brainstorming + platform vision capture
+│   ├── planning-artifacts/   # Product Brief, PRD (currently marketing-only)
+│   └── implementation-artifacts/  # Epics, stories, sprint status
+│
 └── .claude/commands/bmad/    # Claude Code slash command integration
 ```
 
