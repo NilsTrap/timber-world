@@ -1,0 +1,75 @@
+{
+  "common": {
+    "loading": "Indlæser...",
+    "error": "Der opstod en fejl",
+    "success": "Succes",
+    "close": "Luk",
+    "open": "Åbn",
+    "menu": "Menu"
+  },
+  "nav": {
+    "products": "Produkter",
+    "resources": "Ressourcer",
+    "contact": "Kontakt",
+    "requestQuote": "Anmod om tilbud",
+    "skipToContent": "Spring til hovedindhold"
+  },
+  "meta": {
+    "title": "Timber International",
+    "description": "Premium egepaneler og træprodukter fra bæredygtige europæiske skove"
+  },
+  "home": {
+    "heroSlogan": "Fra skov til færdigt produkt",
+    "heroDescription": "Premium egepaneler fremstillet med traditionel ekspertise og bæredygtige metoder, der forbinder europæiske skove med håndværkere verden over.",
+    "scrollToExplore": "Rul for at udforske",
+    "journeyProgress": "{current} af {total}",
+    "journey": {
+      "progressNavigation": "Rejsens fremskridt",
+      "stageOf": "Etape {current} af {total}",
+      "goToStage": "Gå til etape {number}",
+      "forest": "Bæredygtige skove",
+      "forestDescription": "Ansvarligt indkøbt fra certificerede europæiske egeskove",
+      "sawmill": "Dygtig håndværk",
+      "sawmillDescription": "Traditionelle saveteknikker møder moderne præcision",
+      "kilns": "Tålmodig mestring",
+      "kilnsDescription": "Omhyggeligt tørret til perfektion over tid",
+      "elements": "Elementer og paneler",
+      "elementsDescription": "Menneskelig berøring i manuel udvælgelse",
+      "cnc": "CNC-præcision",
+      "cncDescription": "Håndværk møder teknologi",
+      "finishing": "Finishing",
+      "finishingDescription": "Bæredygtige finish påført med omhu",
+      "qualityControl": "Kvalitetskontrol",
+      "qualityControlDescription": "Nul kompromis på kvalitet",
+      "delivery": "Levering",
+      "deliveryDescription": "Tillid og pålidelighed verden over",
+      "stageAlt": "Produktionsfase {number}: {name}",
+      "galleryLabel": "Billedgalleri for {stageName}",
+      "previousImage": "Forrige billede",
+      "nextImage": "Næste billede",
+      "imageOf": "{current} af {total}",
+      "goToImage": "Gå til billede {number}",
+      "ctaHeadline": "Klar til at opleve forskellen?",
+      "ctaSubtext": "Opdag vores premium egeprodukter eller anmod om et tilbud til dit projekt.",
+      "viewProducts": "Se produkter",
+      "requestQuote": "Anmod om tilbud"
+    }
+  },
+  "footer": {
+    "companyDescription": "Premium egepaneler og træprodukter. Fra skov til færdigt produkt leverer vi kvalitetstræløsninger til krævende fagfolk verden over.",
+    "navigation": "Navigation",
+    "contactSection": "Kontakt",
+    "copyright": "© {year} Timber International. Alle rettigheder forbeholdes.",
+    "privacy": "Privatlivspolitik",
+    "terms": "Servicevilkår"
+  },
+  "mobileMenu": {
+    "language": "Sprog",
+    "openMenu": "Åbn menu",
+    "closeMenu": "Luk menu"
+  },
+  "languageSwitcher": {
+    "label": "Vælg sprog",
+    "currentLanguage": "Nuværende sprog: {language}"
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "common": {
+    "loading": "Ladataan...",
+    "error": "Tapahtui virhe",
+    "success": "Onnistui",
+    "close": "Sulje",
+    "open": "Avaa",
+    "menu": "Valikko"
+  },
+  "nav": {
+    "products": "Tuotteet",
+    "resources": "Resurssit",
+    "contact": "Yhteystiedot",
+    "requestQuote": "Pyydä tarjous",
+    "skipToContent": "Siirry pääsisältöön"
+  },
+  "meta": {
+    "title": "Timber International",
+    "description": "Laadukkaat tammipaneelit ja puutuotteet kestävistä eurooppalaisista metsistä"
+  },
+  "home": {
+    "heroSlogan": "Metsästä valmiiksi tuotteeksi",
+    "heroDescription": "Laadukkaat tammipaneelit, jotka on valmistettu perinteisellä ammattitaidolla ja kestävillä käytännöillä, yhdistäen eurooppalaiset metsät käsityöläisiin ympäri maailmaa.",
+    "scrollToExplore": "Vieritä tutkiaksesi",
+    "journeyProgress": "{current} / {total}",
+    "journey": {
+      "progressNavigation": "Matkan edistyminen",
+      "stageOf": "Vaihe {current} / {total}",
+      "goToStage": "Siirry vaiheeseen {number}",
+      "forest": "Kestävät metsät",
+      "forestDescription": "Vastuullisesti hankittu sertifioiduista eurooppalaisista tammimetsistä",
+      "sawmill": "Taitava käsityö",
+      "sawmillDescription": "Perinteiset sahaustekniikat kohtaavat modernin tarkkuuden",
+      "kilns": "Kärsivällistä osaamista",
+      "kilnsDescription": "Huolellisesti kuivattu täydellisyyteen ajan kanssa",
+      "elements": "Elementit ja paneelit",
+      "elementsDescription": "Inhimillinen kosketus manuaalisessa valinnassa",
+      "cnc": "CNC-tarkkuus",
+      "cncDescription": "Käsityö kohtaa teknologian",
+      "finishing": "Viimeistely",
+      "finishingDescription": "Kestävät pinnoitteet huolellisesti",
+      "qualityControl": "Laadunvalvonta",
+      "qualityControlDescription": "Ei kompromisseja laadusta",
+      "delivery": "Toimitus",
+      "deliveryDescription": "Luottamus ja luotettavuus maailmanlaajuisesti",
+      "stageAlt": "Tuotantovaihe {number}: {name}",
+      "galleryLabel": "Kuvagalleria: {stageName}",
+      "previousImage": "Edellinen kuva",
+      "nextImage": "Seuraava kuva",
+      "imageOf": "{current} / {total}",
+      "goToImage": "Siirry kuvaan {number}",
+      "ctaHeadline": "Valmis kokemaan eron?",
+      "ctaSubtext": "Tutustu premium-tammituotteisiimme tai pyydä räätälöity tarjous projektiisi.",
+      "viewProducts": "Näytä tuotteet",
+      "requestQuote": "Pyydä tarjous"
+    }
+  },
+  "footer": {
+    "companyDescription": "Laadukkaat tammipaneelit ja puutuotteet. Metsästä valmiiksi tuotteeksi toimitamme laadukkaita puutoiminta-ratkaisuja vaativille ammattilaisille ympäri maailmaa.",
+    "navigation": "Navigointi",
+    "contactSection": "Yhteystiedot",
+    "copyright": "© {year} Timber International. Kaikki oikeudet pidätetään.",
+    "privacy": "Tietosuojakäytäntö",
+    "terms": "Käyttöehdot"
+  },
+  "mobileMenu": {
+    "language": "Kieli",
+    "openMenu": "Avaa valikko",
+    "closeMenu": "Sulje valikko"
+  },
+  "languageSwitcher": {
+    "label": "Valitse kieli",
+    "currentLanguage": "Nykyinen kieli: {language}"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@timber/ui": ["../../packages/ui/src"],
+      "@timber/ui/*": ["../../packages/ui/src/*"],
+      "@timber/database": ["../../packages/database/src"],
+      "@timber/database/*": ["../../packages/database/src/*"],
+      "@timber/auth": ["../../packages/auth/src"],
+      "@timber/auth/*": ["../../packages/auth/src/*"],
+      "@timber/config": ["../../packages/config/src"],
+      "@timber/config/*": ["../../packages/config/src/*"],
+      "@timber/utils": ["../../packages/utils/src"],
+      "@timber/utils/*": ["../../packages/utils/src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

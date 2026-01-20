@@ -1,0 +1,75 @@
+{
+  "common": {
+    "loading": "Wird geladen...",
+    "error": "Ein Fehler ist aufgetreten",
+    "success": "Erfolgreich",
+    "close": "Schließen",
+    "open": "Öffnen",
+    "menu": "Menü"
+  },
+  "nav": {
+    "products": "Produkte",
+    "resources": "Ressourcen",
+    "contact": "Kontakt",
+    "requestQuote": "Angebot anfordern",
+    "skipToContent": "Zum Hauptinhalt springen"
+  },
+  "meta": {
+    "title": "Timber International",
+    "description": "Premium Eichenpaneele und Holzprodukte aus nachhaltigen europäischen Wäldern"
+  },
+  "home": {
+    "heroSlogan": "Vom Wald zum fertigen Produkt",
+    "heroDescription": "Premium Eichenpaneele, gefertigt mit traditioneller Expertise und nachhaltigen Praktiken, die europäische Wälder mit Handwerkern weltweit verbinden.",
+    "scrollToExplore": "Scrollen zum Entdecken",
+    "journeyProgress": "{current} von {total}",
+    "journey": {
+      "progressNavigation": "Reisefortschritt",
+      "stageOf": "Stufe {current} von {total}",
+      "goToStage": "Zu Stufe {number} gehen",
+      "forest": "Nachhaltige Wälder",
+      "forestDescription": "Verantwortungsvoll aus zertifizierten europäischen Eichenwäldern bezogen",
+      "sawmill": "Gekonnte Handwerkskunst",
+      "sawmillDescription": "Traditionelle Sägetechniken treffen auf moderne Präzision",
+      "kilns": "Geduldige Meisterschaft",
+      "kilnsDescription": "Sorgfältig über Zeit zur Perfektion getrocknet",
+      "elements": "Elemente & Paneele",
+      "elementsDescription": "Menschliche Berührung bei manueller Auswahl",
+      "cnc": "CNC-Präzision",
+      "cncDescription": "Handwerk trifft Technologie",
+      "finishing": "Veredelung",
+      "finishingDescription": "Nachhaltige Oberflächen sorgfältig aufgetragen",
+      "qualityControl": "Qualitätskontrolle",
+      "qualityControlDescription": "Keine Kompromisse bei Qualität",
+      "delivery": "Lieferung",
+      "deliveryDescription": "Vertrauen und Zuverlässigkeit weltweit",
+      "stageAlt": "Produktionsstufe {number}: {name}",
+      "galleryLabel": "Bildergalerie für {stageName}",
+      "previousImage": "Vorheriges Bild",
+      "nextImage": "Nächstes Bild",
+      "imageOf": "{current} von {total}",
+      "goToImage": "Gehe zu Bild {number}",
+      "ctaHeadline": "Bereit, den Unterschied zu erleben?",
+      "ctaSubtext": "Entdecken Sie unsere Premium-Eichenprodukte oder fordern Sie ein Angebot für Ihr Projekt an.",
+      "viewProducts": "Produkte ansehen",
+      "requestQuote": "Angebot anfordern"
+    }
+  },
+  "footer": {
+    "companyDescription": "Premium Eichenpaneele und Holzprodukte. Vom Wald zum fertigen Produkt liefern wir Qualitätsholzlösungen an anspruchsvolle Fachleute weltweit.",
+    "navigation": "Navigation",
+    "contactSection": "Kontakt",
+    "copyright": "© {year} Timber International. Alle Rechte vorbehalten.",
+    "privacy": "Datenschutzrichtlinie",
+    "terms": "Nutzungsbedingungen"
+  },
+  "mobileMenu": {
+    "language": "Sprache",
+    "openMenu": "Menü öffnen",
+    "closeMenu": "Menü schließen"
+  },
+  "languageSwitcher": {
+    "label": "Sprache auswählen",
+    "currentLanguage": "Aktuelle Sprache: {language}"
+  }
+}

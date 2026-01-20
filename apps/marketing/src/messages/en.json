@@ -1,0 +1,75 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "success": "Success",
+    "close": "Close",
+    "open": "Open",
+    "menu": "Menu"
+  },
+  "nav": {
+    "products": "Products",
+    "resources": "Resources",
+    "contact": "Contact",
+    "requestQuote": "Request Quote",
+    "skipToContent": "Skip to main content"
+  },
+  "meta": {
+    "title": "Timber International",
+    "description": "Premium oak panels and wood products from sustainable European forests"
+  },
+  "home": {
+    "heroSlogan": "From Forest to Finished Product",
+    "heroDescription": "Premium oak panels crafted with traditional expertise and sustainable practices, connecting European forests to craftsmen worldwide.",
+    "scrollToExplore": "Scroll to explore",
+    "journeyProgress": "{current} of {total}",
+    "journey": {
+      "progressNavigation": "Journey progress",
+      "stageOf": "Stage {current} of {total}",
+      "goToStage": "Go to stage {number}",
+      "forest": "Sustainable Forests",
+      "forestDescription": "Responsibly sourced from certified European oak forests",
+      "sawmill": "Skilled Craftsmanship",
+      "sawmillDescription": "Traditional milling techniques meet modern precision",
+      "kilns": "Patient Mastery",
+      "kilnsDescription": "Carefully dried to perfection over time",
+      "elements": "Elements & Panels",
+      "elementsDescription": "Human touch in manual selection",
+      "cnc": "CNC Precision",
+      "cncDescription": "Craft meets technology",
+      "finishing": "Finishing",
+      "finishingDescription": "Sustainable finishes applied with care",
+      "qualityControl": "Quality Control",
+      "qualityControlDescription": "Zero compromise on quality",
+      "delivery": "Delivery",
+      "deliveryDescription": "Trust and reliability worldwide",
+      "stageAlt": "Production stage {number}: {name}",
+      "galleryLabel": "Image gallery for {stageName}",
+      "previousImage": "Previous image",
+      "nextImage": "Next image",
+      "imageOf": "{current} of {total}",
+      "goToImage": "Go to image {number}",
+      "ctaHeadline": "Ready to Experience the Difference?",
+      "ctaSubtext": "Discover our premium oak products or get a custom quote for your project.",
+      "viewProducts": "View Products",
+      "requestQuote": "Request Quote"
+    }
+  },
+  "footer": {
+    "companyDescription": "Premium oak panels and wood products. From forest to finished product, we deliver quality timber solutions for discerning professionals worldwide.",
+    "navigation": "Navigation",
+    "contactSection": "Contact",
+    "copyright": "© {year} Timber International. All rights reserved.",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service"
+  },
+  "mobileMenu": {
+    "language": "Language",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
+  },
+  "languageSwitcher": {
+    "label": "Select language",
+    "currentLanguage": "Current language: {language}"
+  }
+}

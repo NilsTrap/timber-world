@@ -1,0 +1,75 @@
+{
+  "common": {
+    "loading": "Laddar...",
+    "error": "Ett fel uppstod",
+    "success": "Lyckades",
+    "close": "Stäng",
+    "open": "Öppna",
+    "menu": "Meny"
+  },
+  "nav": {
+    "products": "Produkter",
+    "resources": "Resurser",
+    "contact": "Kontakt",
+    "requestQuote": "Begär offert",
+    "skipToContent": "Hoppa till huvudinnehåll"
+  },
+  "meta": {
+    "title": "Timber International",
+    "description": "Premiumekpaneler och träprodukter från hållbara europeiska skogar"
+  },
+  "home": {
+    "heroSlogan": "Från skog till färdig produkt",
+    "heroDescription": "Premiumekpaneler tillverkade med traditionell expertis och hållbara metoder, som förbinder europeiska skogar med hantverkare världen över.",
+    "scrollToExplore": "Scrolla för att utforska",
+    "journeyProgress": "{current} av {total}",
+    "journey": {
+      "progressNavigation": "Resans framsteg",
+      "stageOf": "Steg {current} av {total}",
+      "goToStage": "Gå till steg {number}",
+      "forest": "Hållbara skogar",
+      "forestDescription": "Ansvarsfullt inköpt från certifierade europeiska ekskogar",
+      "sawmill": "Skickligt hantverk",
+      "sawmillDescription": "Traditionella sågtekniker möter modern precision",
+      "kilns": "Tålmodig mästerskap",
+      "kilnsDescription": "Noggrant torkat till perfektion över tid",
+      "elements": "Element & paneler",
+      "elementsDescription": "Mänsklig beröring vid manuellt urval",
+      "cnc": "CNC-precision",
+      "cncDescription": "Hantverk möter teknologi",
+      "finishing": "Ytbehandling",
+      "finishingDescription": "Hållbara ytbehandlingar applicerade med omsorg",
+      "qualityControl": "Kvalitetskontroll",
+      "qualityControlDescription": "Inga kompromisser på kvalitet",
+      "delivery": "Leverans",
+      "deliveryDescription": "Förtroende och pålitlighet världen över",
+      "stageAlt": "Produktionssteg {number}: {name}",
+      "galleryLabel": "Bildgalleri för {stageName}",
+      "previousImage": "Föregående bild",
+      "nextImage": "Nästa bild",
+      "imageOf": "{current} av {total}",
+      "goToImage": "Gå till bild {number}",
+      "ctaHeadline": "Redo att uppleva skillnaden?",
+      "ctaSubtext": "Upptäck våra premium ekprodukter eller begär en offert för ditt projekt.",
+      "viewProducts": "Visa produkter",
+      "requestQuote": "Begär offert"
+    }
+  },
+  "footer": {
+    "companyDescription": "Premiumekpaneler och träprodukter. Från skog till färdig produkt levererar vi kvalitetstimmerlösningar till krävande yrkesmän världen över.",
+    "navigation": "Navigering",
+    "contactSection": "Kontakt",
+    "copyright": "© {year} Timber International. Alla rättigheter förbehållna.",
+    "privacy": "Integritetspolicy",
+    "terms": "Användarvillkor"
+  },
+  "mobileMenu": {
+    "language": "Språk",
+    "openMenu": "Öppna meny",
+    "closeMenu": "Stäng meny"
+  },
+  "languageSwitcher": {
+    "label": "Välj språk",
+    "currentLanguage": "Nuvarande språk: {language}"
+  }
+}

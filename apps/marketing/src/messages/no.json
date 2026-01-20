@@ -1,0 +1,75 @@
+{
+  "common": {
+    "loading": "Laster...",
+    "error": "En feil oppstod",
+    "success": "Vellykket",
+    "close": "Lukk",
+    "open": "Åpne",
+    "menu": "Meny"
+  },
+  "nav": {
+    "products": "Produkter",
+    "resources": "Ressurser",
+    "contact": "Kontakt",
+    "requestQuote": "Be om tilbud",
+    "skipToContent": "Hopp til hovedinnhold"
+  },
+  "meta": {
+    "title": "Timber International",
+    "description": "Premium eikepaneler og treprodukter fra bærekraftige europeiske skoger"
+  },
+  "home": {
+    "heroSlogan": "Fra skog til ferdig produkt",
+    "heroDescription": "Premium eikepaneler laget med tradisjonell ekspertise og bærekraftige metoder, som forbinder europeiske skoger med håndverkere verden over.",
+    "scrollToExplore": "Rull for å utforske",
+    "journeyProgress": "{current} av {total}",
+    "journey": {
+      "progressNavigation": "Reisens fremgang",
+      "stageOf": "Steg {current} av {total}",
+      "goToStage": "Gå til steg {number}",
+      "forest": "Bærekraftige skoger",
+      "forestDescription": "Ansvarlig hentet fra sertifiserte europeiske eikeskoger",
+      "sawmill": "Dyktig håndverk",
+      "sawmillDescription": "Tradisjonelle sageteknikker møter moderne presisjon",
+      "kilns": "Tålmodig mestring",
+      "kilnsDescription": "Nøye tørket til perfeksjon over tid",
+      "elements": "Elementer og paneler",
+      "elementsDescription": "Menneskelig berøring i manuelt utvalg",
+      "cnc": "CNC-presisjon",
+      "cncDescription": "Håndverk møter teknologi",
+      "finishing": "Etterbehandling",
+      "finishingDescription": "Bærekraftige overflater påført med omhu",
+      "qualityControl": "Kvalitetskontroll",
+      "qualityControlDescription": "Ingen kompromiss på kvalitet",
+      "delivery": "Levering",
+      "deliveryDescription": "Tillit og pålitelighet over hele verden",
+      "stageAlt": "Produksjonssteg {number}: {name}",
+      "galleryLabel": "Bildegalleri for {stageName}",
+      "previousImage": "Forrige bilde",
+      "nextImage": "Neste bilde",
+      "imageOf": "{current} av {total}",
+      "goToImage": "Gå til bilde {number}",
+      "ctaHeadline": "Klar til å oppleve forskjellen?",
+      "ctaSubtext": "Oppdag våre premium eikeprodukter eller be om et tilbud for prosjektet ditt.",
+      "viewProducts": "Se produkter",
+      "requestQuote": "Be om tilbud"
+    }
+  },
+  "footer": {
+    "companyDescription": "Premium eikepaneler og treprodukter. Fra skog til ferdig produkt leverer vi kvalitetstømmerløsninger til krevende fagfolk verden over.",
+    "navigation": "Navigasjon",
+    "contactSection": "Kontakt",
+    "copyright": "© {year} Timber International. Alle rettigheter forbeholdt.",
+    "privacy": "Personvernerklæring",
+    "terms": "Vilkår for bruk"
+  },
+  "mobileMenu": {
+    "language": "Språk",
+    "openMenu": "Åpne meny",
+    "closeMenu": "Lukk meny"
+  },
+  "languageSwitcher": {
+    "label": "Velg språk",
+    "currentLanguage": "Nåværende språk: {language}"
+  }
+}
