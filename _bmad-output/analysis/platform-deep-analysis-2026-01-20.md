@@ -26,12 +26,12 @@
 | Area | Status | Completion |
 |------|--------|------------|
 | 1. Business Model | ✅ Complete | 100% |
-| 2. User Personas & Portals | 🔄 In Progress | 70% |
+| 2. User Personas & Portals | ✅ Complete | 100% |
 | 3. Data Model | ⏳ Pending | 0% |
 | 4. Integration Points | ⏳ Pending | 0% |
 | 5. MVP Prioritization | ⏳ Pending | 0% |
 
-**Last Updated:** 2026-01-20 (after Question 2.7)
+**Last Updated:** 2026-01-20 (after Question 2.9 - Architecture Decision)
 
 ---
 
@@ -346,12 +346,114 @@ Order placed → Confirmation → Track delivery
 
 ### 2.7 Admin Portal Requirements
 
-**Status:** IN PROGRESS - awaiting detailed answers
+**All admin functions available, toggled per user (not separate portals).**
 
-**Three Admin Views Proposed:**
-1. **Manager Portal** - Day-to-day operations
-2. **Analytics Portal** - Data analysis and insights
-3. **Head Office Portal** - Executive overview, KPIs
+**Manager Functions (Day-to-Day Operations):**
+
+| Function | Description |
+|----------|-------------|
+| Quote Management | Create, send, track quotes |
+| Order Management | Create, track, modify client orders |
+| Supplier Orders | Place and track orders with suppliers |
+| Production Orders | Assign work to producers, track progress |
+| Inventory View | What's in stock, where, quantities |
+| Client Management | Profiles, pricing, history, contacts |
+| Supplier Management | Profiles, contracts, performance |
+| Producer Management | Factory profiles, capacity, performance |
+| Communication Hub | Messages from/to all parties |
+| Quality Issues | Track and resolve complaints/problems |
+| Logistics | Shipments, tracking, delivery scheduling |
+| Warehouse Management | Receiving, shipping, stock movements |
+
+**Analytics Functions:**
+
+| Function | Description |
+|----------|-------------|
+| Sales Analytics | Revenue, margins, trends by period |
+| Client Analytics | Who buys what, frequency, value |
+| Supplier Performance | Delivery times, quality, pricing |
+| Producer Efficiency | Output rates, waste, quality scores |
+| Inventory Analytics | Stock levels, turnover, dead stock |
+| Financial Reports | P&L, cash flow, accounts receivable |
+| Custom Reports | Build your own queries/reports |
+
+**Executive Functions:**
+
+| Function | Description |
+|----------|-------------|
+| KPI Dashboard | Key metrics at a glance |
+| Total Overview | All business in one view (summary) |
+| Alerts/Notifications | Problems needing attention |
+| Approvals Queue | Decisions waiting for approval |
+| Strategic Reports | Long-term trends, forecasting |
+
+### 2.8 Multi-Role Users
+
+**Finding:** Multi-role users are common in this business.
+
+| Scenario | Example |
+|----------|---------|
+| Client + Supplier | Sawmill buys logs from TW, sells boards to TW |
+| Client + Producer | Factory produces for TW, also buys materials for own production |
+| Supplier + Producer | Sawmill supplies boards AND does kiln drying as a service |
+
+**Decision:** One user can have multiple roles, sees all their functions combined.
+
+### 2.9 Portal Architecture Decision
+
+**DECISION: Option B - One Portal, Function-Based Access**
+
+After analysis, decided on ONE portal application for all users:
+
+```
+apps/
+├── marketing/        ← Public website (no login)
+└── portal/           ← ONE portal for ALL users
+                        Function-based permissions per user
+```
+
+**Rationale:**
+- Simpler codebase (one app to maintain)
+- Handles multi-role users naturally
+- Consistent UI pattern everywhere
+- Flexible permissions system
+- Easier updates and maintenance
+
+**UI Pattern:**
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  TIMBER WORLD PORTAL                               [User Menu ▼] │
+├────────────┬─────────────────────────────────────────────────────┤
+│            │                                                     │
+│  FUNCTIONS │                                                     │
+│  (sidebar) │           MAIN CONTENT AREA                         │
+│            │                                                     │
+│  [Function]│     Shows selected function's content               │
+│  [Function]│                                                     │
+│  [Function]│     Same UI structure for all users                 │
+│  [Function]│     Different functions visible per user            │
+│  [...    ] │                                                     │
+│            │                                                     │
+│  Only shows│                                                     │
+│  functions │                                                     │
+│  user has  │                                                     │
+│  access to │                                                     │
+│            │                                                     │
+└────────────┴─────────────────────────────────────────────────────┘
+```
+
+**Permission Model:**
+
+```
+USER
+├── Has one or more ROLES (client, supplier, producer, admin)
+│
+└── Each ROLE has FUNCTIONS that can be toggled ON/OFF
+    │
+    └── Each FUNCTION may have SUB-PERMISSIONS
+        (e.g., view only vs edit, limited data vs full data)
+```
 
 ---
 
@@ -407,29 +509,44 @@ Download: Quality specifications, reference photos, acceptance criteria
 Confirm: Mutual agreement that specs are understood
 ```
 
+### Principle #6: ONE PORTAL, FUNCTION-BASED ACCESS
+
+One portal application serves all user types. Users see functions based on their roles and permissions.
+
+```
+ONE PORTAL APP
+├── Client logs in → sees Client functions
+├── Supplier logs in → sees Supplier functions
+├── Producer logs in → sees Producer functions
+├── Admin logs in → sees Admin functions
+└── Multi-role user → sees combined functions from all their roles
+
+Benefits:
+├── Simple codebase (one app)
+├── Multi-role users work naturally
+├── Consistent UI everywhere
+├── Flexible permission system
+└── Easier maintenance
+```
+
 ---
 
 ## Open Questions
 
 ### To Be Answered:
 
-1. **Admin Portal Details** (Question 2.8)
-   - Manager Portal functions and priorities
-   - Analytics Portal functions and priorities
-   - Head Office Portal functions and priorities
-
-2. **Data Model** (Area 3)
+1. **Data Model** (Area 3)
    - What entities need to be tracked?
    - How do orders flow through the system?
    - How is inventory tracked across locations?
 
-3. **Integration Points** (Area 4)
+2. **Integration Points** (Area 4)
    - ERP integration needed?
    - Accounting system integration?
    - Logistics/shipping integration?
 
-4. **MVP Prioritization** (Area 5)
-   - Which portal to build first?
+3. **MVP Prioritization** (Area 5)
+   - Which functions to build first?
    - What's the minimum viable feature set?
    - Database first or UI first?
 
@@ -445,7 +562,8 @@ Confirm: Mutual agreement that specs are understood
 | Q2.1-2.3 | Client Types, Supplier Types, Internal Team | ✅ Answered |
 | Q2.4-2.5 | Client Portal, Client's Dream | ✅ Answered |
 | Q2.6-2.7 | Supplier Portal, Producer Portal | ✅ Answered |
-| Q2.8 | Admin Portal | 🔄 In Progress |
+| Q2.8 | Admin Portal Functions | ✅ Answered |
+| Q2.9 | Portal Architecture Decision | ✅ Decided: Option B (One Portal) |
 
 ---
 
