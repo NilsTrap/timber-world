@@ -85,6 +85,84 @@ export type ActionResult<T> =
   | { success: true; data: T }
   | { success: false; error: string; code?: string };
 
+/** Shipment list item for overview table */
+export interface ShipmentListItem {
+  id: string;
+  shipmentCode: string;
+  fromPartyName: string;
+  fromPartyCode: string;
+  toPartyName: string;
+  toPartyCode: string;
+  shipmentDate: string;
+  transportCostEur: number | null;
+  packageCount: number;
+  totalVolumeM3: number;
+}
+
+/** Package detail for shipment detail view */
+export interface PackageDetail {
+  id: string;
+  packageNumber: string;
+  packageSequence: number;
+  productNameId: string | null;
+  productName: string | null;
+  woodSpeciesId: string | null;
+  woodSpecies: string | null;
+  humidityId: string | null;
+  humidity: string | null;
+  typeId: string | null;
+  typeName: string | null;
+  processingId: string | null;
+  processing: string | null;
+  fscId: string | null;
+  fsc: string | null;
+  qualityId: string | null;
+  quality: string | null;
+  thickness: string | null;
+  width: string | null;
+  length: string | null;
+  pieces: string | null;
+  volumeM3: number | null;
+  volumeIsCalculated: boolean;
+}
+
+/** Shipment detail with all packages */
+export interface ShipmentDetail {
+  id: string;
+  shipmentCode: string;
+  shipmentNumber: number;
+  fromPartyId: string;
+  fromPartyName: string;
+  toPartyId: string;
+  toPartyName: string;
+  shipmentDate: string;
+  transportCostEur: number | null;
+  packages: PackageDetail[];
+}
+
+/** Package list item for packages overview tab */
+export interface PackageListItem {
+  id: string;
+  packageNumber: string;
+  shipmentCode: string;
+  shipmentId: string;
+  productName: string | null;
+  woodSpecies: string | null;
+  humidity: string | null;
+  thickness: string | null;
+  width: string | null;
+  length: string | null;
+  pieces: string | null;
+  volumeM3: number | null;
+}
+
+/** Input for updating shipment packages */
+export interface UpdateShipmentInput {
+  shipmentId: string;
+  transportCostEur: number | null;
+  packages: PackageInput[];
+}
+
 /** Helper to validate UUID format */
 export function isValidUUID(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);

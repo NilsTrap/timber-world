@@ -54,7 +54,7 @@ development_status:
   2-1-reference-data-management: done
   2-2-organizations-management: done
   2-3-create-shipment-add-packages: done
-  2-4-shipment-inventory-overview: backlog
+  2-4-shipment-inventory-overview: review
   epic-2-retrospective: optional
 
   # Epic 3: Producer Inventory View
