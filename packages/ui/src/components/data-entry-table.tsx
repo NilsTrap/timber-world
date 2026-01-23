@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useEffect, useMemo } from "react";
-import { Plus, Copy, Trash2 } from "lucide-react";
+import { Plus, Copy, Trash2, X } from "lucide-react";
 import { Button } from "./button";
 import { Input } from "./input";
 import {
@@ -305,6 +305,13 @@ function DataEntryTable<TRow>({
     []
   );
 
+  const hasActiveFilters = Object.values(filterState).some((s) => s.size > 0) || sortState !== null;
+
+  const handleClearAll = useCallback(() => {
+    setFilterState({});
+    setSortState(null);
+  }, []);
+
   // ─── Row Operations ─────────────────────────────────────────────────────
   const updateCell = useCallback(
     (originalIndex: number, columnKey: string, value: string) => {
@@ -547,6 +554,15 @@ function DataEntryTable<TRow>({
         </div>
       )}
 
+      {readOnly && hasActiveFilters && (
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" onClick={handleClearAll} className="text-xs h-7">
+            <X className="h-3 w-3 mr-1" />
+            Clear Filters
+          </Button>
+        </div>
+      )}
+
       <div className="rounded-lg border overflow-x-auto">
         <Table className="w-auto">
           <TableHeader>
@@ -643,13 +659,12 @@ function DataEntryTable<TRow>({
                       const abbrev = label ? label.slice(0, 3) : "-";
                       const tooltip = label ? `${col.label}: ${label}` : `${col.label}: (empty)`;
                       return (
-                        <TableCell key={col.key} className="px-1 w-[30px]">
-                          <span
-                            className="inline-flex items-center justify-center h-7 w-full text-xs text-muted-foreground cursor-default"
-                            title={tooltip}
-                          >
-                            {abbrev}
-                          </span>
+                        <TableCell
+                          key={col.key}
+                          className="px-1 text-xs whitespace-nowrap w-[30px] text-muted-foreground"
+                          title={tooltip}
+                        >
+                          {abbrev}
                         </TableCell>
                       );
                     }

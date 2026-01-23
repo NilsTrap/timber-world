@@ -78,12 +78,15 @@ function ColumnHeaderMenu({
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
-          className={`inline-flex items-center justify-center h-4 w-4 rounded-sm hover:bg-accent/80 transition-colors ${
+          className={`relative inline-flex items-center justify-center h-4 w-4 rounded-sm hover:bg-accent/80 transition-colors ${
             isActive ? "text-primary" : "text-muted-foreground/60"
           }`}
           aria-label="Sort and filter"
         >
           <ListFilter className="h-3 w-3" />
+          {activeFilter.size > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent
