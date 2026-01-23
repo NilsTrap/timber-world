@@ -683,7 +683,7 @@ All tables displaying package or inventory data (shipments, production inputs/ou
 Features: collapsible dropdown columns, keyboard navigation (Tab/Arrow/Enter), row copy/delete, built-in sort/filter menus via ColumnHeaderMenu, totals footer (count for packages, sum for pieces/volume), volume auto-calculation.
 
 **Read-Only Views — Use `DataEntryTable` with `readOnly` prop:**
-- Admin Inventory Overview (Packages tab)
+- Admin Inventory Overview (Inventory tab)
 - Producer Inventory table
 - Any future read-only package list
 
@@ -703,7 +703,7 @@ For dropdown columns in readOnly: set `type: "dropdown"` with `collapsible: true
 - Formula: `(thickness × width × length × pieces) / 1,000,000,000` (mm³ → m³)
 - Only when all values are single numbers (not ranges like "40-50")
 - Only when pieces is a positive number (not "-")
-- Display: Latvian locale with comma decimal separator (`0,000`) for input, 4 decimal places for display
+- Display: Latvian locale with comma decimal separator, 3 decimal places (`0,000`) for both input and display
 
 **Reference Data Queries:**
 - Always use explicit FK constraint names in Supabase/PostgREST joins

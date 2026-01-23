@@ -37,7 +37,7 @@ function packageDetailToRow(
     width: pkg.width ?? "",
     length: pkg.length ?? "",
     pieces: pkg.pieces ?? "",
-    volumeM3: pkg.volumeM3 != null ? String(pkg.volumeM3) : "",
+    volumeM3: pkg.volumeM3 != null ? pkg.volumeM3.toFixed(3) : "",
     volumeIsCalculated: pkg.volumeIsCalculated,
   };
 }
@@ -48,16 +48,23 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [dropdowns, setDropdowns] = useState<ReferenceDropdowns | null>(null);
   const [transportCostEur, setTransportCostEur] = useState(
-    shipment.transportCostEur != null ? shipment.transportCostEur.toFixed(2) : ""
+    shipment.transportCostEur != null ? shipment.transportCostEur.toFixed(2).replace(".", ",") : ""
   );
   const [packageRows, setPackageRows] = useState<PackageRow[]>(
     shipment.packages.map((pkg, i) => packageDetailToRow(pkg, i))
   );
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   useEffect(() => {
     async function loadData() {
       const result = await getReferenceDropdowns();
-      if (result.success) setDropdowns(result.data);
+      if (result.success) {
+        setDropdowns(result.data);
+      } else {
+        setLoadError(result.error);
+        toast.error("Failed to load reference data");
+      }
       setIsLoading(false);
     }
     loadData();
@@ -87,7 +94,7 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
       volumeIsCalculated: row.volumeIsCalculated,
     }));
 
-    const costNum = transportCostEur ? parseFloat(transportCostEur) : null;
+    const costNum = transportCostEur ? parseFloat(transportCostEur.replace(",", ".")) : null;
 
     const result = await updateShipmentPackages({
       shipmentId: shipment.id,
@@ -119,7 +126,7 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => router.push("/admin/inventory")}
+        onClick={() => router.push("/admin/inventory?tab=shipments")}
       >
         <ArrowLeft className="h-4 w-4 mr-2" />
         Back to Overview
@@ -146,12 +153,28 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
           <div>
             <span className="text-muted-foreground block mb-1">Transport Cost (€)</span>
             <Input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
+              type="text"
+              inputMode="decimal"
+              placeholder="0,00"
+              aria-label="Transport cost in euros"
               value={transportCostEur}
-              onChange={(e) => setTransportCostEur(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "" || /^[\d.,]*$/.test(val)) {
+                  setTransportCostEur(val);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              onBlur={() => {
+                const num = parseFloat(transportCostEur.replace(",", "."));
+                if (!isNaN(num)) {
+                  setTransportCostEur(num.toFixed(2).replace(".", ","));
+                }
+              }}
               className="w-32 h-8"
             />
           </div>
@@ -159,6 +182,11 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
       </div>
 
       {/* Editable Package Table */}
+      {loadError && (
+        <div className="rounded-lg border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
+          Failed to load reference data: {loadError}
+        </div>
+      )}
       {dropdowns && (
         <PackageEntryTable
           dropdowns={dropdowns}
@@ -171,7 +199,7 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
       <div className="flex justify-end gap-3">
         <Button
           variant="outline"
-          onClick={() => router.push("/admin/inventory")}
+          onClick={() => router.push("/admin/inventory?tab=shipments")}
         >
           Cancel
         </Button>

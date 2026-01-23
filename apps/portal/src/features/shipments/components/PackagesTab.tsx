@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { DataEntryTable, type ColumnDef } from "@timber/ui";
 import { SummaryCards } from "./SummaryCards";
 import type { PackageListItem } from "../types";
@@ -24,7 +24,7 @@ export function PackagesTab({ packages }: PackagesTabProps) {
         type: "readonly",
         getValue: (row) => row.packageNumber,
         totalType: "count",
-        formatTotal: (v) => `${v} pkgs`,
+        formatTotal: (v) => String(v),
       },
       {
         key: "productName",
@@ -113,25 +113,34 @@ export function PackagesTab({ packages }: PackagesTabProps) {
         label: "Vol m³",
         type: "numeric",
         getValue: (row) =>
-          row.volumeM3 != null ? row.volumeM3.toFixed(4) : "",
+          row.volumeM3 != null ? row.volumeM3.toFixed(3) : "",
+        getDisplayValue: (row) =>
+          row.volumeM3 != null ? row.volumeM3.toFixed(3).replace(".", ",") : "",
         totalType: "sum",
-        formatTotal: (v) => v.toFixed(4),
+        formatTotal: (v) => v.toFixed(3).replace(".", ","),
       },
     ],
     []
   );
 
+  const [displayedPackages, setDisplayedPackages] = useState<PackageListItem[]>(packages);
+
+  const handleDisplayRowsChange = useCallback((rows: PackageListItem[]) => {
+    setDisplayedPackages(rows);
+  }, []);
+
   const summaryItems = useMemo(
     () => [
-      { label: "Total Packages", value: packages.length },
+      { label: "Total Packages", value: displayedPackages.length },
       {
         label: "Total m³",
-        value: packages
+        value: displayedPackages
           .reduce((sum, p) => sum + (p.volumeM3 ?? 0), 0)
-          .toFixed(4),
+          .toFixed(3)
+          .replace(".", ","),
       },
     ],
-    [packages]
+    [displayedPackages]
   );
 
   if (packages.length === 0) {
@@ -152,6 +161,7 @@ export function PackagesTab({ packages }: PackagesTabProps) {
         getRowKey={(row) => row.id}
         readOnly
         collapseStorageKey="inventory-packages-collapsed"
+        onDisplayRowsChange={handleDisplayRowsChange}
       />
     </div>
   );

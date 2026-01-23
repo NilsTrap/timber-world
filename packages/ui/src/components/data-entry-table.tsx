@@ -113,6 +113,8 @@ export interface DataEntryTableProps<TRow> {
   /** When true, hides add/copy/delete actions and renders all cells as text.
    *  Retains collapsible columns, sort/filter menus, and totals footer. */
   readOnly?: boolean;
+  /** Called when displayed rows change (after filtering/sorting). Useful for external summaries. */
+  onDisplayRowsChange?: (rows: TRow[]) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -138,6 +140,7 @@ function DataEntryTable<TRow>({
   collapseStorageKey = "det-collapsed-columns",
   idPrefix = "det",
   readOnly = false,
+  onDisplayRowsChange,
 }: DataEntryTableProps<TRow>) {
   // ─── Collapsed Columns ──────────────────────────────────────────────────
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(() => {
@@ -223,8 +226,8 @@ function DataEntryTable<TRow>({
           const aVal = getColDisplayValue(a.row, col);
           const bVal = getColDisplayValue(b.row, col);
           if (col.isNumeric || col.type === "numeric") {
-            const aNum = parseFloat(aVal);
-            const bNum = parseFloat(bVal);
+            const aNum = parseFloat(col.getValue(a.row));
+            const bNum = parseFloat(col.getValue(b.row));
             if (!isNaN(aNum) && !isNaN(bNum)) {
               return sortState.direction === "asc" ? aNum - bNum : bNum - aNum;
             }
@@ -237,6 +240,13 @@ function DataEntryTable<TRow>({
 
     return result;
   }, [rows, filterState, columns, getColDisplayValue, readOnly, sortState]);
+
+  // Notify parent when displayed rows change (for external summaries)
+  useEffect(() => {
+    if (onDisplayRowsChange) {
+      onDisplayRowsChange(displayRows.map((d) => d.row));
+    }
+  }, [displayRows, onDisplayRowsChange]);
 
   /** Totals */
   const totals = useMemo(() => {
@@ -271,8 +281,8 @@ function DataEntryTable<TRow>({
         const bVal = getColDisplayValue(b, col);
 
         if (col.isNumeric || col.type === "numeric") {
-          const aNum = parseFloat(aVal);
-          const bNum = parseFloat(bVal);
+          const aNum = parseFloat(col.getValue(a));
+          const bNum = parseFloat(col.getValue(b));
           if (!isNaN(aNum) && !isNaN(bNum)) {
             return sort.direction === "asc" ? aNum - bNum : bNum - aNum;
           }

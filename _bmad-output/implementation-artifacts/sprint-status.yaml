@@ -50,11 +50,11 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Admin Inventory Management (Updated for Inventory Data Model v2)
-  epic-2: in-progress
+  epic-2: done
   2-1-reference-data-management: done
   2-2-organizations-management: done
   2-3-create-shipment-add-packages: done
-  2-4-shipment-inventory-overview: review
+  2-4-shipment-inventory-overview: done
   epic-2-retrospective: optional
 
   # Epic 3: Producer Inventory View

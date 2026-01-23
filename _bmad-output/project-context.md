@@ -216,7 +216,7 @@ For overview/list views, use `DataEntryTable` with the `readOnly` prop:
 - Retains: collapsible columns, sort/filter menus, totals footer
 - Hides: add button, copy/delete actions, input fields
 - Sort is display-only (doesn't mutate source data)
-- Display "—" for null/empty values, volume to 4 decimal places
+- Display "—" for null/empty values, volume to 3 decimal places
 
 ### Reference Data (7 Dropdowns)
 
@@ -232,7 +232,7 @@ Volume auto-calculates when all conditions are met:
 - Pieces is a positive number (not "-")
 - Formula: `(thickness × width × length × pieces) / 1,000,000,000` (mm³ → m³)
 - When conditions aren't met, user enters volume manually
-- Display format: Latvian locale with 3 decimal places (`0,000`) for input, 4 places for display
+- Display format: Latvian locale with 3 decimal places (`0,000`) for both input and display
 
 ## Architecture Reference
 

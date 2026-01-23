@@ -124,6 +124,13 @@ export function ShipmentsTab({ shipments }: ShipmentsTabProps) {
               Total m³
               <SortIcon columnKey="totalVolumeM3" sortConfig={sortConfig} />
             </TableHead>
+            <TableHead
+              className="cursor-pointer select-none text-right"
+              onClick={() => toggleSort("transportCostEur")}
+            >
+              Transport €
+              <SortIcon columnKey="transportCostEur" sortConfig={sortConfig} />
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -145,7 +152,12 @@ export function ShipmentsTab({ shipments }: ShipmentsTabProps) {
               <TableCell>{shipment.shipmentDate}</TableCell>
               <TableCell className="text-right">{shipment.packageCount}</TableCell>
               <TableCell className="text-right">
-                {shipment.totalVolumeM3.toFixed(4)}
+                {shipment.totalVolumeM3.toFixed(3).replace(".", ",")}
+              </TableCell>
+              <TableCell className="text-right">
+                {shipment.transportCostEur != null
+                  ? shipment.transportCostEur.toFixed(2).replace(".", ",")
+                  : "—"}
               </TableCell>
             </TableRow>
           ))}

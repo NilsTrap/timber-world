@@ -7,7 +7,7 @@
 | **Story ID** | 2.4 |
 | **Epic** | Epic 2: Admin Inventory Management |
 | **Title** | Shipment & Inventory Overview |
-| **Status** | review |
+| **Status** | done |
 | **Created** | 2026-01-23 |
 | **Priority** | High |
 
@@ -22,13 +22,13 @@
 ### AC1: Overview Page with Tabs
 **Given** I am logged in as Admin
 **When** I navigate to Inventory (sidebar)
-**Then** I see a page with two tabs: "Shipments" and "Packages"
-**And** the "Shipments" tab is active by default
+**Then** I see a page with two tabs: "Inventory" and "Shipments"
+**And** the "Inventory" tab is active by default
 
 ### AC2: Shipments Table
 **Given** I am on the Shipments tab
 **When** I view the table
-**Then** I see columns: Shipment Code, From, To, Date, Package Count, Total m³
+**Then** I see columns: Shipment Code, From, To, Date, Package Count, Total m³, Transport €
 **And** shipments are sorted by date (newest first)
 
 ### AC3: Shipment Detail View
@@ -38,22 +38,22 @@
 **And** I see all packages in that shipment with full attributes
 **And** I can edit existing packages or add more packages
 
-### AC4: Packages Table
-**Given** I am on the Packages tab
+### AC4: Inventory Table
+**Given** I am on the Inventory tab
 **When** I view the table
 **Then** I see all packages in the standard read-only table format (see Architecture: Standard Package/Inventory Table Pattern) with all 14 columns: Shipment, Package, Product, Species, Humidity, Type, Processing, FSC, Quality, Thickness, Width, Length, Pieces, Vol m³
 **And** I see summary cards above the table: Total Packages, Total m³
 **And** the table has horizontal scroll (`overflow-x-auto`) on narrow screens
 
-### AC5: Filter Bar (Packages)
-**Given** I am viewing the Packages tab
-**When** I use the filter bar
-**Then** I can filter by: Product Name (dropdown), Species (dropdown), Shipment Code (text search)
+### AC5: Column Filters (Inventory)
+**Given** I am viewing the Inventory tab
+**When** I click a column header's filter icon
+**Then** I see a popover with value checkboxes to filter by any column
 **And** the table updates to show matching packages
 **And** summary cards update to reflect filtered results
 
 ### AC6: Column Sort
-**Given** I am viewing either the Shipments or Packages table
+**Given** I am viewing either the Inventory or Shipments table
 **When** I click a column header
 **Then** the table sorts by that column (toggle ascending/descending)
 **And** active sort is indicated by an arrow icon
@@ -75,7 +75,7 @@ This story builds on Story 2.3's data model and actions. It creates a read-only 
 **Key decisions:**
 - Overview page uses server-side data fetching (RSC) for initial load
 - Tabs use local state + `window.history.replaceState` for instant switching (URL shareable but no server re-fetch)
-- Packages tab follows the standard 14-column read-only table format (see Architecture: Standard Package/Inventory Table Pattern)
+- Inventory tab follows the standard 14-column read-only table format (see Architecture: Standard Package/Inventory Table Pattern)
 - Shipment detail page reuses `PackageEntryTable` (standard `DataEntryTable`) in edit mode with editable transport cost
 - Sort is client-side (tables are reasonably sized for MVP); `SortIcon` extracted as standalone component
 - Filters use client-side filtering; filter dropdowns show only values in actual data
@@ -430,7 +430,7 @@ import { useSearchParams } from "next/navigation";
 export function InventoryOverview({ shipments, packages, dropdowns }) {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(
-    searchParams.get("tab") || "shipments"
+    searchParams.get("tab") || "inventory"
   );
 
   const setTab = useCallback((tab: string) => {
@@ -443,10 +443,10 @@ export function InventoryOverview({ shipments, packages, dropdowns }) {
   return (
     <div>
       <div className="flex gap-2 border-b">
+        <button onClick={() => setTab("inventory")} className={...}>Inventory</button>
         <button onClick={() => setTab("shipments")} className={...}>Shipments</button>
-        <button onClick={() => setTab("packages")} className={...}>Packages</button>
       </div>
-      {activeTab === "shipments" ? <ShipmentsTab ... /> : <PackagesTab ... />}
+      {activeTab === "inventory" ? <PackagesTab ... /> : <ShipmentsTab ... />}
     </div>
   );
 }
@@ -482,12 +482,12 @@ All user-facing strings must use UK spelling:
 ## Definition of Done
 
 - [x] Overview page accessible at `/admin/inventory`
-- [x] Two tabs ("Shipments" / "Packages") with URL-based state
-- [x] Shipments table shows: Code, From, To, Date, Package Count, Total m³
+- [x] Two tabs ("Inventory" / "Shipments") with URL-based state
+- [x] Shipments table shows: Code, From, To, Date, Package Count, Total m³, Transport €
 - [x] Shipments sorted by date (newest first) by default
 - [x] Clicking a shipment row navigates to detail page
 - [x] Column headers sortable (toggle asc/desc) on both tabs
-- [x] Packages tab shows all packages in standard 14-column format with all reference names resolved
+- [x] Inventory tab shows all packages in standard 14-column format with all reference names resolved
 - [x] Summary cards show Total Packages and Total m³
 - [x] Filter bar filters by Product Name, Species, Shipment Code
 - [x] Summary cards update when filters are applied
@@ -516,9 +516,12 @@ Claude Opus 4.5
 - Tabs use local state + `window.history.replaceState` for instant switching without server re-fetch, while keeping URL shareable
 - `InventoryOverview` wraps `useSearchParams()` in a Suspense boundary for Next.js compatibility
 - ShipmentsTab defaults sort to date DESC (newest first); `SortIcon` extracted as standalone component
-- PackagesTab follows standard 14-column read-only table format; filters dynamically show only values in actual data
-- SummaryCards update reactively when filters change (computed from filtered array)
-- ShipmentDetailView: transport cost is editable via Input; loads packages into PackageEntryTable rows
+- Inventory tab (PackagesTab component) follows standard 14-column read-only table format; filters dynamically show only values in actual data
+- SummaryCards update reactively when DataEntryTable filters change via `onDisplayRowsChange` callback
+- ShipmentDetailView: transport cost is editable via text Input with comma decimal separator, validation restricts to numeric characters, onBlur formats to 2dp
+- ShipmentDetailView: error state shown when reference dropdowns fail to load
+- Accessibility: tabs have role="tablist"/role="tab"/aria-selected, tabpanel wrapper, transport input has aria-label
+- **Known tech debt**: All user-facing strings are hardcoded (violates i18n MANDATORY rule). Full i18n requires a separate story to add translation keys across all portal components (project-wide issue, not specific to Story 2.4)
 - Sidebar "Inventory" link updated to `/admin/inventory` - active state highlighting works for all sub-pages via `startsWith` check
 - Empty state with "Create First Shipment" CTA button navigates to existing new-shipment page
 - Detail page uses `isValidUUID()` helper from types.ts for UUID format validation
@@ -543,4 +546,5 @@ Claude Opus 4.5
 - `apps/portal/src/app/(portal)/admin/inventory/[shipmentId]/loading.tsx` - NEW: Loading skeleton
 - `apps/portal/src/app/(portal)/admin/inventory/[shipmentId]/error.tsx` - NEW: Error boundary
 - `apps/portal/src/components/layout/SidebarWrapper.tsx` - Updated Inventory link to `/admin/inventory`
+- `packages/ui/src/components/data-entry-table.tsx` - Added readOnly mode + onDisplayRowsChange callback
 - `supabase/migrations/20260123000003_update_shipment_packages.sql` - NEW: Atomic update DB function

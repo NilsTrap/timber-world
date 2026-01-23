@@ -521,7 +521,7 @@ NFR46: Loading states for operations > 1 second
 
 **Given** I am logged in as Admin
 **When** I navigate to Inventory > Overview
-**Then** I see two tabs: "Shipments" and "Packages"
+**Then** I see two tabs: "Inventory" and "Shipments"
 
 **Given** I am on the Shipments tab
 **When** I view the table
@@ -533,13 +533,13 @@ NFR46: Loading states for operations > 1 second
 **Then** I see all packages in that shipment with full attributes
 **And** I can edit or add more packages
 
-**Given** I am on the Packages tab
+**Given** I am on the Inventory tab
 **When** I view the table
 **Then** I see all packages in the standard read-only table format (see Architecture: Standard Package/Inventory Table Pattern) with all 14 columns: Shipment, Package, Product, Species, Humidity, Type, Processing, FSC, Quality, Thickness, Width, Length, Pieces, Vol m³
 **And** I see summary cards: Total Packages, Total m³
 **And** columns are sortable and the table has horizontal scroll on narrow screens
 
-**Given** I am viewing the packages table
+**Given** I am viewing the inventory table
 **When** I use the filter bar
 **Then** I can filter by: Product Name, Species, Shipment Code
 **And** the table updates to show matching packages

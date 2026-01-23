@@ -18,7 +18,7 @@ function InventoryOverviewInner({
 }: InventoryOverviewProps) {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(
-    searchParams.get("tab") || "shipments"
+    searchParams.get("tab") || "inventory"
   );
 
   const setTab = useCallback((tab: string) => {
@@ -31,8 +31,24 @@ function InventoryOverviewInner({
   return (
     <div className="space-y-6">
       {/* Tab Navigation */}
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b" role="tablist" aria-label="Inventory views">
         <button
+          role="tab"
+          aria-selected={activeTab === "inventory"}
+          aria-controls="panel-inventory"
+          onClick={() => setTab("inventory")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "inventory"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Inventory
+        </button>
+        <button
+          role="tab"
+          aria-selected={activeTab === "shipments"}
+          aria-controls="panel-shipments"
           onClick={() => setTab("shipments")}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             activeTab === "shipments"
@@ -42,24 +58,16 @@ function InventoryOverviewInner({
         >
           Shipments
         </button>
-        <button
-          onClick={() => setTab("packages")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "packages"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Packages
-        </button>
       </div>
 
       {/* Tab Content */}
-      {activeTab === "shipments" ? (
-        <ShipmentsTab shipments={shipments} />
-      ) : (
-        <PackagesTab packages={packages} />
-      )}
+      <div role="tabpanel" id={`panel-${activeTab}`}>
+        {activeTab === "inventory" ? (
+          <PackagesTab packages={packages} />
+        ) : (
+          <ShipmentsTab shipments={shipments} />
+        )}
+      </div>
     </div>
   );
 }
