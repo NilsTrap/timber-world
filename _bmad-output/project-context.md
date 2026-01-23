@@ -173,6 +173,67 @@ const { data } = useRealtimeSubscription('inventory', {
 - Handle connection drops gracefully
 - Use optimistic updates for better UX
 
+## Standard Inventory/Package Table Pattern
+
+All tables displaying inventory packages (shipments, production, inventory overview, etc.) MUST use the `DataEntryTable` component from `@timber/ui` with the same column structure. Use `readOnly` prop for non-editable views.
+
+### Standard Column Order (MANDATORY)
+
+When displaying package data, always use these columns in this order:
+
+| # | Column | Type | Notes |
+|---|--------|------|-------|
+| 1 | Shipment | readonly | `shipment_code` |
+| 2 | Package | readonly | `package_number`, totalType: "count" |
+| 3 | Product | dropdown, collapsible | `ref_product_names` |
+| 4 | Species | dropdown, collapsible | `ref_wood_species` |
+| 5 | Humidity | dropdown, collapsible | `ref_humidity` |
+| 6 | Type | dropdown, collapsible | `ref_types` |
+| 7 | Processing | dropdown, collapsible | `ref_processing` |
+| 8 | FSC | dropdown, collapsible | `ref_fsc` |
+| 9 | Quality | dropdown, collapsible | `ref_quality` |
+| 10 | Thickness | text | placeholder "mm" |
+| 11 | Width | text | placeholder "mm" |
+| 12 | Length | text | placeholder "mm" |
+| 13 | Pieces | text, numeric | totalType: "sum" |
+| 14 | Vol m³ | custom/numeric | Auto-calculated or manual, totalType: "sum" |
+
+### Editable Table (DataEntryTable)
+
+Use `DataEntryTable<PackageRow>` from `@timber/ui` for any view where users can add/edit/delete packages:
+- New Shipment form
+- Shipment Detail edit view
+- Production input (future)
+
+Key props: `columns`, `rows`, `onRowsChange`, `createRow`, `copyRow`, `renumberRows`, `onCellChange`
+
+### Read-Only Table (DataEntryTable with `readOnly`)
+
+For overview/list views, use `DataEntryTable` with the `readOnly` prop:
+- `<DataEntryTable<PackageListItem> columns={...} rows={data} getRowKey={(r) => r.id} readOnly />`
+- `createRow`, `copyRow`, `onRowsChange` props are optional in readOnly mode
+- For dropdown columns: set `type: "dropdown"`, `collapsible: true`, `getValue` returns resolved display string (no `options` array needed)
+- Retains: collapsible columns, sort/filter menus, totals footer
+- Hides: add button, copy/delete actions, input fields
+- Sort is display-only (doesn't mutate source data)
+- Display "—" for null/empty values, volume to 4 decimal places
+
+### Reference Data (7 Dropdowns)
+
+All 7 dropdown columns reference admin-managed tables (`ref_*`). When querying:
+- Use explicit FK names: `ref_product_names!inventory_packages_product_name_id_fkey(value)`
+- Fetch active options only for edit forms: `.eq("is_active", true).order("sort_order")`
+- For read-only display, resolve UUID → display value via FK join
+
+### Volume Calculation
+
+Volume auto-calculates when all conditions are met:
+- Thickness, Width, Length are all single numbers (not ranges like "40-50")
+- Pieces is a positive number (not "-")
+- Formula: `(thickness × width × length × pieces) / 1,000,000,000` (mm³ → m³)
+- When conditions aren't met, user enters volume manually
+- Display format: Latvian locale with 3 decimal places (`0,000`) for input, 4 places for display
+
 ## Architecture Reference
 
 For complete architectural decisions, patterns, and project structure, see:

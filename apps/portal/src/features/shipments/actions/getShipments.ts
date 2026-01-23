@@ -10,6 +10,9 @@ import type { ActionResult, ShipmentListItem } from "../types";
  * Fetches all shipments with party names and package aggregates.
  * Ordered by shipment_date DESC (newest first).
  * Admin only.
+ *
+ * TODO: Generate proper Supabase types from schema to remove `as any` casts
+ * across all shipment actions (getShipments, getShipmentDetail, getPackages, updateShipmentPackages)
  */
 export async function getShipments(): Promise<ActionResult<ShipmentListItem[]>> {
   const session = await getSession();
@@ -23,6 +26,9 @@ export async function getShipments(): Promise<ActionResult<ShipmentListItem[]>> 
 
   const supabase = await createClient();
 
+  // TODO: Replace embedded inventory_packages(volume_m3) with a DB view or function
+  // that returns aggregated package_count + total_volume_m3 to avoid transferring all
+  // package rows per shipment just for count/sum computation
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("shipments")

@@ -149,6 +149,10 @@ export interface PackageListItem {
   productName: string | null;
   woodSpecies: string | null;
   humidity: string | null;
+  typeName: string | null;
+  processing: string | null;
+  fsc: string | null;
+  quality: string | null;
   thickness: string | null;
   width: string | null;
   length: string | null;

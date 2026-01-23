@@ -71,13 +71,13 @@ export async function getShipmentDetail(
       pieces,
       volume_m3,
       volume_is_calculated,
-      ref_product_names(value),
-      ref_wood_species(value),
-      ref_humidity(value),
-      ref_types(value),
-      ref_processing(value),
-      ref_fsc(value),
-      ref_quality(value)
+      ref_product_names!inventory_packages_product_name_id_fkey(value),
+      ref_wood_species!inventory_packages_wood_species_id_fkey(value),
+      ref_humidity!inventory_packages_humidity_id_fkey(value),
+      ref_types!inventory_packages_type_id_fkey(value),
+      ref_processing!inventory_packages_processing_id_fkey(value),
+      ref_fsc!inventory_packages_fsc_id_fkey(value),
+      ref_quality!inventory_packages_quality_id_fkey(value)
     `)
     .eq("shipment_id", shipmentId)
     .order("package_sequence", { ascending: true });

@@ -35,10 +35,14 @@ export async function getPackages(): Promise<ActionResult<PackageListItem[]>> {
       length,
       pieces,
       volume_m3,
-      shipments(shipment_code),
-      ref_product_names(value),
-      ref_wood_species(value),
-      ref_humidity(value)
+      shipments!inventory_packages_shipment_id_fkey(shipment_code),
+      ref_product_names!inventory_packages_product_name_id_fkey(value),
+      ref_wood_species!inventory_packages_wood_species_id_fkey(value),
+      ref_humidity!inventory_packages_humidity_id_fkey(value),
+      ref_types!inventory_packages_type_id_fkey(value),
+      ref_processing!inventory_packages_processing_id_fkey(value),
+      ref_fsc!inventory_packages_fsc_id_fkey(value),
+      ref_quality!inventory_packages_quality_id_fkey(value)
     `)
     .order("package_number", { ascending: true });
 
@@ -56,6 +60,10 @@ export async function getPackages(): Promise<ActionResult<PackageListItem[]>> {
     productName: pkg.ref_product_names?.value ?? null,
     woodSpecies: pkg.ref_wood_species?.value ?? null,
     humidity: pkg.ref_humidity?.value ?? null,
+    typeName: pkg.ref_types?.value ?? null,
+    processing: pkg.ref_processing?.value ?? null,
+    fsc: pkg.ref_fsc?.value ?? null,
+    quality: pkg.ref_quality?.value ?? null,
     thickness: pkg.thickness,
     width: pkg.width,
     length: pkg.length,

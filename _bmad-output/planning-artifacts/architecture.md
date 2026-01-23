@@ -651,6 +651,65 @@ function handleSubmit() {
 </Button>
 ```
 
+### Standard Package/Inventory Table Pattern (MANDATORY)
+
+All tables displaying package or inventory data (shipments, production inputs/outputs, inventory overview, etc.) MUST use the same column structure and component.
+
+**Standard Column Order (14 columns):**
+
+| # | Column | Type | DB Reference |
+|---|--------|------|-------------|
+| 1 | Shipment | readonly | `shipments.shipment_code` |
+| 2 | Package | readonly | `inventory_packages.package_number` |
+| 3 | Product | dropdown, collapsible | `ref_product_names` |
+| 4 | Species | dropdown, collapsible | `ref_wood_species` |
+| 5 | Humidity | dropdown, collapsible | `ref_humidity` |
+| 6 | Type | dropdown, collapsible | `ref_types` |
+| 7 | Processing | dropdown, collapsible | `ref_processing` |
+| 8 | FSC | dropdown, collapsible | `ref_fsc` |
+| 9 | Quality | dropdown, collapsible | `ref_quality` |
+| 10 | Thickness | text input | `inventory_packages.thickness` (mm) |
+| 11 | Width | text input | `inventory_packages.width` (mm) |
+| 12 | Length | text input | `inventory_packages.length` (mm) |
+| 13 | Pieces | numeric | `inventory_packages.pieces` |
+| 14 | Vol m³ | numeric (auto-calc or manual) | `inventory_packages.volume_m3` |
+
+**Editable Views — Use `DataEntryTable<PackageRow>` from `@timber/ui`:**
+- New Shipment creation
+- Shipment Detail edit
+- Production output entry
+- Any future package editing form
+
+Features: collapsible dropdown columns, keyboard navigation (Tab/Arrow/Enter), row copy/delete, built-in sort/filter menus via ColumnHeaderMenu, totals footer (count for packages, sum for pieces/volume), volume auto-calculation.
+
+**Read-Only Views — Use `DataEntryTable` with `readOnly` prop:**
+- Admin Inventory Overview (Packages tab)
+- Producer Inventory table
+- Any future read-only package list
+
+Usage: `<DataEntryTable<PackageListItem> columns={...} rows={data} getRowKey={(r) => r.id} readOnly />`
+
+The `readOnly` prop:
+- Hides Add/Copy/Delete buttons and Actions column
+- Renders all cells as plain text (resolved display values, not inputs/dropdowns)
+- Retains collapsible columns (click header to collapse/expand)
+- Retains built-in sort/filter menus (sort is display-only, doesn't mutate source data)
+- Retains totals footer
+- `createRow`, `copyRow`, `onRowsChange` props become optional
+
+For dropdown columns in readOnly: set `type: "dropdown"` with `collapsible: true` and `getValue` returning the already-resolved display string. No `options` array needed.
+
+**Volume Auto-Calculation:**
+- Formula: `(thickness × width × length × pieces) / 1,000,000,000` (mm³ → m³)
+- Only when all values are single numbers (not ranges like "40-50")
+- Only when pieces is a positive number (not "-")
+- Display: Latvian locale with comma decimal separator (`0,000`) for input, 4 decimal places for display
+
+**Reference Data Queries:**
+- Always use explicit FK constraint names in Supabase/PostgREST joins
+- Pattern: `ref_product_names!inventory_packages_product_name_id_fkey(value)`
+- Fetch active options only for edit dropdowns: `.eq("is_active", true).order("sort_order")`
+
 ### Pattern Summary
 
 | Area | Pattern |
@@ -667,6 +726,7 @@ function handleSubmit() {
 | Unexpected errors | Error boundaries |
 | Loading (server) | Suspense + loading.tsx |
 | Loading (client) | useTransition |
+| Package/Inventory tables | Standard 14-column layout via DataEntryTable or read-only Table |
 
 ### Enforcement Guidelines
 

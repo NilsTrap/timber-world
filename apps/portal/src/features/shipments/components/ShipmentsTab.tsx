@@ -20,6 +20,23 @@ interface ShipmentsTabProps {
 
 type SortKey = keyof ShipmentListItem;
 
+function SortIcon({
+  columnKey,
+  sortConfig,
+}: {
+  columnKey: SortKey;
+  sortConfig: { key: SortKey; direction: "asc" | "desc" };
+}) {
+  if (sortConfig.key !== columnKey) {
+    return <ArrowUpDown className="h-3 w-3 ml-1 inline text-muted-foreground" />;
+  }
+  return sortConfig.direction === "asc" ? (
+    <ArrowUp className="h-3 w-3 ml-1 inline text-primary" />
+  ) : (
+    <ArrowDown className="h-3 w-3 ml-1 inline text-primary" />
+  );
+}
+
 export function ShipmentsTab({ shipments }: ShipmentsTabProps) {
   const router = useRouter();
   const [sortConfig, setSortConfig] = useState<{
@@ -46,17 +63,6 @@ export function ShipmentsTab({ shipments }: ShipmentsTabProps) {
     }));
   };
 
-  const SortIcon = ({ columnKey }: { columnKey: SortKey }) => {
-    if (sortConfig.key !== columnKey) {
-      return <ArrowUpDown className="h-3 w-3 ml-1 inline text-muted-foreground" />;
-    }
-    return sortConfig.direction === "asc" ? (
-      <ArrowUp className="h-3 w-3 ml-1 inline text-primary" />
-    ) : (
-      <ArrowDown className="h-3 w-3 ml-1 inline text-primary" />
-    );
-  };
-
   if (shipments.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -81,42 +87,42 @@ export function ShipmentsTab({ shipments }: ShipmentsTabProps) {
               onClick={() => toggleSort("shipmentCode")}
             >
               Shipment Code
-              <SortIcon columnKey="shipmentCode" />
+              <SortIcon columnKey="shipmentCode" sortConfig={sortConfig} />
             </TableHead>
             <TableHead
               className="cursor-pointer select-none"
               onClick={() => toggleSort("fromPartyCode")}
             >
               From
-              <SortIcon columnKey="fromPartyCode" />
+              <SortIcon columnKey="fromPartyCode" sortConfig={sortConfig} />
             </TableHead>
             <TableHead
               className="cursor-pointer select-none"
               onClick={() => toggleSort("toPartyCode")}
             >
               To
-              <SortIcon columnKey="toPartyCode" />
+              <SortIcon columnKey="toPartyCode" sortConfig={sortConfig} />
             </TableHead>
             <TableHead
               className="cursor-pointer select-none"
               onClick={() => toggleSort("shipmentDate")}
             >
               Date
-              <SortIcon columnKey="shipmentDate" />
+              <SortIcon columnKey="shipmentDate" sortConfig={sortConfig} />
             </TableHead>
             <TableHead
               className="cursor-pointer select-none text-right"
               onClick={() => toggleSort("packageCount")}
             >
               Packages
-              <SortIcon columnKey="packageCount" />
+              <SortIcon columnKey="packageCount" sortConfig={sortConfig} />
             </TableHead>
             <TableHead
               className="cursor-pointer select-none text-right"
               onClick={() => toggleSort("totalVolumeM3")}
             >
               Total m³
-              <SortIcon columnKey="totalVolumeM3" />
+              <SortIcon columnKey="totalVolumeM3" sortConfig={sortConfig} />
             </TableHead>
           </TableRow>
         </TableHeader>

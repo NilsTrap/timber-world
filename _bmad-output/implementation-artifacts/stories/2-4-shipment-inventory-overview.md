@@ -41,8 +41,9 @@
 ### AC4: Packages Table
 **Given** I am on the Packages tab
 **When** I view the table
-**Then** I see all packages with columns: Package No, Shipment Code, Product, Species, Humidity, Dimensions, Pieces, m³
+**Then** I see all packages in the standard read-only table format (see Architecture: Standard Package/Inventory Table Pattern) with all 14 columns: Shipment, Package, Product, Species, Humidity, Type, Processing, FSC, Quality, Thickness, Width, Length, Pieces, Vol m³
 **And** I see summary cards above the table: Total Packages, Total m³
+**And** the table has horizontal scroll (`overflow-x-auto`) on narrow screens
 
 ### AC5: Filter Bar (Packages)
 **Given** I am viewing the Packages tab
@@ -73,10 +74,12 @@ This story builds on Story 2.3's data model and actions. It creates a read-only 
 
 **Key decisions:**
 - Overview page uses server-side data fetching (RSC) for initial load
-- Tabs use URL search params (`?tab=shipments` / `?tab=packages`) for shareable state
-- Shipment detail page reuses existing `ShipmentHeader` and `PackageEntryTable` components in edit mode
-- Sort is client-side (tables are reasonably sized for MVP)
-- Filters use client-side filtering with URL search params for persistence
+- Tabs use local state + `window.history.replaceState` for instant switching (URL shareable but no server re-fetch)
+- Packages tab follows the standard 14-column read-only table format (see Architecture: Standard Package/Inventory Table Pattern)
+- Shipment detail page reuses `PackageEntryTable` (standard `DataEntryTable`) in edit mode with editable transport cost
+- Sort is client-side (tables are reasonably sized for MVP); `SortIcon` extracted as standalone component
+- Filters use client-side filtering; filter dropdowns show only values in actual data
+- All Supabase queries use explicit FK constraint names for resilience
 
 ### Database Schema (existing, no changes needed)
 
@@ -195,6 +198,10 @@ CREATE TABLE inventory_packages (
     productName: string | null;
     woodSpecies: string | null;
     humidity: string | null;
+    typeName: string | null;
+    processing: string | null;
+    fsc: string | null;
+    quality: string | null;
     thickness: string | null;
     width: string | null;
     length: string | null;
@@ -202,7 +209,7 @@ CREATE TABLE inventory_packages (
     volumeM3: number | null;
   }
   ```
-  Joins `inventory_packages` with `shipments` (for shipment_code) and `ref_product_names`, `ref_wood_species`, `ref_humidity` for display values.
+  Joins `inventory_packages` with `shipments` (for shipment_code) and all 7 reference tables (`ref_product_names`, `ref_wood_species`, `ref_humidity`, `ref_types`, `ref_processing`, `ref_fsc`, `ref_quality`) using explicit FK constraint names for display values.
 
 - [x] `actions/updateShipmentPackages.ts` - Update an existing shipment's packages:
   - Accepts shipment ID + transport cost + full package array (same shape as create)
@@ -227,7 +234,9 @@ CREATE TABLE inventory_packages (
   - Receives `packages: PackageListItem[]` and reference dropdown options
   - Filter bar: Product Name (select), Species (select), Shipment Code (text input)
   - Summary cards above table: Total Packages count, Total m³ sum
-  - Table with sort on column headers
+  - Read-only table following standard 14-column layout (see Architecture: Standard Package/Inventory Table Pattern)
+  - All columns sortable with sort state displayed via SortIcon component (extracted outside render)
+  - `overflow-x-auto` wrapper for horizontal scroll
   - Cards and table update reactively when filters change
 
 - [x] `components/SummaryCards.tsx` - Reusable summary card row:
@@ -253,11 +262,12 @@ CREATE TABLE inventory_packages (
   - Add `loading.tsx` and `error.tsx`
 
 - [x] Create `components/ShipmentDetailView.tsx` - Client component:
-  - Shows shipment header info as read-only display (not form)
+  - Shows shipment header info (code, from, to, date as read-only; transport cost as editable Input)
   - Renders `PackageEntryTable` with pre-filled rows from existing packages
   - "Add Package" adds new row
-  - "Save Changes" calls `updateShipmentPackages` action
-  - Success toast + stay on page (no redirect)
+  - "Save Changes" calls `updateShipmentPackages` action (includes updated transport cost)
+  - `updateShipmentPackages` calls `revalidatePath("/admin/inventory")` to bust route cache
+  - Success toast + `router.refresh()` to reload server data
 
 #### Task 5: Update Navigation
 
@@ -407,23 +417,28 @@ export async function myAction(input: MyInput): Promise<ActionResult<MyOutput>> 
 }
 ```
 
-### Tab Pattern (URL-based)
+### Tab Pattern (URL-synced local state)
+
+Uses local state for instant tab switching (no server re-fetch) while syncing to URL via `replaceState` for shareability:
 
 ```typescript
 "use client";
 
-import { useSearchParams, useRouter } from "next/navigation";
+import { useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 
 export function InventoryOverview({ shipments, packages, dropdowns }) {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const activeTab = searchParams.get("tab") || "shipments";
+  const [activeTab, setActiveTab] = useState(
+    searchParams.get("tab") || "shipments"
+  );
 
-  const setTab = (tab: string) => {
-    const params = new URLSearchParams(searchParams.toString());
+  const setTab = useCallback((tab: string) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(window.location.search);
     params.set("tab", tab);
-    router.push(`?${params.toString()}`);
-  };
+    window.history.replaceState(null, "", `?${params.toString()}`);
+  }, []);
 
   return (
     <div>
@@ -472,11 +487,11 @@ All user-facing strings must use UK spelling:
 - [x] Shipments sorted by date (newest first) by default
 - [x] Clicking a shipment row navigates to detail page
 - [x] Column headers sortable (toggle asc/desc) on both tabs
-- [x] Packages tab shows all packages with resolved reference names
+- [x] Packages tab shows all packages in standard 14-column format with all reference names resolved
 - [x] Summary cards show Total Packages and Total m³
 - [x] Filter bar filters by Product Name, Species, Shipment Code
 - [x] Summary cards update when filters are applied
-- [x] Shipment detail page shows header info + editable package table
+- [x] Shipment detail page shows header info (with editable transport cost) + editable package table
 - [x] Can edit existing packages on detail page
 - [x] Can add new packages on detail page
 - [x] "Save Changes" persists updates atomically via DB function
@@ -493,19 +508,20 @@ All user-facing strings must use UK spelling:
 Claude Opus 4.5
 
 ### Completion Notes
-- Server actions use Supabase PostgREST relation queries (foreign key joins) for fetching party names and reference values
-- `getShipments` aggregates package count and total volume via the embedded `inventory_packages` relation
+- Server actions use Supabase PostgREST relation queries with explicit FK constraint names (e.g., `ref_product_names!inventory_packages_product_name_id_fkey(value)`)
+- `getShipments` aggregates package count and total volume via the embedded `inventory_packages` relation (TODO: replace with DB view/function for efficiency)
 - `getShipmentDetail` joins all 7 reference tables to resolve display names for each package
-- `getPackages` resolves product_name, wood_species, humidity display values plus shipment_code
-- `updateShipmentPackages` uses atomic DB function (delete + re-insert pattern) matching `create_shipment_with_packages` style
-- Tabs use URL search params (`?tab=shipments`/`?tab=packages`) for shareable/bookmarkable state
+- `getPackages` resolves all 7 reference table display values plus shipment_code — follows standard 14-column layout
+- `updateShipmentPackages` uses atomic DB function (delete + re-insert pattern) matching `create_shipment_with_packages` style; calls `revalidatePath("/admin/inventory")` to bust route cache
+- Tabs use local state + `window.history.replaceState` for instant switching without server re-fetch, while keeping URL shareable
 - `InventoryOverview` wraps `useSearchParams()` in a Suspense boundary for Next.js compatibility
-- ShipmentsTab defaults sort to date DESC (newest first)
-- PackagesTab filters dynamically show only values that exist in the actual data
+- ShipmentsTab defaults sort to date DESC (newest first); `SortIcon` extracted as standalone component
+- PackagesTab follows standard 14-column read-only table format; filters dynamically show only values in actual data
 - SummaryCards update reactively when filters change (computed from filtered array)
-- ShipmentDetailView loads packages into PackageEntryTable rows, reusing the same edit experience as new shipment
+- ShipmentDetailView: transport cost is editable via Input; loads packages into PackageEntryTable rows
 - Sidebar "Inventory" link updated to `/admin/inventory` - active state highlighting works for all sub-pages via `startsWith` check
 - Empty state with "Create First Shipment" CTA button navigates to existing new-shipment page
+- Detail page uses `isValidUUID()` helper from types.ts for UUID format validation
 
 ### File List
 - `apps/portal/src/features/shipments/types.ts` - Added ShipmentListItem, PackageDetail, ShipmentDetail, PackageListItem, UpdateShipmentInput types

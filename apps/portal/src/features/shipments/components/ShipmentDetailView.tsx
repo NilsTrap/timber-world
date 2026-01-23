@@ -4,13 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, ArrowLeft } from "lucide-react";
-import { Button } from "@timber/ui";
+import { Button, Input } from "@timber/ui";
 import { PackageEntryTable } from "./PackageEntryTable";
-import { getReferenceDropdowns, getActiveOrganisations, updateShipmentPackages } from "../actions";
+import { getReferenceDropdowns, updateShipmentPackages } from "../actions";
 import type {
   ShipmentDetail,
   ReferenceDropdowns,
-  OrganisationOption,
   PackageRow,
   PackageInput,
 } from "../types";
@@ -43,32 +42,11 @@ function packageDetailToRow(
   };
 }
 
-function createEmptyRow(index: number): PackageRow {
-  return {
-    clientId: `pkg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    packageNumber: `PKG-${String(index + 1).padStart(3, "0")}`,
-    productNameId: "",
-    woodSpeciesId: "",
-    humidityId: "",
-    typeId: "",
-    processingId: "",
-    fscId: "",
-    qualityId: "",
-    thickness: "",
-    width: "",
-    length: "",
-    pieces: "",
-    volumeM3: "",
-    volumeIsCalculated: false,
-  };
-}
-
 export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [dropdowns, setDropdowns] = useState<ReferenceDropdowns | null>(null);
-  const [organisations, setOrganisations] = useState<OrganisationOption[]>([]);
   const [transportCostEur, setTransportCostEur] = useState(
     shipment.transportCostEur != null ? shipment.transportCostEur.toFixed(2) : ""
   );
@@ -78,12 +56,8 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
 
   useEffect(() => {
     async function loadData() {
-      const [dropsResult, orgsResult] = await Promise.all([
-        getReferenceDropdowns(),
-        getActiveOrganisations(),
-      ]);
-      if (dropsResult.success) setDropdowns(dropsResult.data);
-      if (orgsResult.success) setOrganisations(orgsResult.data);
+      const result = await getReferenceDropdowns();
+      if (result.success) setDropdowns(result.data);
       setIsLoading(false);
     }
     loadData();
@@ -170,12 +144,16 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
             <span className="font-medium">{shipment.shipmentDate}</span>
           </div>
           <div>
-            <span className="text-muted-foreground">Transport Cost:</span>{" "}
-            <span className="font-medium">
-              {shipment.transportCostEur != null
-                ? `€${shipment.transportCostEur.toFixed(2)}`
-                : "-"}
-            </span>
+            <span className="text-muted-foreground block mb-1">Transport Cost (€)</span>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={transportCostEur}
+              onChange={(e) => setTransportCostEur(e.target.value)}
+              className="w-32 h-8"
+            />
           </div>
         </div>
       </div>

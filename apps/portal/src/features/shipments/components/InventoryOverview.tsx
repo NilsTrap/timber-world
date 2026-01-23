@@ -1,33 +1,32 @@
 "use client";
 
-import { useSearchParams, useRouter } from "next/navigation";
+import { useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { ShipmentsTab } from "./ShipmentsTab";
 import { PackagesTab } from "./PackagesTab";
-import type { ShipmentListItem, PackageListItem, ReferenceOption } from "../types";
+import type { ShipmentListItem, PackageListItem } from "../types";
 
 interface InventoryOverviewProps {
   shipments: ShipmentListItem[];
   packages: PackageListItem[];
-  productNames: ReferenceOption[];
-  woodSpecies: ReferenceOption[];
 }
 
 function InventoryOverviewInner({
   shipments,
   packages,
-  productNames,
-  woodSpecies,
 }: InventoryOverviewProps) {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const activeTab = searchParams.get("tab") || "shipments";
+  const [activeTab, setActiveTab] = useState(
+    searchParams.get("tab") || "shipments"
+  );
 
-  const setTab = (tab: string) => {
-    const params = new URLSearchParams(searchParams.toString());
+  const setTab = useCallback((tab: string) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(window.location.search);
     params.set("tab", tab);
-    router.push(`?${params.toString()}`);
-  };
+    window.history.replaceState(null, "", `?${params.toString()}`);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -59,11 +58,7 @@ function InventoryOverviewInner({
       {activeTab === "shipments" ? (
         <ShipmentsTab shipments={shipments} />
       ) : (
-        <PackagesTab
-          packages={packages}
-          productNames={productNames}
-          woodSpecies={woodSpecies}
-        />
+        <PackagesTab packages={packages} />
       )}
     </div>
   );

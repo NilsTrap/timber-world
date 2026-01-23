@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin } from "@/lib/auth";
 import { packageInputSchema } from "../schemas";
@@ -77,6 +78,8 @@ export async function updateShipmentPackages(
     console.error("Failed to update shipment:", error);
     return { success: false, error: `Failed to update shipment: ${error.message}`, code: "RPC_FAILED" };
   }
+
+  revalidatePath("/admin/inventory");
 
   return {
     success: true,

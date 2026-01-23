@@ -474,20 +474,8 @@ NFR46: Loading states for operations > 1 second
 
 **Given** I have created a shipment header
 **When** I proceed to add packages
-**Then** I see a horizontal/tabular entry form with columns:
-- Package No (auto-generated, read-only)
-- Product Name (dropdown)
-- Species (dropdown)
-- Humidity (dropdown)
-- Type (dropdown)
-- Processing (dropdown)
-- FSC (dropdown)
-- Quality (dropdown)
-- Thickness (text input)
-- Width (text input)
-- Length (text input)
-- Pieces (text input)
-- Volume m³ (auto-calculated or manual)
+**Then** I see the standard `DataEntryTable` component (see Architecture: Standard Package/Inventory Table Pattern) with all 14 columns in the standard order: Shipment, Package, Product, Species, Humidity, Type, Processing, FSC, Quality, Thickness, Width, Length, Pieces, Vol m³
+**And** dropdown columns are collapsible, keyboard navigation works (Tab/Arrow/Enter), and rows support copy/delete
 
 **Given** I am entering a package row
 **When** I enter valid dimensions (e.g., "40", "100", "2000") and pieces (e.g., "500")
@@ -547,8 +535,9 @@ NFR46: Loading states for operations > 1 second
 
 **Given** I am on the Packages tab
 **When** I view the table
-**Then** I see all packages with columns: Package No, Shipment, Product, Species, Humidity, Dimensions, Pieces, m³
+**Then** I see all packages in the standard read-only table format (see Architecture: Standard Package/Inventory Table Pattern) with all 14 columns: Shipment, Package, Product, Species, Humidity, Type, Processing, FSC, Quality, Thickness, Width, Length, Pieces, Vol m³
 **And** I see summary cards: Total Packages, Total m³
+**And** columns are sortable and the table has horizontal scroll on narrow screens
 
 **Given** I am viewing the packages table
 **When** I use the filter bar
@@ -587,7 +576,7 @@ NFR46: Loading states for operations > 1 second
 **Given** I am logged in as Producer
 **When** I navigate to Inventory
 **Then** I see a table of all packages at my facility (where to_organisation = my facility)
-**And** columns display: Package No, Shipment, Product, Species, Humidity, Type, Processing, Dimensions, Pieces, m³
+**And** the table uses the standard read-only table format (see Architecture: Standard Package/Inventory Table Pattern) with all 14 columns: Shipment, Package, Product, Species, Humidity, Type, Processing, FSC, Quality, Thickness, Width, Length, Pieces, Vol m³
 
 **Given** packages exist for my facility
 **When** I view the inventory table
@@ -711,7 +700,7 @@ NFR46: Loading states for operations > 1 second
 
 **Given** I have added input lines
 **When** I view the inputs section
-**Then** I see all input lines with: Package No, Product, Dimensions, Pieces Used, m³
+**Then** I see all input lines in the standard 14-column table format (see Architecture: Standard Package/Inventory Table Pattern)
 **And** I see a running total of input m³
 **And** I can remove any input line by clicking delete
 
@@ -740,7 +729,7 @@ NFR46: Loading states for operations > 1 second
 
 **Given** I have added inputs to a production entry
 **When** I move to the Outputs section
-**Then** I see a horizontal/tabular entry form similar to shipment package entry
+**Then** I see the standard `DataEntryTable` component (see Architecture: Standard Package/Inventory Table Pattern) with all 14 columns in the standard order
 **And** output lines can be auto-generated based on inputs (inherit attributes)
 
 **Given** I click "Auto-Generate from Inputs"
@@ -753,11 +742,9 @@ NFR46: Loading states for operations > 1 second
 
 **Given** I am adding output lines manually
 **When** I click "+ Add Output"
-**Then** a new row is added with all attribute dropdowns:
-- Product Name, Species, Humidity, Type, Processing, FSC, Quality (dropdowns)
-- Thickness, Width, Length (text inputs)
-- Pieces, m³ (text inputs)
+**Then** a new row is added following the standard 14-column layout with all attribute dropdowns and dimension inputs
 **And** the package number is auto-generated (internal production number)
+**And** volume auto-calculates when all dimensions and pieces are single numbers
 
 **Given** I am editing output lines
 **When** I need the same values for multiple outputs

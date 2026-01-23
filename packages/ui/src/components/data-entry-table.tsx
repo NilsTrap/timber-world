@@ -82,18 +82,18 @@ export interface DataEntryTableProps<TRow> {
   columns: ColumnDef<TRow>[];
   /** Current rows */
   rows: TRow[];
-  /** Callback when rows change */
-  onRowsChange: (rows: TRow[]) => void;
+  /** Callback when rows change (optional in readOnly mode) */
+  onRowsChange?: (rows: TRow[]) => void;
 
   // ─── Row Identity ─────────────────────────────────────────────────────
   /** Get unique key for a row (for React keys) */
   getRowKey: (row: TRow) => string;
 
   // ─── Row Operations ───────────────────────────────────────────────────
-  /** Create a new empty row at given index */
-  createRow: (index: number) => TRow;
-  /** Create a copy of a row for the given new index */
-  copyRow: (source: TRow, newIndex: number) => TRow;
+  /** Create a new empty row at given index (not used in readOnly mode) */
+  createRow?: (index: number) => TRow;
+  /** Create a copy of a row for the given new index (not used in readOnly mode) */
+  copyRow?: (source: TRow, newIndex: number) => TRow;
   /** Called after any reordering to renumber rows. Receives all rows, returns updated rows. */
   renumberRows?: (rows: TRow[]) => TRow[];
   /** Called when a cell value changes. Receives row, column key, new value. Returns updated row. */
@@ -108,6 +108,11 @@ export interface DataEntryTableProps<TRow> {
   collapseStorageKey?: string;
   /** ID prefix for input elements (default: "det") */
   idPrefix?: string;
+
+  // ─── Read-Only Mode ───────────────────────────────────────────────────
+  /** When true, hides add/copy/delete actions and renders all cells as text.
+   *  Retains collapsible columns, sort/filter menus, and totals footer. */
+  readOnly?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -132,6 +137,7 @@ function DataEntryTable<TRow>({
   addRowLabel = "Add Row",
   collapseStorageKey = "det-collapsed-columns",
   idPrefix = "det",
+  readOnly = false,
 }: DataEntryTableProps<TRow>) {
   // ─── Collapsed Columns ──────────────────────────────────────────────────
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(() => {
@@ -194,9 +200,9 @@ function DataEntryTable<TRow>({
     return map;
   }, [rows, filterableColumns, getColDisplayValue]);
 
-  /** Display rows: filtered subset with original index */
+  /** Display rows: filtered (and sorted in readOnly mode) subset with original index */
   const displayRows = useMemo(() => {
-    return rows
+    let result = rows
       .map((row, idx) => ({ row, originalIndex: idx }))
       .filter(({ row }) => {
         for (const [colKey, allowedValues] of Object.entries(filterState)) {
@@ -208,7 +214,29 @@ function DataEntryTable<TRow>({
         }
         return true;
       });
-  }, [rows, filterState, columns, getColDisplayValue]);
+
+    // In readOnly mode, sort is display-only (not physical reorder)
+    if (readOnly && sortState) {
+      const col = columns.find((c) => c.key === sortState.column);
+      if (col) {
+        result = [...result].sort((a, b) => {
+          const aVal = getColDisplayValue(a.row, col);
+          const bVal = getColDisplayValue(b.row, col);
+          if (col.isNumeric || col.type === "numeric") {
+            const aNum = parseFloat(aVal);
+            const bNum = parseFloat(bVal);
+            if (!isNaN(aNum) && !isNaN(bNum)) {
+              return sortState.direction === "asc" ? aNum - bNum : bNum - aNum;
+            }
+          }
+          const cmp = aVal.localeCompare(bVal);
+          return sortState.direction === "asc" ? cmp : -cmp;
+        });
+      }
+    }
+
+    return result;
+  }, [rows, filterState, columns, getColDisplayValue, readOnly, sortState]);
 
   /** Totals */
   const totals = useMemo(() => {
@@ -233,10 +261,10 @@ function DataEntryTable<TRow>({
   const handleSortChange = useCallback(
     (sort: ColumnSortState | null) => {
       setSortState(sort);
-      if (!sort) return;
+      if (!sort || readOnly) return;
 
       const col = columns.find((c) => c.key === sort.column);
-      if (!col) return;
+      if (!col || !onRowsChange) return;
 
       const sorted = [...rows].sort((a, b) => {
         const aVal = getColDisplayValue(a, col);
@@ -257,7 +285,7 @@ function DataEntryTable<TRow>({
       const result = renumberRows ? renumberRows(sorted) : sorted;
       onRowsChange(result);
     },
-    [rows, columns, onRowsChange, renumberRows, getColDisplayValue]
+    [rows, columns, onRowsChange, renumberRows, getColDisplayValue, readOnly]
   );
 
   const handleFilterChange = useCallback(
@@ -270,6 +298,7 @@ function DataEntryTable<TRow>({
   // ─── Row Operations ─────────────────────────────────────────────────────
   const updateCell = useCallback(
     (originalIndex: number, columnKey: string, value: string) => {
+      if (!onRowsChange) return;
       const newRows = [...rows];
       const row = newRows[originalIndex]!;
       if (onCellChange) {
@@ -284,6 +313,7 @@ function DataEntryTable<TRow>({
   );
 
   const handleAddRow = useCallback(() => {
+    if (!createRow || !onRowsChange) return;
     setFilterState({});
     const newRow = createRow(rows.length);
     onRowsChange([...rows, newRow]);
@@ -291,6 +321,7 @@ function DataEntryTable<TRow>({
 
   const handleCopyRow = useCallback(
     (originalIndex: number) => {
+      if (!copyRow || !onRowsChange) return;
       const source = rows[originalIndex]!;
       const newRow = copyRow(source, originalIndex + 1);
       const newRows = [...rows];
@@ -303,6 +334,7 @@ function DataEntryTable<TRow>({
 
   const handleRemoveRow = useCallback(
     (originalIndex: number) => {
+      if (!onRowsChange) return;
       if (rows.length <= 1) return;
       const newRows = rows.filter((_, i) => i !== originalIndex);
       const result = renumberRows ? renumberRows(newRows) : newRows;
@@ -495,13 +527,15 @@ function DataEntryTable<TRow>({
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        <Button onClick={handleAddRow} variant="outline" size="sm">
-          <Plus className="h-4 w-4" />
-          {addRowLabel}
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <Button onClick={handleAddRow} variant="outline" size="sm">
+            <Plus className="h-4 w-4" />
+            {addRowLabel}
+          </Button>
+        </div>
+      )}
 
       <div className="rounded-lg border overflow-x-auto">
         <Table className="w-auto">
@@ -563,7 +597,7 @@ function DataEntryTable<TRow>({
                 );
               })}
               {/* Actions column */}
-              <TableHead className="px-1 text-xs" />
+              {!readOnly && <TableHead className="px-1 text-xs" />}
             </TableRow>
           </TableHeader>
 
@@ -574,7 +608,7 @@ function DataEntryTable<TRow>({
                   const isCollapsed = col.collapsible && collapsedColumns.has(col.key);
                   const currentValue = col.getValue(row);
 
-                  if (col.type === "custom" && col.renderCell) {
+                  if (col.type === "custom" && col.renderCell && !readOnly) {
                     return (
                       <TableCell key={col.key} className="px-1">
                         {col.renderCell(
@@ -588,13 +622,34 @@ function DataEntryTable<TRow>({
                     );
                   }
 
-                  if (col.type === "readonly") {
+                  if (col.type === "readonly" || readOnly) {
+                    // In readOnly mode, all cells render as text
+                    const displayValue = readOnly
+                      ? getColDisplayValue(row, col)
+                      : currentValue;
+
+                    if (readOnly && col.collapsible && isCollapsed) {
+                      const label = getColDisplayValue(row, col);
+                      const abbrev = label ? label.slice(0, 3) : "-";
+                      const tooltip = label ? `${col.label}: ${label}` : `${col.label}: (empty)`;
+                      return (
+                        <TableCell key={col.key} className="px-1 w-[30px]">
+                          <span
+                            className="inline-flex items-center justify-center h-7 w-full text-xs text-muted-foreground cursor-default"
+                            title={tooltip}
+                          >
+                            {abbrev}
+                          </span>
+                        </TableCell>
+                      );
+                    }
+
                     return (
                       <TableCell
                         key={col.key}
-                        className="px-1 font-mono text-xs text-muted-foreground whitespace-nowrap"
+                        className="px-1 text-xs whitespace-nowrap"
                       >
-                        {currentValue || "—"}
+                        {displayValue || "—"}
                       </TableCell>
                     );
                   }
@@ -621,29 +676,31 @@ function DataEntryTable<TRow>({
                 })}
 
                 {/* Actions */}
-                <TableCell className="px-1">
-                  <div className="flex items-center gap-0.5">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleCopyRow(originalIndex)}
-                      aria-label="Copy row"
-                      title="Copy row"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleRemoveRow(originalIndex)}
-                      disabled={rows.length <= 1}
-                      aria-label="Remove row"
-                      title="Remove row"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </TableCell>
+                {!readOnly && (
+                  <TableCell className="px-1">
+                    <div className="flex items-center gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleCopyRow(originalIndex)}
+                        aria-label="Copy row"
+                        title="Copy row"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleRemoveRow(originalIndex)}
+                        disabled={rows.length <= 1}
+                        aria-label="Remove row"
+                        title="Remove row"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
@@ -672,7 +729,7 @@ function DataEntryTable<TRow>({
                     </TableCell>
                   );
                 })}
-                <TableCell className="px-1" />
+                {!readOnly && <TableCell className="px-1" />}
               </TableRow>
             </TableFooter>
           )}
