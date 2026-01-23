@@ -192,6 +192,7 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
           dropdowns={dropdowns}
           rows={packageRows}
           onRowsChange={setPackageRows}
+          shipmentCode={shipment.shipmentCode}
         />
       )}
 

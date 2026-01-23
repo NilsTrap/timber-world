@@ -14,6 +14,7 @@ export interface SessionUser {
   email: string;
   name: string;
   role: UserRole;
+  partyId: string | null;
 }
 
 /**
@@ -39,11 +40,26 @@ export async function getSession(): Promise<SessionUser | null> {
   const role = (user.user_metadata?.role as UserRole) || "producer";
   const name = (user.user_metadata?.name as string) || user.email || "User";
 
+  // Query portal_users for party_id (links producers to their facility)
+  // NOTE: This adds an extra DB round-trip for producers. Post-MVP: consider
+  // storing party_id in user_metadata to avoid this on every request.
+  let partyId: string | null = null;
+  if (role === "producer") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: portalUser } = await (supabase as any)
+      .from("portal_users")
+      .select("party_id")
+      .eq("auth_user_id", user.id)
+      .single();
+    partyId = portalUser?.party_id ?? null;
+  }
+
   return {
     id: user.id,
     email: user.email || "",
     name,
     role,
+    partyId,
   };
 }
 
