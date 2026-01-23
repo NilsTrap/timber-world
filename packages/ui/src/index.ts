@@ -49,7 +49,25 @@ export {
   TableCaption,
 } from "./components/table";
 export { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/tabs";
+export {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverAnchor,
+} from "./components/popover";
 export { Badge, badgeVariants } from "./components/badge";
+export {
+  ColumnHeaderMenu,
+  type ColumnSortState,
+  type SortDirection,
+} from "./components/column-header-menu";
+export {
+  DataEntryTable,
+  type ColumnDef,
+  type ColumnType,
+  type DataEntryTableProps,
+  type DropdownOption,
+} from "./components/data-entry-table";
 
 // Utils
 export { cn } from "./utils";
