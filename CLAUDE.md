@@ -142,6 +142,28 @@ Project configuration in `_bmad/bmm/config.yaml`:
 - `communication_language`: English
 - `output_folder`: `{project-root}/_bmad-output`
 
+## Component Standards
+
+### DataEntryTable (Inventory / Production / Product Tables)
+
+All editable tables related to **inventory, production, and product data** must use the `DataEntryTable` generic component from `@timber/ui`. This includes package entry, stock management, production tracking, and any table where users input or edit product-related records.
+
+**Location:** `packages/ui/src/components/data-entry-table.tsx`
+
+**Import:** `import { DataEntryTable, type ColumnDef } from "@timber/ui";`
+
+**Built-in features:**
+- Column types: `readonly`, `dropdown` (collapsible), `text`, `custom` (via `renderCell`)
+- Sort & filter per column (via `ColumnHeaderMenu` popover)
+- Keyboard navigation: Enter (next field), Arrow keys (horizontal at edges, vertical)
+- Add / Copy / Delete rows with automatic renumbering
+- Totals footer (count, sum, custom formatTotal)
+- Collapse/expand for dropdown columns with localStorage persistence
+
+**Usage pattern:** Create a thin wrapper component (e.g., `PackageEntryTable`) that defines `ColumnDef<TRow>[]` and domain-specific callbacks (`onCellChange`, `copyRow`, `renumberRows`, `createRow`).
+
+**Not required for:** Other tables in the system (e.g., admin listings, analytics dashboards, user management) may use different table patterns as appropriate.
+
 ## Working with BMad
 
 1. **Check status**: Use `/bmad:bmm:workflows:workflow-status` to see where the project is
