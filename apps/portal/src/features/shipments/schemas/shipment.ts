@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+/** Dimension field: number, range (e.g. "40-50"), or empty */
+const dimensionField = z.string().max(20).regex(
+  /^$|^[\d.,]+(-[\d.,]+)?$/,
+  "Must be a number or range (e.g. 40 or 40-50)"
+);
+
+/** Pieces field: number, "-" (uncountable), or empty */
+const piecesField = z.string().max(20).regex(
+  /^$|^-$|^[\d]+$/,
+  "Must be a number or '-' for uncountable"
+);
+
 /** Schema for a single package row submission */
 export const packageInputSchema = z.object({
   productNameId: z.string().uuid().nullable(),
@@ -9,10 +21,10 @@ export const packageInputSchema = z.object({
   processingId: z.string().uuid().nullable(),
   fscId: z.string().uuid().nullable(),
   qualityId: z.string().uuid().nullable(),
-  thickness: z.string(),
-  width: z.string(),
-  length: z.string(),
-  pieces: z.string(),
+  thickness: dimensionField,
+  width: dimensionField,
+  length: dimensionField,
+  pieces: piecesField,
   volumeM3: z.number().nullable(),
   volumeIsCalculated: z.boolean(),
 });
