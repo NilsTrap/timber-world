@@ -205,7 +205,7 @@ export function PackageEntryTable({
         totalType: "sum",
         formatTotal: (value) => formatVolumeDisplay(value.toFixed(3)),
         getValue: (row) => row.volumeM3,
-        renderCell: (row, renderIndex, originalIndex, onChange) => {
+        renderCell: (row, renderIndex, originalIndex, onChange, onKeyDown) => {
           if (row.volumeIsCalculated) {
             return (
               <span
@@ -223,6 +223,7 @@ export function PackageEntryTable({
               placeholder="0,000"
               value={formatVolumeInput(row.volumeM3)}
               onChange={(e) => onChange(normalizeDecimalInput(e.target.value))}
+              onKeyDown={onKeyDown}
               onBlur={(e) => {
                 const raw = normalizeDecimalInput(e.target.value);
                 if (raw) {

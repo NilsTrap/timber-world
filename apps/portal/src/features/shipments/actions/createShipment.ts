@@ -48,7 +48,7 @@ export async function createShipment(
 
   if (seqError) {
     console.error("Failed to get shipment number:", seqError);
-    return { success: false, error: "Failed to generate shipment number", code: "RPC_FAILED" };
+    return { success: false, error: `Failed to generate shipment number: ${seqError.message}`, code: "RPC_FAILED" };
   }
 
   // 2. Generate shipment code
@@ -61,7 +61,7 @@ export async function createShipment(
 
   if (codeError) {
     console.error("Failed to generate shipment code:", codeError);
-    return { success: false, error: "Failed to generate shipment code", code: "RPC_FAILED" };
+    return { success: false, error: `Failed to generate shipment code: ${codeError.message}`, code: "RPC_FAILED" };
   }
 
   // 3. Insert shipment record
@@ -87,7 +87,7 @@ export async function createShipment(
     if (shipmentError.code === "23505") {
       return { success: false, error: "Shipment code already exists", code: "DUPLICATE" };
     }
-    return { success: false, error: "Failed to create shipment", code: "INSERT_FAILED" };
+    return { success: false, error: `Failed to create shipment: ${shipmentError.message}`, code: "INSERT_FAILED" };
   }
 
   const shipmentId = shipment.id;
@@ -105,7 +105,7 @@ export async function createShipment(
       console.error(`Failed to generate package number for package ${i + 1}:`, pkgNumError);
       return {
         success: false,
-        error: `Failed to generate package number for package ${i + 1}`,
+        error: `Failed to generate package number for package ${i + 1}: ${pkgNumError.message}`,
         code: "RPC_FAILED",
       };
     }
@@ -136,7 +136,7 @@ export async function createShipment(
       console.error(`Failed to create package ${i + 1}:`, pkgError);
       return {
         success: false,
-        error: `Failed to create package ${i + 1}`,
+        error: `Failed to create package ${i + 1}: ${pkgError.message}`,
         code: "INSERT_FAILED",
       };
     }

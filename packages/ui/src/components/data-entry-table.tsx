@@ -56,7 +56,8 @@ export interface ColumnDef<TRow> {
     row: TRow,
     renderIndex: number,
     originalIndex: number,
-    onChange: (value: string) => void
+    onChange: (value: string) => void,
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => void
   ) => React.ReactNode;
 
   // ─── Sort/Filter ──────────────────────────────────────────────────────
@@ -580,7 +581,8 @@ function DataEntryTable<TRow>({
                           row,
                           renderIndex,
                           originalIndex,
-                          (value) => updateCell(originalIndex, col.key, value)
+                          (value) => updateCell(originalIndex, col.key, value),
+                          (e) => handleFieldKeyDown(e, renderIndex, col.key, displayRows.length)
                         )}
                       </TableCell>
                     );
