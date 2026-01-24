@@ -12,6 +12,7 @@ import {
   Button,
 } from "@timber/ui";
 import { ArrowUpDown, ArrowUp, ArrowDown, Plus } from "lucide-react";
+import { formatDate } from "@/lib/utils";
 import type { ShipmentListItem } from "../types";
 
 interface ShipmentsTabProps {
@@ -149,7 +150,7 @@ export function ShipmentsTab({ shipments }: ShipmentsTabProps) {
               <TableCell>
                 {shipment.toPartyCode} - {shipment.toPartyName}
               </TableCell>
-              <TableCell>{shipment.shipmentDate}</TableCell>
+              <TableCell>{formatDate(shipment.shipmentDate)}</TableCell>
               <TableCell className="text-right">{shipment.packageCount}</TableCell>
               <TableCell className="text-right">
                 {shipment.totalVolumeM3.toFixed(3).replace(".", ",")}

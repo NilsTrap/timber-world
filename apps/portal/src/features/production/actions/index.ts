@@ -1,6 +1,7 @@
 export { getProcesses } from "./getProcesses";
 export { createProductionEntry } from "./createProductionEntry";
 export { getDraftProductions } from "./getDraftProductions";
+export { getValidatedProductions } from "./getValidatedProductions";
 export { getProductionEntry } from "./getProductionEntry";
 export { getAvailablePackages } from "./getAvailablePackages";
 export { getProductionInputs } from "./getProductionInputs";

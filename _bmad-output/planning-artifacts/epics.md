@@ -213,17 +213,18 @@ NFR46: Loading states for operations > 1 second
 ---
 
 ### Epic 5: Production Insights & History
-**User Outcome:** Producer can view history and edit past entries; Admin can view producer efficiency reports
+**User Outcome:** Producer can view production history (as a tab within the Production page), create correction entries to fix mistakes; Admin can view producer efficiency reports
 
 **FRs covered:** FR45, FR46, FR51, FR52
 
 **Additional Requirements:**
-- Production history table for Producer
-- Edit existing production entries
+- Production page gets two tabs: Active (drafts) + History (validated entries)
+- Remove separate "History" sidebar item — history lives inside Production
+- Validated entries are permanent — no editing or deleting
+- Corrections are new production entries (same flow) flagged as "correction" and linked to the original
 - Dashboard metrics (outcome %, waste %)
 - Per-process efficiency breakdown
 - Admin efficiency overview/comparison
-- Efficiency calculation engine
 
 **Standalone Value:** Complete analytics for both user types. Full visibility into production performance.
 
@@ -835,28 +836,30 @@ NFR46: Loading states for operations > 1 second
 
 ## Epic 5: Production Insights & History
 
-**Goal:** Producer can view history and edit past entries; Admin can view producer efficiency reports
+**Goal:** Producer can view production history within the Production page, request corrections (with admin approval); Admin can view producer efficiency reports
 
 **FRs covered:** FR45, FR46, FR51, FR52
 
 ---
 
-### Story 5.1: Production History Table
+### Story 5.1: Production Page Tabs (Active + History)
 
 **As a** Producer,
-**I want** to view my production history,
-**So that** I can review past production entries and their results.
+**I want** to view my production history alongside active entries,
+**So that** I can review past production entries without navigating away from the Production section.
 
 **Acceptance Criteria:**
 
 **Given** I am logged in as Producer
-**When** I navigate to History
-**Then** I see a table of all validated production entries
-**And** columns display: Date, Process Type, Input m³, Output m³, Outcome %, Waste %
+**When** I navigate to Production
+**Then** I see two tabs: "Active" and "History"
+**And** the "Active" tab shows draft entries (current behavior)
+**And** the "History" tab shows validated production entries
 
-**Given** production entries exist
+**Given** I am on the "History" tab
 **When** I view the history table
-**Then** entries are sorted by date (newest first) by default
+**Then** I see columns: Date, Process Type, Input m³, Output m³, Outcome %, Waste %
+**And** entries are sorted by date (newest first) by default
 **And** I can click column headers to sort by any column
 
 **Given** I am viewing production history
@@ -870,58 +873,54 @@ NFR46: Loading states for operations > 1 second
 **And** the table shows only entries for that process
 
 **Given** I click on a history row
-**When** the row expands or navigates
-**Then** I see full details: all input lines, all output lines, calculations, notes
-**And** I see a "Edit" button to modify this entry
+**When** the detail view opens
+**Then** I see full details: all input lines, all output lines, calculations (read-only)
+**And** I see a "Request Correction" button (if the entry is eligible for correction)
 
-**Given** no production entries exist
-**When** I view the History page
+**Given** no validated entries exist
+**When** I view the "History" tab
 **Then** I see an empty state "No production history yet"
-**And** I see a link to "Create Production Entry"
+
+**Given** the sidebar currently shows a "History" item
+**When** this story is implemented
+**Then** the "History" sidebar item is removed (history lives inside the Production page)
 
 ---
 
-### Story 5.2: Edit Production Entry
+### Story 5.2: Production Corrections
 
 **As a** Producer,
-**I want** to edit a validated production entry,
-**So that** I can correct mistakes in past records.
+**I want** to create a correction entry to fix a mistake in a past production,
+**So that** inventory is adjusted correctly while maintaining a full audit trail.
+
+**Design Principle:** Validated entries are permanent — they are never edited or voided. A correction is a new production entry (like a reverse journal in accounting) that adjusts inventory to the correct state. It follows the same flow as a normal production (inputs, outputs, validate) but is flagged as a correction and linked to the original entry.
 
 **Acceptance Criteria:**
 
-**Given** I am viewing a production entry in history
-**When** I click "Edit"
-**Then** I see the full production form pre-filled with all existing data
-**And** status shows "Editing validated entry"
+**Given** I am viewing a validated production entry in history
+**When** I click "Create Correction"
+**Then** a new production entry is created with type "correction"
+**And** it is linked to the original entry (reference)
+**And** I am taken to the correction entry form (same layout as normal production)
 
-**Given** I am editing a validated entry
-**When** I modify inputs, outputs, or process
-**Then** calculations update live (same as new entry)
-**And** I see a warning "Editing will update inventory accordingly"
+**Given** I am creating a correction entry
+**When** I add inputs and outputs
+**Then** the form works exactly like a normal production entry
+**And** I can add any available inventory packages as inputs
+**And** I can define output packages as normal
+**And** live calculations update (input m³, output m³, outcome %)
 
-**Given** I have made changes to a validated entry
-**When** I click "Re-validate"
-**Then** I see a confirmation dialog showing:
-- Original values vs new values
-- Net inventory changes that will occur
-- "This will adjust inventory to match new values"
+**Given** I have completed a correction entry
+**When** I click "Validate"
+**Then** the same validation flow as a normal production runs (inputs deducted, outputs created)
+**And** the entry status changes to "validated"
+**And** I see a success toast and am redirected to the production page
 
-**Given** I confirm re-validation
-**When** the system processes the change
-**Then** inventory is adjusted (old inputs restored, old outputs removed, new values applied)
-**And** the entry's `updated_at` timestamp is updated
-**And** I see success toast "Production entry updated"
-**And** I am redirected to history
-
-**Given** I am editing an entry
-**When** I click "Cancel"
-**Then** no changes are saved
-**And** I return to history view
-
-**Given** I am editing an entry
-**When** I click "Delete Entry"
-**Then** I see a confirmation "This will restore inventory to pre-production state"
-**And** if confirmed, the entry is deleted and inventory is restored
+**Given** a correction entry is validated
+**When** I view it in history
+**Then** it appears with a "Correction" badge
+**And** it links to the original entry it corrects
+**And** it is included in efficiency calculations like any other entry
 
 ---
 
@@ -954,7 +953,7 @@ NFR46: Loading states for operations > 1 second
 **Given** I am viewing per-process metrics
 **When** I look at individual process rows
 **Then** metrics are color-coded:
-- Green: Outcome % ≥ 80%
+- Green: Outcome % >= 80%
 - Yellow: Outcome % 60-79%
 - Red: Outcome % < 60%
 
@@ -965,7 +964,7 @@ NFR46: Loading states for operations > 1 second
 
 **Given** I click on a process in the breakdown table
 **When** the action completes
-**Then** I am taken to History filtered by that process
+**Then** I am taken to Production page > History tab filtered by that process
 
 ---
 
@@ -991,7 +990,7 @@ NFR46: Loading states for operations > 1 second
 - Total Output m³
 - Outcome %
 - Waste %
-- Trend indicator (↑↓ compared to previous period)
+- Trend indicator (compared to previous period)
 
 **Given** I am viewing efficiency reports
 **When** I use the date range filter

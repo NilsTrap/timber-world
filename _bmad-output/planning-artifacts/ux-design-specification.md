@@ -278,6 +278,13 @@ Rule: One primary button per screen.
 - Row hover highlights
 - Summary row for totals (bold)
 
+### Data Display Conventions
+
+- Dates: European format DD.MM.YYYY (e.g., 24.01.2026)
+- Date+time: DD.MM.YYYY HH:mm (e.g., 24.01.2026 14:30)
+- Volumes: 3 decimal places with comma separator (e.g., 1,234)
+- Percentages: 1 decimal place with % suffix (e.g., 85.3%)
+
 ### Empty & Loading States
 
 - Loading: Skeleton rows

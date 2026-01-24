@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FileText } from "lucide-react";
+import { formatDate, formatDateTime } from "@/lib/utils";
 import type { ProductionListItem } from "../types";
 
 interface DraftProductionListProps {
@@ -31,9 +32,9 @@ export function DraftProductionList({ drafts }: DraftProductionListProps) {
             <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">{entry.processName}</p>
-              <p className="text-xs text-muted-foreground" suppressHydrationWarning>
-                {new Date(entry.productionDate + "T00:00:00").toLocaleDateString()} &middot; Created{" "}
-                {new Date(entry.createdAt).toLocaleString()}
+              <p className="text-xs text-muted-foreground">
+                {formatDate(entry.productionDate)} &middot; Created{" "}
+                {formatDateTime(entry.createdAt)}
               </p>
             </div>
             <span

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { Button, Input } from "@timber/ui";
+import { formatDate } from "@/lib/utils";
 import { PackageEntryTable } from "./PackageEntryTable";
 import { getReferenceDropdowns, updateShipmentPackages } from "../actions";
 import type {
@@ -148,7 +149,7 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
           </div>
           <div>
             <span className="text-muted-foreground">Date:</span>{" "}
-            <span className="font-medium">{shipment.shipmentDate}</span>
+            <span className="font-medium">{formatDate(shipment.shipmentDate)}</span>
           </div>
           <div>
             <span className="text-muted-foreground block mb-1">Transport Cost (€)</span>

@@ -31,6 +31,17 @@ export interface ProductionListItem {
   createdAt: string;
 }
 
+export interface ProductionHistoryItem {
+  id: string;
+  processName: string;
+  productionDate: string;
+  totalInputM3: number;
+  totalOutputM3: number;
+  outcomePercentage: number;
+  wastePercentage: number;
+  validatedAt: string;
+}
+
 export interface ProductionInput {
   id: string;
   productionEntryId: string;

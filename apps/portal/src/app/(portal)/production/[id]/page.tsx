@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { formatDate } from "@/lib/utils";
 import {
   getProductionEntry,
   getAvailablePackages,
@@ -40,7 +41,7 @@ export default async function ProductionEntryPage({
   }
 
   const { processName, processCode, productionDate: rawDate, status } = result.data;
-  const productionDate = new Date(rawDate + "T00:00:00").toLocaleDateString();
+  const productionDate = formatDate(rawDate);
   const isDraft = status === "draft";
 
   // Fetch inputs + outputs data for all entries

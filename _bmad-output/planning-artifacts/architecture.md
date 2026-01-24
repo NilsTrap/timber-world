@@ -705,6 +705,12 @@ For dropdown columns in readOnly: set `type: "dropdown"` with `collapsible: true
 - Only when pieces is a positive number (not "-")
 - Display: Latvian locale with comma decimal separator, 3 decimal places (`0,000`) for both input and display
 
+**Date Formatting:**
+- All dates use European format: DD.MM.YYYY (e.g., `24.01.2026`)
+- Date+time uses: DD.MM.YYYY HH:mm (e.g., `24.01.2026 14:30`)
+- Use `formatDate()` / `formatDateTime()` from `@/lib/utils`
+- Never use `toLocaleDateString()` or `toLocaleString()` (browser-dependent)
+
 **Reference Data Queries:**
 - Always use explicit FK constraint names in Supabase/PostgREST joins
 - Pattern: `ref_product_names!inventory_packages_product_name_id_fkey(value)`

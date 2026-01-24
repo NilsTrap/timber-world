@@ -19,7 +19,6 @@ const PRODUCER_NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
   { href: "/inventory", label: "Inventory", iconName: "Package" },
   { href: "/production", label: "Production", iconName: "Factory" },
-  { href: "/history", label: "History", iconName: "History" },
 ];
 
 /**

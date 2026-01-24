@@ -225,6 +225,21 @@ All 7 dropdown columns reference admin-managed tables (`ref_*`). When querying:
 - Fetch active options only for edit forms: `.eq("is_active", true).order("sort_order")`
 - For read-only display, resolve UUID → display value via FK join
 
+### Date Formatting (MANDATORY)
+
+All dates displayed in the portal MUST use European format: **DD.MM.YYYY** (e.g., `24.01.2026`).
+Date+time uses: **DD.MM.YYYY HH:mm** (e.g., `24.01.2026 14:30`).
+
+Use the utility functions from `@/lib/utils`:
+```typescript
+import { formatDate, formatDateTime } from "@/lib/utils";
+
+formatDate("2026-01-24")        // → "24.01.2026"
+formatDateTime("2026-01-24T14:30:00Z") // → "24.01.2026 14:30"
+```
+
+**NEVER** use `toLocaleDateString()` or `toLocaleString()` — these produce inconsistent results depending on the user's browser locale.
+
 ### Volume Calculation
 
 Volume auto-calculates when all conditions are met:
