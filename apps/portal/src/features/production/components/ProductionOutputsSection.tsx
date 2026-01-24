@@ -21,6 +21,7 @@ interface ProductionOutputsSectionProps {
   dropdowns: ReferenceDropdowns;
   inputs: ProductionInput[];
   processCode: string;
+  onTotalChange?: (totalM3: number) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -62,6 +63,7 @@ export function ProductionOutputsSection({
   dropdowns,
   inputs,
   processCode,
+  onTotalChange,
 }: ProductionOutputsSectionProps) {
   const [rows, setRows] = useState<OutputRow[]>(() =>
     initialOutputs.map((o, i) => dbOutputToRow(o, i, processCode))
@@ -76,6 +78,10 @@ export function ProductionOutputsSection({
       return sum + (isNaN(vol) ? 0 : vol);
     }, 0);
   }, [rows]);
+
+  useEffect(() => {
+    onTotalChange?.(totalM3);
+  }, [totalM3, onTotalChange]);
 
   // ─── Save Logic ─────────────────────────────────────────────────────────────
 

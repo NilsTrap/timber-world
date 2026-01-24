@@ -67,7 +67,7 @@ development_status:
   4-1-create-production-entry-with-process-selection: done
   4-2-add-production-inputs-from-inventory: done
   4-3-add-production-outputs: done
-  4-4-live-production-calculations: backlog
+  4-4-live-production-calculations: done
   4-5-validate-production-update-inventory: backlog
   epic-4-retrospective: optional
 

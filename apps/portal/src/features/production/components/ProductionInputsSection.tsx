@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useTransition, useEffect, useRef } from "react";
+import { useState, useCallback, useMemo, useTransition, useEffect, useRef } from "react";
 import { Plus, X } from "lucide-react";
 import { Button } from "@timber/ui";
 import type { PackageListItem } from "@/features/shipments/types";
@@ -13,6 +13,7 @@ interface ProductionInputsSectionProps {
   productionEntryId: string;
   initialPackages: PackageListItem[];
   initialInputs: ProductionInput[];
+  onTotalChange?: (totalM3: number) => void;
 }
 
 /**
@@ -25,6 +26,7 @@ export function ProductionInputsSection({
   productionEntryId,
   initialPackages,
   initialInputs,
+  onTotalChange,
 }: ProductionInputsSectionProps) {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [packages, setPackages] = useState<PackageListItem[]>(initialPackages);
@@ -56,7 +58,11 @@ export function ProductionInputsSection({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const totalVolumeM3 = inputs.reduce((sum, i) => sum + i.volumeM3, 0);
+  const totalVolumeM3 = useMemo(() => inputs.reduce((sum, i) => sum + i.volumeM3, 0), [inputs]);
+
+  useEffect(() => {
+    onTotalChange?.(totalVolumeM3);
+  }, [totalVolumeM3, onTotalChange]);
 
   return (
     <div className="space-y-3">

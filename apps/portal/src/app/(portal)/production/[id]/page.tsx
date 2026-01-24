@@ -7,8 +7,7 @@ import {
   getReferenceDropdownsForProducer,
   getProductionOutputs,
 } from "@/features/production/actions";
-import { ProductionInputsSection } from "@/features/production/components/ProductionInputsSection";
-import { ProductionOutputsSection } from "@/features/production/components/ProductionOutputsSection";
+import { ProductionEntryClient } from "@/features/production/components/ProductionEntryClient";
 import type { PackageListItem } from "@/features/shipments/types";
 import type { ProductionInput, ProductionOutput, ReferenceDropdowns } from "@/features/production/types";
 
@@ -24,7 +23,8 @@ interface ProductionEntryPageProps {
  * Production Entry Detail Page
  *
  * Shows a single production entry with process, date, and status.
- * Placeholder for inputs/outputs sections (Stories 4.2-4.3).
+ * Uses ProductionEntryClient to coordinate live calculations between
+ * inputs, outputs, and summary sections.
  *
  * TODO [i18n]: Replace hardcoded text with useTranslations()
  */
@@ -65,6 +65,10 @@ export default async function ProductionEntryPage({
     if (dropdownResult.success) dropdowns = dropdownResult.data;
   }
 
+  // Compute initial totals server-side for instant display (no layout shift)
+  const initialInputTotal = initialInputs.reduce((sum, i) => sum + i.volumeM3, 0);
+  const initialOutputTotal = initialOutputs.reduce((sum, o) => sum + (o.volumeM3 || 0), 0);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -87,23 +91,16 @@ export default async function ProductionEntryPage({
         </span>
       </div>
 
-      {/* Inputs Section */}
       {isDraft && (
-        <ProductionInputsSection
+        <ProductionEntryClient
           productionEntryId={id}
           initialPackages={initialPackages}
           initialInputs={initialInputs}
-        />
-      )}
-
-      {/* Outputs Section */}
-      {isDraft && (
-        <ProductionOutputsSection
-          productionEntryId={id}
           initialOutputs={initialOutputs}
           dropdowns={dropdowns}
-          inputs={initialInputs}
           processCode={processCode}
+          initialInputTotal={initialInputTotal}
+          initialOutputTotal={initialOutputTotal}
         />
       )}
     </div>
