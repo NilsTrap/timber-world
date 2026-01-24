@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useEffect, useMemo } from "react";
+import { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import { Plus, Copy, Trash2, X } from "lucide-react";
 import { Button } from "./button";
 import { Input } from "./input";
@@ -143,16 +143,21 @@ function DataEntryTable<TRow>({
   onDisplayRowsChange,
 }: DataEntryTableProps<TRow>) {
   // ─── Collapsed Columns ──────────────────────────────────────────────────
-  const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
+  const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
+  const collapseLoaded = useRef(false);
+
+  // Load collapsed columns from localStorage after mount (avoids hydration mismatch)
+  useEffect(() => {
     try {
       const stored = localStorage.getItem(collapseStorageKey);
-      if (stored) return new Set(JSON.parse(stored) as string[]);
+      if (stored) setCollapsedColumns(new Set(JSON.parse(stored) as string[]));
     } catch {}
-    return new Set();
-  });
+    collapseLoaded.current = true;
+  }, [collapseStorageKey]);
 
+  // Persist collapsed columns to localStorage (skip until initial load completes)
   useEffect(() => {
+    if (!collapseLoaded.current) return;
     try {
       localStorage.setItem(collapseStorageKey, JSON.stringify([...collapsedColumns]));
     } catch {}

@@ -2,3 +2,8 @@ export { getProcesses } from "./getProcesses";
 export { createProductionEntry } from "./createProductionEntry";
 export { getDraftProductions } from "./getDraftProductions";
 export { getProductionEntry } from "./getProductionEntry";
+export { getAvailablePackages } from "./getAvailablePackages";
+export { getProductionInputs } from "./getProductionInputs";
+export { addProductionInput } from "./addProductionInput";
+export { removeProductionInput } from "./removeProductionInput";
+export { updateProductionInput } from "./updateProductionInput";

@@ -114,6 +114,7 @@ NFR46: Loading states for operations > 1 second
 
 **Accessibility:**
 - Keyboard shortcuts: Ctrl+I (add input), Ctrl+O (add output), Ctrl+Enter (validate), Escape (cancel)
+- Keyboard shortcuts MUST be visually displayed on the production entry page (e.g., small hint labels next to the relevant buttons or in a visible shortcuts bar)
 - Tab navigation through all flows
 - Visible focus indicators
 
@@ -655,20 +656,25 @@ NFR46: Loading states for operations > 1 second
 
 **Given** I am on a production entry form
 **When** I click "+ Add Input"
-**Then** I see a package selector showing available inventory packages
-**And** each package shows: Package No, Product Name, Species, Dimensions, Available Pieces, m³
+**Then** I see a large package selector dialog (near full-screen), scrollable both vertically and horizontally
+**And** packages are displayed in the full standard 14-column table format (same as Producer Inventory view)
+**And** I can use the same sort/filter/collapse features to find packages
 
-**Given** I am adding an input
-**When** I select a package from inventory
-**Then** a new input line is added with all package attributes pre-filled:
-- Package No (reference)
-- Product Name, Species, Humidity, Type, Processing, FSC, Quality
-- Dimensions (Thickness, Width, Length)
-**And** I can enter pieces used (cannot exceed available pieces)
+**Given** the package selector is open
+**When** I check one or more package rows (via checkboxes)
+**Then** editable Pieces and Volume fields appear for each selected row
+**And** I can enter amounts for multiple packages before confirming
+**And** pieces cannot exceed available, volume cannot exceed package total
+
+**Given** I have selected packages with amounts
+**When** I click "Add Selected"
+**Then** all selected packages are added as inputs with their entered amounts
+**And** the selector closes and the inputs table refreshes
+**And** collapsed column preferences are persisted and restored across sessions
 
 **Given** I have added input lines
 **When** I view the inputs section
-**Then** I see all input lines in the standard 14-column table format (see Architecture: Standard Package/Inventory Table Pattern)
+**Then** I see all input lines in the standard 14-column table format with full sort/filter/collapse functionality
 **And** I see a running total of input m³
 **And** I can remove any input line by clicking delete
 
@@ -676,14 +682,14 @@ NFR46: Loading states for operations > 1 second
 **When** I blur the pieces field
 **Then** I see a validation error "Pieces exceeds available inventory"
 
-**Given** I partially consume a package (use some but not all pieces)
-**When** production is validated
-**Then** the package's pieces are reduced by the consumed amount
-**And** the remaining pieces stay in inventory
+**Given** I try to enter volume m³ greater than available in a package
+**When** I blur the volume field
+**Then** I see a validation error "Volume exceeds available inventory"
 
 **Given** I have multiple inputs to add
 **When** I use keyboard shortcut Ctrl+I
-**Then** a new input line is added quickly
+**Then** the package selector opens
+**And** the shortcut hint "Ctrl+I" is visibly displayed next to or on the "+ Add Input" button
 
 ---
 
@@ -697,7 +703,7 @@ NFR46: Loading states for operations > 1 second
 
 **Given** I have added inputs to a production entry
 **When** I move to the Outputs section
-**Then** I see the standard `DataEntryTable` component (see Architecture: Standard Package/Inventory Table Pattern) with all 14 columns in the standard order
+**Then** I see the standard `DataEntryTable` component with all 14 columns, sort/filter/collapse features
 **And** output lines can be auto-generated based on inputs (inherit attributes)
 
 **Given** I click "Auto-Generate from Inputs"
@@ -721,13 +727,14 @@ NFR46: Loading states for operations > 1 second
 
 **Given** I have added output lines
 **When** I view the outputs section
-**Then** I see all output lines with full attributes
+**Then** I see all output lines in the standard 14-column table with sort/filter/collapse functionality
 **And** I see a running total of output m³
 **And** I can remove any output line by clicking delete
 
 **Given** I want to add outputs quickly
 **When** I use keyboard shortcut Ctrl+O
-**Then** a new output line is added
+**Then** the output entry form opens
+**And** the shortcut hint "Ctrl+O" is visibly displayed next to or on the "+ Add Output" button
 
 ---
 
@@ -794,6 +801,11 @@ NFR46: Loading states for operations > 1 second
 **Then** the input package record is marked as consumed (quantity = 0 or flagged)
 **And** it remains in history but not in available inventory
 
+**Given** I partially consume a package (use some but not all pieces)
+**When** production is validated
+**Then** the package's pieces are reduced by the consumed amount
+**And** the remaining pieces stay in available inventory
+
 **Given** input package is partially consumed
 **When** production is validated
 **Then** the package's pieces and m³ are reduced by consumed amount
@@ -815,6 +827,7 @@ NFR46: Loading states for operations > 1 second
 **Given** I press Ctrl+Enter
 **When** I have a valid production entry
 **Then** the validation dialog opens
+**And** the shortcut hint "Ctrl+Enter" is visibly displayed next to or on the "Validate" button
 
 ---
 

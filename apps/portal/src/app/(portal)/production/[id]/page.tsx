@@ -1,7 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Package } from "lucide-react";
-import { getProductionEntry } from "@/features/production/actions";
+import {
+  getProductionEntry,
+  getAvailablePackages,
+  getProductionInputs,
+} from "@/features/production/actions";
+import { ProductionInputsSection } from "@/features/production/components/ProductionInputsSection";
+import type { PackageListItem } from "@/features/shipments/types";
+import type { ProductionInput } from "@/features/production/types";
 
 export const metadata: Metadata = {
   title: "Production Entry",
@@ -34,6 +41,19 @@ export default async function ProductionEntryPage({
   const productionDate = new Date(rawDate + "T00:00:00").toLocaleDateString();
   const isDraft = status === "draft";
 
+  // Fetch inputs data for draft entries
+  let initialPackages: PackageListItem[] = [];
+  let initialInputs: ProductionInput[] = [];
+
+  if (isDraft) {
+    const [pkgResult, inputResult] = await Promise.all([
+      getAvailablePackages(id),
+      getProductionInputs(id),
+    ]);
+    if (pkgResult.success) initialPackages = pkgResult.data;
+    if (inputResult.success) initialInputs = inputResult.data;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -56,19 +76,14 @@ export default async function ProductionEntryPage({
         </span>
       </div>
 
-      {/* Inputs Section — Story 4.2 */}
-      <div className="rounded-lg border bg-card p-8 shadow-sm">
-        <div className="flex flex-col items-center justify-center text-center">
-          <Package className="h-10 w-10 text-muted-foreground mb-3" />
-          <h2 className="text-base font-semibold mb-1">Inputs</h2>
-          <p className="text-sm text-muted-foreground">
-            Select packages from inventory as production inputs.
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Coming in Story 4.2
-          </p>
-        </div>
-      </div>
+      {/* Inputs Section */}
+      {isDraft && (
+        <ProductionInputsSection
+          productionEntryId={id}
+          initialPackages={initialPackages}
+          initialInputs={initialInputs}
+        />
+      )}
 
       {/* Outputs Section — Story 4.3 */}
       <div className="rounded-lg border bg-card p-8 shadow-sm">

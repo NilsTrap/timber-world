@@ -30,7 +30,7 @@ export function DraftProductionList({ drafts }: DraftProductionListProps) {
             <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">{draft.processName}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground" suppressHydrationWarning>
                 {new Date(draft.productionDate + "T00:00:00").toLocaleDateString()} &middot; Created{" "}
                 {new Date(draft.createdAt).toLocaleString()}
               </p>

@@ -31,6 +31,29 @@ export interface ProductionListItem {
   createdAt: string;
 }
 
+export interface ProductionInput {
+  id: string;
+  productionEntryId: string;
+  packageId: string;
+  packageNumber: string;
+  shipmentCode: string;
+  productName: string | null;
+  woodSpecies: string | null;
+  humidity: string | null;
+  typeName: string | null;
+  processing: string | null;
+  fsc: string | null;
+  quality: string | null;
+  thickness: string | null;
+  width: string | null;
+  length: string | null;
+  availablePieces: string | null;
+  totalVolumeM3: number | null;
+  piecesUsed: number | null;
+  volumeM3: number;
+  createdAt: string;
+}
+
 export type ActionResult<T> =
   | { success: true; data: T }
   | { success: false; error: string; code?: string };
