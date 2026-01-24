@@ -1,5 +1,6 @@
 export { getProcesses } from "./getProcesses";
 export { createProductionEntry } from "./createProductionEntry";
+export { createCorrectionEntry } from "./createCorrectionEntry";
 export { getDraftProductions } from "./getDraftProductions";
 export { getValidatedProductions } from "./getValidatedProductions";
 export { getProductionEntry } from "./getProductionEntry";
@@ -12,3 +13,4 @@ export { getReferenceDropdownsForProducer } from "./getReferenceDropdownsForProd
 export { getProductionOutputs } from "./getProductionOutputs";
 export { saveProductionOutputs } from "./saveProductionOutputs";
 export { validateProduction } from "./validateProduction";
+export { deleteProductionEntry } from "./deleteProductionEntry";

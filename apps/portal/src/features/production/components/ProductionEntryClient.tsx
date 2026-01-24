@@ -23,6 +23,7 @@ interface ProductionEntryClientProps {
   initialInputTotal: number;
   initialOutputTotal: number;
   readOnly?: boolean;
+  hideMetrics?: boolean;
 }
 
 /**
@@ -42,10 +43,12 @@ export function ProductionEntryClient({
   initialInputTotal,
   initialOutputTotal,
   readOnly,
+  hideMetrics,
 }: ProductionEntryClientProps) {
   const router = useRouter();
   const [inputTotalM3, setInputTotalM3] = useState(initialInputTotal);
   const [outputTotalM3, setOutputTotalM3] = useState(initialOutputTotal);
+  const [currentInputs, setCurrentInputs] = useState(initialInputs);
   const [inputCount, setInputCount] = useState(initialInputs.length);
   const [outputCount, setOutputCount] = useState(initialOutputs.length);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -81,10 +84,12 @@ export function ProductionEntryClient({
 
   return (
     <div className="space-y-6">
-      <ProductionSummary
-        inputTotalM3={inputTotalM3}
-        outputTotalM3={outputTotalM3}
-      />
+      {!hideMetrics && (
+        <ProductionSummary
+          inputTotalM3={inputTotalM3}
+          outputTotalM3={outputTotalM3}
+        />
+      )}
 
       <ProductionInputsSection
         productionEntryId={productionEntryId}
@@ -92,6 +97,7 @@ export function ProductionEntryClient({
         initialInputs={initialInputs}
         onTotalChange={setInputTotalM3}
         onCountChange={setInputCount}
+        onInputsChange={setCurrentInputs}
         readOnly={readOnly}
       />
 
@@ -99,7 +105,7 @@ export function ProductionEntryClient({
         productionEntryId={productionEntryId}
         initialOutputs={initialOutputs}
         dropdowns={dropdowns}
-        inputs={initialInputs}
+        inputs={currentInputs}
         processCode={processCode}
         onTotalChange={setOutputTotalM3}
         onCountChange={setOutputCount}

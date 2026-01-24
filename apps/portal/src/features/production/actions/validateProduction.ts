@@ -119,13 +119,30 @@ export async function validateProduction(
     return { success: false, error: "All outputs must have volume > 0", code: "VALIDATION_FAILED" };
   }
 
-  // 4. Compute totals
+  // 4. Pre-check: verify output package numbers won't conflict
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const outputNumbers = outputs.map((o: any) => o.package_number).filter(Boolean);
+  if (outputNumbers.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing } = await (supabase as any)
+      .from("inventory_packages")
+      .select("package_number")
+      .in("package_number", outputNumbers);
+    if (existing && existing.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const conflicts = existing.map((e: any) => e.package_number).join(", ");
+      await revertStatus();
+      return { success: false, error: `Output package numbers already exist: ${conflicts}`, code: "VALIDATION_FAILED" };
+    }
+  }
+
+  // 5. Compute totals
   const totalInputM3 = inputs.reduce((sum: number, i: { volume_m3: number }) => sum + Number(i.volume_m3), 0);
   const totalOutputM3 = outputs.reduce((sum: number, o: { volume_m3: number }) => sum + Number(o.volume_m3), 0);
   const outcomePercentage = totalInputM3 > 0 ? (totalOutputM3 / totalInputM3) * 100 : 0;
   const wastePercentage = 100 - outcomePercentage;
 
-  // 5. Deduct from input inventory packages
+  // 6. Deduct from input inventory packages
   for (const input of inputs) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: pkg, error: pkgError } = await (supabase as any)
@@ -224,7 +241,7 @@ export async function validateProduction(
     }
   }
 
-  // 6. Create output inventory packages
+  // 7. Create output inventory packages
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const outputPackages = outputs.map((output: any, index: number) => ({
     production_entry_id: productionEntryId,
@@ -257,7 +274,7 @@ export async function validateProduction(
     return { success: false, error: `Failed to create output packages: ${insertError.message}`, code: "INSERT_FAILED" };
   }
 
-  // 7. Finalize: transition validating → validated with totals
+  // 8. Finalize: transition validating → validated with totals
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: updateEntryError } = await (supabase as any)
     .from("portal_production_entries")

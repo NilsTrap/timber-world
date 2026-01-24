@@ -20,7 +20,12 @@ export const metadata: Metadata = {
  *
  * TODO [i18n]: Replace hardcoded text with useTranslations()
  */
-export default async function ProductionPage() {
+export default async function ProductionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
   const session = await getSession();
 
   if (!session) {
@@ -50,6 +55,7 @@ export default async function ProductionPage() {
         processes={processes}
         drafts={drafts}
         history={history}
+        defaultTab={tab}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
-import { Button } from "@timber/ui";
 import { formatDate } from "@/lib/utils";
 import {
   getProductionEntry,
@@ -10,6 +11,8 @@ import {
   getProductionOutputs,
 } from "@/features/production/actions";
 import { ProductionEntryClient } from "@/features/production/components/ProductionEntryClient";
+import { CreateCorrectionButton } from "@/features/production/components/CreateCorrectionButton";
+import { DeleteDraftButton } from "@/features/production/components/DeleteDraftButton";
 import type { PackageListItem } from "@/features/shipments/types";
 import type { ProductionInput, ProductionOutput, ReferenceDropdowns } from "@/features/production/types";
 
@@ -41,9 +44,10 @@ export default async function ProductionEntryPage({
     notFound();
   }
 
-  const { processName, processCode, productionDate: rawDate, status } = result.data;
+  const { processName, processCode, productionDate: rawDate, status, entryType, correctsEntryId } = result.data;
   const productionDate = formatDate(rawDate);
   const isDraft = status === "draft";
+  const isCorrection = entryType === "correction";
 
   // Fetch inputs + outputs data for all entries
   let initialPackages: PackageListItem[] = [];
@@ -70,12 +74,32 @@ export default async function ProductionEntryPage({
     if (pkgResult.success) initialPackages = pkgResult.data;
   }
 
+  // Fetch original entry info if this is a correction (for reference link)
+  let originalEntryInfo: { processName: string; productionDate: string } | null = null;
+  if (isCorrection && correctsEntryId) {
+    const originalResult = await getProductionEntry(correctsEntryId);
+    if (originalResult.success) {
+      originalEntryInfo = {
+        processName: originalResult.data.processName,
+        productionDate: formatDate(originalResult.data.productionDate),
+      };
+    }
+  }
+
   // Compute initial totals server-side for instant display (no layout shift)
   const initialInputTotal = initialInputs.reduce((sum, i) => sum + i.volumeM3, 0);
   const initialOutputTotal = initialOutputs.reduce((sum, o) => sum + (o.volumeM3 || 0), 0);
 
   return (
     <div className="space-y-6">
+      <Link
+        href={isDraft ? "/production" : "/production?tab=history"}
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Link>
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">
@@ -84,21 +108,35 @@ export default async function ProductionEntryPage({
           <p className="text-muted-foreground">
             Production date: {productionDate}
           </p>
+          {isCorrection && correctsEntryId && originalEntryInfo && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Corrects:{" "}
+              <Link
+                href={`/production/${correctsEntryId}`}
+                className="text-primary hover:underline"
+              >
+                {originalEntryInfo.processName} - {originalEntryInfo.productionDate}
+              </Link>
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3">
-          {!isDraft && (
-            <Button variant="outline" size="sm" disabled>
-              Create Correction
-            </Button>
+          {isDraft && (
+            <DeleteDraftButton entryId={id} />
+          )}
+          {!isDraft && !isCorrection && (
+            <CreateCorrectionButton originalEntryId={id} />
           )}
           <span
             className={`text-xs px-2.5 py-1 rounded-full font-medium ${
               isDraft
-                ? "bg-yellow-100 text-yellow-800"
+                ? isCorrection
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-yellow-100 text-yellow-800"
                 : "bg-green-100 text-green-800"
             }`}
           >
-            {isDraft ? "Draft" : "Validated"}
+            {isDraft ? (isCorrection ? "Correction (Draft)" : "Draft") : isCorrection ? "Correction" : "Validated"}
           </span>
         </div>
       </div>
@@ -109,10 +147,11 @@ export default async function ProductionEntryPage({
         initialInputs={initialInputs}
         initialOutputs={initialOutputs}
         dropdowns={dropdowns}
-        processCode={processCode}
+        processCode={isCorrection ? "CR" : processCode}
         initialInputTotal={initialInputTotal}
         initialOutputTotal={initialOutputTotal}
         readOnly={!isDraft}
+        hideMetrics={isCorrection}
       />
     </div>
   );

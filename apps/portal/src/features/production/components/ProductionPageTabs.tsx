@@ -10,6 +10,7 @@ interface ProductionPageTabsProps {
   processes: Process[];
   drafts: ProductionListItem[];
   history: ProductionHistoryItem[];
+  defaultTab?: string;
 }
 
 /**
@@ -23,9 +24,10 @@ export function ProductionPageTabs({
   processes,
   drafts,
   history,
+  defaultTab,
 }: ProductionPageTabsProps) {
   return (
-    <Tabs defaultValue="active">
+    <Tabs defaultValue={defaultTab === "history" ? "history" : "active"}>
       <TabsList>
         <TabsTrigger value="active">Active</TabsTrigger>
         <TabsTrigger value="history">History</TabsTrigger>

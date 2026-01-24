@@ -8,11 +8,15 @@ export interface Process {
   sortOrder: number;
 }
 
+export type EntryType = "standard" | "correction";
+
 export interface ProductionEntry {
   id: string;
   processId: string;
   productionDate: string;
   status: "draft" | "validated";
+  entryType: EntryType;
+  correctsEntryId: string | null;
   notes: string | null;
   totalInputM3: number | null;
   totalOutputM3: number | null;
@@ -40,6 +44,7 @@ export interface ProductionHistoryItem {
   outcomePercentage: number;
   wastePercentage: number;
   validatedAt: string;
+  entryType: EntryType;
 }
 
 export interface ProductionInput {

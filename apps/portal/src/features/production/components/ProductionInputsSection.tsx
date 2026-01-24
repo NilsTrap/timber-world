@@ -15,6 +15,7 @@ interface ProductionInputsSectionProps {
   initialInputs: ProductionInput[];
   onTotalChange?: (totalM3: number) => void;
   onCountChange?: (count: number) => void;
+  onInputsChange?: (inputs: ProductionInput[]) => void;
   readOnly?: boolean;
 }
 
@@ -30,6 +31,7 @@ export function ProductionInputsSection({
   initialInputs,
   onTotalChange,
   onCountChange,
+  onInputsChange,
   readOnly,
 }: ProductionInputsSectionProps) {
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -72,6 +74,10 @@ export function ProductionInputsSection({
   useEffect(() => {
     onCountChange?.(inputs.length);
   }, [inputs.length, onCountChange]);
+
+  useEffect(() => {
+    onInputsChange?.(inputs);
+  }, [inputs, onInputsChange]);
 
   return (
     <div className="space-y-3">

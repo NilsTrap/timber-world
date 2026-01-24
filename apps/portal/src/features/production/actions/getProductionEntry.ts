@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
-import type { ActionResult } from "../types";
+import type { ActionResult, EntryType } from "../types";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -11,6 +11,8 @@ export interface ProductionEntryDetail {
   id: string;
   productionDate: string;
   status: "draft" | "validated";
+  entryType: EntryType;
+  correctsEntryId: string | null;
   notes: string | null;
   createdAt: string;
   processName: string;
@@ -36,7 +38,7 @@ export async function getProductionEntry(
 
   const { data, error } = await (supabase as any)
     .from("portal_production_entries")
-    .select("id, production_date, status, notes, created_at, ref_processes(value, code)")
+    .select("id, production_date, status, entry_type, corrects_entry_id, notes, created_at, ref_processes(value, code)")
     .eq("id", id)
     .single();
 
@@ -50,6 +52,8 @@ export async function getProductionEntry(
       id: data.id,
       productionDate: data.production_date,
       status: data.status,
+      entryType: data.entry_type ?? "standard",
+      correctsEntryId: data.corrects_entry_id ?? null,
       notes: data.notes,
       createdAt: data.created_at,
       processName: data.ref_processes?.value ?? "Unknown",

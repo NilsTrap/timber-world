@@ -293,6 +293,11 @@ export function ProductionHistoryTable({
                   </td>
                   <td className="px-4 py-3">
                     {entry.processName}
+                    {entry.entryType === "correction" && (
+                      <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                        Correction
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {fmt3(entry.totalInputM3)}

@@ -22,7 +22,7 @@ export async function getValidatedProductions(): Promise<
   const { data, error } = await (supabase as any)
     .from("portal_production_entries")
     .select(
-      "id, production_date, total_input_m3, total_output_m3, outcome_percentage, waste_percentage, validated_at, ref_processes(value)"
+      "id, production_date, total_input_m3, total_output_m3, outcome_percentage, waste_percentage, validated_at, entry_type, ref_processes(value)"
     )
     .eq("created_by", session.id)
     .eq("status", "validated")
@@ -42,6 +42,7 @@ export async function getValidatedProductions(): Promise<
     outcomePercentage: row.outcome_percentage ?? 0,
     wastePercentage: row.waste_percentage ?? 0,
     validatedAt: row.validated_at,
+    entryType: row.entry_type ?? "standard",
   }));
 
   return { success: true, data: items };
