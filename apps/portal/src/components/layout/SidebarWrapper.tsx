@@ -37,6 +37,7 @@ function getNavItems(role: UserRole): NavItem[] {
 export async function SidebarWrapper() {
   const session = await getSession();
   const navItems = getNavItems(session?.role || "producer");
+  const brandName = session?.partyName || "Timber World";
 
-  return <Sidebar navItems={navItems} />;
+  return <Sidebar navItems={navItems} brandName={brandName} />;
 }

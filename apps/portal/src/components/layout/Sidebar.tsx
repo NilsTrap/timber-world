@@ -19,6 +19,7 @@ export interface NavItem {
 
 interface SidebarProps {
   navItems: NavItem[];
+  brandName: string;
 }
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
@@ -29,7 +30,7 @@ const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
  * Left sidebar that can be collapsed to show only icons.
  * Collapse state is persisted to localStorage.
  */
-export function Sidebar({ navItems }: SidebarProps) {
+export function Sidebar({ navItems, brandName }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -54,7 +55,7 @@ export function Sidebar({ navItems }: SidebarProps) {
     return (
       <aside className="flex h-screen w-64 flex-col border-r bg-card">
         <div className="flex h-14 items-center border-b px-4">
-          <span className="font-semibold text-lg">Timber World</span>
+          <span className="font-semibold text-lg">{brandName}</span>
         </div>
       </aside>
     );
@@ -75,14 +76,9 @@ export function Sidebar({ navItems }: SidebarProps) {
           aria-label="Go to dashboard"
         >
           {isCollapsed ? (
-            <span className="text-xl font-bold text-primary">TW</span>
+            <span className="text-xl font-bold text-primary">{brandName.slice(0, 2).toUpperCase()}</span>
           ) : (
-            <>
-              <span className="font-semibold text-lg whitespace-nowrap">Timber World</span>
-              <span className="ml-2 text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded whitespace-nowrap">
-                Portal
-              </span>
-            </>
+            <span className="font-semibold text-lg whitespace-nowrap truncate">{brandName}</span>
           )}
         </Link>
       </div>
