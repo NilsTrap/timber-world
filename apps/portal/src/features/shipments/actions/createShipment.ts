@@ -37,7 +37,7 @@ export async function createShipment(
     return { success: false, error: message, code: "VALIDATION_FAILED" };
   }
 
-  const { fromPartyId, toPartyId, shipmentDate, transportCostEur, packages } = parsed.data;
+  const { fromOrganisationId, toOrganisationId, shipmentDate, transportCostEur, packages } = parsed.data;
 
   const supabase = await createClient();
 
@@ -62,8 +62,8 @@ export async function createShipment(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .rpc("create_shipment_with_packages", {
-      p_from_party_id: fromPartyId,
-      p_to_party_id: toPartyId,
+      p_from_organisation_id: fromOrganisationId,
+      p_to_organisation_id: toOrganisationId,
       p_shipment_date: shipmentDate,
       p_transport_cost_eur: transportCostEur,
       p_packages: packagesJsonb,

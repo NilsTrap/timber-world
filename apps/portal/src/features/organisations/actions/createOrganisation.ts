@@ -49,7 +49,7 @@ export async function createOrganisation(
   // 4. Check for duplicate code
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existing } = await (supabase as any)
-    .from("parties")
+    .from("organisations")
     .select("id")
     .eq("code", code)
     .single();
@@ -65,7 +65,7 @@ export async function createOrganisation(
   // 5. Insert new organisation
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
-    .from("parties")
+    .from("organisations")
     .insert({
       code,
       name,

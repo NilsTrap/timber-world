@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, User, LogOut } from "lucide-react";
 import { Button } from "@timber/ui";
 import { cn } from "@/lib/utils";
 import { SidebarLink, type IconName } from "./SidebarLink";
+import { OrganizationSelector, type OrganizationOption } from "./OrganizationSelector";
 import { logoutUser } from "@/features/auth/actions";
 
 /**
@@ -20,6 +22,8 @@ export interface NavItem {
 interface SidebarProps {
   navItems: NavItem[];
   brandName: string;
+  /** Organizations for Super Admin selector (omit for regular users) */
+  organizations?: OrganizationOption[];
 }
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
@@ -30,9 +34,13 @@ const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
  * Left sidebar that can be collapsed to show only icons.
  * Collapse state is persisted to localStorage.
  */
-export function Sidebar({ navItems, brandName }: SidebarProps) {
+export function Sidebar({ navItems, brandName, organizations }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const searchParams = useSearchParams();
+
+  // Get current org from URL for OrganizationSelector
+  const currentOrgId = searchParams.get("org");
 
   // Load collapsed state from localStorage on mount
   useEffect(() => {
@@ -82,6 +90,17 @@ export function Sidebar({ navItems, brandName }: SidebarProps) {
           )}
         </Link>
       </div>
+
+      {/* Organization Selector (Super Admin only) */}
+      {organizations && organizations.length > 0 && (
+        <div className="border-b">
+          <OrganizationSelector
+            organizations={organizations}
+            currentOrgId={currentOrgId}
+            isCollapsed={isCollapsed}
+          />
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-2" aria-label="Main navigation">

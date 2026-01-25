@@ -8,12 +8,12 @@ import type { OrganisationOption } from "../types";
 
 interface ShipmentHeaderProps {
   organisations: OrganisationOption[];
-  fromPartyId: string;
-  toPartyId: string;
+  fromOrganisationId: string;
+  toOrganisationId: string;
   shipmentDate: string;
   transportCostEur: string;
-  onFromPartyChange: (id: string) => void;
-  onToPartyChange: (id: string) => void;
+  onFromOrganisationChange: (id: string) => void;
+  onToOrganisationChange: (id: string) => void;
   onDateChange: (date: string) => void;
   onTransportCostChange: (value: string) => void;
 }
@@ -26,12 +26,12 @@ interface ShipmentHeaderProps {
  */
 export function ShipmentHeader({
   organisations,
-  fromPartyId,
-  toPartyId,
+  fromOrganisationId,
+  toOrganisationId,
   shipmentDate,
   transportCostEur,
-  onFromPartyChange,
-  onToPartyChange,
+  onFromOrganisationChange,
+  onToOrganisationChange,
   onDateChange,
   onTransportCostChange,
 }: ShipmentHeaderProps) {
@@ -40,9 +40,9 @@ export function ShipmentHeader({
 
   // Auto-fetch shipment code when both organisations are selected
   useEffect(() => {
-    if (fromPartyId && toPartyId && fromPartyId !== toPartyId) {
+    if (fromOrganisationId && toOrganisationId && fromOrganisationId !== toOrganisationId) {
       setIsLoadingCode(true);
-      getShipmentCodePreview(fromPartyId, toPartyId).then((result) => {
+      getShipmentCodePreview(fromOrganisationId, toOrganisationId).then((result) => {
         if (result.success) {
           setShipmentCode(result.data.code);
         } else {
@@ -53,7 +53,7 @@ export function ShipmentHeader({
     } else {
       setShipmentCode("");
     }
-  }, [fromPartyId, toPartyId]);
+  }, [fromOrganisationId, toOrganisationId]);
 
   return (
     <div className="rounded-lg border bg-card p-6">
@@ -62,13 +62,13 @@ export function ShipmentHeader({
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         {/* From Organisation */}
         <div className="space-y-2">
-          <Label htmlFor="from-party">
+          <Label htmlFor="from-organisation">
             From Organisation
           </Label>
           <select
-            id="from-party"
-            value={fromPartyId}
-            onChange={(e) => onFromPartyChange(e.target.value)}
+            id="from-organisation"
+            value={fromOrganisationId}
+            onChange={(e) => onFromOrganisationChange(e.target.value)}
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <option value="">Select...</option>
@@ -82,25 +82,25 @@ export function ShipmentHeader({
 
         {/* To Organisation */}
         <div className="space-y-2">
-          <Label htmlFor="to-party">
+          <Label htmlFor="to-organisation">
             To Organisation
           </Label>
           <select
-            id="to-party"
-            value={toPartyId}
-            onChange={(e) => onToPartyChange(e.target.value)}
+            id="to-organisation"
+            value={toOrganisationId}
+            onChange={(e) => onToOrganisationChange(e.target.value)}
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <option value="">Select...</option>
             {organisations
-              .filter((org) => org.id !== fromPartyId)
+              .filter((org) => org.id !== fromOrganisationId)
               .map((org) => (
                 <option key={org.id} value={org.id}>
                   {org.code} - {org.name}
                 </option>
               ))}
           </select>
-          {fromPartyId && toPartyId && fromPartyId === toPartyId && (
+          {fromOrganisationId && toOrganisationId && fromOrganisationId === toOrganisationId && (
             <p className="text-sm text-destructive">From and To must be different</p>
           )}
         </div>

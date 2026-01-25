@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isOrganisationUser } from "@/lib/auth";
 import type { ActionResult, EntryType } from "../types";
 
 const UUID_REGEX =
@@ -21,6 +21,10 @@ export interface ProductionEntryDetail {
 
 /**
  * Fetch a single production entry by ID with joined process name.
+ *
+ * Multi-tenancy:
+ * - Organisation users can only fetch entries from their own organisation
+ * - Super Admin can fetch any entry
  */
 export async function getProductionEntry(
   id: string
@@ -38,13 +42,19 @@ export async function getProductionEntry(
 
   const { data, error } = await (supabase as any)
     .from("portal_production_entries")
-    .select("id, production_date, status, entry_type, corrects_entry_id, notes, created_at, ref_processes(value, code)")
+    .select("id, production_date, status, entry_type, corrects_entry_id, notes, created_at, organisation_id, ref_processes(value, code)")
     .eq("id", id)
     .single();
 
   if (error || !data) {
     return { success: false, error: "Production entry not found", code: "NOT_FOUND" };
   }
+
+  // Organisation users can only access their own organisation's entries
+  if (isOrganisationUser(session) && data.organisation_id !== session.organisationId) {
+    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
+  // Super Admin can access any entry
 
   return {
     success: true,

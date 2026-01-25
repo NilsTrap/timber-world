@@ -13,8 +13,8 @@ import type { ActionResult } from "../types";
  * Admin only.
  */
 export async function getShipmentCodePreview(
-  fromPartyId: string,
-  toPartyId: string
+  fromOrganisationId: string,
+  toOrganisationId: string
 ): Promise<ActionResult<{ code: string }>> {
   const session = await getSession();
   if (!session) {
@@ -25,12 +25,12 @@ export async function getShipmentCodePreview(
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
-  if (!isValidUUID(fromPartyId) || !isValidUUID(toPartyId)) {
+  if (!isValidUUID(fromOrganisationId) || !isValidUUID(toOrganisationId)) {
     return { success: false, error: "Invalid organisation ID", code: "INVALID_ID" };
   }
 
-  if (fromPartyId === toPartyId) {
-    return { success: false, error: "From and To organisations must be different", code: "SAME_PARTY" };
+  if (fromOrganisationId === toOrganisationId) {
+    return { success: false, error: "From and To organisations must be different", code: "SAME_ORGANISATION" };
   }
 
   const supabase = await createClient();
@@ -39,8 +39,8 @@ export async function getShipmentCodePreview(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .rpc("generate_shipment_code", {
-      p_from_party_id: fromPartyId,
-      p_to_party_id: toPartyId,
+      p_from_organisation_id: fromOrganisationId,
+      p_to_organisation_id: toOrganisationId,
     });
 
   if (error) {

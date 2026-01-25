@@ -142,6 +142,20 @@ Project configuration in `_bmad/bmm/config.yaml`:
 - `communication_language`: English
 - `output_folder`: `{project-root}/_bmad-output`
 
+## Database (Supabase Cloud)
+
+This project uses **Supabase cloud only** - no local Docker database is used.
+
+**Key commands:**
+- `npx supabase db push` - Apply migrations to the remote cloud database
+- `npx supabase db diff` - Generate migration from remote schema changes
+
+**Never use:**
+- `npx supabase db reset` - Requires Docker (not available in this project)
+- `npx supabase start` - Requires Docker for local development
+
+The `supabase/config.toml` file is required for the Supabase CLI to work with migrations, but it does not mean a local database is used. All database operations are performed against the cloud Supabase instance.
+
 ## Component Standards
 
 ### DataEntryTable (Inventory / Production / Product Tables)

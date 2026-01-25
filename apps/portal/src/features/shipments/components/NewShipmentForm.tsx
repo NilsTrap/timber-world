@@ -39,8 +39,8 @@ function getTodayDate(): string {
 const DRAFT_STORAGE_KEY = "new-shipment-draft";
 
 interface DraftState {
-  fromPartyId: string;
-  toPartyId: string;
+  fromOrganisationId: string;
+  toOrganisationId: string;
   shipmentDate: string;
   transportCostEur: string;
   packageRows: PackageRow[];
@@ -88,8 +88,8 @@ export function NewShipmentForm() {
 
   // Form state (restored from sessionStorage draft if available)
   const [draft] = useState(loadDraft);
-  const [fromPartyId, setFromPartyId] = useState(draft?.fromPartyId ?? "");
-  const [toPartyId, setToPartyId] = useState(draft?.toPartyId ?? "");
+  const [fromOrganisationId, setFromOrganisationId] = useState(draft?.fromOrganisationId ?? "");
+  const [toOrganisationId, setToOrganisationId] = useState(draft?.toOrganisationId ?? "");
   const [shipmentDate, setShipmentDate] = useState(draft?.shipmentDate ?? getTodayDate());
   const [transportCostEur, setTransportCostEur] = useState(draft?.transportCostEur ?? "");
   const [packageRows, setPackageRows] = useState<PackageRow[]>(
@@ -99,25 +99,25 @@ export function NewShipmentForm() {
 
   // Persist form state to sessionStorage on changes
   useEffect(() => {
-    saveDraft({ fromPartyId, toPartyId, shipmentDate, transportCostEur, packageRows });
-  }, [fromPartyId, toPartyId, shipmentDate, transportCostEur, packageRows]);
+    saveDraft({ fromOrganisationId, toOrganisationId, shipmentDate, transportCostEur, packageRows });
+  }, [fromOrganisationId, toOrganisationId, shipmentDate, transportCostEur, packageRows]);
 
-  // Fetch shipment code preview when both parties are selected
+  // Fetch shipment code preview when both organisations are selected
   useEffect(() => {
-    if (!fromPartyId || !toPartyId || fromPartyId === toPartyId) {
+    if (!fromOrganisationId || !toOrganisationId || fromOrganisationId === toOrganisationId) {
       setShipmentCode("");
       return;
     }
 
     async function fetchCode() {
-      const result = await getShipmentCodePreview(fromPartyId, toPartyId);
+      const result = await getShipmentCodePreview(fromOrganisationId, toOrganisationId);
       if (result.success) {
         setShipmentCode(result.data.code);
       }
     }
 
     fetchCode();
-  }, [fromPartyId, toPartyId]);
+  }, [fromOrganisationId, toOrganisationId]);
 
   // Load initial data
   useEffect(() => {
@@ -147,15 +147,15 @@ export function NewShipmentForm() {
 
   const handleSave = useCallback(async () => {
     // Validate header
-    if (!fromPartyId) {
+    if (!fromOrganisationId) {
       toast.error("Please select From Organisation");
       return;
     }
-    if (!toPartyId) {
+    if (!toOrganisationId) {
       toast.error("Please select To Organisation");
       return;
     }
-    if (fromPartyId === toPartyId) {
+    if (fromOrganisationId === toOrganisationId) {
       toast.error("From and To organisations must be different");
       return;
     }
@@ -194,8 +194,8 @@ export function NewShipmentForm() {
     setIsSaving(true);
 
     const result = await createShipment({
-      fromPartyId,
-      toPartyId,
+      fromOrganisationId,
+      toOrganisationId,
       shipmentDate,
       transportCostEur: transportCostEur ? parseFloat(transportCostEur) : null,
       packages,
@@ -210,7 +210,7 @@ export function NewShipmentForm() {
     }
 
     setIsSaving(false);
-  }, [fromPartyId, toPartyId, shipmentDate, transportCostEur, packageRows, router]);
+  }, [fromOrganisationId, toOrganisationId, shipmentDate, transportCostEur, packageRows, router]);
 
   if (isLoading) {
     return (
@@ -228,12 +228,12 @@ export function NewShipmentForm() {
 
       <ShipmentHeader
         organisations={organisations}
-        fromPartyId={fromPartyId}
-        toPartyId={toPartyId}
+        fromOrganisationId={fromOrganisationId}
+        toOrganisationId={toOrganisationId}
         shipmentDate={shipmentDate}
         transportCostEur={transportCostEur}
-        onFromPartyChange={setFromPartyId}
-        onToPartyChange={setToPartyId}
+        onFromOrganisationChange={setFromOrganisationId}
+        onToOrganisationChange={setToOrganisationId}
         onDateChange={setShipmentDate}
         onTransportCostChange={setTransportCostEur}
       />

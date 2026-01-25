@@ -31,16 +31,16 @@ export const packageInputSchema = z.object({
 
 /** Schema for creating a shipment with packages */
 export const createShipmentSchema = z.object({
-  fromPartyId: z.string().uuid("Invalid From Organisation"),
-  toPartyId: z.string().uuid("Invalid To Organisation"),
+  fromOrganisationId: z.string().uuid("Invalid From Organisation"),
+  toOrganisationId: z.string().uuid("Invalid To Organisation"),
   shipmentDate: z.string().min(1, "Date is required"),
   transportCostEur: z.number().nonnegative().nullable(),
   packages: z
     .array(packageInputSchema)
     .min(1, "At least one package is required"),
-}).refine((data) => data.fromPartyId !== data.toPartyId, {
+}).refine((data) => data.fromOrganisationId !== data.toOrganisationId, {
   message: "From and To organisations must be different",
-  path: ["toPartyId"],
+  path: ["toOrganisationId"],
 });
 
 export type CreateShipmentFormData = z.infer<typeof createShipmentSchema>;

@@ -1,6 +1,6 @@
 # Story 5.4: Admin Efficiency Reports
 
-Status: review
+Status: done
 
 ## Story
 

@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult, ShipmentListItem } from "../types";
 
 /**
@@ -11,10 +11,12 @@ import type { ActionResult, ShipmentListItem } from "../types";
  * Ordered by shipment_date DESC (newest first).
  * Admin only.
  *
+ * @param orgId - Optional org ID for Super Admin to filter by specific organisation
+ *
  * TODO: Generate proper Supabase types from schema to remove `as any` casts
  * across all shipment actions (getShipments, getShipmentDetail, getPackages, updateShipmentPackages)
  */
-export async function getShipments(): Promise<ActionResult<ShipmentListItem[]>> {
+export async function getShipments(orgId?: string): Promise<ActionResult<ShipmentListItem[]>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
@@ -31,7 +33,7 @@ export async function getShipments(): Promise<ActionResult<ShipmentListItem[]>> 
   // package rows per shipment just for count/sum computation
   // Note: FK constraints kept original names (shipments_from_party_id_fkey) after column rename
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  let query = (supabase as any)
     .from("shipments")
     .select(`
       id,
@@ -40,9 +42,17 @@ export async function getShipments(): Promise<ActionResult<ShipmentListItem[]>> 
       transport_cost_eur,
       from_organisation:organisations!shipments_from_party_id_fkey(code, name),
       to_organisation:organisations!shipments_to_party_id_fkey(code, name),
+      to_organisation_id,
       inventory_packages(volume_m3)
     `)
     .order("shipment_date", { ascending: false });
+
+  // Apply org filter for Super Admin when specified (filter by destination org)
+  if (isSuperAdmin(session) && orgId) {
+    query = query.eq("to_organisation_id", orgId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Failed to fetch shipments:", error);

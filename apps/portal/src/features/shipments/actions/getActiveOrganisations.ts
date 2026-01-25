@@ -24,7 +24,7 @@ export async function getActiveOrganisations(): Promise<ActionResult<Organisatio
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
-    .from("parties")
+    .from("organisations")
     .select("id, code, name")
     .eq("is_active", true)
     .order("code");

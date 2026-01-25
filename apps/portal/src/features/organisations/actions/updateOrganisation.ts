@@ -60,7 +60,7 @@ export async function updateOrganisation(
   // 5. Update organisation
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
-    .from("parties")
+    .from("organisations")
     .update({ name })
     .eq("id", id)
     .select("id, code, name, is_active, created_at, updated_at")

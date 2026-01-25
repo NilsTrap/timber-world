@@ -141,11 +141,11 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
           <div>
             <span className="text-muted-foreground">From:</span>{" "}
-            <span className="font-medium">{shipment.fromPartyName}</span>
+            <span className="font-medium">{shipment.fromOrganisationName}</span>
           </div>
           <div>
             <span className="text-muted-foreground">To:</span>{" "}
-            <span className="font-medium">{shipment.toPartyName}</span>
+            <span className="font-medium">{shipment.toOrganisationName}</span>
           </div>
           <div>
             <span className="text-muted-foreground">Date:</span>{" "}

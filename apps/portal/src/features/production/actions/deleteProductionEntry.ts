@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer } from "@/lib/auth";
+import { getSession, isOrganisationUser } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 const UUID_REGEX =
@@ -9,7 +9,10 @@ const UUID_REGEX =
 
 /**
  * Delete a draft production entry and all its related inputs/outputs.
- * Only draft entries owned by the current user can be deleted.
+ *
+ * Multi-tenancy:
+ * - Organisation users can only delete their own organisation's draft entries
+ * - Super Admin can delete any draft entry
  */
 export async function deleteProductionEntry(
   entryId: string
@@ -19,21 +22,17 @@ export async function deleteProductionEntry(
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  if (!isProducer(session)) {
-    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
-  }
-
   if (!entryId || !UUID_REGEX.test(entryId)) {
     return { success: false, error: "Invalid entry ID", code: "INVALID_INPUT" };
   }
 
   const supabase = await createClient();
 
-  // Fetch entry — verify it exists, is draft, and owned by user
+  // Fetch entry — verify it exists, is draft, and owned by user's organisation
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: entry, error: fetchError } = await (supabase as any)
     .from("portal_production_entries")
-    .select("id, status, created_by")
+    .select("id, status, organisation_id")
     .eq("id", entryId)
     .single();
 
@@ -41,9 +40,11 @@ export async function deleteProductionEntry(
     return { success: false, error: "Production entry not found", code: "NOT_FOUND" };
   }
 
-  if (entry.created_by !== session.id) {
+  // Organisation users can only delete their own organisation's entries
+  if (isOrganisationUser(session) && entry.organisation_id !== session.organisationId) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
+  // Super Admin can delete any entry
 
   if (entry.status !== "draft") {
     return { success: false, error: "Only draft entries can be deleted", code: "VALIDATION_FAILED" };

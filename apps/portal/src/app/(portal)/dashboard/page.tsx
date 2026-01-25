@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
 import { AccessDeniedHandler } from "@/components/AccessDeniedHandler";
 import {
   getProducerMetrics,
@@ -22,12 +22,13 @@ export const metadata: Metadata = {
  * Admin Dashboard Loader (Server Component)
  *
  * Fetches admin metrics server-side and passes to client component.
+ * @param orgId - Optional org ID for Super Admin to filter by specific organisation
  */
-async function AdminDashboardLoader() {
+async function AdminDashboardLoader({ orgId }: { orgId?: string }) {
   try {
     const [metricsResult, breakdownResult] = await Promise.all([
-      getAdminMetrics(),
-      getAdminProcessBreakdown(),
+      getAdminMetrics(undefined, orgId),
+      getAdminProcessBreakdown(undefined, orgId),
     ]);
 
     const hasError = !metricsResult.success || !breakdownResult.success;
@@ -145,7 +146,12 @@ async function ProducerDashboardContent() {
  * - Admin sees: "Admin Overview" with inventory/product/efficiency metrics
  * - Producer sees: "Production Dashboard" with production-focused metrics
  */
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ org?: string }>;
+}) {
+  const { org: selectedOrgId } = await searchParams;
   const session = await getSession();
 
   if (!session) {
@@ -153,6 +159,8 @@ export default async function DashboardPage() {
   }
 
   const userIsAdmin = isAdmin(session);
+  // Pass org filter to admin dashboard for Super Admin
+  const orgFilter = isSuperAdmin(session) ? selectedOrgId : undefined;
 
   return (
     <div className="space-y-6">
@@ -172,7 +180,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {userIsAdmin ? <AdminDashboardLoader /> : <ProducerDashboardContent />}
+      {userIsAdmin ? <AdminDashboardLoader orgId={orgFilter} /> : <ProducerDashboardContent />}
     </div>
   );
 }

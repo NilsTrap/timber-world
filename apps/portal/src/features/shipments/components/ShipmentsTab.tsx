@@ -92,17 +92,17 @@ export function ShipmentsTab({ shipments }: ShipmentsTabProps) {
             </TableHead>
             <TableHead
               className="cursor-pointer select-none"
-              onClick={() => toggleSort("fromPartyCode")}
+              onClick={() => toggleSort("fromOrganisationCode")}
             >
               From
-              <SortIcon columnKey="fromPartyCode" sortConfig={sortConfig} />
+              <SortIcon columnKey="fromOrganisationCode" sortConfig={sortConfig} />
             </TableHead>
             <TableHead
               className="cursor-pointer select-none"
-              onClick={() => toggleSort("toPartyCode")}
+              onClick={() => toggleSort("toOrganisationCode")}
             >
               To
-              <SortIcon columnKey="toPartyCode" sortConfig={sortConfig} />
+              <SortIcon columnKey="toOrganisationCode" sortConfig={sortConfig} />
             </TableHead>
             <TableHead
               className="cursor-pointer select-none"
@@ -145,10 +145,10 @@ export function ShipmentsTab({ shipments }: ShipmentsTabProps) {
                 {shipment.shipmentCode}
               </TableCell>
               <TableCell>
-                {shipment.fromPartyCode} - {shipment.fromPartyName}
+                {shipment.fromOrganisationCode} - {shipment.fromOrganisationName}
               </TableCell>
               <TableCell>
-                {shipment.toPartyCode} - {shipment.toPartyName}
+                {shipment.toOrganisationCode} - {shipment.toOrganisationName}
               </TableCell>
               <TableCell>{formatDate(shipment.shipmentDate)}</TableCell>
               <TableCell className="text-right">{shipment.packageCount}</TableCell>

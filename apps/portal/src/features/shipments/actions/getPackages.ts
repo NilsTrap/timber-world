@@ -15,8 +15,10 @@ import type { ActionResult, PackageListItem } from "../types";
  * Organisation ownership:
  * - Shipment packages: owner = destination org (to_organisation_id)
  * - Production packages: owner = production entry's org (organisation_id)
+ *
+ * @param orgId - Optional org ID for Super Admin to filter by specific organisation
  */
-export async function getPackages(): Promise<ActionResult<PackageListItem[]>> {
+export async function getPackages(orgId?: string): Promise<ActionResult<PackageListItem[]>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
@@ -94,9 +96,9 @@ export async function getPackages(): Promise<ActionResult<PackageListItem[]>> {
     }
   }
 
-  // Map packages with correct organisation
+  // Map packages with correct organisation, optionally filtering by orgId
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const packages: PackageListItem[] = (packagesData as any[]).map((pkg: any) => {
+  const allPackages = (packagesData as any[]).map((pkg: any) => {
     let organisationId: string | null = null;
 
     if (pkg.shipments?.to_organisation_id) {
@@ -128,8 +130,19 @@ export async function getPackages(): Promise<ActionResult<PackageListItem[]>> {
       volumeM3: pkg.volume_m3 != null ? Number(pkg.volume_m3) : null,
       organisationName: org?.name ?? null,
       organisationCode: org?.code ?? null,
+      _organisationId: organisationId, // Internal field for filtering
     };
   });
+
+  // Filter by orgId if specified (Super Admin with org filter)
+  let packages: PackageListItem[];
+  if (orgId) {
+    packages = allPackages
+      .filter((pkg) => pkg._organisationId === orgId)
+      .map(({ _organisationId, ...rest }) => rest);
+  } else {
+    packages = allPackages.map(({ _organisationId, ...rest }) => rest);
+  }
 
   return { success: true, data: packages };
 }

@@ -50,7 +50,7 @@ export async function getOrgShipmentCount(
   const { count: fromCount, error: fromError } = await (supabase as any)
     .from("shipments")
     .select("id", { count: "exact", head: true })
-    .eq("from_party_id", orgId);
+    .eq("from_organisation_id", orgId);
 
   if (fromError) {
     console.error("Failed to count shipments (from):", fromError);
@@ -65,7 +65,7 @@ export async function getOrgShipmentCount(
   const { count: toCount, error: toError } = await (supabase as any)
     .from("shipments")
     .select("id", { count: "exact", head: true })
-    .eq("to_party_id", orgId);
+    .eq("to_organisation_id", orgId);
 
   if (toError) {
     console.error("Failed to count shipments (to):", toError);

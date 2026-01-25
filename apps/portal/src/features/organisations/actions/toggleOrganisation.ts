@@ -48,7 +48,7 @@ export async function toggleOrganisation(
   // 4. Update organisation status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
-    .from("parties")
+    .from("organisations")
     .update({ is_active: isActive })
     .eq("id", id)
     .select("id, is_active")

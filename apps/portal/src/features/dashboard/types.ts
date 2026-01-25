@@ -38,6 +38,8 @@ export interface DateRange {
 
 /** Admin dashboard aggregate metrics */
 export interface AdminMetrics {
+  totalInventoryM3: number;
+  packageCount: number;
   totalProductionVolumeM3: number;
   overallOutcomePercent: number;
   overallWastePercent: number;

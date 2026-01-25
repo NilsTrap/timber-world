@@ -28,12 +28,12 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
   let totalInventoryM3 = 0;
 
   // 1a. Shipment-sourced packages (shipped to this producer's facility, not consumed)
-  if (session.partyId) {
+  if (session.organisationId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: shipmentPkgs, error: shipmentError } = await (supabase as any)
       .from("inventory_packages")
-      .select("volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(to_party_id)")
-      .eq("shipments.to_party_id", session.partyId)
+      .select("volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(to_organisation_id)")
+      .eq("shipments.to_organisation_id", session.organisationId)
       .neq("status", "consumed");
 
     if (shipmentError) {

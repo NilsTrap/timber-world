@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
   Package,
@@ -48,12 +48,17 @@ interface SidebarLinkProps {
  */
 export function SidebarLink({ href, label, iconName, isCollapsed }: SidebarLinkProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const isActive = pathname === href || pathname.startsWith(`${href}/`);
   const Icon = ICON_MAP[iconName] || LayoutDashboard;
 
+  // Preserve org filter when navigating between pages
+  const orgParam = searchParams.get("org");
+  const finalHref = orgParam ? `${href}?org=${orgParam}` : href;
+
   return (
     <Link
-      href={href}
+      href={finalHref}
       aria-label={isCollapsed ? label : undefined}
       aria-current={isActive ? "page" : undefined}
       title={isCollapsed ? label : undefined}

@@ -11,6 +11,7 @@ import type { ProductionHistoryItem } from "../types";
 interface ProductionHistoryTableProps {
   entries: ProductionHistoryItem[];
   defaultProcess?: string;
+  showOrganisation?: boolean;
 }
 
 /** Format number with comma decimal separator */
@@ -23,6 +24,7 @@ function fmt1(n: number): string {
 
 type ColumnKey =
   | "productionDate"
+  | "organisationCode"
   | "processName"
   | "totalInputM3"
   | "totalOutputM3"
@@ -45,6 +47,7 @@ function parseEuropeanDate(value: string): string {
 export function ProductionHistoryTable({
   entries,
   defaultProcess,
+  showOrganisation = false,
 }: ProductionHistoryTableProps) {
   const router = useRouter();
   const [sortState, setSortState] = useState<ColumnSortState | null>(null);
@@ -68,6 +71,8 @@ export function ProductionHistoryTable({
     switch (col) {
       case "productionDate":
         return formatDate(entry.productionDate);
+      case "organisationCode":
+        return entry.organisationCode ?? "";
       case "processName":
         return entry.processName;
       case "totalInputM3":
@@ -85,6 +90,7 @@ export function ProductionHistoryTable({
   const uniqueValues = useMemo(() => {
     const cols: ColumnKey[] = [
       "productionDate",
+      "organisationCode",
       "processName",
       "totalInputM3",
       "totalOutputM3",
@@ -130,6 +136,7 @@ export function ProductionHistoryTable({
     // Apply column filters
     const cols: ColumnKey[] = [
       "productionDate",
+      "organisationCode",
       "processName",
       "totalInputM3",
       "totalOutputM3",
@@ -174,14 +181,20 @@ export function ProductionHistoryTable({
     );
   }
 
-  const columns: { key: ColumnKey; label: string; numeric: boolean; align: string }[] = [
+  const allColumns: { key: ColumnKey; label: string; numeric: boolean; align: string }[] = [
     { key: "productionDate", label: "Date", numeric: false, align: "text-left" },
+    { key: "organisationCode", label: "Organisation", numeric: false, align: "text-left" },
     { key: "processName", label: "Process", numeric: false, align: "text-left" },
     { key: "totalInputM3", label: "Input m³", numeric: true, align: "text-right" },
     { key: "totalOutputM3", label: "Output m³", numeric: true, align: "text-right" },
     { key: "outcomePercentage", label: "Outcome %", numeric: true, align: "text-right" },
     { key: "wastePercentage", label: "Waste %", numeric: true, align: "text-right" },
   ];
+
+  // Filter out organisation column if not needed
+  const columns = showOrganisation
+    ? allColumns
+    : allColumns.filter((c) => c.key !== "organisationCode");
 
   return (
     <div className="space-y-2">
@@ -283,7 +296,7 @@ export function ProductionHistoryTable({
             {filteredEntries.length === 0 ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={columns.length}
                   className="px-4 py-8 text-center text-muted-foreground"
                 >
                   No entries match your filters
@@ -295,6 +308,11 @@ export function ProductionHistoryTable({
                   <td className="px-4 py-3">
                     {formatDate(entry.productionDate)}
                   </td>
+                  {showOrganisation && (
+                    <td className="px-4 py-3">
+                      {entry.organisationCode ?? ""}
+                    </td>
+                  )}
                   <td className="px-4 py-3">
                     {entry.processName}
                     {entry.entryType === "correction" && (
@@ -323,6 +341,7 @@ export function ProductionHistoryTable({
             <tfoot>
               <tr className="border-t bg-muted/30 font-bold">
                 <td className="px-4 py-3" />
+                {showOrganisation && <td className="px-4 py-3" />}
                 <td className="px-4 py-3" />
                 <td className="px-4 py-3 text-right tabular-nums">
                   {fmt3(filteredEntries.reduce((sum, e) => sum + e.totalInputM3, 0))}

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getSession, isSuperAdmin } from "@/lib/auth";
 import {
   getProcesses,
   getDraftProductions,
@@ -23,19 +23,22 @@ export const metadata: Metadata = {
 export default async function ProductionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; process?: string }>;
+  searchParams: Promise<{ tab?: string; process?: string; org?: string }>;
 }) {
-  const { tab, process } = await searchParams;
+  const { tab, process, org: selectedOrgId } = await searchParams;
   const session = await getSession();
 
   if (!session) {
     redirect("/login");
   }
 
+  // Pass org filter to queries for Super Admin
+  const orgFilter = isSuperAdmin(session) ? selectedOrgId : undefined;
+
   const [processesResult, draftsResult, historyResult] = await Promise.all([
     getProcesses(),
-    getDraftProductions(),
-    getValidatedProductions(),
+    getDraftProductions(orgFilter),
+    getValidatedProductions(orgFilter),
   ]);
 
   const processes = processesResult.success ? processesResult.data : [];
@@ -57,6 +60,7 @@ export default async function ProductionPage({
         history={history}
         defaultTab={tab}
         defaultProcess={process}
+        showOrganisation={isSuperAdmin(session)}
       />
     </div>
   );

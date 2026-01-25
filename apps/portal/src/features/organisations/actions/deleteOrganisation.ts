@@ -50,13 +50,13 @@ export async function deleteOrganisation(
   const { count: fromCount } = await (supabase as any)
     .from("shipments")
     .select("id", { count: "exact", head: true })
-    .eq("from_party_id", id);
+    .eq("from_organisation_id", id);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { count: toCount } = await (supabase as any)
     .from("shipments")
     .select("id", { count: "exact", head: true })
-    .eq("to_party_id", id);
+    .eq("to_organisation_id", id);
 
   const totalShipments = (fromCount ?? 0) + (toCount ?? 0);
 
@@ -71,7 +71,7 @@ export async function deleteOrganisation(
   // 5. Delete organisation
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
-    .from("parties")
+    .from("organisations")
     .delete()
     .eq("id", id);
 

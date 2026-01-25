@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
 import type {
   ActionResult,
   AdminProcessBreakdownItem,
@@ -60,13 +60,19 @@ function getPreviousPeriodRange(dateRange: DateRange): DateRange {
 async function fetchProcessStats(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
-  dateRange?: DateRange
+  dateRange?: DateRange,
+  orgId?: string
 ): Promise<Map<string, ProcessStats>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("portal_production_entries")
     .select("process_id, total_input_m3, total_output_m3, ref_processes(value)")
     .eq("status", "validated");
+
+  // Apply org filter when specified
+  if (orgId) {
+    query = query.eq("organisation_id", orgId);
+  }
 
   if (dateRange) {
     query = query.gte("validated_at", dateRange.start);
@@ -116,9 +122,11 @@ async function fetchProcessStats(
  * Computes per-process stats and trend compared to previous period.
  *
  * @param dateRange - Optional date range filter
+ * @param orgId - Optional org ID for Super Admin to filter by specific organisation
  */
 export async function getAdminProcessBreakdown(
-  dateRange?: DateRange
+  dateRange?: DateRange,
+  orgId?: string
 ): Promise<ActionResult<AdminProcessBreakdownItem[]>> {
   const session = await getSession();
   if (!session) {
@@ -130,15 +138,18 @@ export async function getAdminProcessBreakdown(
 
   const supabase = await createClient();
 
+  // Determine org filter for Super Admin
+  const effectiveOrgId = isSuperAdmin(session) ? orgId : undefined;
+
   try {
     // Fetch current period stats
-    const currentStats = await fetchProcessStats(supabase, dateRange);
+    const currentStats = await fetchProcessStats(supabase, dateRange, effectiveOrgId);
 
     // Fetch previous period stats for trend calculation (only if date range specified)
     let previousStats: Map<string, ProcessStats> | null = null;
     if (dateRange) {
       const previousRange = getPreviousPeriodRange(dateRange);
-      previousStats = await fetchProcessStats(supabase, previousRange);
+      previousStats = await fetchProcessStats(supabase, previousRange, effectiveOrgId);
     }
 
     // Build result with computed averages and trends

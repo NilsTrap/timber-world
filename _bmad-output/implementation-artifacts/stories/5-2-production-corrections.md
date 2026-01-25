@@ -91,7 +91,7 @@ so that inventory is adjusted correctly while maintaining a full audit trail.
 
 - [x] Task 7: Verification (AC: all)
   - [x] Build passes: `npx turbo build --filter=@timber/portal`
-  - [x] Migration applies: `npx supabase db push` (or local reset)
+  - [x] Migration applies: `npx supabase db push`
   - [x] "Create Correction" button creates a linked correction entry
   - [x] Correction entry form works like normal production (add inputs, outputs, validate)
   - [x] Correction badge shown in draft state and in history

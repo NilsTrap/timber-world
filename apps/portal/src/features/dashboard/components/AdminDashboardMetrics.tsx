@@ -8,7 +8,8 @@ interface AdminDashboardMetricsProps {
 /**
  * Admin Dashboard Metric Cards
  *
- * Displays 3 metric cards in a grid:
+ * Displays 4 metric cards in a grid:
+ * - Total Inventory (all packages volume m3)
  * - Total Production Volume (all-time output m3)
  * - Outcome Rate (weighted average %)
  * - Waste Rate (weighted average %)
@@ -17,21 +18,30 @@ interface AdminDashboardMetricsProps {
  * TODO [i18n]: Replace hardcoded text with useTranslations()
  */
 export function AdminDashboardMetrics({ metrics }: AdminDashboardMetricsProps) {
-  const hasData = metrics && metrics.entryCount > 0;
+  const hasProductionData = metrics && metrics.entryCount > 0;
+  const hasInventoryData = metrics && metrics.packageCount > 0;
 
   const cards = [
     {
+      title: "Total Inventory",
+      value:
+        hasInventoryData && metrics.totalInventoryM3 > 0
+          ? `${formatVolume(metrics.totalInventoryM3)} m\u00B3`
+          : "--",
+      subtitle: `${metrics?.packageCount ?? 0} packages`,
+    },
+    {
       title: "Total Production Volume",
       value:
-        hasData && metrics.totalProductionVolumeM3 > 0
+        hasProductionData && metrics.totalProductionVolumeM3 > 0
           ? `${formatVolume(metrics.totalProductionVolumeM3)} m\u00B3`
           : "--",
-      subtitle: `${hasData ? metrics.entryCount : 0} production entries`,
+      subtitle: `${hasProductionData ? metrics.entryCount : 0} production entries`,
     },
     {
       title: "Overall Outcome Rate",
       value:
-        hasData && metrics.overallOutcomePercent > 0
+        hasProductionData && metrics.overallOutcomePercent > 0
           ? `${formatPercent(metrics.overallOutcomePercent)}%`
           : "--",
       subtitle: "Weighted average",
@@ -39,7 +49,7 @@ export function AdminDashboardMetrics({ metrics }: AdminDashboardMetricsProps) {
     {
       title: "Overall Waste Rate",
       value:
-        hasData && metrics.overallWastePercent > 0
+        hasProductionData && metrics.overallWastePercent > 0
           ? `${formatPercent(metrics.overallWastePercent)}%`
           : "--",
       subtitle: "Weighted average",
@@ -47,7 +57,7 @@ export function AdminDashboardMetrics({ metrics }: AdminDashboardMetricsProps) {
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => (
         <div
           key={card.title}

@@ -1,35 +1,51 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isOrganisationUser, isSuperAdmin } from "@/lib/auth";
 import type { ProductionHistoryItem, ActionResult } from "../types";
 
 /**
  * Fetch validated production entries with calculated totals.
  * Ordered by validated_at (newest first).
+ *
+ * Multi-tenancy:
+ * - Organisation users see only their organisation's validated entries
+ * - Super Admin sees all validated entries across all organisations (or filtered by orgId if provided)
+ *
+ * @param orgId - Optional org ID for Super Admin to filter by specific organisation
  */
-export async function getValidatedProductions(): Promise<
+export async function getValidatedProductions(orgId?: string): Promise<
   ActionResult<ProductionHistoryItem[]>
 > {
   const session = await getSession();
   if (!session) {
-    return { success: false, error: "Not authenticated" };
+    return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
   const supabase = await createClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  let query = (supabase as any)
     .from("portal_production_entries")
     .select(
-      "id, production_date, total_input_m3, total_output_m3, outcome_percentage, waste_percentage, validated_at, entry_type, ref_processes(value)"
+      "id, production_date, total_input_m3, total_output_m3, outcome_percentage, waste_percentage, validated_at, entry_type, organisation_id, ref_processes(value), organisations(code, name)"
     )
-    .eq("created_by", session.id)
     .eq("status", "validated")
     .order("validated_at", { ascending: false });
 
+  // Organisation users: always filter by their own organisation
+  if (isOrganisationUser(session)) {
+    query = query.eq("organisation_id", session.organisationId);
+  } else if (isSuperAdmin(session) && orgId) {
+    // Super Admin with org filter: filter by selected organisation
+    query = query.eq("organisation_id", orgId);
+  }
+  // Super Admin without org filter: no filter, sees all validated entries
+
+  const { data, error } = await query;
+
   if (error) {
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, code: "QUERY_FAILED" };
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,6 +59,8 @@ export async function getValidatedProductions(): Promise<
     wastePercentage: row.waste_percentage ?? 0,
     validatedAt: row.validated_at,
     entryType: row.entry_type ?? "standard",
+    organisationCode: row.organisations?.code ?? null,
+    organisationName: row.organisations?.name ?? null,
   }));
 
   return { success: true, data: items };

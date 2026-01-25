@@ -45,6 +45,8 @@ export interface ProductionHistoryItem {
   wastePercentage: number;
   validatedAt: string;
   entryType: EntryType;
+  organisationCode: string | null;
+  organisationName: string | null;
 }
 
 export interface ProductionInput {

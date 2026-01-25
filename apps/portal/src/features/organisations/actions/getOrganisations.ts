@@ -36,10 +36,10 @@ export async function getOrganisations(
 
   const supabase = await createClient();
 
-  // 3. Fetch organisations from parties table
+  // 3. Fetch organisations from organisations table
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
-    .from("parties")
+    .from("organisations")
     .select("id, code, name, is_active, created_at, updated_at");
 
   // Filter to active-only unless includeInactive is true

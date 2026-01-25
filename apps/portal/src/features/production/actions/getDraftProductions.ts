@@ -1,32 +1,49 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isOrganisationUser, isSuperAdmin } from "@/lib/auth";
 import type { ProductionListItem, ActionResult } from "../types";
 
 /**
  * Fetch draft production entries with joined process name.
  * Ordered by most recently created first.
+ *
+ * Multi-tenancy:
+ * - Organisation users see only their organisation's drafts
+ * - Super Admin sees all drafts across all organisations (or filtered by orgId if provided)
+ *
+ * @param orgId - Optional org ID for Super Admin to filter by specific organisation
  */
-export async function getDraftProductions(): Promise<
+export async function getDraftProductions(orgId?: string): Promise<
   ActionResult<ProductionListItem[]>
 > {
   const session = await getSession();
   if (!session) {
-    return { success: false, error: "Not authenticated" };
+    return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
   const supabase = await createClient();
 
-  const { data, error } = await (supabase as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("portal_production_entries")
-    .select("id, production_date, status, created_at, ref_processes(value)")
-    .eq("created_by", session.id)
+    .select("id, production_date, status, created_at, organisation_id, ref_processes(value)")
     .eq("status", "draft")
     .order("created_at", { ascending: false });
 
+  // Organisation users: always filter by their own organisation
+  if (isOrganisationUser(session)) {
+    query = query.eq("organisation_id", session.organisationId);
+  } else if (isSuperAdmin(session) && orgId) {
+    // Super Admin with org filter: filter by selected organisation
+    query = query.eq("organisation_id", orgId);
+  }
+  // Super Admin without org filter: no filter, sees all drafts
+
+  const { data, error } = await query;
+
   if (error) {
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, code: "QUERY_FAILED" };
   }
 
   const items: ProductionListItem[] = (data ?? []).map((row: any) => ({

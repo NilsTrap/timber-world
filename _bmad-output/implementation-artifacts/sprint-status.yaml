@@ -80,12 +80,12 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Multi-Tenancy Foundation
-  epic-6: in-progress
+  epic-6: done
   6-1-database-schema-multi-tenancy: done
   6-2-organization-scoped-authentication: done
   6-3-context-aware-inventory-queries: done
-  6-4-context-aware-production-queries: backlog
-  6-5-organization-selector-super-admin: backlog
+  6-4-context-aware-production-queries: done
+  6-5-organization-selector-super-admin: done
   epic-6-retrospective: optional
 
   # Epic 7: User & Organization Management

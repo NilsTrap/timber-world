@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult, AdminMetrics, DateRange } from "../types";
 
 /**
@@ -13,9 +13,11 @@ import type { ActionResult, AdminMetrics, DateRange } from "../types";
  * 3. Entry count for the period
  *
  * @param dateRange - Optional date range filter (ISO strings)
+ * @param orgId - Optional org ID for Super Admin to filter by specific organisation
  */
 export async function getAdminMetrics(
-  dateRange?: DateRange
+  dateRange?: DateRange,
+  orgId?: string
 ): Promise<ActionResult<AdminMetrics>> {
   const session = await getSession();
   if (!session) {
@@ -27,12 +29,77 @@ export async function getAdminMetrics(
 
   const supabase = await createClient();
 
-  // Build query - admin sees ALL validated entries (no created_by filter)
+  // Fetch inventory packages with shipment info for org filtering
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: packagesData, error: packagesError } = await (supabase as any)
+    .from("inventory_packages")
+    .select("volume_m3, shipment_id, production_entry_id, shipments(to_organisation_id)");
+
+  if (packagesError) {
+    console.error("[getAdminMetrics] Failed to fetch packages:", packagesError.message);
+    return { success: false, error: packagesError.message, code: "QUERY_FAILED" };
+  }
+
+  // For org filtering, we need production entry org info too
+  let productionOrgMap = new Map<string, string>();
+  if (orgId && packagesData) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const productionIds = (packagesData as any[])
+      .filter((pkg) => pkg.production_entry_id && !pkg.shipment_id)
+      .map((pkg) => pkg.production_entry_id);
+
+    if (productionIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: prodData } = await (supabase as any)
+        .from("portal_production_entries")
+        .select("id, organisation_id")
+        .in("id", productionIds);
+
+      if (prodData) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const entry of prodData as any[]) {
+          productionOrgMap.set(entry.id, entry.organisation_id);
+        }
+      }
+    }
+  }
+
+  // Calculate inventory totals (with optional org filter)
+  let totalInventoryM3 = 0;
+  let packageCount = 0;
+
+  if (packagesData) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const pkg of packagesData as any[]) {
+      // Determine package org
+      let pkgOrgId: string | null = null;
+      if (pkg.shipments?.to_organisation_id) {
+        pkgOrgId = pkg.shipments.to_organisation_id;
+      } else if (pkg.production_entry_id) {
+        pkgOrgId = productionOrgMap.get(pkg.production_entry_id) ?? null;
+      }
+
+      // Apply org filter if specified
+      if (orgId && pkgOrgId !== orgId) {
+        continue;
+      }
+
+      totalInventoryM3 += Number(pkg.volume_m3) || 0;
+      packageCount++;
+    }
+  }
+
+  // Build query - admin sees ALL validated entries (or filtered by org if specified)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("portal_production_entries")
     .select("total_input_m3, total_output_m3, validated_at")
     .eq("status", "validated");
+
+  // Apply org filter for Super Admin when specified
+  if (isSuperAdmin(session) && orgId) {
+    query = query.eq("organisation_id", orgId);
+  }
 
   // Apply date range filter if provided
   if (dateRange) {
@@ -73,6 +140,8 @@ export async function getAdminMetrics(
   return {
     success: true,
     data: {
+      totalInventoryM3,
+      packageCount,
       totalProductionVolumeM3,
       overallOutcomePercent,
       overallWastePercent,

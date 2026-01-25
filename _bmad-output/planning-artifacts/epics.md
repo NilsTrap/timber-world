@@ -5,15 +5,16 @@ inputDocuments:
   - 'planning-artifacts/architecture.md'
   - 'planning-artifacts/ux-design-specification.md'
   - 'planning-artifacts/inventory-data-model-v2.md'
-scope: 'Producer MVP'
-targetUsers: ['Admin (Timber World)', 'Producer (Factory Manager)']
-epicCount: 5
-storyCount: 19
+  - 'analysis/brainstorming-session-2026-01-25.md'
+scope: 'Producer MVP + Multi-Tenancy Extension'
+targetUsers: ['Super Admin', 'Organization User', 'Admin (legacy)', 'Producer (Factory Manager)']
+epicCount: 9
+storyCount: 38  # 19 original + 19 new (Epics 6-9)
 workflowComplete: true
-completedDate: '2026-01-22'
+completedDate: '2026-01-25'
 status: 'ready-for-implementation'
-lastUpdated: '2026-01-22'
-updateNote: 'Epic 2-4 updated for Inventory Data Model v2 (flat shipment/package model)'
+lastUpdated: '2026-01-25'
+updateNote: 'Added Epics 6-9 for Multi-Tenancy, User Management, Shipments, Consolidated Views'
 ---
 
 # Timber-World Producer MVP - Epic Breakdown
@@ -1008,3 +1009,654 @@ NFR46: Loading states for operations > 1 second
 **When** I view Admin dashboard
 **Then** I see a message "No production data recorded yet"
 **And** the efficiency section shows placeholder state
+
+---
+---
+
+# Multi-Tenancy Extension (Epics 6-9)
+
+**Date Added:** 2026-01-25
+**Source:** Brainstorming session + Architecture Addendum
+**Builds On:** Producer MVP (Epics 1-5)
+
+## New Requirements (Multi-Tenancy)
+
+### From Architecture Addendum (2026-01-25)
+
+**Multi-Tenancy Requirements:**
+- Add organisation_id to portal_users and inventory_packages
+- Context-driven views (same forms, filtered by session org)
+- Organization-scoped login and data visibility
+
+**User Management Requirements:**
+- Super Admin creates organizations
+- Super Admin creates users within organizations
+- Organizations may have 0+ users (no type distinction)
+- User onboarding with credential sending
+
+**Shipment Flow Requirements:**
+- Two-stage flow: Draft → Pending → Accept/Reject → Complete
+- Extend existing shipments table with status workflow
+- Shipment codes: [FROM]-[TO]-[NUMBER]
+- Inventory moves only on completion
+
+**Consolidated Views Requirements:**
+- Platform-wide dashboard with aggregated metrics
+- Per-org breakdown with drill-down
+- Shipments view showing all cross-org activity
+
+### New FR Coverage Map (Epics 6-9)
+
+| Requirement | Epic | Description |
+|-------------|------|-------------|
+| Arch: organisation_id on tables | Epic 6 | Data model extension for multi-tenancy |
+| Arch: Context-driven views | Epic 6 | Same forms, filtered by session org |
+| Arch: Org-scoped login | Epic 6 | Users belong to one organization |
+| Arch: User creation in org | Epic 7 | Super Admin creates users per org |
+| Arch: Credential sending | Epic 7 | Email with login details |
+| Arch: Orgs with 0+ users | Epic 7 | No type distinction needed |
+| Arch: Two-stage shipment flow | Epic 8 | Draft → Accept → Execute |
+| Arch: Shipment status workflow | Epic 8 | Extend shipments table |
+| Arch: Shipment codes | Epic 8 | FROM-TO-NUMBER format |
+| Arch: Aggregated dashboard | Epic 9 | Platform-wide metrics |
+| Arch: Shipments view | Epic 9 | Cross-org activity log |
+| Arch: Per-org drill-down | Epic 9 | View org as they see it |
+
+---
+
+## Epic 6: Multi-Tenancy Foundation
+
+**Goal:** Organization users see only their organization's data; Super Admin can view all or filter by organization
+
+**Requirements covered:**
+- Add organisation_id to portal_users and inventory_packages
+- Context-aware queries (filter by session's org)
+- Organization-scoped login and dashboard
+
+**Standalone Value:** Complete data isolation - users log in and see only their org's inventory and production.
+
+---
+
+### Story 6.1: Database Schema for Multi-Tenancy
+
+**As a** developer,
+**I want** the database schema updated with organisation_id columns,
+**So that** all data can be properly scoped to organizations.
+
+**Acceptance Criteria:**
+
+**Given** the existing database schema
+**When** migrations are applied
+**Then** `portal_users` table has `organisation_id` column (nullable, FK to organisations)
+**And** `inventory_packages` table has `organisation_id` column (FK to organisations)
+**And** `portal_production_entries` table has `organisation_id` column (FK to organisations)
+**And** existing data is migrated to the default organisation (TWP)
+**And** Super Admin user (existing admin) has `organisation_id = NULL`
+
+---
+
+### Story 6.2: Organization-Scoped Authentication
+
+**As an** organization user,
+**I want** my session to include my organization context,
+**So that** I automatically see only my organization's data.
+
+**Acceptance Criteria:**
+
+**Given** I am a user with `organisation_id` set
+**When** I log in
+**Then** my session includes `organisation_id` and `organisation_code`
+**And** the sidebar shows my organization name
+
+**Given** I am a Super Admin (organisation_id = NULL)
+**When** I log in
+**Then** my session has `organisation_id = null`
+**And** the sidebar shows "Timber World Platform"
+
+**Given** I try to access a route
+**When** middleware checks my session
+**Then** organisation context is available for all server actions
+
+---
+
+### Story 6.3: Context-Aware Inventory Queries
+
+**As an** organization user,
+**I want** to see only my organization's inventory,
+**So that** I work with relevant data only.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as an organization user
+**When** I view the Inventory page
+**Then** I see only packages where `organisation_id` matches my organization
+**And** summary totals reflect only my organization's packages
+
+**Given** I am logged in as Super Admin
+**When** I view the Inventory page
+**Then** I see packages from all organizations
+**And** each row shows which organization owns the package
+
+**Given** packages exist for multiple organizations
+**When** an organization user views inventory
+**Then** they cannot see packages from other organizations
+
+---
+
+### Story 6.4: Context-Aware Production Queries
+
+**As an** organization user,
+**I want** to see only my organization's production entries,
+**So that** my production history is scoped to my facility.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as an organization user
+**When** I view the Production page (Active or History tab)
+**Then** I see only production entries where `organisation_id` matches my organization
+
+**Given** I am logged in as an organization user
+**When** I create a new production entry
+**Then** the entry is automatically assigned my `organisation_id`
+
+**Given** I am logged in as Super Admin
+**When** I view production entries
+**Then** I see entries from all organizations
+**And** I can filter by organization
+
+---
+
+### Story 6.5: Organization Selector for Super Admin
+
+**As a** Super Admin,
+**I want** to filter all views by organization,
+**So that** I can focus on one organization's data when needed.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as Super Admin
+**When** I view the dashboard header
+**Then** I see an organization dropdown (default: "All Organizations")
+
+**Given** I select a specific organization from the dropdown
+**When** the selection changes
+**Then** all data views (Inventory, Production, Dashboard) filter to that organization
+**And** the URL includes `?org={org_id}` for bookmarking
+
+**Given** I select "All Organizations"
+**When** the selection changes
+**Then** all views show aggregated data across all organizations
+
+**Given** I am an organization user (not Super Admin)
+**When** I view any page
+**Then** I do not see the organization selector (my org is fixed)
+
+---
+
+## Epic 7: User & Organization Management
+
+**Goal:** Super Admin can create organizations and assign users to them; users receive login credentials
+
+**Requirements covered:**
+- Extend organisations management (single type for all)
+- User CRUD within organization context
+- Credential sending (email with login details)
+- Organizations may have 0+ users
+
+**Standalone Value:** Full user lifecycle - Super Admin onboards new orgs and users. Builds on Epic 6.
+
+---
+
+### Story 7.1: Enhanced Organizations Management
+
+**As a** Super Admin,
+**I want** to manage organizations with user count visibility,
+**So that** I can see which organizations have users and which don't.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as Super Admin
+**When** I navigate to Admin > Organisations
+**Then** I see a table with columns: Code, Name, User Count, Status, Actions
+
+**Given** I am viewing the organisations table
+**When** an organization has 0 users
+**Then** the User Count shows "0" (not an error state)
+**And** I can still create shipments to/from this organization
+
+**Given** I click on an organization row
+**When** the detail view opens
+**Then** I see a "Users" tab alongside organization details
+
+**Given** I am an organization user (not Super Admin)
+**When** I try to access Admin > Organisations
+**Then** I am redirected with "Access denied" message
+
+---
+
+### Story 7.2: User Management within Organization
+
+**As a** Super Admin,
+**I want** to create and manage users within an organization,
+**So that** I can onboard new organization staff.
+
+**Acceptance Criteria:**
+
+**Given** I am viewing an organization's Users tab
+**When** I click "Add User"
+**Then** I see a form with fields: Name (required), Email (required)
+
+**Given** I am adding a new user
+**When** I enter valid name and email and click Save
+**Then** a new user record is created with `organisation_id` set to this organization
+**And** the user's role is set to "producer" by default
+**And** I see a success message "User created"
+
+**Given** I try to add a user with an email that already exists
+**When** I click Save
+**Then** I see an error "Email already registered"
+
+**Given** I am viewing the Users tab
+**When** I see the user list
+**Then** I see columns: Name, Email, Status (Active/Invited), Last Login, Actions
+
+**Given** I click Edit on a user
+**When** I modify their name and save
+**Then** the user's name is updated
+**And** I see a success toast
+
+**Given** I click Deactivate on a user
+**When** I confirm the action
+**Then** the user is marked inactive
+**And** they can no longer log in
+
+---
+
+### Story 7.3: User Credential Generation
+
+**As a** Super Admin,
+**I want** to generate login credentials for new users,
+**So that** they can access the portal.
+
+**Acceptance Criteria:**
+
+**Given** I have created a new user
+**When** the user is saved
+**Then** a temporary password is auto-generated (12+ chars, mixed case, numbers)
+**And** the user status is set to "Invited"
+
+**Given** a user has status "Invited"
+**When** I view their row in the Users table
+**Then** I see a "Send Credentials" button
+
+**Given** I click "Send Credentials"
+**When** the action completes
+**Then** an email is sent to the user with: login URL, email, temporary password
+**And** I see a success toast "Credentials sent to {email}"
+**And** `invited_at` timestamp is recorded
+
+**Given** the user logs in with the temporary password
+**When** they successfully authenticate
+**Then** their status changes from "Invited" to "Active"
+
+---
+
+### Story 7.4: Resend and Reset Credentials
+
+**As a** Super Admin,
+**I want** to resend or reset user credentials,
+**So that** I can help users who lost access.
+
+**Acceptance Criteria:**
+
+**Given** a user has status "Invited" (never logged in)
+**When** I click "Resend Credentials"
+**Then** a new temporary password is generated
+**And** the email is sent again with new credentials
+
+**Given** a user has status "Active" (has logged in before)
+**When** I click "Reset Password"
+**Then** a new temporary password is generated
+**And** the user receives an email with reset instructions
+**And** their next login requires the new password
+
+**Given** I want to view credential send history
+**When** I view a user's details
+**Then** I see when credentials were last sent (`invited_at`)
+**And** I see who sent them (`invited_by`)
+
+---
+
+## Epic 8: Inter-Organization Shipments
+
+**Goal:** Organizations can send inventory to each other with a review/approval process
+
+**Requirements covered:**
+- Two-stage shipment flow: Draft → Pending → Accept/Reject → Complete
+- Shipment creation with package selection
+- Receiver acceptance/rejection workflow
+- Inventory movement on completion only
+
+**Standalone Value:** Complete goods movement between orgs. Builds on Epics 6-7.
+
+**Note:** This extends the existing `shipments` table with status workflow for inter-org movements.
+
+---
+
+### Story 8.1: Shipment Schema for Inter-Org Flow
+
+**As a** developer,
+**I want** the shipments table extended for inter-org workflows,
+**So that** shipments between organizations include approval flow.
+
+**Acceptance Criteria:**
+
+**Given** the existing `shipments` table
+**When** migrations are applied
+**Then** `shipments` table has additional columns:
+- status (TEXT: draft, pending, accepted, completed, rejected) - default 'completed' for legacy
+- submitted_at (TIMESTAMPTZ, nullable)
+- reviewed_at, reviewed_by (for acceptance/rejection)
+- rejection_reason (TEXT, nullable)
+
+**And** `shipment_packages` table (existing) supports partial quantities:
+- pieces (INTEGER) - pieces being shipped
+- volume_m3 (DECIMAL) - volume being shipped
+
+**And** existing shipments are marked with status = 'completed' (no approval needed for legacy data)
+
+---
+
+### Story 8.2: Create Shipment Draft
+
+**As an** organization user,
+**I want** to create a shipment draft and select packages,
+**So that** I can prepare a shipment to another organization.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as an organization user
+**When** I navigate to Shipments and click "New Shipment"
+**Then** I see a form with: To Organisation (dropdown), Notes (optional)
+
+**Given** I am creating a shipment
+**When** I select a destination organization
+**Then** the shipment code is auto-generated (e.g., "INE-TWP-001")
+**And** a draft shipment record is created
+
+**Given** I have a draft shipment
+**When** I click "Add Packages"
+**Then** I see a package selector showing my organization's available inventory
+**And** I can select multiple packages with quantities (pieces/volume)
+
+**Given** I have selected packages
+**When** I view the shipment draft
+**Then** I see all selected packages with: Package#, Product, Dimensions, Pieces, Volume
+**And** I see totals: Total Packages, Total m³
+
+**Given** I have a draft shipment
+**When** I remove a package from the selection
+**Then** the package is removed from the shipment
+**And** totals are recalculated
+
+---
+
+### Story 8.3: Submit Shipment for Acceptance
+
+**As an** organization user,
+**I want** to submit my shipment draft for receiver approval,
+**So that** the receiving organization can review before goods move.
+
+**Acceptance Criteria:**
+
+**Given** I have a draft shipment with at least one package
+**When** I click "Submit for Acceptance"
+**Then** I see a confirmation dialog showing: destination org, package count, total m³
+
+**Given** I confirm the submission
+**When** the action completes
+**Then** shipment status changes from "draft" to "pending"
+**And** `submitted_at` timestamp is set
+**And** I see success message "Shipment submitted for acceptance"
+
+**Given** a shipment is pending
+**When** I view it
+**Then** I can no longer add or remove packages
+**And** I see status "Pending Acceptance"
+**And** I see a "Cancel" button (returns to draft)
+
+**Given** I try to submit a shipment with no packages
+**When** I click "Submit"
+**Then** I see error "At least one package is required"
+
+---
+
+### Story 8.4: Receiver Reviews Pending Shipment
+
+**As an** organization user (receiver),
+**I want** to see and review incoming shipment requests,
+**So that** I can verify what I'm receiving before accepting.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as an organization user
+**When** a shipment is pending with my organization as destination
+**Then** I see a notification indicator on the Shipments menu
+
+**Given** I navigate to Shipments
+**When** I view the "Incoming" tab
+**Then** I see all pending shipments addressed to my organization
+**And** columns show: Code, From Org, Packages, Volume m³, Submitted Date, Actions
+
+**Given** I click on a pending shipment
+**When** the detail view opens
+**Then** I see full package list with all attributes
+**And** I see sender's notes (if any)
+**And** I see "Accept" and "Reject" buttons
+
+**Given** I am Super Admin
+**When** I view Shipments
+**Then** I can see all pending shipments across all organizations
+
+---
+
+### Story 8.5: Accept or Reject Shipment
+
+**As an** organization user (receiver),
+**I want** to accept or reject an incoming shipment,
+**So that** I control what inventory enters my organization.
+
+**Acceptance Criteria:**
+
+**Given** I am viewing a pending shipment addressed to my organization
+**When** I click "Accept"
+**Then** I see a confirmation dialog "Accept X packages (Y m³) from {Org}?"
+
+**Given** I confirm acceptance
+**When** the action completes
+**Then** shipment status changes to "accepted"
+**And** `reviewed_at` and `reviewed_by` are set
+**And** inventory packages are moved: `organisation_id` updated to my org
+**And** shipment status changes to "completed"
+**And** `completed_at` is set
+**And** sender sees the shipment as "Completed"
+
+**Given** I click "Reject"
+**When** I am prompted
+**Then** I must enter a rejection reason (required)
+
+**Given** I confirm rejection with a reason
+**When** the action completes
+**Then** shipment status changes to "rejected"
+**And** `rejection_reason` is saved
+**And** packages remain with sender (no inventory movement)
+**And** sender sees the shipment as "Rejected" with the reason
+
+---
+
+### Story 8.6: Shipment History and Status Tracking
+
+**As an** organization user,
+**I want** to view my shipment history,
+**So that** I can track what I've sent and received.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as an organization user
+**When** I navigate to Shipments
+**Then** I see tabs: "Outgoing" (sent by my org), "Incoming" (sent to my org)
+
+**Given** I am viewing the Outgoing tab
+**When** I see the table
+**Then** I see columns: Code, To Org, Packages, Volume m³, Status, Date
+**And** status shows: Draft, Pending, Completed, Rejected
+
+**Given** I am viewing the Incoming tab
+**When** I see the table
+**Then** I see columns: Code, From Org, Packages, Volume m³, Status, Date
+**And** pending shipments are highlighted
+
+**Given** I click on any shipment
+**When** the detail view opens
+**Then** I see full shipment details including all packages
+**And** if rejected, I see the rejection reason
+
+**Given** I am Super Admin
+**When** I view Shipments
+**Then** I see an "All Shipments" tab showing shipments between all organizations
+
+---
+
+## Epic 9: Consolidated Platform Views
+
+**Goal:** Super Admin sees platform-wide metrics and all cross-org shipments in one view
+
+**Requirements covered:**
+- Aggregated dashboard (totals across all orgs)
+- Per-org breakdown with drill-down
+- Shipments view showing all cross-org activity
+- Each org also sees their own shipments (sent/received)
+
+**Standalone Value:** Complete visibility for Super Admin. Builds on Epics 6-8.
+
+---
+
+### Story 9.1: Super Admin Aggregated Dashboard
+
+**As a** Super Admin,
+**I want** to see platform-wide metrics on my dashboard,
+**So that** I can monitor all organizations at a glance.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as Super Admin
+**When** I view my dashboard
+**Then** I see aggregated MetricCards:
+- Total Inventory Volume (all orgs combined, m³)
+- Total Production Volume (all orgs combined, m³)
+- Active Organizations (count of orgs with recent activity)
+- Pending Shipments (count awaiting acceptance)
+
+**Given** production data exists across multiple organizations
+**When** I view the dashboard
+**Then** I see Overall Outcome % and Waste % (weighted across all orgs)
+
+**Given** I view the dashboard
+**When** I look at the efficiency section
+**Then** I see per-process breakdown aggregated across all organizations
+
+---
+
+### Story 9.2: Per-Organization Breakdown
+
+**As a** Super Admin,
+**I want** to see a breakdown by organization,
+**So that** I can compare performance across my network.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as Super Admin
+**When** I view the dashboard
+**Then** I see an "Organizations Overview" table with columns:
+- Organization Name
+- Inventory (m³)
+- Production Volume (m³)
+- Outcome %
+- Last Activity
+
+**Given** I am viewing the Organizations Overview
+**When** I click on an organization row
+**Then** I am taken to that organization's detailed view
+**And** I see their dashboard as they would see it
+
+**Given** I am viewing an organization's detail view
+**When** I look at the header
+**Then** I see "Viewing as: {Org Name}" indicator
+**And** I see a "Back to Platform View" link
+
+**Given** organizations have varying performance
+**When** I view the breakdown
+**Then** Outcome % is color-coded (green ≥80%, yellow 60-79%, red <60%)
+
+---
+
+### Story 9.3: All Shipments View
+
+**As a** Super Admin,
+**I want** to see all shipments across the platform,
+**So that** I can track goods movement between all organizations.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as Super Admin
+**When** I navigate to Shipments
+**Then** I see an "All Shipments" tab (in addition to Incoming/Outgoing)
+
+**Given** I am viewing the All Shipments tab
+**When** I see the table
+**Then** I see columns: Code, From Org, To Org, Packages, Volume m³, Status, Date
+**And** shipments are sorted by date (newest first)
+
+**Given** I am viewing All Shipments
+**When** I use the filter options
+**Then** I can filter by: From Org, To Org, Status, Date Range
+
+**Given** I click on any shipment row
+**When** the detail view opens
+**Then** I see full shipment details including all packages
+**And** I can see acceptance/rejection history
+
+**Given** pending shipments exist
+**When** I view All Shipments
+**Then** pending shipments are visually highlighted
+**And** I see a count badge on the tab "All Shipments (3)"
+
+---
+
+### Story 9.4: Organization User Shipments View
+
+**As an** organization user,
+**I want** to see my sent and received shipments,
+**So that** I can track my organization's goods movement.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as an organization user
+**When** I navigate to Shipments
+**Then** I see two tabs: "Outgoing" and "Incoming"
+**And** I do NOT see the "All Shipments" tab (Super Admin only)
+
+**Given** I am viewing Outgoing shipments
+**When** I see the table
+**Then** I see only shipments where my org is the sender
+**And** columns show: Code, To Org, Packages, Volume m³, Status, Date
+
+**Given** I am viewing Incoming shipments
+**When** I see the table
+**Then** I see only shipments where my org is the receiver
+**And** columns show: Code, From Org, Packages, Volume m³, Status, Date
+**And** pending shipments show action buttons (Accept/Reject)
+
+**Given** I have pending incoming shipments
+**When** I view the Shipments menu item
+**Then** I see a notification badge with the count

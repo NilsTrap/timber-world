@@ -5,12 +5,15 @@ inputDocuments:
   - '_bmad-output/planning-artifacts/product-brief-Timber-World-2026-01-20.md'
   - '_bmad-output/analysis/platform-deep-analysis-2026-01-20.md'
   - '_bmad-output/analysis/platform-vision-capture-2026-01-20.md'
+  - '_bmad-output/analysis/brainstorming-session-2026-01-25.md'
 workflowType: 'architecture'
 project_name: 'Timber-World'
 user_name: 'Nils'
 date: '2026-01-21'
 status: 'complete'
 completedAt: '2026-01-21'
+lastAddendum: '2026-01-25'
+addendumNotes: 'Multi-Tenancy & Inter-Org Transfers Addendum added'
 ---
 
 # Architecture Decision Document
@@ -1976,4 +1979,356 @@ For existing Story 2.1 code (Product Management), it should be replaced with Ref
 ---
 
 **Full Specification:** See `_bmad-output/planning-artifacts/inventory-data-model-v2.md`
+
+---
+---
+
+# Multi-Tenancy & Inter-Org Transfers Addendum
+
+**Date:** 2026-01-25
+**Context:** Expanding platform to support multiple organizations, user management, and inter-organization goods movement
+**Source:** Brainstorming session `_bmad-output/analysis/brainstorming-session-2026-01-25.md`
+
+---
+
+## Overview
+
+The Timber World Production Portal evolves from a single-tenant system (Super Admin + Producers) to a multi-tenant platform where:
+
+1. **Organizations** are independent entities with their own inventory, production, and users
+2. **Super Admin** oversees all organizations with consolidated views
+3. **Goods flow** between organizations via a two-stage transfer process
+4. **Organizations may have 0+ users** - an org without users can still be referenced in shipments/transfers
+
+---
+
+## Platform Hierarchy
+
+| Layer | Role | Capabilities |
+|-------|------|--------------|
+| **Super Admin** | Platform owner (Nils) | Manage all orgs, assign users, consolidated views, deep-dive into any org, see all movement |
+| **Organization** | Independent entity | Own inventory, production, users; exchange goods with other orgs |
+| **User** | Org operator | Work within assigned organization context |
+
+### Role Model (MVP)
+
+For MVP, all users within an organization have the same rights. Role separation within orgs is deferred to future iterations.
+
+```
+Super Admin (existing admin role)
+    └── Organization 1
+        ├── User A (full org access)
+        └── User B (full org access)
+    └── Organization 2
+        └── User C (full org access)
+    └── Organization 3 (no users yet - can still receive shipments)
+```
+
+---
+
+## Core Architectural Pattern: Context-Driven Views
+
+**Key Insight:** Same forms work for Super Admin and Organization users - the difference is context filtering.
+
+```typescript
+// Pattern: Get org context from session
+async function getInventory() {
+  const session = await getSession();
+
+  if (isSuperAdmin(session)) {
+    // Super Admin: show all or filter by selected org
+    const orgFilter = getOrgFilterFromQuery(); // optional URL param
+    return orgFilter
+      ? fetchInventoryByOrg(orgFilter)
+      : fetchAllInventory();
+  } else {
+    // Org User: always scoped to their organization
+    return fetchInventoryByOrg(session.organisation_id);
+  }
+}
+```
+
+**Benefits:**
+- No duplicate forms/components
+- Super Admin can "view as" any organization
+- Single codebase, context-aware behavior
+
+---
+
+## Entity Model: Single Organization Type
+
+**Decision:** All organizations use the same entity type. An organization's capabilities depend on whether it has users, not on a type flag.
+
+| User Count | Capabilities |
+|------------|--------------|
+| **Has users** | Users can log in, view data, create transfers, manage production |
+| **No users (yet)** | Can be referenced as sender/receiver in shipments and transfers; other orgs create records on their behalf |
+
+**Key Insight:** An organization without users today might get users tomorrow. No migration or type change needed - just add users.
+
+### Database: `organisations` Table Update
+
+```sql
+-- Updated organisations table (was 'parties')
+CREATE TABLE organisations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  code TEXT NOT NULL UNIQUE,  -- 3-letter code for shipment codes (TWP, INE, etc.)
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- No 'type' column - capabilities determined by user count
+-- Existing rows migrate from 'parties' table
+```
+
+**Note:** Organizations without users (e.g., external suppliers) can still appear in shipments and transfers. The receiving org creates the shipment/transfer entry on their behalf.
+
+---
+
+## User Management
+
+### Database: `portal_users` Table Update
+
+```sql
+-- Updated portal_users table
+ALTER TABLE portal_users
+  ADD COLUMN organisation_id UUID REFERENCES organisations(id),
+  ADD COLUMN invited_at TIMESTAMPTZ,
+  ADD COLUMN invited_by UUID REFERENCES portal_users(id);
+
+-- Super Admin has organisation_id = NULL (platform-level)
+-- Org Users have organisation_id = their org
+```
+
+### User Creation Flow
+
+1. Super Admin navigates to Organizations → Select Org → Users tab
+2. Click "Add User" → Enter: Name, Email
+3. System generates temporary password
+4. Click "Send Credentials" → Email sent with login details
+5. User logs in, sees only their organization's data
+
+### Authentication Context
+
+```typescript
+// Extended session type
+interface Session {
+  user_id: string;
+  email: string;
+  role: 'admin' | 'producer';  // existing
+  organisation_id: string | null;  // NEW: null = Super Admin
+  organisation_code: string | null;  // NEW: for display/shipment codes
+}
+```
+
+---
+
+## Two-Stage Shipment Flow
+
+**Problem Solved:** Direct shipments with rejection create messy audit trails (inventory moves, then moves back on rejection).
+
+**Solution:** Two-stage flow with Draft state.
+
+### Shipment States
+
+```
+[Draft] → [Pending] → [Accepted] → [Completed]
+              ↓
+         [Rejected]
+```
+
+| State | Description | Inventory Impact |
+|-------|-------------|------------------|
+| **Draft** | Sender preparing shipment | None |
+| **Pending** | Sent to receiver, awaiting acceptance | None (still at sender) |
+| **Accepted** | Receiver approved, ready to execute | None yet |
+| **Completed** | Shipment executed | Packages move from sender to receiver |
+| **Rejected** | Receiver declined at pending stage | None (never moved) |
+
+### Flow Steps
+
+1. **Create Draft:** Sender creates shipment, selects packages, receiver org
+2. **Submit for Acceptance:** Draft → Pending (receiver notified)
+3. **Receiver Reviews:** Check package list, quantities
+4. **Accept or Reject:**
+   - Accept → Packages flagged for shipment
+   - Reject → Draft closed, packages remain at sender
+5. **Execute Shipment:** On accept, inventory moves to receiver org
+
+### Database: Extended `shipments` Table
+
+The existing `shipments` table is extended with status workflow columns for inter-org movements:
+
+```sql
+-- Add status workflow columns to existing shipments table
+ALTER TABLE shipments ADD COLUMN
+  status TEXT DEFAULT 'completed',  -- draft, pending, accepted, completed, rejected
+  submitted_at TIMESTAMPTZ,         -- When draft → pending
+  reviewed_at TIMESTAMPTZ,          -- When accepted/rejected
+  reviewed_by UUID REFERENCES portal_users(id),
+  rejection_reason TEXT;
+
+-- Existing shipments get status = 'completed' (legacy data)
+UPDATE shipments SET status = 'completed' WHERE status IS NULL;
+```
+
+**Note:** The existing `shipment_packages` table already supports the package selection pattern.
+
+### Shipment Code Format
+
+Existing pattern: `[FROM]-[TO]-[NUMBER]`
+
+- `TWP-INE-001` = Timber World → INERCE, shipment #1
+- `INE-TWP-001` = INERCE → Timber World, shipment #1
+
+---
+
+## Goods Intake from Organizations Without Users
+
+When receiving goods from organizations that don't have platform users (e.g., external suppliers):
+
+1. Super Admin or Org User creates shipment with sender org selected
+2. Sender org exists in `organisations` table (may have 0 users)
+3. Packages are entered into receiving org's inventory
+4. No acceptance flow needed (sender org has no users to confirm)
+
+### Flow
+
+```
+Sender Organization (no users)
+    ↓ [Physical goods arrive with invoice]
+Receiving Org User
+    ↓ [Creates shipment entry: Sender Org → Their Org]
+Inventory Packages
+    ↓ [Packages added to receiving org's inventory]
+```
+
+**Future:** If the sender organization later onboards users, they can log in and see their shipment history - no data migration needed.
+
+---
+
+## Consolidated Views (Super Admin)
+
+### Platform Dashboard
+
+Super Admin sees aggregated metrics across ALL organizations:
+
+| Metric | Scope |
+|--------|-------|
+| Total Inventory Volume | All orgs combined |
+| Total Production Volume | All orgs combined |
+| Active Shipments | Pending + in-progress |
+| Orgs Active Today | Count of orgs with activity |
+
+### Per-Organization Breakdown
+
+Drill-down to individual org metrics (same as org's own dashboard).
+
+### Shipments/Movements View
+
+**New dedicated view** showing all cross-org activity:
+
+- Filter by: Date range, From org, To org, Status
+- Columns: Code, From, To, Volume (m³), Status, Date
+- Click row → Transfer detail (packages list)
+
+### Super Admin Navigation Update
+
+```
+Dashboard (consolidated)
+├── Organizations
+│   ├── [Org List] → Click to view as that org
+│   └── [Org] → Users tab
+├── Shipments
+│   ├── All Shipments (cross-org view)
+│   └── Pending Approvals (if any org)
+├── Inventory (all orgs, filterable)
+├── Production (all orgs, filterable)
+└── Reference Data (existing)
+```
+
+---
+
+## Component Reuse Strategy
+
+| Existing Component | Reuse For | Modifications |
+|--------------------|-----------|---------------|
+| Shipment Form | Inter-org Shipments | Add status workflow, two-stage flow |
+| Package Entry Table | Shipment Package Selection | Add checkbox column for selection |
+| Inventory Table | All org views | Add org filter for Super Admin |
+| Production Form | All org views | Context-scoped by session |
+| Dashboard Metrics | Org + Consolidated | Add aggregation mode for Super Admin |
+
+---
+
+## Data Scoping Rules
+
+### Query Patterns
+
+```typescript
+// Super Admin queries - optional org filter
+const query = supabase
+  .from('inventory_packages')
+  .select('*');
+
+if (orgFilter) {
+  query.eq('organisation_id', orgFilter);
+}
+
+// Org User queries - always scoped
+const query = supabase
+  .from('inventory_packages')
+  .select('*')
+  .eq('organisation_id', session.organisation_id);
+```
+
+### Package Ownership
+
+Update `inventory_packages` to include organisation ownership:
+
+```sql
+ALTER TABLE inventory_packages
+  ADD COLUMN organisation_id UUID REFERENCES organisations(id);
+
+-- Migrate existing packages to default org (TWP)
+UPDATE inventory_packages SET organisation_id = (SELECT id FROM organisations WHERE code = 'TWP');
+```
+
+---
+
+## Implementation Priority
+
+| Priority | Feature | Dependencies |
+|----------|---------|--------------|
+| **1** | Multi-tenancy | Add `organisation_id` to users and packages, context-aware queries |
+| **2** | User Management | User CRUD within org context, credential sending |
+| **3** | Shipments | Two-stage flow, extend shipments table, reuse shipment UI |
+| **4** | Consolidated Views | Super Admin dashboard aggregation, shipments view |
+
+---
+
+## Migration Notes
+
+1. **Rename `parties` → `organisations`** with additional columns
+2. **Add `organisation_id`** to `portal_users` and `inventory_packages`
+3. **Extend `shipments`** table with status workflow columns
+4. **Migrate existing data** to default organisation (TWP)
+5. **Update all queries** to be context-aware
+
+---
+
+## Tables Summary (After This Addendum)
+
+| Table | Purpose |
+|-------|---------|
+| organisations | All organizations (may have 0+ users) |
+| portal_users | User accounts with org assignment |
+| shipments | Extended with status workflow for inter-org flow |
+| shipment_packages | Packages in a shipment (existing) |
+| inventory_packages | Packages with org ownership |
+| (existing tables remain) | ... |
+
+**Total: 14 tables** (organisations rename, extended shipments - no new tables needed)
 

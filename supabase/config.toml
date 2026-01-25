@@ -1,4 +1,7 @@
-# Supabase Local Development Configuration
+# Supabase CLI Configuration
+# This file is required for the Supabase CLI to manage migrations and push schema changes.
+# NOTE: This project uses cloud Supabase only (no local Docker database).
+# Migrations are applied via: npx supabase db push
 # See: https://supabase.com/docs/guides/cli/config
 
 [api]
