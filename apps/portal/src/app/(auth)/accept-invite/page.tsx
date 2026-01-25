@@ -1,29 +1,25 @@
 import type { Metadata } from "next";
-import { LoginForm } from "@/features/auth/components";
+import { AcceptInviteForm } from "@/features/auth/components/AcceptInviteForm";
 
 export const metadata: Metadata = {
-  title: "Login",
+  title: "Accept Invitation",
 };
 
-export default function LoginPage() {
+export default function AcceptInvitePage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Timber World Portal
+          Welcome to Timber World
         </h1>
         <p className="text-sm text-muted-foreground">
-          Sign in to access the production management portal
+          Set your password to complete your account setup
         </p>
       </div>
 
       <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <LoginForm />
+        <AcceptInviteForm />
       </div>
-
-      <p className="text-center text-sm text-muted-foreground">
-        Don&apos;t have an account? Contact your administrator for an invitation.
-      </p>
     </div>
   );
 }

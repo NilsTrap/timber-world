@@ -93,7 +93,7 @@ export async function resetUserPassword(
     email: portalUser.email as string,
     options: {
       redirectTo: process.env.NEXT_PUBLIC_APP_URL
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/login`
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/accept-invite`
         : undefined,
     },
   });

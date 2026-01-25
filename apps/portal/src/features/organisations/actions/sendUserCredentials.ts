@@ -120,7 +120,7 @@ export async function sendUserCredentials(
         organisation_name: organisationName,
       },
       redirectTo: process.env.NEXT_PUBLIC_APP_URL
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/login`
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/accept-invite`
         : undefined,
     });
 

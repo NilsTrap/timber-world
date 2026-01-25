@@ -97,23 +97,51 @@ export async function resendUserCredentials(
     };
   }
 
-  // 6. Generate a new invite link via Supabase Auth Admin API
-  // This sends the invite email automatically
+  // 6. Delete the existing auth user and create a fresh invite
+  // Supabase doesn't allow re-inviting an existing email, so we delete and recreate
   const supabaseAdmin = createAdminClient();
-  const { error: inviteError } = await supabaseAdmin.auth.admin.generateLink({
-    type: "invite",
-    email: portalUser.email as string,
-    options: {
-      redirectTo: process.env.NEXT_PUBLIC_APP_URL
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/login`
-        : undefined,
-    },
-  });
 
-  if (inviteError) {
+  // Delete the old auth user
+  const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(
+    portalUser.auth_user_id as string
+  );
+
+  if (deleteError) {
+    console.error("Failed to delete old auth user:", deleteError);
+    return {
+      success: false,
+      error: "Failed to reset user credentials. Please try again.",
+      code: "DELETE_FAILED",
+    };
+  }
+
+  // Get organisation name for metadata
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: org } = await (supabase as any)
+    .from("organisations")
+    .select("name")
+    .eq("id", organisationId)
+    .single();
+
+  const organisationName = org?.name || "Timber World";
+
+  // Create a fresh invite
+  const { data: authData, error: inviteError } =
+    await supabaseAdmin.auth.admin.inviteUserByEmail(portalUser.email as string, {
+      data: {
+        name: portalUser.name as string,
+        role: portalUser.role as string,
+        organisation_name: organisationName,
+      },
+      redirectTo: process.env.NEXT_PUBLIC_APP_URL
+        ? `${process.env.NEXT_PUBLIC_APP_URL}/accept-invite`
+        : undefined,
+    });
+
+  if (inviteError || !authData.user) {
     console.error("Failed to resend invite:", inviteError);
 
-    if (inviteError.message?.includes("rate limit") || inviteError.message?.includes("exceeded")) {
+    if (inviteError?.message?.includes("rate limit") || inviteError?.message?.includes("exceeded")) {
       return {
         success: false,
         error: "Email rate limit reached. Supabase allows 4 invites per hour. Please try again later.",
@@ -123,16 +151,17 @@ export async function resendUserCredentials(
 
     return {
       success: false,
-      error: inviteError.message || "Failed to resend invite email",
+      error: inviteError?.message || "Failed to resend invite email",
       code: "INVITE_FAILED",
     };
   }
 
-  // 7. Update invited_at timestamp in portal_users
+  // 7. Update auth_user_id and invited_at timestamp in portal_users
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: updateError } = await (supabase as any)
     .from("portal_users")
     .update({
+      auth_user_id: authData.user.id,
       invited_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
