@@ -23,8 +23,8 @@ export async function getAvailablePackages(
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
-  if (!session.partyId) {
-    return { success: false, error: "Your account is not linked to a facility. Contact Admin.", code: "NO_PARTY_LINK" };
+  if (!session.organisationId) {
+    return { success: false, error: "Your account is not linked to a facility. Contact Admin.", code: "NO_ORGANISATION_LINK" };
   }
 
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -65,10 +65,10 @@ export async function getAvailablePackages(
     .from("inventory_packages")
     .select(`
       id, package_number, shipment_id, thickness, width, length, pieces, volume_m3,
-      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, to_party_id),
+      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, to_organisation_id),
       ${refSelect}
     `)
-    .eq("shipments.to_party_id", session.partyId)
+    .eq("shipments.to_organisation_id", session.organisationId)
     .neq("status", "consumed")
     .order("package_number", { ascending: true });
 
@@ -76,16 +76,17 @@ export async function getAvailablePackages(
     shipmentQuery = shipmentQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
   }
 
-  // Query 2: Production-sourced packages owned by this producer (status: produced)
+  // Query 2: Production-sourced packages owned by this producer's organisation (status: produced)
+  // Filter by organisation_id for proper multi-tenant isolation (not created_by)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let productionQuery = (supabase as any)
     .from("inventory_packages")
     .select(`
       id, package_number, shipment_id, thickness, width, length, pieces, volume_m3,
-      portal_production_entries!inner(created_by),
+      portal_production_entries!inner(organisation_id),
       ${refSelect}
     `)
-    .eq("portal_production_entries.created_by", session.id)
+    .eq("portal_production_entries.organisation_id", session.organisationId)
     .eq("status", "produced")
     .order("package_number", { ascending: true });
 
@@ -125,6 +126,9 @@ export async function getAvailablePackages(
     length: pkg.length,
     pieces: pkg.pieces,
     volumeM3: pkg.volume_m3 != null ? Number(pkg.volume_m3) : null,
+    // Producer only sees their own org's packages, so use session org info
+    organisationName: session.organisationName,
+    organisationCode: session.organisationCode,
   }));
 
   return { success: true, data: packages };

@@ -8,7 +8,7 @@ import type { ActionResult, PackageListItem } from "../types";
  * Get Producer Packages
  *
  * Fetches all inventory packages for the producer's linked facility.
- * Filters by shipments where to_party_id matches the producer's party_id.
+ * Filters by shipments where to_organisation_id matches the producer's organisation_id.
  * Producer only.
  */
 export async function getProducerPackages(): Promise<ActionResult<PackageListItem[]>> {
@@ -21,8 +21,8 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
-  if (!session.partyId) {
-    return { success: false, error: "Your account is not linked to a facility. Contact Admin.", code: "NO_PARTY_LINK" };
+  if (!session.organisationId) {
+    return { success: false, error: "Your account is not linked to a facility. Contact Admin.", code: "NO_ORGANISATION_LINK" };
   }
 
   const supabase = await createClient();
@@ -41,7 +41,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       pieces,
       volume_m3,
       status,
-      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, to_party_id),
+      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, to_organisation_id),
       ref_product_names!inventory_packages_product_name_id_fkey(value),
       ref_wood_species!inventory_packages_wood_species_id_fkey(value),
       ref_humidity!inventory_packages_humidity_id_fkey(value),
@@ -50,7 +50,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       ref_fsc!inventory_packages_fsc_id_fkey(value),
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
-    .eq("shipments.to_party_id", session.partyId)
+    .eq("shipments.to_organisation_id", session.organisationId)
     .neq("status", "consumed")
     .order("package_number", { ascending: true });
 
@@ -59,7 +59,8 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     return { success: false, error: `Failed to fetch packages: ${shipmentError.message}`, code: "QUERY_FAILED" };
   }
 
-  // Query 2: Production-sourced packages (created by this producer's validated entries)
+  // Query 2: Production-sourced packages (from this producer's organisation)
+  // Filter by organisation_id on production entries for proper multi-tenant isolation
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: productionData, error: productionError } = await (supabase as any)
     .from("inventory_packages")
@@ -73,7 +74,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       pieces,
       volume_m3,
       status,
-      portal_production_entries!inner(created_by),
+      portal_production_entries!inner(organisation_id),
       ref_product_names!inventory_packages_product_name_id_fkey(value),
       ref_wood_species!inventory_packages_wood_species_id_fkey(value),
       ref_humidity!inventory_packages_humidity_id_fkey(value),
@@ -82,7 +83,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       ref_fsc!inventory_packages_fsc_id_fkey(value),
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
-    .eq("portal_production_entries.created_by", session.id)
+    .eq("portal_production_entries.organisation_id", session.organisationId)
     .eq("status", "produced")
     .order("package_number", { ascending: true });
 
@@ -113,6 +114,9 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       length: pkg.length,
       pieces: pkg.pieces,
       volumeM3: pkg.volume_m3 != null ? Number(pkg.volume_m3) : null,
+      // Producer only sees their own org's packages, so use session org info
+      organisationName: session.organisationName,
+      organisationCode: session.organisationCode,
     }));
 
   return { success: true, data: packages };

@@ -7,7 +7,7 @@ import type { ActionResult, ShipmentListItem } from "../types";
 /**
  * Get Shipments
  *
- * Fetches all shipments with party names and package aggregates.
+ * Fetches all shipments with organisation names and package aggregates.
  * Ordered by shipment_date DESC (newest first).
  * Admin only.
  *
@@ -29,6 +29,7 @@ export async function getShipments(): Promise<ActionResult<ShipmentListItem[]>> 
   // TODO: Replace embedded inventory_packages(volume_m3) with a DB view or function
   // that returns aggregated package_count + total_volume_m3 to avoid transferring all
   // package rows per shipment just for count/sum computation
+  // Note: FK constraints kept original names (shipments_from_party_id_fkey) after column rename
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("shipments")
@@ -37,8 +38,8 @@ export async function getShipments(): Promise<ActionResult<ShipmentListItem[]>> 
       shipment_code,
       shipment_date,
       transport_cost_eur,
-      from_party:parties!shipments_from_party_id_fkey(code, name),
-      to_party:parties!shipments_to_party_id_fkey(code, name),
+      from_organisation:organisations!shipments_from_party_id_fkey(code, name),
+      to_organisation:organisations!shipments_to_party_id_fkey(code, name),
       inventory_packages(volume_m3)
     `)
     .order("shipment_date", { ascending: false });
@@ -52,10 +53,10 @@ export async function getShipments(): Promise<ActionResult<ShipmentListItem[]>> 
   const shipments: ShipmentListItem[] = (data as any[]).map((row: any) => ({
     id: row.id,
     shipmentCode: row.shipment_code,
-    fromPartyName: row.from_party?.name ?? "",
-    fromPartyCode: row.from_party?.code ?? "",
-    toPartyName: row.to_party?.name ?? "",
-    toPartyCode: row.to_party?.code ?? "",
+    fromOrganisationName: row.from_organisation?.name ?? "",
+    fromOrganisationCode: row.from_organisation?.code ?? "",
+    toOrganisationName: row.to_organisation?.name ?? "",
+    toOrganisationCode: row.to_organisation?.code ?? "",
     shipmentDate: row.shipment_date,
     transportCostEur: row.transport_cost_eur != null ? Number(row.transport_cost_eur) : null,
     packageCount: row.inventory_packages?.length ?? 0,

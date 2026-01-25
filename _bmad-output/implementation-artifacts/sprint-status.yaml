@@ -72,9 +72,44 @@ development_status:
   epic-4-retrospective: optional
 
   # Epic 5: Production Insights & History
-  epic-5: in-progress
+  epic-5: done
   5-1-production-page-tabs: done
   5-2-production-corrections: done
   5-3-producer-dashboard-metrics: done
-  5-4-admin-efficiency-reports: review
+  5-4-admin-efficiency-reports: done
   epic-5-retrospective: optional
+
+  # Epic 6: Multi-Tenancy Foundation
+  epic-6: in-progress
+  6-1-database-schema-multi-tenancy: done
+  6-2-organization-scoped-authentication: done
+  6-3-context-aware-inventory-queries: done
+  6-4-context-aware-production-queries: backlog
+  6-5-organization-selector-super-admin: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: User & Organization Management
+  epic-7: backlog
+  7-1-enhanced-organizations-management: backlog
+  7-2-user-management-within-organization: backlog
+  7-3-user-credential-generation: backlog
+  7-4-resend-reset-credentials: backlog
+  epic-7-retrospective: optional
+
+  # Epic 8: Inter-Organization Shipments
+  epic-8: backlog
+  8-1-shipment-schema-inter-org-flow: backlog
+  8-2-create-shipment-draft: backlog
+  8-3-submit-shipment-for-acceptance: backlog
+  8-4-receiver-reviews-pending-shipment: backlog
+  8-5-accept-or-reject-shipment: backlog
+  8-6-shipment-history-status-tracking: backlog
+  epic-8-retrospective: optional
+
+  # Epic 9: Consolidated Platform Views
+  epic-9: backlog
+  9-1-super-admin-aggregated-dashboard: backlog
+  9-2-per-organization-breakdown: backlog
+  9-3-all-shipments-view: backlog
+  9-4-organization-user-shipments-view: backlog
+  epic-9-retrospective: optional

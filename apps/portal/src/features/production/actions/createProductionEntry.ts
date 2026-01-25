@@ -32,6 +32,7 @@ export async function createProductionEntry(
       production_date: new Date().toISOString().split("T")[0],
       status: "draft",
       created_by: session.id,
+      organisation_id: session.organisationId,
     })
     .select("id")
     .single();

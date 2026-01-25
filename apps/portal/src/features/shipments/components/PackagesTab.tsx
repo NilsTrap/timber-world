@@ -13,6 +13,13 @@ export function PackagesTab({ packages }: PackagesTabProps) {
   const columns: ColumnDef<PackageListItem>[] = useMemo(
     () => [
       {
+        key: "organisationCode",
+        label: "Organisation",
+        type: "readonly",
+        getValue: (row) => row.organisationCode ?? "",
+        width: "w-[6rem]",
+      },
+      {
         key: "shipmentCode",
         label: "Shipment",
         type: "readonly",

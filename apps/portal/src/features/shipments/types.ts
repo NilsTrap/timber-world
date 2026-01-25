@@ -3,8 +3,8 @@ export interface Shipment {
   id: string;
   shipmentCode: string;
   shipmentNumber: number;
-  fromPartyId: string;
-  toPartyId: string;
+  fromOrganisationId: string;
+  toOrganisationId: string;
   shipmentDate: string;
   notes: string | null;
   createdAt: string;
@@ -56,8 +56,8 @@ export interface PackageRow {
 
 /** Input for creating a shipment with packages */
 export interface CreateShipmentInput {
-  fromPartyId: string;
-  toPartyId: string;
+  fromOrganisationId: string;
+  toOrganisationId: string;
   shipmentDate: string;
   transportCostEur: number | null;
   packages: PackageInput[];
@@ -89,10 +89,10 @@ export type ActionResult<T> =
 export interface ShipmentListItem {
   id: string;
   shipmentCode: string;
-  fromPartyName: string;
-  fromPartyCode: string;
-  toPartyName: string;
-  toPartyCode: string;
+  fromOrganisationName: string;
+  fromOrganisationCode: string;
+  toOrganisationName: string;
+  toOrganisationCode: string;
   shipmentDate: string;
   transportCostEur: number | null;
   packageCount: number;
@@ -131,10 +131,10 @@ export interface ShipmentDetail {
   id: string;
   shipmentCode: string;
   shipmentNumber: number;
-  fromPartyId: string;
-  fromPartyName: string;
-  toPartyId: string;
-  toPartyName: string;
+  fromOrganisationId: string;
+  fromOrganisationName: string;
+  toOrganisationId: string;
+  toOrganisationName: string;
   shipmentDate: string;
   transportCostEur: number | null;
   packages: PackageDetail[];
@@ -158,6 +158,8 @@ export interface PackageListItem {
   length: string | null;
   pieces: string | null;
   volumeM3: number | null;
+  organisationName: string | null;
+  organisationCode: string | null;
 }
 
 /** Input for updating shipment packages */

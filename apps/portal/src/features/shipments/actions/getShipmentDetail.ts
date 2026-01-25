@@ -24,7 +24,7 @@ export async function getShipmentDetail(
 
   const supabase = await createClient();
 
-  // Fetch shipment with party info
+  // Fetch shipment with organisation info
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: shipment, error: shipmentError } = await (supabase as any)
     .from("shipments")
@@ -32,12 +32,12 @@ export async function getShipmentDetail(
       id,
       shipment_code,
       shipment_number,
-      from_party_id,
-      to_party_id,
+      from_organisation_id,
+      to_organisation_id,
       shipment_date,
       transport_cost_eur,
-      from_party:parties!shipments_from_party_id_fkey(code, name),
-      to_party:parties!shipments_to_party_id_fkey(code, name)
+      from_organisation:organisations!shipments_from_party_id_fkey(code, name),
+      to_organisation:organisations!shipments_to_party_id_fkey(code, name)
     `)
     .eq("id", shipmentId)
     .single();
@@ -118,10 +118,10 @@ export async function getShipmentDetail(
     id: shipment.id,
     shipmentCode: shipment.shipment_code,
     shipmentNumber: shipment.shipment_number,
-    fromPartyId: shipment.from_party_id,
-    fromPartyName: `${shipment.from_party?.code ?? ""} - ${shipment.from_party?.name ?? ""}`,
-    toPartyId: shipment.to_party_id,
-    toPartyName: `${shipment.to_party?.code ?? ""} - ${shipment.to_party?.name ?? ""}`,
+    fromOrganisationId: shipment.from_organisation_id,
+    fromOrganisationName: `${shipment.from_organisation?.code ?? ""} - ${shipment.from_organisation?.name ?? ""}`,
+    toOrganisationId: shipment.to_organisation_id,
+    toOrganisationName: `${shipment.to_organisation?.code ?? ""} - ${shipment.to_organisation?.name ?? ""}`,
     shipmentDate: shipment.shipment_date,
     transportCostEur: shipment.transport_cost_eur != null ? Number(shipment.transport_cost_eur) : null,
     packages: packageDetails,
