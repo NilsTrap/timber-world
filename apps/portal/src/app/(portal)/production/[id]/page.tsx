@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { formatDate } from "@/lib/utils";
+import { getSession, isSuperAdmin } from "@/lib/auth";
 import {
   getProductionEntry,
   getAvailablePackages,
@@ -37,6 +38,8 @@ export default async function ProductionEntryPage({
   params,
 }: ProductionEntryPageProps) {
   const { id } = await params;
+  const session = await getSession();
+  const isUserSuperAdmin = isSuperAdmin(session);
 
   const result = await getProductionEntry(id);
 
@@ -123,6 +126,9 @@ export default async function ProductionEntryPage({
         <div className="flex items-center gap-3">
           {isDraft && (
             <DeleteDraftButton entryId={id} />
+          )}
+          {!isDraft && isUserSuperAdmin && (
+            <DeleteDraftButton entryId={id} isValidated />
           )}
           {!isDraft && !isCorrection && (
             <CreateCorrectionButton originalEntryId={id} />

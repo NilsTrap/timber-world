@@ -9,6 +9,8 @@ interface PackageEntryTableProps {
   dropdowns: ReferenceDropdowns;
   onRowsChange: (rows: PackageRow[]) => void;
   shipmentCode?: string;
+  /** If true, package numbers are editable (for admin inventory) */
+  editablePackageNumbers?: boolean;
 }
 
 /** Dropdown column configuration */
@@ -44,10 +46,11 @@ function calculateVolume(
   if (isRange(thickness) || isRange(width) || isRange(length)) return null;
   if (pieces === "-" || pieces.trim() === "") return null;
 
-  const t = parseFloat(thickness);
-  const w = parseFloat(width);
-  const l = parseFloat(length);
-  const p = parseFloat(pieces);
+  // Normalize comma decimal separators to dots for parsing
+  const t = parseFloat(thickness.replace(",", "."));
+  const w = parseFloat(width.replace(",", "."));
+  const l = parseFloat(length.replace(",", "."));
+  const p = parseFloat(pieces.replace(",", "."));
 
   if (isNaN(t) || isNaN(w) || isNaN(l) || isNaN(p)) return null;
   if (t <= 0 || w <= 0 || l <= 0 || p <= 0) return null;
@@ -125,6 +128,7 @@ export function PackageEntryTable({
   dropdowns,
   onRowsChange,
   shipmentCode,
+  editablePackageNumbers = false,
 }: PackageEntryTableProps) {
   /** Build column definitions from dropdowns */
   const columns: ColumnDef<PackageRow>[] = useMemo(() => {
@@ -137,20 +141,32 @@ export function PackageEntryTable({
         getValue: () => shipmentCode || "",
         getDisplayValue: () => shipmentCode || "-",
       },
-      // Package number (readonly)
-      {
-        key: "packageNumber",
-        label: "Package",
-        type: "readonly",
-        getValue: (row) => row.packageNumber,
-        totalType: "count",
-      },
+      // Package number (readonly or editable based on prop)
+      editablePackageNumbers
+        ? {
+            key: "packageNumber",
+            label: "Package",
+            type: "text" as const,
+            placeholder: "PKG-001",
+            width: "w-[6rem]",
+            navigable: true,
+            getValue: (row) => row.packageNumber,
+            totalType: "count" as const,
+          }
+        : {
+            key: "packageNumber",
+            label: "Package",
+            type: "readonly" as const,
+            getValue: (row) => row.packageNumber,
+            totalType: "count" as const,
+          },
       // 7 dropdown columns
       ...DROPDOWN_COLUMNS.map((dc): ColumnDef<PackageRow> => ({
         key: dc.field,
         label: dc.label,
         type: "dropdown",
         collapsible: true,
+        navigable: true,
         options: dropdowns[dc.optionsKey].map((o) => ({ id: o.id, value: o.value })),
         getValue: (row) => row[dc.field] as string,
       })),
@@ -237,7 +253,7 @@ export function PackageEntryTable({
       },
     ];
     return cols;
-  }, [dropdowns, shipmentCode]);
+  }, [dropdowns, shipmentCode, editablePackageNumbers]);
 
   /** Handle cell changes with volume auto-calculation */
   const handleCellChange = useCallback(
@@ -277,14 +293,19 @@ export function PackageEntryTable({
     []
   );
 
-  /** Renumber all rows after reorder/add/delete */
+  /** Renumber all rows after reorder/add/delete (skip if package numbers are editable) */
   const renumberRows = useCallback(
-    (updatedRows: PackageRow[]): PackageRow[] =>
-      updatedRows.map((row, i) => ({
+    (updatedRows: PackageRow[]): PackageRow[] => {
+      if (editablePackageNumbers) {
+        // Don't auto-renumber when package numbers are editable
+        return updatedRows;
+      }
+      return updatedRows.map((row, i) => ({
         ...row,
         packageNumber: generatePreviewNumber(i),
-      })),
-    []
+      }));
+    },
+    [editablePackageNumbers]
   );
 
   return (

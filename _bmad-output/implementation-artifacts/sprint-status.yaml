@@ -113,3 +113,86 @@ development_status:
   9-3-all-shipments-view: done
   9-4-organization-user-shipments-view: done
   epic-9-retrospective: optional
+
+# ============================================================================
+# AD-HOC CHANGES LOG
+# ============================================================================
+# Changes made outside of formal story tracking, typically UX improvements,
+# bug fixes, or minor enhancements requested during development.
+
+ad_hoc_changes:
+  - date: 2026-01-26
+    description: "Super Admin delete capabilities and navigation restructure"
+    changes:
+      - "Super Admin can delete production history entries (from detail page and list view)"
+      - "Super Admin can delete inventory packages (from admin inventory page)"
+      - "Super Admin can delete shipments (from shipments list)"
+      - "Super Admin can delete reference data options (from reference data page)"
+      - "Navigation restructure: Renamed 'New Shipment' to 'Shipments' page"
+      - "Shipments page now has two tabs: 'New Shipment' and 'Shipments' list"
+      - "Inventory page simplified to show only packages (removed Shipments tab)"
+    files_created:
+      - "src/app/(portal)/admin/shipments/page.tsx"
+      - "src/features/shipments/components/ShipmentsPageContent.tsx"
+      - "src/features/shipments/actions/deleteShipment.ts"
+      - "src/features/inventory/actions/deleteInventoryPackage.ts"
+      - "src/features/reference-data/actions/deleteReferenceOption.ts"
+    files_modified:
+      - "src/features/production/actions/deleteProductionEntry.ts"
+      - "src/features/production/components/ProductionHistoryTable.tsx"
+      - "src/features/production/components/ProductionPageTabs.tsx"
+      - "src/app/(portal)/production/page.tsx"
+      - "src/features/shipments/components/PackagesTab.tsx"
+      - "src/features/shipments/components/ShipmentsTab.tsx"
+      - "src/features/shipments/components/InventoryOverview.tsx"
+      - "src/features/reference-data/components/ReferenceOptionsTable.tsx"
+      - "src/features/reference-data/components/ReferenceDataManager.tsx"
+      - "src/app/(portal)/admin/reference/page.tsx"
+      - "src/app/(portal)/admin/inventory/page.tsx"
+      - "src/components/layout/SidebarWrapper.tsx"
+      - "packages/ui/src/components/data-entry-table.tsx"
+
+  - date: 2026-01-26
+    description: "Producer Shipments page redesign to match Admin layout"
+    changes:
+      - "Producer /shipments page now uses same layout as Admin (New Shipment tab + Shipments tab)"
+      - "New Shipment form uses admin's PackageEntryTable with locked 'From' organisation"
+      - "Shipments tab shows combined outgoing + incoming history with direction badges"
+      - "Direction filter buttons (All / Outgoing / Incoming) for quick filtering"
+      - "Status badges show shipment workflow state (Draft, Pending, Completed, etc.)"
+    files_created:
+      - "src/features/shipments/actions/createOrgShipment.ts"
+      - "src/features/shipments/actions/getAllOrgShipments.ts"
+      - "src/features/shipments/actions/getUserOrganisation.ts"
+      - "src/features/shipments/components/ProducerNewShipmentForm.tsx"
+      - "src/features/shipments/components/ProducerShipmentsTab.tsx"
+      - "src/features/shipments/components/ProducerShipmentsPageContent.tsx"
+    files_modified:
+      - "src/features/shipments/components/ShipmentHeader.tsx"
+      - "src/features/shipments/actions/index.ts"
+      - "src/features/shipments/components/index.ts"
+      - "src/app/(portal)/shipments/page.tsx"
+
+  - date: 2026-01-27
+    description: "Admin inventory inline editing with organisation dropdown and manual save"
+    changes:
+      - "Admin inventory view now supports inline editing with Save/Discard buttons (no auto-save)"
+      - "Organisation dropdown shows 3-letter code in cell but full 'CODE - Name' in dropdown menu"
+      - "Add/Copy row buttons: copy preserves shipmentCode and packageNumber (only clears shipmentId)"
+      - "Removed 'Add Inventory' tab - editing merged into main inventory view"
+      - "Fixed organisation filter sidebar not updating inventory display (useEffect sync)"
+      - "Fixed shipment code 'ADMIN' not showing (separate shipment query instead of JOIN)"
+      - "Shipment code uniqueness restored with exceptions for 'ADMIN', '-', and empty string"
+    files_created:
+      - "src/features/inventory/actions/saveInventoryPackages.ts"
+      - "supabase/migrations/20260127000002_allow_duplicate_shipment_codes.sql"
+      - "supabase/migrations/20260127000003_restore_shipment_code_uniqueness.sql"
+    files_modified:
+      - "src/features/inventory/components/EditablePackagesTab.tsx"
+      - "src/features/inventory/components/AdminInventoryPageContent.tsx"
+      - "src/features/inventory/actions/getEditablePackages.ts"
+      - "src/features/inventory/actions/updateShipmentCode.ts"
+    files_deleted:
+      - "src/features/inventory/components/AdminAddInventoryForm.tsx"
+    database_changes:
+      - "Unique index on shipments.shipment_code now excludes 'ADMIN', '-', and empty string"

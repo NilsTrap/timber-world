@@ -152,6 +152,9 @@ function DataEntryTable<TRow>({
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
   const collapseLoaded = useRef(false);
 
+  // Track which dropdown is currently in "selection mode" (user pressed Enter to browse options)
+  const activeDropdownRef = useRef<string | null>(null);
+
   // Load collapsed columns from localStorage after mount (avoids hydration mismatch)
   useEffect(() => {
     try {
@@ -503,22 +506,94 @@ function DataEntryTable<TRow>({
   // ─── Rendering Helpers ──────────────────────────────────────────────────
   const renderDropdown = (
     col: ColumnDef<TRow>,
+    renderIndex: number,
     originalIndex: number,
     currentValue: string
-  ) => (
-    <select
-      value={currentValue}
-      onChange={(e) => updateCell(originalIndex, col.key, e.target.value)}
-      className="h-7 text-xs rounded-md border border-input bg-transparent px-1 py-0.5 shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-    >
-      <option value="">-</option>
-      {(col.options ?? []).map((opt) => (
-        <option key={opt.id} value={opt.id}>
-          {opt.value}
-        </option>
-      ))}
-    </select>
-  );
+  ) => {
+    const dropdownId = `${idPrefix}-${renderIndex}-${col.key}`;
+
+    return (
+      <select
+        id={dropdownId}
+        value={currentValue}
+        onChange={(e) => {
+          updateCell(originalIndex, col.key, e.target.value);
+          // Exit selection mode after choosing and move to next field
+          activeDropdownRef.current = null;
+          focusNextField(renderIndex, col.key, displayRows.length);
+        }}
+        onKeyDown={(e) => {
+          const isActive = activeDropdownRef.current === dropdownId;
+
+          if (e.key === "Enter") {
+            e.preventDefault();
+            if (!isActive) {
+              // Enter selection mode and open dropdown
+              activeDropdownRef.current = dropdownId;
+              // Use mousedown to open the native select dropdown
+              const mousedown = new MouseEvent("mousedown", {
+                bubbles: true,
+                cancelable: true,
+                view: window,
+              });
+              e.currentTarget.dispatchEvent(mousedown);
+            } else {
+              // Confirm selection - exit selection mode and move to next field
+              activeDropdownRef.current = null;
+              focusNextField(renderIndex, col.key, displayRows.length);
+            }
+            return;
+          }
+
+          if (e.key === "Escape") {
+            activeDropdownRef.current = null;
+            return;
+          }
+
+          // When in selection mode, let arrow keys navigate options
+          if (isActive) {
+            if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+              // Let browser handle option navigation
+              return;
+            }
+          }
+
+          // Cell navigation (when not in selection mode)
+          if (e.key === "ArrowUp") {
+            e.preventDefault();
+            focusField(renderIndex - 1, col.key);
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            focusField(renderIndex + 1, col.key);
+          } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            focusNextField(renderIndex, col.key, displayRows.length);
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            focusPrevField(renderIndex, col.key);
+          } else if (e.key === "Tab" && !e.shiftKey) {
+            e.preventDefault();
+            focusNextField(renderIndex, col.key, displayRows.length);
+          } else if (e.key === "Tab" && e.shiftKey) {
+            e.preventDefault();
+            focusPrevField(renderIndex, col.key);
+          }
+        }}
+        onBlur={() => {
+          // Exit selection mode when focus leaves
+          activeDropdownRef.current = null;
+        }}
+        className="h-7 text-xs rounded-md border border-input bg-transparent px-1 py-0.5 shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <option value="">-</option>
+        {(col.options ?? []).map((opt) => (
+          <option key={opt.id} value={opt.id}>
+            {opt.value}
+          </option>
+        ))}
+      </select>
+    );
+  };
 
   const renderCollapsedCell = (col: ColumnDef<TRow>, currentValue: string) => {
     const label = getOptionLabel(col.options ?? [], currentValue);
@@ -583,7 +658,7 @@ function DataEntryTable<TRow>({
         </div>
       )}
 
-      <div className="rounded-lg border overflow-x-auto w-fit max-w-full">
+      <div className="rounded-lg border overflow-x-auto w-fit max-w-full pb-2">
         <Table className="w-auto">
           <TableHeader>
             <TableRow>
@@ -654,15 +729,15 @@ function DataEntryTable<TRow>({
                   const isCollapsed = col.collapsible && collapsedColumns.has(col.key);
                   const currentValue = col.getValue(row);
 
-                  if (col.type === "custom" && col.renderCell && !readOnly) {
+                  if (col.type === "custom" && col.renderCell) {
                     return (
                       <TableCell key={col.key} className="px-1">
                         {col.renderCell(
                           row,
                           renderIndex,
                           originalIndex,
-                          (value) => updateCell(originalIndex, col.key, value),
-                          (e) => handleFieldKeyDown(e, renderIndex, col.key, displayRows.length)
+                          readOnly ? () => {} : (value) => updateCell(originalIndex, col.key, value),
+                          readOnly ? () => {} : (e) => handleFieldKeyDown(e, renderIndex, col.key, displayRows.length)
                         )}
                       </TableCell>
                     );
@@ -707,7 +782,7 @@ function DataEntryTable<TRow>({
                       >
                         {isCollapsed
                           ? renderCollapsedCell(col, currentValue)
-                          : renderDropdown(col, originalIndex, currentValue)}
+                          : renderDropdown(col, renderIndex, originalIndex, currentValue)}
                       </TableCell>
                     );
                   }

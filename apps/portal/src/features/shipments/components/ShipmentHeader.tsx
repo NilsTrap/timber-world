@@ -16,6 +16,8 @@ interface ShipmentHeaderProps {
   onToOrganisationChange: (id: string) => void;
   onDateChange: (date: string) => void;
   onTransportCostChange: (value: string) => void;
+  /** Lock the From organisation (for producer mode) */
+  lockedFromOrganisation?: OrganisationOption | null;
 }
 
 /**
@@ -34,7 +36,9 @@ export function ShipmentHeader({
   onToOrganisationChange,
   onDateChange,
   onTransportCostChange,
+  lockedFromOrganisation,
 }: ShipmentHeaderProps) {
+  const isFromLocked = !!lockedFromOrganisation;
   const [shipmentCode, setShipmentCode] = useState<string>("");
   const [isLoadingCode, setIsLoadingCode] = useState(false);
 
@@ -65,19 +69,25 @@ export function ShipmentHeader({
           <Label htmlFor="from-organisation">
             From Organisation
           </Label>
-          <select
-            id="from-organisation"
-            value={fromOrganisationId}
-            onChange={(e) => onFromOrganisationChange(e.target.value)}
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            <option value="">Select...</option>
-            {organisations.map((org) => (
-              <option key={org.id} value={org.id}>
-                {org.code} - {org.name}
-              </option>
-            ))}
-          </select>
+          {isFromLocked ? (
+            <div className="flex items-center h-9 px-3 rounded-md border bg-muted text-sm">
+              {lockedFromOrganisation.code} - {lockedFromOrganisation.name}
+            </div>
+          ) : (
+            <select
+              id="from-organisation"
+              value={fromOrganisationId}
+              onChange={(e) => onFromOrganisationChange(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">Select...</option>
+              {organisations.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.code} - {org.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* To Organisation */}

@@ -11,6 +11,7 @@ import {
   PowerOff,
   Plus,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import {
   Button,
@@ -34,12 +35,15 @@ import {
   getReferenceOptions,
   toggleReferenceOption,
   reorderReferenceOptions,
+  deleteReferenceOption,
 } from "../actions";
 import type { ReferenceTableName, ReferenceOption } from "../types";
 import { ReferenceOptionForm } from "./ReferenceOptionForm";
 
 interface ReferenceOptionsTableProps {
   tableName: ReferenceTableName;
+  /** If true, shows delete button for each row (Super Admin only) */
+  canDelete?: boolean;
 }
 
 type SortColumn = "sortOrder" | "value" | "isActive";
@@ -52,6 +56,7 @@ type SortDirection = "asc" | "desc";
  */
 export function ReferenceOptionsTable({
   tableName,
+  canDelete = false,
 }: ReferenceOptionsTableProps) {
   const isProcesses = tableName === "ref_processes";
   const [options, setOptions] = useState<ReferenceOption[]>([]);
@@ -64,6 +69,10 @@ export function ReferenceOptionsTable({
 
   // Deactivate confirmation state
   const [deactivateOption, setDeactivateOption] = useState<ReferenceOption | null>(null);
+
+  // Delete confirmation state
+  const [deleteOption, setDeleteOption] = useState<ReferenceOption | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Sorting state - default to alphabetical by value
   const [sortColumn, setSortColumn] = useState<SortColumn>("value");
@@ -159,6 +168,22 @@ export function ReferenceOptionsTable({
     if (deactivateOption) {
       await performToggleActive(deactivateOption, false);
       setDeactivateOption(null);
+    }
+  };
+
+  // Confirm deletion
+  const confirmDelete = async () => {
+    if (deleteOption) {
+      setIsDeleting(true);
+      const result = await deleteReferenceOption(tableName, deleteOption.id);
+      if (result.success) {
+        toast.success("Option deleted");
+        setOptions((prev) => prev.filter((o) => o.id !== deleteOption.id));
+      } else {
+        toast.error(result.error);
+      }
+      setIsDeleting(false);
+      setDeleteOption(null);
     }
   };
 
@@ -376,6 +401,17 @@ export function ReferenceOptionsTable({
                           <Power className="h-4 w-4" />
                         )}
                       </Button>
+                      {canDelete && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setDeleteOption(option)}
+                          className="text-muted-foreground hover:text-destructive"
+                          aria-label={`Delete ${option.value}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -407,6 +443,29 @@ export function ReferenceOptionsTable({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeactivate}>
               Deactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteOption} onOpenChange={(open) => !open && setDeleteOption(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Option</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete &quot;{deleteOption?.value}&quot;?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

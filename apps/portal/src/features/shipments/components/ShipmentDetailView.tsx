@@ -127,7 +127,7 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => router.push("/admin/inventory?tab=shipments")}
+        onClick={() => router.push("/admin/shipments?tab=list")}
       >
         <ArrowLeft className="h-4 w-4 mr-2" />
         Back to Overview
@@ -201,7 +201,7 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
       <div className="flex justify-end gap-3">
         <Button
           variant="outline"
-          onClick={() => router.push("/admin/inventory?tab=shipments")}
+          onClick={() => router.push("/admin/shipments?tab=list")}
         >
           Cancel
         </Button>

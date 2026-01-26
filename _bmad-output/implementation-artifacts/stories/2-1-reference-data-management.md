@@ -293,3 +293,10 @@ apps/portal/src/features/reference-data/
 
 ### Completion Notes
 Implemented full CRUD for reference data management. All 7 reference tables (Product Names, Wood Species, Humidity, Types, Processing, FSC, Quality) can be managed through a unified interface with tabs. Features include add, edit, deactivate/activate, reorder (up/down buttons), and sortable columns. Portal now uses collapsible sidebar navigation for better UX. Used type assertions for Supabase queries since generated types don't include the new reference tables yet.
+
+### Ad-Hoc Enhancement (2026-01-26)
+**Super Admin Delete Reference Options**
+- Added `deleteReferenceOption` server action (Super Admin only)
+- Added delete button (trash icon) to ReferenceOptionsTable for Super Admin
+- Delete confirmation dialog before permanent deletion
+- Files modified: `deleteReferenceOption.ts` (new), `ReferenceOptionsTable.tsx`, `ReferenceDataManager.tsx`, `admin/reference/page.tsx`

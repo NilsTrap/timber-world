@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
 import { ReferenceDataManager } from "@/features/reference-data";
 
 export const metadata: Metadata = {
@@ -32,7 +32,7 @@ export default async function ReferenceDataPage() {
         </p>
       </div>
 
-      <ReferenceDataManager />
+      <ReferenceDataManager canDelete={isSuperAdmin(session)} />
     </div>
   );
 }

@@ -10,7 +10,7 @@ import type { OrganizationOption } from "./OrganizationSelector";
 const ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
   { href: "/admin/inventory", label: "Inventory", iconName: "Package" },
-  { href: "/admin/inventory/new-shipment", label: "New Shipment", iconName: "Truck" },
+  { href: "/admin/shipments", label: "Shipments", iconName: "Truck" },
   { href: "/production", label: "Production", iconName: "Factory" },
   { href: "/admin/reference", label: "Reference Data", iconName: "Settings" },
   { href: "/admin/organisations", label: "Organisations", iconName: "Building2" },

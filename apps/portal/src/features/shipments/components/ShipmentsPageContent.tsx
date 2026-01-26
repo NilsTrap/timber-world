@@ -3,28 +3,25 @@
 import { useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { NewShipmentForm } from "./NewShipmentForm";
 import { ShipmentsTab } from "./ShipmentsTab";
-import { PackagesTab } from "./PackagesTab";
-import type { ShipmentListItem, PackageListItem } from "../types";
+import type { ShipmentListItem } from "../types";
 
-interface InventoryOverviewProps {
+interface ShipmentsPageContentProps {
   shipments: ShipmentListItem[];
-  packages: PackageListItem[];
-  /** If true, shows delete button for packages (Super Admin only) */
-  canDeletePackages?: boolean;
+  defaultTab?: string;
   /** If true, shows delete button for shipments (Super Admin only) */
-  canDeleteShipments?: boolean;
+  canDelete?: boolean;
 }
 
-function InventoryOverviewInner({
+function ShipmentsPageContentInner({
   shipments,
-  packages,
-  canDeletePackages = false,
-  canDeleteShipments = false,
-}: InventoryOverviewProps) {
+  defaultTab,
+  canDelete = false,
+}: ShipmentsPageContentProps) {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(
-    searchParams.get("tab") || "inventory"
+    defaultTab || searchParams.get("tab") || "new"
   );
 
   const setTab = useCallback((tab: string) => {
@@ -37,27 +34,27 @@ function InventoryOverviewInner({
   return (
     <div className="space-y-6">
       {/* Tab Navigation */}
-      <div className="flex gap-1 border-b" role="tablist" aria-label="Inventory views">
+      <div className="flex gap-1 border-b" role="tablist" aria-label="Shipment views">
         <button
           role="tab"
-          aria-selected={activeTab === "inventory"}
-          aria-controls="panel-inventory"
-          onClick={() => setTab("inventory")}
+          aria-selected={activeTab === "new"}
+          aria-controls="panel-new"
+          onClick={() => setTab("new")}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "inventory"
+            activeTab === "new"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          Inventory
+          New Shipment
         </button>
         <button
           role="tab"
-          aria-selected={activeTab === "shipments"}
-          aria-controls="panel-shipments"
-          onClick={() => setTab("shipments")}
+          aria-selected={activeTab === "list"}
+          aria-controls="panel-list"
+          onClick={() => setTab("list")}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "shipments"
+            activeTab === "list"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
@@ -68,20 +65,20 @@ function InventoryOverviewInner({
 
       {/* Tab Content */}
       <div role="tabpanel" id={`panel-${activeTab}`}>
-        {activeTab === "inventory" ? (
-          <PackagesTab packages={packages} canDelete={canDeletePackages} />
+        {activeTab === "new" ? (
+          <NewShipmentForm />
         ) : (
-          <ShipmentsTab shipments={shipments} canDelete={canDeleteShipments} />
+          <ShipmentsTab shipments={shipments} canDelete={canDelete} />
         )}
       </div>
     </div>
   );
 }
 
-export function InventoryOverview(props: InventoryOverviewProps) {
+export function ShipmentsPageContent(props: ShipmentsPageContentProps) {
   return (
     <Suspense fallback={<div className="animate-pulse h-64 bg-muted rounded-lg" />}>
-      <InventoryOverviewInner {...props} />
+      <ShipmentsPageContentInner {...props} />
     </Suspense>
   );
 }

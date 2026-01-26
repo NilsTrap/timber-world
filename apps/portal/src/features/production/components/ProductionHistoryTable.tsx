@@ -2,16 +2,31 @@
 
 import { useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { X, Calendar } from "lucide-react";
-import { Button } from "@timber/ui";
+import { X, Calendar, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+  Button,
+} from "@timber/ui";
 import { ColumnHeaderMenu, type ColumnSortState } from "@timber/ui";
 import { formatDate } from "@/lib/utils";
+import { deleteProductionEntry } from "../actions";
 import type { ProductionHistoryItem } from "../types";
 
 interface ProductionHistoryTableProps {
   entries: ProductionHistoryItem[];
   defaultProcess?: string;
   showOrganisation?: boolean;
+  /** If true, shows delete button for each row (Super Admin only) */
+  canDelete?: boolean;
 }
 
 /** Format number with comma decimal separator */
@@ -48,9 +63,24 @@ export function ProductionHistoryTable({
   entries,
   defaultProcess,
   showOrganisation = false,
+  canDelete = false,
 }: ProductionHistoryTableProps) {
   const router = useRouter();
   const [sortState, setSortState] = useState<ColumnSortState | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [localEntries, setLocalEntries] = useState(entries);
+
+  const handleDelete = async (entryId: string) => {
+    setDeletingId(entryId);
+    const result = await deleteProductionEntry(entryId);
+    if (result.success) {
+      toast.success("Production entry deleted");
+      setLocalEntries((prev) => prev.filter((e) => e.id !== entryId));
+    } else {
+      toast.error(result.error);
+    }
+    setDeletingId(null);
+  };
   const [filterState, setFilterState] = useState<Record<string, Set<string>>>(
     defaultProcess ? { processName: new Set([defaultProcess]) } : {}
   );
@@ -99,11 +129,11 @@ export function ProductionHistoryTable({
     ];
     const result: Record<string, string[]> = {};
     for (const col of cols) {
-      const values = new Set(entries.map((e) => getDisplayValue(e, col)));
+      const values = new Set(localEntries.map((e) => getDisplayValue(e, col)));
       result[col] = Array.from(values);
     }
     return result;
-  }, [entries]);
+  }, [localEntries]);
 
   const handleFilterChange = (columnKey: string, values: Set<string>) => {
     setFilterState((prev) => ({ ...prev, [columnKey]: values }));
@@ -121,7 +151,7 @@ export function ProductionHistoryTable({
 
   // Filter and sort entries
   const filteredEntries = useMemo(() => {
-    let result = [...entries];
+    let result = [...localEntries];
 
     // Date range filter
     const isoFrom = parseEuropeanDate(dateFrom);
@@ -170,10 +200,10 @@ export function ProductionHistoryTable({
     }
 
     return result;
-  }, [entries, filterState, sortState, dateFrom, dateTo]);
+  }, [localEntries, filterState, sortState, dateFrom, dateTo]);
 
   // Empty state — no entries at all
-  if (entries.length === 0) {
+  if (localEntries.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
         <p className="text-sm">No production history yet</p>
@@ -290,13 +320,18 @@ export function ProductionHistoryTable({
                   </span>
                 </th>
               ))}
+              {canDelete && (
+                <th className="px-4 py-3 font-medium select-none text-center w-20">
+                  Actions
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {filteredEntries.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length}
+                  colSpan={columns.length + (canDelete ? 1 : 0)}
                   className="px-4 py-8 text-center text-muted-foreground"
                 >
                   No entries match your filters
@@ -333,6 +368,40 @@ export function ProductionHistoryTable({
                   <td className="px-4 py-3 text-right tabular-nums">
                     {fmt1(entry.wastePercentage)}%
                   </td>
+                  {canDelete && (
+                    <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                            disabled={deletingId === entry.id}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete production entry?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently delete this production entry ({entry.processName} - {formatDate(entry.productionDate)}) and all its inputs and outputs. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDelete(entry.id)}
+                              disabled={deletingId === entry.id}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              {deletingId === entry.id ? "Deleting..." : "Delete"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
@@ -363,6 +432,7 @@ export function ProductionHistoryTable({
                     return fmt1(filteredEntries.reduce((sum, e) => sum + e.wastePercentage * e.totalInputM3, 0) / totalInput) + "%";
                   })()}
                 </td>
+                {canDelete && <td className="px-4 py-3" />}
               </tr>
             </tfoot>
           )}

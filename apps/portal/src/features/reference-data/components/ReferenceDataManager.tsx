@@ -5,12 +5,17 @@ import { ReferenceTableSelector } from "./ReferenceTableSelector";
 import { ReferenceOptionsTable } from "./ReferenceOptionsTable";
 import type { ReferenceTableName } from "../types";
 
+interface ReferenceDataManagerProps {
+  /** If true, shows delete button for each option (Super Admin only) */
+  canDelete?: boolean;
+}
+
 /**
  * Reference Data Manager
  *
  * Main component for managing reference data. Combines table selector and options table.
  */
-export function ReferenceDataManager() {
+export function ReferenceDataManager({ canDelete = false }: ReferenceDataManagerProps) {
   const [selectedTable, setSelectedTable] =
     useState<ReferenceTableName>("ref_product_names");
 
@@ -21,7 +26,7 @@ export function ReferenceDataManager() {
         onTableChange={setSelectedTable}
       />
 
-      <ReferenceOptionsTable tableName={selectedTable} />
+      <ReferenceOptionsTable tableName={selectedTable} canDelete={canDelete} />
     </div>
   );
 }

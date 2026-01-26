@@ -13,6 +13,8 @@ interface ProductionPageTabsProps {
   defaultTab?: string;
   defaultProcess?: string;
   showOrganisation?: boolean;
+  /** If true, shows delete button for history entries (Super Admin only) */
+  canDeleteHistory?: boolean;
 }
 
 /**
@@ -29,6 +31,7 @@ export function ProductionPageTabs({
   defaultTab,
   defaultProcess,
   showOrganisation = false,
+  canDeleteHistory = false,
 }: ProductionPageTabsProps) {
   return (
     <Tabs defaultValue={defaultTab === "history" ? "history" : "active"}>
@@ -48,7 +51,7 @@ export function ProductionPageTabs({
       </TabsContent>
 
       <TabsContent value="history">
-        <ProductionHistoryTable entries={history} defaultProcess={defaultProcess} showOrganisation={showOrganisation} />
+        <ProductionHistoryTable entries={history} defaultProcess={defaultProcess} showOrganisation={showOrganisation} canDelete={canDeleteHistory} />
       </TabsContent>
     </Tabs>
   );

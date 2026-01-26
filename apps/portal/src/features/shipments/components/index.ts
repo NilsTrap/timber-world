@@ -13,3 +13,8 @@ export { SubmitShipmentDialog } from "./SubmitShipmentDialog";
 export { AcceptRejectButtons } from "./AcceptRejectButtons";
 // Super Admin shipment components (Epic 9)
 export { AllShipmentsTab } from "./AllShipmentsTab";
+export { ShipmentsPageContent } from "./ShipmentsPageContent";
+// Producer shipment components
+export { ProducerNewShipmentForm } from "./ProducerNewShipmentForm";
+export { ProducerShipmentsTab } from "./ProducerShipmentsTab";
+export { ProducerShipmentsPageContent } from "./ProducerShipmentsPageContent";

@@ -268,3 +268,30 @@ Claude Opus 4.5
 - Refactored getDraftProductions to only return draft entries
 - Created ProductionHistoryTable with sortable columns, process/date filters, and clickable rows
 - Added ProductionHistoryItem type for history data
+
+### Ad-Hoc Enhancement (2026-01-26)
+**Super Admin Delete Production History**
+
+1. **Delete from Detail Page**:
+   - Updated `deleteProductionEntry` action to allow Super Admin to delete validated entries (not just drafts)
+   - Updated `DeleteDraftButton` component to accept `isValidated` prop for different messaging
+   - Super Admin sees Delete button on validated production entries
+
+2. **Delete from History Table**:
+   - Added `canDelete` prop to `ProductionHistoryTable` component
+   - Added "Actions" column with delete button (trash icon) for Super Admin
+   - Delete confirmation dialog with entry details
+   - Optimistic UI update after successful deletion
+
+3. **Safety Checks in deleteProductionEntry**:
+   - Checks if any correction entries reference this entry (blocks deletion)
+   - Checks if output packages are used as inputs in other production entries (blocks deletion)
+   - Deletes related inventory packages before deleting the entry
+
+Files modified:
+- `src/features/production/actions/deleteProductionEntry.ts` - Super Admin can delete validated, safety checks added
+- `src/features/production/components/DeleteDraftButton.tsx` - Added isValidated prop
+- `src/features/production/components/ProductionHistoryTable.tsx` - Added delete column
+- `src/features/production/components/ProductionPageTabs.tsx` - Added canDeleteHistory prop
+- `src/app/(portal)/production/page.tsx` - Passes canDeleteHistory={isSuperAdmin}
+- `src/app/(portal)/production/[id]/page.tsx` - Shows delete for Super Admin on validated

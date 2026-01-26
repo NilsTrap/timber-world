@@ -1,15 +1,48 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
-import { DataEntryTable, type ColumnDef } from "@timber/ui";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+  Button,
+  DataEntryTable,
+  type ColumnDef,
+} from "@timber/ui";
 import { SummaryCards } from "./SummaryCards";
+import { deleteInventoryPackage } from "@/features/inventory/actions";
 import type { PackageListItem } from "../types";
 
 interface PackagesTabProps {
   packages: PackageListItem[];
+  /** If true, shows delete button for each row (Super Admin only) */
+  canDelete?: boolean;
 }
 
-export function PackagesTab({ packages }: PackagesTabProps) {
+export function PackagesTab({ packages, canDelete = false }: PackagesTabProps) {
+  const [localPackages, setLocalPackages] = useState(packages);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (packageId: string) => {
+    setDeletingId(packageId);
+    const result = await deleteInventoryPackage(packageId);
+    if (result.success) {
+      toast.success("Package deleted");
+      setLocalPackages((prev) => prev.filter((p) => p.id !== packageId));
+    } else {
+      toast.error(result.error);
+    }
+    setDeletingId(null);
+  };
+
   const columns: ColumnDef<PackageListItem>[] = useMemo(
     () => [
       {
@@ -126,8 +159,51 @@ export function PackagesTab({ packages }: PackagesTabProps) {
         totalType: "sum",
         formatTotal: (v) => v.toFixed(3).replace(".", ","),
       },
+      ...(canDelete
+        ? [
+            {
+              key: "actions",
+              label: "",
+              type: "custom" as const,
+              getValue: () => "",
+              width: "w-[3rem]",
+              renderCell: (row: PackageListItem) => (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                      disabled={deletingId === row.id}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete package?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete package {row.packageNumber} from {row.shipmentCode || "production"}. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDelete(row.id)}
+                        disabled={deletingId === row.id}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {deletingId === row.id ? "Deleting..." : "Delete"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              ),
+            },
+          ]
+        : []),
     ],
-    []
+    [canDelete, deletingId]
   );
 
   const [displayedPackages, setDisplayedPackages] = useState<PackageListItem[]>(packages);
@@ -150,7 +226,7 @@ export function PackagesTab({ packages }: PackagesTabProps) {
     [displayedPackages]
   );
 
-  if (packages.length === 0) {
+  if (localPackages.length === 0) {
     return (
       <div className="flex items-center justify-center py-12 text-muted-foreground">
         No packages recorded yet
@@ -164,7 +240,7 @@ export function PackagesTab({ packages }: PackagesTabProps) {
 
       <DataEntryTable<PackageListItem>
         columns={columns}
-        rows={packages}
+        rows={localPackages}
         getRowKey={(row) => row.id}
         readOnly
         collapseStorageKey="inventory-packages-collapsed"

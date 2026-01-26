@@ -75,6 +75,7 @@ export interface CreateShipmentInput {
 
 /** Package data for server submission */
 export interface PackageInput {
+  packageNumber?: string; // Optional: for admin inventory with custom package numbers
   productNameId: string | null;
   woodSpeciesId: string | null;
   humidityId: string | null;
@@ -188,6 +189,21 @@ export interface PackageListItem {
   volumeM3: number | null;
   organisationName: string | null;
   organisationCode: string | null;
+}
+
+/** Editable package item with both IDs and display values for admin editing */
+export interface EditablePackageItem extends PackageListItem {
+  organisationId: string | null;
+  productNameId: string | null;
+  woodSpeciesId: string | null;
+  humidityId: string | null;
+  typeId: string | null;
+  processingId: string | null;
+  fscId: string | null;
+  qualityId: string | null;
+  volumeIsCalculated: boolean;
+  /** True if this is a new row not yet saved to DB */
+  isNew?: boolean;
 }
 
 /** Input for updating shipment packages */

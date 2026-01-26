@@ -548,3 +548,39 @@ Claude Opus 4.5
 - `apps/portal/src/components/layout/SidebarWrapper.tsx` - Updated Inventory link to `/admin/inventory`
 - `packages/ui/src/components/data-entry-table.tsx` - Added readOnly mode + onDisplayRowsChange callback
 - `supabase/migrations/20260123000003_update_shipment_packages.sql` - NEW: Atomic update DB function
+
+### Ad-Hoc Enhancement (2026-01-26)
+**Navigation Restructure & Super Admin Delete Capabilities**
+
+1. **Navigation Restructure**:
+   - Renamed "New Shipment" sidebar item to "Shipments" (`/admin/shipments`)
+   - Shipments page now has two tabs: "New Shipment" (form) and "Shipments" (list)
+   - Inventory page simplified to show only packages (removed Shipments tab)
+   - Created `ShipmentsPageContent.tsx` component with tab navigation
+
+2. **Super Admin Delete Shipments**:
+   - Added `deleteShipment` server action (Super Admin only)
+   - Validates that no packages from shipment are used as production inputs
+   - Added delete button (trash icon) to ShipmentsTab for Super Admin
+   - Delete confirmation dialog before permanent deletion
+
+3. **Super Admin Delete Inventory Packages**:
+   - Added `deleteInventoryPackage` server action (Super Admin only)
+   - Validates that package is not used as production input
+   - Added delete button to PackagesTab for Super Admin (custom column renders in readOnly mode)
+   - Updated DataEntryTable to render custom columns even in readOnly mode
+
+Files created:
+- `src/app/(portal)/admin/shipments/page.tsx`
+- `src/features/shipments/components/ShipmentsPageContent.tsx`
+- `src/features/shipments/actions/deleteShipment.ts`
+- `src/features/inventory/actions/deleteInventoryPackage.ts`
+
+Files modified:
+- `src/app/(portal)/admin/inventory/page.tsx` - Simplified to only show packages
+- `src/components/layout/SidebarWrapper.tsx` - Updated nav item
+- `src/features/shipments/components/ShipmentsTab.tsx` - Added delete button
+- `src/features/shipments/components/PackagesTab.tsx` - Added delete button
+- `src/features/shipments/components/InventoryOverview.tsx` - Added canDelete props
+- `src/features/shipments/components/ShipmentDetailView.tsx` - Updated links
+- `packages/ui/src/components/data-entry-table.tsx` - Custom columns in readOnly mode

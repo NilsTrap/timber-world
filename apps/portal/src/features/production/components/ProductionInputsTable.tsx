@@ -48,9 +48,10 @@ function calculateVolume(
   pieces: number
 ): number | null {
   if (!thickness || !width || !length || pieces <= 0) return null;
-  const t = parseFloat(thickness);
-  const w = parseFloat(width);
-  const l = parseFloat(length);
+  // Normalize comma decimal separators to dots for parsing
+  const t = parseFloat(thickness.replace(",", "."));
+  const w = parseFloat(width.replace(",", "."));
+  const l = parseFloat(length.replace(",", "."));
   if (isNaN(t) || isNaN(w) || isNaN(l)) return null;
   // Check for ranges (e.g. "40-50")
   if (thickness.includes("-") || width.includes("-") || length.includes("-")) return null;

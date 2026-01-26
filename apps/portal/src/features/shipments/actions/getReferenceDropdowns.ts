@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import type { ActionResult, ReferenceDropdowns, ReferenceOption } from "../types";
 
 const REFERENCE_TABLES = [
@@ -19,7 +19,7 @@ const REFERENCE_TABLES = [
  *
  * Fetches all 7 reference table active options for the package entry form.
  * Returns combined result with all dropdown options.
- * Admin only.
+ * Available to any authenticated user (admins and org users).
  */
 export async function getReferenceDropdowns(): Promise<ActionResult<ReferenceDropdowns>> {
   const session = await getSession();
@@ -27,9 +27,7 @@ export async function getReferenceDropdowns(): Promise<ActionResult<ReferenceDro
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  if (!isAdmin(session)) {
-    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
-  }
+  // Reference data is read-only and available to all authenticated users
 
   const supabase = await createClient();
 

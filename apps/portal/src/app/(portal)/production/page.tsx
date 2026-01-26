@@ -61,6 +61,7 @@ export default async function ProductionPage({
         defaultTab={tab}
         defaultProcess={process}
         showOrganisation={isSuperAdmin(session)}
+        canDeleteHistory={isSuperAdmin(session)}
       />
     </div>
   );

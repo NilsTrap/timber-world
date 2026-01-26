@@ -2,9 +2,9 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { getSession, isSuperAdmin } from "@/lib/auth";
-import { getActiveOrganisations } from "@/features/shipments/actions/getActiveOrganisations";
+import { getUserOrganisation, getAllOrgShipments, getActiveOrganisations } from "@/features/shipments/actions";
 import { getAllPendingShipmentCount } from "@/features/shipments/actions/getAllShipments";
-import { ShipmentsPageContent } from "./ShipmentsPageContent";
+import { ProducerShipmentsPageContent, AllShipmentsTab } from "@/features/shipments/components";
 
 export default async function ShipmentsPage({
   searchParams,
@@ -20,27 +20,47 @@ export default async function ShipmentsPage({
   const isSuperAdminUser = isSuperAdmin(session);
   const isOrgUser = !!session.organisationId;
 
-  // Org users without organization assignment can't access shipments
-  if (!isSuperAdminUser && !isOrgUser) {
-    redirect("/dashboard");
-  }
-
-  // For Super Admin, fetch organizations for the All Shipments filter
-  let organizations: Array<{ id: string; code: string; name: string }> = [];
-  let allPendingCount = 0;
-
-  if (isSuperAdminUser) {
+  // Super Admin without org context - show the All Shipments admin view
+  if (isSuperAdminUser && !isOrgUser) {
     const [orgsResult, pendingResult] = await Promise.all([
       getActiveOrganisations(),
       getAllPendingShipmentCount(),
     ]);
-    if (orgsResult.success) {
-      organizations = orgsResult.data;
-    }
-    if (pendingResult.success) {
-      allPendingCount = pendingResult.data;
-    }
+
+    const organizations = orgsResult.success ? orgsResult.data : [];
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">All Shipments</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              View and monitor shipments across all organizations
+            </p>
+          </div>
+        </div>
+
+        <AllShipmentsTab organizations={organizations} />
+      </div>
+    );
   }
+
+  // Organisation user - show the producer shipments page
+  if (!isOrgUser) {
+    redirect("/dashboard");
+  }
+
+  // Fetch user's organisation and shipments in parallel
+  const [userOrgResult, shipmentsResult] = await Promise.all([
+    getUserOrganisation(),
+    getAllOrgShipments(),
+  ]);
+
+  if (!userOrgResult.success || !userOrgResult.data) {
+    redirect("/dashboard");
+  }
+
+  const shipments = shipmentsResult.success ? shipmentsResult.data : [];
 
   return (
     <Suspense
@@ -50,12 +70,10 @@ export default async function ShipmentsPage({
         </div>
       }
     >
-      <ShipmentsPageContent
-        initialTab={tab as "outgoing" | "incoming" | "all" | undefined}
-        isSuperAdmin={isSuperAdminUser}
-        isOrgUser={isOrgUser}
-        organizations={organizations}
-        allPendingCount={allPendingCount}
+      <ProducerShipmentsPageContent
+        userOrganisation={userOrgResult.data}
+        shipments={shipments}
+        defaultTab={tab}
       />
     </Suspense>
   );

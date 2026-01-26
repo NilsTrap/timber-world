@@ -34,10 +34,11 @@ export function calculateVolume(
   if (isRange(thickness) || isRange(width) || isRange(length)) return null;
   if (pieces === "-" || pieces.trim() === "") return null;
 
-  const t = parseFloat(thickness);
-  const w = parseFloat(width);
-  const l = parseFloat(length);
-  const p = parseFloat(pieces);
+  // Normalize comma decimal separators to dots for parsing
+  const t = parseFloat(thickness.replace(",", "."));
+  const w = parseFloat(width.replace(",", "."));
+  const l = parseFloat(length.replace(",", "."));
+  const p = parseFloat(pieces.replace(",", "."));
 
   if (isNaN(t) || isNaN(w) || isNaN(l) || isNaN(p)) return null;
   if (t <= 0 || w <= 0 || l <= 0 || p <= 0) return null;

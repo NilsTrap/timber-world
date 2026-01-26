@@ -20,13 +20,18 @@ import { deleteProductionEntry } from "../actions";
 
 interface DeleteDraftButtonProps {
   entryId: string;
+  /** If true, shows different messaging for validated entries (Super Admin only) */
+  isValidated?: boolean;
 }
 
 /**
- * Client component button that deletes a draft production entry
+ * Client component button that deletes a production entry
  * after user confirmation via AlertDialog.
+ *
+ * For drafts: available to entry owner
+ * For validated: available to Super Admin only
  */
-export function DeleteDraftButton({ entryId }: DeleteDraftButtonProps) {
+export function DeleteDraftButton({ entryId, isValidated = false }: DeleteDraftButtonProps) {
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
 
@@ -34,8 +39,8 @@ export function DeleteDraftButton({ entryId }: DeleteDraftButtonProps) {
     setIsPending(true);
     const result = await deleteProductionEntry(entryId);
     if (result.success) {
-      toast.success("Draft entry deleted");
-      router.push("/production");
+      toast.success(isValidated ? "Production entry deleted" : "Draft entry deleted");
+      router.push("/production?tab=history");
     } else {
       toast.error(result.error);
       setIsPending(false);
@@ -52,10 +57,13 @@ export function DeleteDraftButton({ entryId }: DeleteDraftButtonProps) {
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete draft entry?</AlertDialogTitle>
+          <AlertDialogTitle>
+            {isValidated ? "Delete production entry?" : "Delete draft entry?"}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete this draft production entry and all its
-            inputs and outputs. This action cannot be undone.
+            {isValidated
+              ? "This will permanently delete this validated production entry and all its inputs and outputs. This action cannot be undone."
+              : "This will permanently delete this draft production entry and all its inputs and outputs. This action cannot be undone."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
