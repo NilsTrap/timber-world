@@ -16,6 +16,7 @@ import { SummaryCards } from "@/features/shipments/components/SummaryCards";
 import { deleteInventoryPackage, saveInventoryPackages, updateShipmentCode } from "../actions";
 import { getReferenceDropdowns } from "@/features/shipments/actions";
 import { getOrganisations } from "@/features/organisations/actions";
+import { PasteImportModal } from "./PasteImportModal";
 import type { EditablePackageItem, ReferenceDropdowns } from "@/features/shipments/types";
 
 // ─── Volume Helpers ───────────────────────────────────────────────────────────
@@ -137,6 +138,7 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [pendingShipmentCodeUpdates, setPendingShipmentCodeUpdates] = useState<Map<string, string>>(new Map());
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const previousPackageIds = useRef<Set<string>>(new Set(packages.map(p => p.id)));
 
   // Sync local state when packages prop changes (e.g., org filter changed)
@@ -435,6 +437,15 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
     previousPackageIds.current = new Set(originalPackages.map(p => p.id));
   }, [originalPackages]);
 
+  // Import packages from spreadsheet paste
+  const handleImport = useCallback((importedPackages: EditablePackageItem[]) => {
+    setLocalPackages(prev => [...prev, ...importedPackages]);
+    // Update tracking for new packages
+    const newIds = new Set(importedPackages.map(p => p.id));
+    previousPackageIds.current = new Set([...previousPackageIds.current, ...newIds]);
+    toast.success(`Imported ${importedPackages.length} package${importedPackages.length !== 1 ? "s" : ""}`);
+  }, []);
+
   const columns: ColumnDef<EditablePackageItem>[] = useMemo(
     () => {
       if (!dropdowns || organisations.length === 0) return [];
@@ -670,16 +681,21 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
         <div className="flex-1">
           <SummaryCards items={summaryItems} />
         </div>
-        {isDirty && (
-          <div className="flex gap-2 shrink-0">
-            <Button variant="outline" onClick={handleDiscard} disabled={isSaving}>
-              Discard
-            </Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save Changes"}
-            </Button>
-          </div>
-        )}
+        <div className="flex gap-2 shrink-0">
+          <Button variant="outline" onClick={() => setImportModalOpen(true)}>
+            Import from Spreadsheet
+          </Button>
+          {isDirty && (
+            <>
+              <Button variant="outline" onClick={handleDiscard} disabled={isSaving}>
+                Discard
+              </Button>
+              <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       <DataEntryTable<EditablePackageItem>
@@ -692,6 +708,14 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
         copyRow={copyRow}
         collapseStorageKey="editable-inventory-collapsed"
         onDisplayRowsChange={handleDisplayRowsChange}
+      />
+
+      <PasteImportModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        dropdowns={dropdowns}
+        organisations={organisations}
+        onImport={handleImport}
       />
     </div>
   );
