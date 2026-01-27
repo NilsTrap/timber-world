@@ -13,7 +13,7 @@ import {
   type ColumnDef,
 } from "@timber/ui";
 import { SummaryCards } from "@/features/shipments/components/SummaryCards";
-import { deleteInventoryPackage, saveInventoryPackages, updateShipmentCode, cleanupAdminShipments } from "../actions";
+import { deleteInventoryPackage, saveInventoryPackages, updateShipmentCode } from "../actions";
 import { getReferenceDropdowns } from "@/features/shipments/actions";
 import { getOrganisations } from "@/features/organisations/actions";
 import { PasteImportModal } from "./PasteImportModal";
@@ -445,21 +445,6 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
     toast.success(`Imported ${importedPackages.length} package${importedPackages.length !== 1 ? "s" : ""}`);
   }, []);
 
-  // Cleanup admin-created shipments (keeps packages, removes shipment records)
-  const handleCleanupShipments = useCallback(async () => {
-    if (!confirm("This will remove all admin-created shipments from the shipments list.\n\nPackages will remain in inventory.\n\nContinue?")) {
-      return;
-    }
-
-    const result = await cleanupAdminShipments();
-    if (result.success) {
-      toast.success(`Cleaned up ${result.data.shipmentsDeleted} shipments (${result.data.packagesUnlinked} packages unlinked)`);
-      router.refresh();
-    } else {
-      toast.error(result.error);
-    }
-  }, [router]);
-
   const columns: ColumnDef<EditablePackageItem>[] = useMemo(
     () => {
       if (!dropdowns || organisations.length === 0) return [];
@@ -698,9 +683,6 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
         <div className="flex gap-2 shrink-0">
           <Button variant="outline" onClick={() => setImportModalOpen(true)}>
             Import from Spreadsheet
-          </Button>
-          <Button variant="ghost" size="sm" onClick={handleCleanupShipments} className="text-muted-foreground">
-            Cleanup Shipments
           </Button>
           {isDirty && (
             <>
