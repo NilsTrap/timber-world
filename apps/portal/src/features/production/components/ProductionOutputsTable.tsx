@@ -226,13 +226,22 @@ export function ProductionOutputsTable({
     [processCode]
   );
 
+  // Create new row with dropdown values inherited from the last row
+  const handleCreateRow = useCallback(
+    (index: number) => {
+      const lastRow = rows.length > 0 ? rows[rows.length - 1] : undefined;
+      return createEmptyOutputRow(index, processCode, lastRow);
+    },
+    [rows, processCode]
+  );
+
   return (
     <DataEntryTable<OutputRow>
       columns={columns}
       rows={rows}
       onRowsChange={onRowsChange}
       getRowKey={(row) => row.clientId}
-      createRow={(index) => createEmptyOutputRow(index, processCode)}
+      createRow={handleCreateRow}
       copyRow={handleCopyRow}
       renumberRows={renumberRows}
       onCellChange={handleCellChange}
