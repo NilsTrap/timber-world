@@ -47,20 +47,18 @@ export function calculateVolume(
   return (t * w * l * p) / 1_000_000_000;
 }
 
-export function createEmptyOutputRow(index: number, code: string = "OUT", templateRow?: OutputRow): OutputRow {
+export function createEmptyOutputRow(index: number, code: string = "OUT"): OutputRow {
   return {
     clientId: generateClientId(),
     dbId: null,
     packageNumber: generateOutputNumber(index, code),
-    // Inherit dropdown values from template row (if provided)
-    productNameId: templateRow?.productNameId ?? "",
-    woodSpeciesId: templateRow?.woodSpeciesId ?? "",
-    humidityId: templateRow?.humidityId ?? "",
-    typeId: templateRow?.typeId ?? "",
-    processingId: templateRow?.processingId ?? "",
-    fscId: templateRow?.fscId ?? "",
-    qualityId: templateRow?.qualityId ?? "",
-    // Don't inherit dimensions/pieces/volume - those are row-specific
+    productNameId: "",
+    woodSpeciesId: "",
+    humidityId: "",
+    typeId: "",
+    processingId: "",
+    fscId: "",
+    qualityId: "",
     thickness: "",
     width: "",
     length: "",
