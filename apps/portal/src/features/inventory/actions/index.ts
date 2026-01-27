@@ -5,3 +5,4 @@ export { getEditablePackages } from "./getEditablePackages";
 export { updateInventoryPackage } from "./updateInventoryPackage";
 export { updateShipmentCode } from "./updateShipmentCode";
 export { saveInventoryPackages } from "./saveInventoryPackages";
+export { cleanupAdminShipments } from "./cleanupAdminShipments";
