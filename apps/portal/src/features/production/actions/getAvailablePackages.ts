@@ -94,7 +94,30 @@ export async function getAvailablePackages(
     productionQuery = productionQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
   }
 
-  const [shipmentResult, productionResult] = await Promise.all([shipmentQuery, productionQuery]);
+  // Query 3: Direct inventory packages (admin-added, no shipment or production source)
+  // These have organisation_id set directly on the package
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let directQuery = (supabase as any)
+    .from("inventory_packages")
+    .select(`
+      id, package_number, shipment_id, thickness, width, length, pieces, volume_m3,
+      ${refSelect}
+    `)
+    .eq("organisation_id", session.organisationId)
+    .is("shipment_id", null)
+    .is("production_entry_id", null)
+    .neq("status", "consumed")
+    .order("package_number", { ascending: true });
+
+  if (usedPackageIds.length > 0) {
+    directQuery = directQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
+  }
+
+  const [shipmentResult, productionResult, directResult] = await Promise.all([
+    shipmentQuery,
+    productionQuery,
+    directQuery,
+  ]);
 
   if (shipmentResult.error) {
     console.error("Failed to fetch shipment packages:", shipmentResult.error);
@@ -103,13 +126,29 @@ export async function getAvailablePackages(
 
   if (productionResult.error) {
     console.error("Failed to fetch production packages:", productionResult.error);
-    // Non-fatal: continue with shipment packages only
+    // Non-fatal: continue with other packages
   }
 
-  const allData = [...(shipmentResult.data ?? []), ...(productionResult.data ?? [])];
+  if (directResult.error) {
+    console.error("Failed to fetch direct packages:", directResult.error);
+    // Non-fatal: continue with other packages
+  }
+
+  // Merge all result sets and deduplicate by id
+  const allData = [
+    ...(shipmentResult.data ?? []),
+    ...(productionResult.data ?? []),
+    ...(directResult.data ?? []),
+  ];
+  const seenIds = new Set<string>();
+  const uniqueData = allData.filter((pkg: { id: string }) => {
+    if (seenIds.has(pkg.id)) return false;
+    seenIds.add(pkg.id);
+    return true;
+  });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const packages: PackageListItem[] = allData.map((pkg: any) => ({
+  const packages: PackageListItem[] = uniqueData.map((pkg: any) => ({
     id: pkg.id,
     packageNumber: pkg.package_number,
     shipmentCode: pkg.shipments?.shipment_code ?? "",
