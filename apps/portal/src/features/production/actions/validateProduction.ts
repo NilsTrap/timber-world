@@ -34,11 +34,11 @@ export async function validateProduction(
 
   const supabase = await createClient();
 
-  // 1. Fetch entry and verify ownership
+  // 1. Fetch entry and verify ownership (include process info for package numbering)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: entry, error: entryError } = await (supabase as any)
     .from("portal_production_entries")
-    .select("id, status, created_by")
+    .select("id, status, created_by, organisation_id, ref_processes!inner(code, value)")
     .eq("id", productionEntryId)
     .single();
 
@@ -53,6 +53,10 @@ export async function validateProduction(
   if (entry.status !== "draft") {
     return { success: false, error: "Entry is already validated", code: "VALIDATION_FAILED" };
   }
+
+  const organisationId = entry.organisation_id;
+  const processCode = entry.ref_processes?.code;
+  const processName = entry.ref_processes?.value;
 
   // Atomic lock: transition draft → validating (prevents race condition with concurrent requests)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -119,15 +123,67 @@ export async function validateProduction(
     return { success: false, error: "All outputs must have volume > 0", code: "VALIDATION_FAILED" };
   }
 
-  // 4. Pre-check: verify output package numbers won't conflict
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const outputNumbers = outputs.map((o: any) => o.package_number).filter(Boolean);
-  if (outputNumbers.length > 0) {
+  // 4. Generate final package numbers for outputs
+  // For "Sorting" process, inherit the process code from input packages
+  const isSortingProcess = processName?.toLowerCase() === "sorting";
+  let effectiveProcessCode = processCode;
+
+  if (isSortingProcess && inputs.length > 0) {
+    // Get the first input package to extract its process code
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: inputPkg } = await (supabase as any)
+      .from("inventory_packages")
+      .select("package_number")
+      .eq("id", inputs[0].package_id)
+      .single();
+
+    if (inputPkg?.package_number) {
+      const match = inputPkg.package_number.match(/^N-([A-Z]{2})-\d+$/);
+      if (match) {
+        effectiveProcessCode = match[1];
+      }
+    }
+  }
+
+  // Generate final package numbers using the counter
+  const finalPackageNumbers: string[] = [];
+  for (let i = 0; i < outputs.length; i++) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: pkgNumResult, error: pkgNumError } = await (supabase as any)
+      .rpc("generate_production_package_number", {
+        p_organisation_id: organisationId,
+        p_process_code: effectiveProcessCode,
+      });
+
+    if (pkgNumError) {
+      await revertStatus();
+      return { success: false, error: `Failed to generate package number: ${pkgNumError.message}`, code: "PKG_NUM_FAILED" };
+    }
+
+    finalPackageNumbers.push(pkgNumResult as string);
+  }
+
+  // Update production outputs with final package numbers
+  for (let i = 0; i < outputs.length; i++) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateOutputError } = await (supabase as any)
+      .from("portal_production_outputs")
+      .update({ package_number: finalPackageNumbers[i] })
+      .eq("id", outputs[i].id);
+
+    if (updateOutputError) {
+      await revertStatus();
+      return { success: false, error: `Failed to update output package number: ${updateOutputError.message}`, code: "UPDATE_FAILED" };
+    }
+  }
+
+  // 6. Pre-check: verify final package numbers won't conflict
+  if (finalPackageNumbers.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existing } = await (supabase as any)
       .from("inventory_packages")
       .select("package_number")
-      .in("package_number", outputNumbers);
+      .in("package_number", finalPackageNumbers);
     if (existing && existing.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const conflicts = existing.map((e: any) => e.package_number).join(", ");
@@ -246,7 +302,7 @@ export async function validateProduction(
   const outputPackages = outputs.map((output: any, index: number) => ({
     production_entry_id: productionEntryId,
     shipment_id: null,
-    package_number: output.package_number,
+    package_number: finalPackageNumbers[index],
     package_sequence: index + 1,
     product_name_id: output.product_name_id,
     wood_species_id: output.wood_species_id,

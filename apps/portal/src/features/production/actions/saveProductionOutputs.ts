@@ -195,30 +195,16 @@ export async function saveProductionOutputs(
     }
   }
 
-  // INSERT new rows with auto-generated package numbers
+  // INSERT new rows with temporary placeholder numbers
+  // Final package numbers are assigned during validation (to avoid wasting numbers on deleted drafts)
   if (toInsert.length > 0) {
-    // Generate package numbers for each new row
-    const generatedNumbers: string[] = [];
-    for (let i = 0; i < toInsert.length; i++) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: pkgNumResult, error: pkgNumError } = await (supabase as any)
-        .rpc("generate_production_package_number", {
-          p_organisation_id: organisationId,
-          p_process_code: effectiveProcessCode,
-        });
+    // Use placeholder format: (pending-{code}) - will be replaced on validation
+    const placeholderNumbers = toInsert.map((_, i) => `(pending-${effectiveProcessCode}-${i + 1})`);
 
-      if (pkgNumError) {
-        console.error("Failed to generate package number:", pkgNumError);
-        return { success: false, error: `Failed to generate package number: ${pkgNumError.message}`, code: "PKG_NUM_FAILED" };
-      }
-
-      generatedNumbers.push(pkgNumResult as string);
-    }
-
-    // Build payloads with generated package numbers
+    // Build payloads with placeholder package numbers
     const payloadsWithNumbers = toInsert.map((r, i) => ({
       ...r.payload,
-      package_number: generatedNumbers[i],
+      package_number: placeholderNumbers[i],
     }));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
