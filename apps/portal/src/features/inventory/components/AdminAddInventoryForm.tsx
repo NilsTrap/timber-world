@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { Button, Label, Input } from "@timber/ui";
+import { Button, Label } from "@timber/ui";
 import { PackageEntryTable } from "@/features/shipments/components/PackageEntryTable";
 import { getActiveOrganisations, getReferenceDropdowns } from "@/features/shipments/actions";
 import { createAdminInventory } from "../actions";
@@ -31,16 +31,10 @@ function createEmptyRow(index: number): PackageRow {
   };
 }
 
-/** Get today's date in YYYY-MM-DD format */
-function getTodayDate(): string {
-  return new Date().toISOString().split("T")[0] ?? "";
-}
-
 const DRAFT_STORAGE_KEY = "admin-add-inventory-draft";
 
 interface DraftState {
   toOrganisationId: string;
-  shipmentDate: string;
   packageRows: PackageRow[];
 }
 
@@ -71,9 +65,8 @@ function clearDraft() {
  * Admin Add Inventory Form
  *
  * Simplified form for adding inventory directly to an organization.
- * - No "From Organization" (admin-added inventory has no source)
- * - Shipment code is automatically "ADM-XXX"
- * - Just select destination org, date, and packages
+ * - No shipment is created - packages go directly to inventory
+ * - Just select destination org and packages
  */
 export function AdminAddInventoryForm() {
   const router = useRouter();
@@ -87,16 +80,14 @@ export function AdminAddInventoryForm() {
   // Form state (restored from sessionStorage draft if available)
   const [draft] = useState(loadDraft);
   const [toOrganisationId, setToOrganisationId] = useState(draft?.toOrganisationId ?? "");
-  const [shipmentDate, setShipmentDate] = useState(draft?.shipmentDate ?? getTodayDate());
-  const [shipmentCode, setShipmentCode] = useState("ADMIN");
   const [packageRows, setPackageRows] = useState<PackageRow[]>(
     draft?.packageRows?.length ? draft.packageRows : [createEmptyRow(0)]
   );
 
   // Persist form state to sessionStorage on changes
   useEffect(() => {
-    saveDraft({ toOrganisationId, shipmentDate, packageRows });
-  }, [toOrganisationId, shipmentDate, packageRows]);
+    saveDraft({ toOrganisationId, packageRows });
+  }, [toOrganisationId, packageRows]);
 
   // Load initial data
   useEffect(() => {
@@ -130,10 +121,6 @@ export function AdminAddInventoryForm() {
       toast.error("Please select destination organization");
       return;
     }
-    if (!shipmentDate) {
-      toast.error("Please select a date");
-      return;
-    }
 
     // Validate packages - at least one row with some data
     const validPackages = packageRows.filter(
@@ -147,6 +134,7 @@ export function AdminAddInventoryForm() {
 
     // Transform rows to server format
     const packages: PackageInput[] = validPackages.map((row) => ({
+      packageNumber: row.packageNumber || undefined,
       productNameId: row.productNameId || null,
       woodSpeciesId: row.woodSpeciesId || null,
       humidityId: row.humidityId || null,
@@ -166,8 +154,6 @@ export function AdminAddInventoryForm() {
 
     const result = await createAdminInventory({
       toOrganisationId,
-      shipmentDate,
-      shipmentCode,
       packages,
     });
 
@@ -181,7 +167,7 @@ export function AdminAddInventoryForm() {
     }
 
     setIsSaving(false);
-  }, [toOrganisationId, shipmentDate, packageRows, router]);
+  }, [toOrganisationId, packageRows, router]);
 
   if (isLoading) {
     return (
@@ -197,7 +183,7 @@ export function AdminAddInventoryForm() {
       <div className="rounded-lg border bg-card p-6">
         <h2 className="text-lg font-semibold mb-4">Add Inventory</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* To Organisation */}
           <div className="space-y-2">
             <Label htmlFor="to-organisation">
@@ -217,31 +203,6 @@ export function AdminAddInventoryForm() {
               ))}
             </select>
           </div>
-
-          {/* Date */}
-          <div className="space-y-2">
-            <Label htmlFor="shipment-date">
-              Date
-            </Label>
-            <Input
-              id="shipment-date"
-              type="date"
-              value={shipmentDate}
-              onChange={(e) => setShipmentDate(e.target.value)}
-            />
-          </div>
-
-          {/* Shipment Code (editable) */}
-          <div className="space-y-2">
-            <Label htmlFor="shipment-code">Shipment Code</Label>
-            <Input
-              id="shipment-code"
-              value={shipmentCode}
-              onChange={(e) => setShipmentCode(e.target.value.toUpperCase())}
-              placeholder="ADMIN"
-              className="font-mono"
-            />
-          </div>
         </div>
       </div>
 
@@ -251,7 +212,7 @@ export function AdminAddInventoryForm() {
           rows={packageRows}
           dropdowns={dropdowns}
           onRowsChange={setPackageRows}
-          shipmentCode={shipmentCode}
+          shipmentCode="INV"
           editablePackageNumbers
         />
       )}

@@ -6,22 +6,18 @@ import type { ActionResult, PackageInput } from "@/features/shipments/types";
 
 interface CreateAdminInventoryInput {
   toOrganisationId: string;
-  shipmentDate: string;
-  shipmentCode: string;
   packages: PackageInput[];
 }
 
 interface CreateAdminInventoryResult {
-  shipmentId: string;
-  shipmentCode: string;
   packageCount: number;
 }
 
 /**
  * Create Admin Inventory
  *
- * Adds inventory directly to an organization without a source organization.
- * Creates a shipment with code "ADM-XXX" and from_organisation_id = NULL.
+ * Adds inventory packages directly to an organization without creating shipments.
+ * Packages are inserted directly into inventory_packages with shipment_id = NULL.
  * Admin only.
  */
 export async function createAdminInventory(
@@ -36,18 +32,10 @@ export async function createAdminInventory(
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
-  const { toOrganisationId, shipmentDate, shipmentCode, packages } = input;
+  const { toOrganisationId, packages } = input;
 
   if (!toOrganisationId) {
     return { success: false, error: "Destination organization is required", code: "VALIDATION_FAILED" };
-  }
-
-  if (!shipmentDate) {
-    return { success: false, error: "Date is required", code: "VALIDATION_FAILED" };
-  }
-
-  if (!shipmentCode) {
-    return { success: false, error: "Shipment code is required", code: "VALIDATION_FAILED" };
   }
 
   if (!packages || packages.length === 0) {
@@ -56,9 +44,11 @@ export async function createAdminInventory(
 
   const supabase = await createClient();
 
-  // Transform packages to snake_case JSONB for the DB function
-  const packagesJsonb = packages.map((pkg) => ({
-    package_number: pkg.packageNumber || null,
+  // Insert packages directly into inventory (no shipment)
+  const packagesToInsert = packages.map((pkg, index) => ({
+    shipment_id: null, // No shipment for admin-added packages
+    package_number: pkg.packageNumber || `PKG-${Date.now()}-${index + 1}`,
+    organisation_id: toOrganisationId,
     product_name_id: pkg.productNameId || null,
     wood_species_id: pkg.woodSpeciesId || null,
     humidity_id: pkg.humidityId || null,
@@ -74,27 +64,20 @@ export async function createAdminInventory(
     volume_is_calculated: pkg.volumeIsCalculated,
   }));
 
-  // Call the admin inventory creation function
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .rpc("create_admin_inventory", {
-      p_to_organisation_id: toOrganisationId,
-      p_shipment_date: shipmentDate,
-      p_shipment_code: shipmentCode,
-      p_packages: packagesJsonb,
-    });
+  const { error } = await (supabase as any)
+    .from("inventory_packages")
+    .insert(packagesToInsert);
 
   if (error) {
     console.error("Failed to create admin inventory:", error);
-    return { success: false, error: `Failed to create inventory: ${error.message}`, code: "RPC_FAILED" };
+    return { success: false, error: `Failed to create inventory: ${error.message}`, code: "INSERT_FAILED" };
   }
 
   return {
     success: true,
     data: {
-      shipmentId: data.shipment_id,
-      shipmentCode: data.shipment_code,
-      packageCount: data.package_count,
+      packageCount: packages.length,
     },
   };
 }

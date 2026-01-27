@@ -8,7 +8,6 @@ interface PackageSaveInput {
   id: string;
   isNew?: boolean;
   packageNumber: string;
-  shipmentCode?: string; // User-specified shipment code for new packages
   organisationId: string | null;
   productNameId: string | null;
   woodSpeciesId: string | null;
@@ -35,7 +34,7 @@ interface SaveResult {
  * Save Inventory Packages (Bulk)
  *
  * Saves multiple inventory packages - updates existing ones and creates new ones.
- * New packages are created as admin inventory (no shipment).
+ * New packages are created directly in inventory without creating shipments.
  * Super Admin only.
  */
 export async function saveInventoryPackages(
@@ -95,95 +94,41 @@ export async function saveInventoryPackages(
     }
   }
 
-  // Create new packages
-  // New packages need a shipment - we'll create an admin shipment for them
-  if (newPackages.length > 0) {
-    // Group new packages by organisation
-    const byOrg = new Map<string, PackageSaveInput[]>();
-    for (const pkg of newPackages) {
-      const orgId = pkg.organisationId || "unknown";
-      if (!byOrg.has(orgId)) {
-        byOrg.set(orgId, []);
-      }
-      byOrg.get(orgId)!.push(pkg);
+  // Create new packages directly in inventory (no shipment)
+  for (const pkg of newPackages) {
+    if (!pkg.organisationId) {
+      errors.push(`Cannot create package without organisation: ${pkg.packageNumber || "unnamed"}`);
+      continue;
     }
 
-    // Create packages for each organisation
-    for (const [orgId, orgPackages] of byOrg) {
-      if (orgId === "unknown") {
-        errors.push("Cannot create packages without organisation");
-        continue;
-      }
+    const packageNumber = pkg.packageNumber || `PKG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
-      // Use shipment code from first package, default to "-" if empty
-      const shipmentCode = orgPackages[0]?.shipmentCode?.trim() || "-";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: pkgError } = await (supabase as any)
+      .from("inventory_packages")
+      .insert({
+        shipment_id: null, // No shipment for admin-added packages
+        package_number: packageNumber,
+        organisation_id: pkg.organisationId,
+        product_name_id: pkg.productNameId || null,
+        wood_species_id: pkg.woodSpeciesId || null,
+        humidity_id: pkg.humidityId || null,
+        type_id: pkg.typeId || null,
+        processing_id: pkg.processingId || null,
+        fsc_id: pkg.fscId || null,
+        quality_id: pkg.qualityId || null,
+        thickness: pkg.thickness,
+        width: pkg.width,
+        length: pkg.length,
+        pieces: pkg.pieces,
+        volume_m3: pkg.volumeM3,
+        volume_is_calculated: pkg.volumeIsCalculated,
+      });
 
-      // Get next shipment number
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: shipmentNum, error: seqError } = await (supabase as any)
-        .rpc("get_next_shipment_number");
-
-      if (seqError) {
-        errors.push(`Failed to get shipment number: ${seqError.message}`);
-        continue;
-      }
-
-      // Create shipment for this batch with user-specified code
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: shipmentData, error: shipmentError } = await (supabase as any)
-        .from("shipments")
-        .insert({
-          shipment_code: shipmentCode,
-          shipment_number: shipmentNum,
-          from_organisation_id: null,
-          to_organisation_id: orgId,
-          shipment_date: new Date().toISOString().split("T")[0],
-          status: "completed",
-          completed_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-
-      if (shipmentError) {
-        errors.push(`Failed to create shipment: ${shipmentError.message}`);
-        continue;
-      }
-
-      // Insert packages
-      let sequence = 0;
-      for (const pkg of orgPackages) {
-        sequence++;
-        const packageNumber = pkg.packageNumber || `${shipmentCode}-${shipmentNum}-${String(sequence).padStart(3, "0")}`;
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: pkgError } = await (supabase as any)
-          .from("inventory_packages")
-          .insert({
-            shipment_id: shipmentData.id,
-            package_number: packageNumber,
-            package_sequence: sequence,
-            organisation_id: orgId,
-            product_name_id: pkg.productNameId || null,
-            wood_species_id: pkg.woodSpeciesId || null,
-            humidity_id: pkg.humidityId || null,
-            type_id: pkg.typeId || null,
-            processing_id: pkg.processingId || null,
-            fsc_id: pkg.fscId || null,
-            quality_id: pkg.qualityId || null,
-            thickness: pkg.thickness,
-            width: pkg.width,
-            length: pkg.length,
-            pieces: pkg.pieces,
-            volume_m3: pkg.volumeM3,
-            volume_is_calculated: pkg.volumeIsCalculated,
-          });
-
-        if (pkgError) {
-          errors.push(`Failed to create ${packageNumber}: ${pkgError.message}`);
-        } else {
-          created++;
-        }
-      }
+    if (pkgError) {
+      errors.push(`Failed to create ${packageNumber}: ${pkgError.message}`);
+    } else {
+      created++;
     }
   }
 

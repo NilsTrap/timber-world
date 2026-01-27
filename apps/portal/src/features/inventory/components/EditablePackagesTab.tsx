@@ -378,7 +378,6 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
         id: pkg.id,
         isNew: pkg.isNew,
         packageNumber: pkg.packageNumber,
-        shipmentCode: pkg.shipmentCode, // Pass shipment code for new packages
         organisationId: pkg.organisationId,
         productNameId: pkg.productNameId,
         woodSpeciesId: pkg.woodSpeciesId,
