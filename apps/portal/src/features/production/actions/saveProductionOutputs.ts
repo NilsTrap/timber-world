@@ -64,7 +64,7 @@ export async function saveProductionOutputs(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: entry, error: entryError } = await (supabase as any)
     .from("portal_production_entries")
-    .select("id, created_by, organisation_id, process_id, ref_processes!inner(code)")
+    .select("id, created_by, organisation_id, process_id, ref_processes!inner(code, value)")
     .eq("id", productionEntryId)
     .single();
 
@@ -76,7 +76,37 @@ export async function saveProductionOutputs(
   }
 
   const organisationId = entry.organisation_id;
-  const processCode = entry.ref_processes?.code;
+  let processCode = entry.ref_processes?.code;
+  const processName = entry.ref_processes?.value;
+
+  // For "Sorting" process, inherit the process code from input packages
+  // since sorting doesn't change the product type
+  const isSortingProcess = processName?.toLowerCase() === "sorting";
+  let inheritedProcessCode: string | null = null;
+
+  if (isSortingProcess) {
+    // Fetch input packages to get their process codes
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: inputs, error: inputsError } = await (supabase as any)
+      .from("portal_production_inputs")
+      .select("inventory_packages!inner(package_number)")
+      .eq("production_entry_id", productionEntryId)
+      .limit(1);
+
+    if (!inputsError && inputs && inputs.length > 0) {
+      const inputPackageNumber = inputs[0]?.inventory_packages?.package_number;
+      if (inputPackageNumber) {
+        // Extract process code from package number format: N-{CODE}-{NNNN}
+        const match = inputPackageNumber.match(/^N-([A-Z]{2})-\d+$/);
+        if (match) {
+          inheritedProcessCode = match[1];
+        }
+      }
+    }
+  }
+
+  // Use inherited code for Sorting, otherwise use the process's own code
+  const effectiveProcessCode = inheritedProcessCode || processCode;
 
   // Fetch existing DB rows with full data for diff comparison
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -174,7 +204,7 @@ export async function saveProductionOutputs(
       const { data: pkgNumResult, error: pkgNumError } = await (supabase as any)
         .rpc("generate_production_package_number", {
           p_organisation_id: organisationId,
-          p_process_code: processCode,
+          p_process_code: effectiveProcessCode,
         });
 
       if (pkgNumError) {
