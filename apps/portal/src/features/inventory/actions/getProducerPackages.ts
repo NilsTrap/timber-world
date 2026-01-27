@@ -8,7 +8,10 @@ import type { ActionResult, PackageListItem } from "../types";
  * Get Producer Packages
  *
  * Fetches all inventory packages for the producer's linked facility.
- * Filters by shipments where to_organisation_id matches the producer's organisation_id.
+ * Includes packages from:
+ * 1. Shipments to this organisation
+ * 2. Production entries from this organisation
+ * 3. Direct inventory (admin-added) for this organisation
  * Producer only.
  */
 export async function getProducerPackages(): Promise<ActionResult<PackageListItem[]>> {
@@ -89,15 +92,54 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
 
   if (productionError) {
     console.error("Failed to fetch production packages:", productionError);
-    // Non-fatal: return shipment packages only
+    // Non-fatal: continue with other results
   }
 
-  // Merge both result sets
+  // Query 3: Direct inventory packages (admin-added, no shipment or production source)
+  // These have organisation_id set directly on the package
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allData = [...(shipmentData ?? []), ...(productionData ?? [])];
+  const { data: directData, error: directError } = await (supabase as any)
+    .from("inventory_packages")
+    .select(`
+      id,
+      package_number,
+      shipment_id,
+      thickness,
+      width,
+      length,
+      pieces,
+      volume_m3,
+      status,
+      ref_product_names!inventory_packages_product_name_id_fkey(value),
+      ref_wood_species!inventory_packages_wood_species_id_fkey(value),
+      ref_humidity!inventory_packages_humidity_id_fkey(value),
+      ref_types!inventory_packages_type_id_fkey(value),
+      ref_processing!inventory_packages_processing_id_fkey(value),
+      ref_fsc!inventory_packages_fsc_id_fkey(value),
+      ref_quality!inventory_packages_quality_id_fkey(value)
+    `)
+    .eq("organisation_id", session.organisationId)
+    .is("shipment_id", null)
+    .is("production_entry_id", null)
+    .neq("status", "consumed")
+    .order("package_number", { ascending: true });
+
+  if (directError) {
+    console.error("Failed to fetch direct packages:", directError);
+    // Non-fatal: continue with other results
+  }
+
+  // Merge all result sets and deduplicate by id
+  const allData = [...(shipmentData ?? []), ...(productionData ?? []), ...(directData ?? [])];
+  const seenIds = new Set<string>();
+  const uniqueData = allData.filter((pkg: { id: string }) => {
+    if (seenIds.has(pkg.id)) return false;
+    seenIds.add(pkg.id);
+    return true;
+  });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const packages: PackageListItem[] = allData.map((pkg: any) => ({
+  const packages: PackageListItem[] = uniqueData.map((pkg: any) => ({
       id: pkg.id,
       packageNumber: pkg.package_number,
       shipmentCode: pkg.shipments?.shipment_code ?? "",
