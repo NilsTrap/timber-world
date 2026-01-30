@@ -31,12 +31,12 @@ async function lookupNextNumber(
     .eq("organisation_id", organisationId)
     .like("package_number", pattern);
 
-  // Query max from production_outputs (for drafts not yet in inventory)
+  // Query max from portal_production_outputs (for drafts not yet in inventory)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: prodData } = await (supabase as any)
-    .from("production_outputs")
-    .select("package_number, production_entries!inner(organisation_id)")
-    .eq("production_entries.organisation_id", organisationId)
+    .from("portal_production_outputs")
+    .select("package_number, portal_production_entries!inner(organisation_id)")
+    .eq("portal_production_entries.organisation_id", organisationId)
     .like("package_number", pattern);
 
   // Find the maximum number from both sources
