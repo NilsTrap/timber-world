@@ -85,8 +85,8 @@ export async function assignPackageNumbers(
   // Get production entry with org and process info
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: entry, error: entryError } = await (supabase as any)
-    .from("production_entries")
-    .select("id, organisation_id, status, ref_processes(code)")
+    .from("portal_production_entries")
+    .select("id, organisation_id, status, ref_processes!inner(code)")
     .eq("id", productionEntryId)
     .single();
 
@@ -108,7 +108,7 @@ export async function assignPackageNumbers(
   // Get all outputs that need numbers assigned
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: outputs, error: outputsError } = await (supabase as any)
-    .from("production_outputs")
+    .from("portal_production_outputs")
     .select("id, package_number, sort_order")
     .eq("production_entry_id", productionEntryId)
     .order("sort_order", { ascending: true });
@@ -142,7 +142,7 @@ export async function assignPackageNumbers(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: updateError } = await (supabase as any)
-      .from("production_outputs")
+      .from("portal_production_outputs")
       .update({ package_number: packageNumber })
       .eq("id", output.id);
 

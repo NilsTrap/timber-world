@@ -40,7 +40,7 @@ export function DeleteDraftButton({ entryId, isValidated = false }: DeleteDraftB
     const result = await deleteProductionEntry(entryId);
     if (result.success) {
       toast.success(isValidated ? "Production entry deleted" : "Draft entry deleted");
-      router.push("/production?tab=history");
+      router.push("/production?tab=active");
     } else {
       toast.error(result.error);
       setIsPending(false);
