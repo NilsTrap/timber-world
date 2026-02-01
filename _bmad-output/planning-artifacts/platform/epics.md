@@ -6,15 +6,16 @@ inputDocuments:
   - 'planning-artifacts/platform/ux-design-specification.md'
   - 'planning-artifacts/platform/inventory-data-model-v2.md'
   - 'analysis/brainstorming-platform-multitenancy-2026-01-25.md'
-scope: 'Producer MVP + Multi-Tenancy Extension'
+  - 'analysis/multi-tenant-architecture-design-2026-02-01.md'
+scope: 'Producer MVP + Multi-Tenancy Extension + Platform Foundation v2'
 targetUsers: ['Super Admin', 'Organization User', 'Admin (legacy)', 'Producer (Factory Manager)']
-epicCount: 9
-storyCount: 38  # 19 original + 19 new (Epics 6-9)
+epicCount: 10
+storyCount: 54  # 19 original + 19 (Epics 6-9) + 16 (Epic 10)
 workflowComplete: true
 completedDate: '2026-01-25'
 status: 'ready-for-implementation'
-lastUpdated: '2026-01-25'
-updateNote: 'Added Epics 6-9 for Multi-Tenancy, User Management, Shipments, Consolidated Views'
+lastUpdated: '2026-02-01'
+updateNote: 'Added Epic 10 for Platform Foundation v2 (multi-org membership, roles, permissions, impersonation)'
 ---
 
 # Timber-World Producer MVP - Epic Breakdown
@@ -1079,6 +1080,9 @@ NFR46: Loading states for operations > 1 second
 
 ### Story 6.1: Database Schema for Multi-Tenancy
 
+> **Extended by Story 10.1** (adds organization types, memberships, features, roles, permissions tables)
+> **User model superseded by Story 10.5** (single org_id → multi-org memberships)
+
 **As a** developer,
 **I want** the database schema updated with organisation_id columns,
 **So that** all data can be properly scoped to organizations.
@@ -1096,6 +1100,8 @@ NFR46: Loading states for operations > 1 second
 ---
 
 ### Story 6.2: Organization-Scoped Authentication
+
+> **Superseded by Story 10.6** (enhanced session with multi-org memberships, current_organization switcher)
 
 **As an** organization user,
 **I want** my session to include my organization context,
@@ -1168,6 +1174,8 @@ NFR46: Loading states for operations > 1 second
 
 ### Story 6.5: Organization Selector for Super Admin
 
+> **Extended by Story 10.7** (org switcher for multi-org users) and **Story 10.14** (View As impersonation)
+
 **As a** Super Admin,
 **I want** to filter all views by organization,
 **So that** I can focus on one organization's data when needed.
@@ -1209,6 +1217,8 @@ NFR46: Loading states for operations > 1 second
 
 ### Story 7.1: Enhanced Organizations Management
 
+> **Extended by Story 10.12** (organization feature configuration) and **Story 10.13** (organization type management)
+
 **As a** Super Admin,
 **I want** to manage organizations with user count visibility,
 **So that** I can see which organizations have users and which don't.
@@ -1235,6 +1245,8 @@ NFR46: Loading states for operations > 1 second
 ---
 
 ### Story 7.2: User Management within Organization
+
+> **Extended by Story 10.10** (role assignment) and **Story 10.11** (permission overrides)
 
 **As a** Super Admin,
 **I want** to create and manage users within an organization,
@@ -1660,3 +1672,798 @@ NFR46: Loading states for operations > 1 second
 **Given** I have pending incoming shipments
 **When** I view the Shipments menu item
 **Then** I see a notification badge with the count
+
+---
+---
+
+# Epic 10: Platform Foundation v2 (Multi-Org Upgrade)
+
+**Date Added:** 2026-02-01
+**Source:** Multi-Tenant Architecture Design session + Architecture Addendum v2
+**Builds On:** Producer MVP (Epics 1-5) + Multi-Tenancy Extension (Epics 6-9)
+**Relationship to Epics 6-7:** This epic *evolves* the single-org model from Epics 6-7 into a full multi-org platform. It is additive (not replacement) - existing functionality keeps working while new capabilities are added.
+
+## New Requirements (Platform Foundation v2)
+
+### From Architecture Addendum (2026-02-01)
+
+**Organization Model:**
+- Organization types as tags (Principal, Producer, Supplier, Client, Trader, Logistics)
+- Organizations can have multiple types (e.g., a company can be both Producer and Supplier)
+- All organizations are peers from IT perspective
+
+**Multi-Org Membership:**
+- Users can belong to multiple organizations
+- Organization switcher for users with multiple memberships
+- Primary organization concept for defaults
+
+**Permission Model (Three Layers):**
+1. Organization Features - what the org has access to
+2. Roles - bundles of permissions assigned to users
+3. User Overrides - per-user permission additions/removals
+
+**Super Admin Features:**
+- "View As" impersonation for organizations and users
+- Full audit trail for impersonation actions
+
+### New Requirement Coverage Map (Epic 10)
+
+| Requirement | Story | Description |
+|-------------|-------|-------------|
+| Arch: organization_types table | 10.1 | Types as tags, not classes |
+| Arch: multi-org membership | 10.1 | organization_memberships table |
+| Arch: three-layer permissions | 10.1 | features, roles, overrides tables |
+| Arch: org type seeding | 10.2 | 6 standard types |
+| Arch: features registry | 10.3 | All platform features registered |
+| Arch: default roles | 10.4 | System roles for common use cases |
+| Arch: user migration | 10.5 | Existing users to membership model |
+| Arch: session context | 10.6 | Multi-org aware sessions |
+| Arch: org switcher | 10.7 | Switch between memberships |
+| Arch: permission checking | 10.8 | Three-layer resolution |
+| Arch: role management | 10.9 | CRUD for roles |
+| Arch: role assignment | 10.10 | Assign roles to users |
+| Arch: permission overrides | 10.11 | Per-user fine-tuning |
+| Arch: org feature config | 10.12 | Enable/disable per org |
+| Arch: org type management | 10.13 | Assign types to orgs |
+| Arch: view as org | 10.14 | Impersonate organization |
+| Arch: view as user | 10.15 | Impersonate user |
+| Arch: audit trail | 10.16 | Log all impersonation |
+
+---
+
+## Epic 10: Platform Foundation v2 (Multi-Org Upgrade)
+
+**Goal:** Evolve the single-org model from Epics 6-7 into a full multi-org platform with organization types, multi-org user membership, granular roles/permissions, and Super Admin impersonation
+
+**Architecture Reference:** `planning-artifacts/platform/architecture.md` (Platform Multi-Tenant Architecture v2 Addendum)
+
+**Analysis Reference:** `analysis/multi-tenant-architecture-design-2026-02-01.md`
+
+**Requirements covered:**
+- Organization types as tags with feature defaults
+- Multi-org user membership with switcher
+- Three-layer permission model (org features → roles → user overrides)
+- Super Admin "View As" impersonation with audit trail
+
+**Relationship to existing epics:**
+| This Epic | Relationship | Earlier Epic |
+|-----------|--------------|--------------|
+| 10.1 | Extends | 6.1 (adds new tables alongside existing) |
+| 10.5 | Supersedes | 6.1 user model (single org → multi-org memberships) |
+| 10.6 | Supersedes | 6.2 (enhanced session with memberships) |
+| 10.7 | Extends | 6.5 (org switcher for all multi-org users) |
+| 10.10-10.11 | Extends | 7.2 (adds roles and permission overrides) |
+| 10.12-10.13 | Extends | 7.1 (adds feature config and type management) |
+| 10.14 | Extends | 9.2 (View As impersonation) |
+
+**Standalone Value:** Complete multi-tenant foundation enabling all future portal features (Client Portal, Supplier Portal, Sales Portal, etc.)
+
+---
+
+### Story 10.1: Database Schema - Core Tables
+
+> **Extends Story 6.1** - Adds new tables alongside existing schema (organization_types, memberships, features, roles, permissions). Does not modify existing tables except adding `is_platform_admin` to portal_users.
+
+**As a** developer,
+**I want** all new multi-tenant tables created in the database,
+**So that** the foundation exists for the new architecture.
+
+**Acceptance Criteria:**
+
+**Given** the existing database schema
+**When** migrations are applied
+**Then** the following tables exist:
+
+1. `organization_types` with columns:
+   - id (UUID, PK)
+   - name (TEXT, unique) - "principal", "producer", etc.
+   - description (TEXT)
+   - icon (TEXT, nullable)
+   - default_features (TEXT[])
+   - sort_order (INTEGER)
+   - created_at (TIMESTAMPTZ)
+
+2. `organization_type_assignments` with columns:
+   - organization_id (UUID, FK to organisations)
+   - type_id (UUID, FK to organization_types)
+   - PRIMARY KEY (organization_id, type_id)
+
+3. `organization_relationships` with columns:
+   - id (UUID, PK)
+   - party_a_id (UUID, FK) - seller/supplier role
+   - party_b_id (UUID, FK) - buyer/client role
+   - relationship_type (TEXT)
+   - metadata (JSONB, nullable)
+   - is_active (BOOLEAN, default true)
+   - created_at (TIMESTAMPTZ)
+   - CHECK constraint: party_a_id != party_b_id
+
+4. `organization_memberships` with columns:
+   - id (UUID, PK)
+   - user_id (UUID, FK to portal_users)
+   - organization_id (UUID, FK to organisations)
+   - is_active (BOOLEAN, default true)
+   - is_primary (BOOLEAN, default false)
+   - invited_at (TIMESTAMPTZ, nullable)
+   - invited_by (UUID, FK, nullable)
+   - created_at (TIMESTAMPTZ)
+   - UNIQUE (user_id, organization_id)
+
+5. `features` with columns:
+   - id (UUID, PK)
+   - code (TEXT, unique) - "orders.view", "inventory.edit"
+   - name (TEXT)
+   - description (TEXT, nullable)
+   - category (TEXT, nullable)
+   - sort_order (INTEGER)
+   - created_at (TIMESTAMPTZ)
+
+6. `organization_features` with columns:
+   - organization_id (UUID, FK)
+   - feature_code (TEXT)
+   - enabled (BOOLEAN, default true)
+   - PRIMARY KEY (organization_id, feature_code)
+
+7. `roles` with columns:
+   - id (UUID, PK)
+   - name (TEXT, unique)
+   - description (TEXT, nullable)
+   - permissions (TEXT[])
+   - is_system (BOOLEAN, default false)
+   - created_at (TIMESTAMPTZ)
+
+8. `user_roles` with columns:
+   - user_id (UUID, FK)
+   - organization_id (UUID, FK)
+   - role_id (UUID, FK)
+   - PRIMARY KEY (user_id, organization_id, role_id)
+
+9. `user_permission_overrides` with columns:
+   - user_id (UUID, FK)
+   - organization_id (UUID, FK)
+   - feature_code (TEXT)
+   - granted (BOOLEAN) - true = add, false = remove
+   - PRIMARY KEY (user_id, organization_id, feature_code)
+
+**And** `portal_users` table has new column:
+   - is_platform_admin (BOOLEAN, default false)
+
+**And** appropriate indexes are created for foreign keys and common queries
+
+---
+
+### Story 10.2: Seed Organization Types
+
+**As a** Super Admin,
+**I want** organization types pre-populated in the system,
+**So that** I can assign types to organizations.
+
+**Acceptance Criteria:**
+
+**Given** the organization_types table exists
+**When** seed migration runs
+**Then** the following types exist:
+
+| Name | Description | Default Features |
+|------|-------------|------------------|
+| principal | Owns materials, orchestrates supply chain | inventory.*, production.*, shipments.*, orders.*, analytics.*, users.* |
+| producer | Manufactures products | inventory.view, production.*, shipments.*, dashboard.view |
+| supplier | Provides raw materials | orders.view, deliveries.*, invoices.* |
+| client | Buys finished products | orders.*, tracking.view, invoices.view, reorder.* |
+| trader | Intermediary buyer/seller | orders.*, suppliers.*, clients.*, inventory.view |
+| logistics | Transports goods | shipments.view, tracking.*, documents.view |
+
+**And** existing organizations are assigned types:
+- TWP (Timber World Platform) → principal
+- All other organizations → producer (default based on current usage)
+
+**And** the type assignments can be viewed in Admin > Organisations
+
+---
+
+### Story 10.3: Seed Features Registry
+
+**As a** developer,
+**I want** all system features registered in the database,
+**So that** they can be enabled/disabled per organization.
+
+**Acceptance Criteria:**
+
+**Given** the features table exists
+**When** seed migration runs
+**Then** features are registered by category:
+
+**Dashboard:**
+- dashboard.view - View dashboard metrics
+
+**Inventory:**
+- inventory.view - View inventory packages
+- inventory.create - Create inventory entries
+- inventory.edit - Edit inventory packages
+- inventory.delete - Delete inventory packages
+
+**Production:**
+- production.view - View production entries
+- production.create - Create production entries
+- production.edit - Edit draft production
+- production.validate - Validate production entries
+- production.delete - Delete production entries
+- production.corrections - Create correction entries
+
+**Shipments:**
+- shipments.view - View shipments
+- shipments.create - Create shipments
+- shipments.edit - Edit draft shipments
+- shipments.delete - Delete shipments
+- shipments.submit - Submit for acceptance
+- shipments.accept - Accept incoming shipments
+- shipments.reject - Reject incoming shipments
+
+**Reference Data:**
+- reference.view - View reference data
+- reference.manage - Manage reference data options
+
+**Organizations:**
+- organizations.view - View organizations
+- organizations.create - Create organizations
+- organizations.edit - Edit organizations
+- organizations.delete - Delete organizations
+
+**Users:**
+- users.view - View users in organization
+- users.invite - Invite new users
+- users.edit - Edit user details
+- users.remove - Remove users
+- users.credentials - Send/reset credentials
+
+**Analytics:**
+- analytics.view - View efficiency reports
+- analytics.export - Export data
+
+**And** features are ordered logically within each category
+
+---
+
+### Story 10.4: Seed Default Roles
+
+**As a** Super Admin,
+**I want** default roles available in the system,
+**So that** I can assign them to users.
+
+**Acceptance Criteria:**
+
+**Given** the roles table exists
+**When** seed migration runs
+**Then** the following system roles exist:
+
+| Role | Description | Permissions |
+|------|-------------|-------------|
+| Org Admin | Manages users within organization | users.* |
+| Production Manager | Full production access | production.*, inventory.view, shipments.view, dashboard.view |
+| Inventory Manager | Manages inventory | inventory.*, shipments.*, dashboard.view |
+| Viewer | Read-only access | dashboard.view, inventory.view, production.view, shipments.view |
+| Full Access | All features (for org owner) | * |
+
+**And** all seeded roles have is_system = true
+**And** system roles cannot be deleted (only deactivated)
+
+---
+
+### Story 10.5: Migrate Users to Memberships
+
+> **Supersedes Story 6.1 user model** - Evolves from single `organisation_id` on users to multi-org memberships. Existing org_id is preserved for backward compatibility; memberships table becomes the source of truth.
+
+**As a** developer,
+**I want** existing users migrated to the membership model,
+**So that** multi-org support works with existing data.
+
+**Acceptance Criteria:**
+
+**Given** users exist with organisation_id set
+**When** migration runs
+**Then** for each user with organisation_id:
+- A record is created in organization_memberships
+- is_primary = true (their only org becomes primary)
+- is_active = true
+
+**And** the current Super Admin (admin role, org_id = null):
+- Gets is_platform_admin = true
+- No membership record (platform-level user)
+
+**And** existing user sessions continue to work
+**And** the organisation_id column on portal_users is kept for backward compatibility during transition
+
+---
+
+### Story 10.6: Update Session Context
+
+> **Supersedes Story 6.2** - Enhances session from single org context to multi-org aware. Session now includes all memberships and current_organization (switchable). Backward compatible: single-org users work exactly as before.
+
+**As a** user,
+**I want** my session to include my organization memberships,
+**So that** I can work in the context of my organization(s).
+
+**Acceptance Criteria:**
+
+**Given** I log in successfully
+**When** my session is created
+**Then** the session includes:
+```typescript
+{
+  user_id: string;
+  email: string;
+  name: string;
+  is_platform_admin: boolean;
+  current_organization_id: string | null;
+  current_organization_code: string | null;
+  current_organization_name: string | null;
+  memberships: Array<{
+    organization_id: string;
+    organization_code: string;
+    organization_name: string;
+    is_primary: boolean;
+  }>;
+}
+```
+
+**And** if I have one membership, current_organization is set to that org
+**And** if I have multiple memberships, current_organization is set to my primary org
+**And** if I am platform admin, current_organization is null (platform view)
+
+**And** session context is available in:
+- Server components via getSession()
+- Server actions via getAuthContext()
+- Client components via useSession() hook
+
+---
+
+### Story 10.7: Organization Switcher UI
+
+> **Extends Story 6.5** - The Super Admin org filter (6.5) remains for platform-wide filtering. This adds an org switcher for regular users with multiple memberships. Single-org users see no switcher (same as before).
+
+**As a** user with multiple organization memberships,
+**I want** to switch between my organizations,
+**So that** I can work in the context of each organization.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in with multiple organization memberships
+**When** I view the sidebar
+**Then** I see my current organization name with a dropdown indicator
+
+**Given** I click on the organization selector
+**When** the dropdown opens
+**Then** I see all my organization memberships
+**And** my current organization is highlighted
+**And** each option shows organization code and name
+
+**Given** I select a different organization
+**When** I click on it
+**Then** my current_organization_id is updated in session/cookie
+**And** the page refreshes with the new organization context
+**And** all data views now show that organization's data
+
+**Given** I have only one organization membership
+**When** I view the sidebar
+**Then** I see my organization name without dropdown (not clickable)
+
+**Given** I am a Platform Admin
+**When** I view the sidebar
+**Then** I see "Timber World Platform" as current context
+**And** I have access to the organization filter dropdown (existing behavior)
+
+---
+
+### Story 10.8: Permission Checking Infrastructure
+
+**As a** developer,
+**I want** a permission checking system based on the new model,
+**So that** access control uses org features, roles, and overrides.
+
+**Acceptance Criteria:**
+
+**Given** the permission tables exist with data
+**When** I call hasPermission(userId, orgId, featureCode)
+**Then** it calculates effective permissions:
+1. Check if org has feature enabled (organization_features)
+2. Get all role permissions for user in org (user_roles → roles.permissions)
+3. Apply user overrides (user_permission_overrides)
+4. Return true if feature is in effective set
+
+**And** a usePermissions() hook is available for client components:
+```typescript
+const { hasPermission, permissions } = usePermissions();
+if (hasPermission('production.create')) { ... }
+```
+
+**And** a checkPermission() helper for server actions:
+```typescript
+export async function createProduction(data) {
+  const ctx = await getAuthContext();
+  if (!ctx.hasPermission('production.create')) {
+    return { success: false, error: 'Permission denied' };
+  }
+  // ... proceed
+}
+```
+
+**And** permission checks are cached per request to avoid repeated DB queries
+
+---
+
+### Story 10.9: Role Management UI
+
+**As a** Super Admin,
+**I want** to view and manage roles,
+**So that** I can customize permission bundles.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as Super Admin
+**When** I navigate to Admin > Roles
+**Then** I see a table of all roles with columns:
+- Name
+- Description
+- Permission Count
+- System (yes/no)
+- Actions
+
+**Given** I click "Add Role"
+**When** the form opens
+**Then** I can enter: Name, Description
+**And** I can select permissions from a categorized checkbox list
+**And** I can save the new role
+
+**Given** I edit an existing role
+**When** I modify permissions and save
+**Then** the role is updated
+**And** users with this role get updated permissions immediately
+
+**Given** I try to delete a system role
+**When** I click delete
+**Then** I see an error "System roles cannot be deleted"
+
+**Given** I delete a custom role that has users assigned
+**When** I confirm deletion
+**Then** I see a warning with affected user count
+**And** upon confirmation, role assignments are removed
+**And** the role is deleted
+
+---
+
+### Story 10.10: User Role Assignment
+
+> **Extends Story 7.2** - Adds role assignment capability to the existing user management UI. The simple "producer" role default (7.2) is replaced by explicit role assignment using the new roles system.
+
+**As a** Super Admin or Org Admin,
+**I want** to assign roles to users within an organization,
+**So that** users have appropriate permissions.
+
+**Acceptance Criteria:**
+
+**Given** I am viewing a user in an organization
+**When** I click "Manage Roles"
+**Then** I see a list of available roles with checkboxes
+**And** currently assigned roles are checked
+
+**Given** I check/uncheck roles
+**When** I save changes
+**Then** user_roles records are updated
+**And** user's effective permissions change immediately
+**And** I see success toast "Roles updated"
+
+**Given** I am an Org Admin (not Super Admin)
+**When** I view the role assignment UI
+**Then** I can only assign roles that I have permission to assign
+**And** I cannot assign roles with more permissions than I have
+
+**Given** a user has no roles assigned
+**When** I view their profile
+**Then** they have no permissions (except explicitly granted overrides)
+
+---
+
+### Story 10.11: User Permission Overrides
+
+> **Extends Story 7.2** - Adds per-user permission fine-tuning to the existing user management UI. This is the third layer of the permission model (org features → roles → user overrides).
+
+**As a** Super Admin,
+**I want** to add or remove specific permissions for a user,
+**So that** I can fine-tune access beyond role templates.
+
+**Acceptance Criteria:**
+
+**Given** I am viewing a user's permissions
+**When** I click "Permission Overrides"
+**Then** I see:
+- Current effective permissions (from roles)
+- List of all features with override options: [Inherit] [Grant] [Deny]
+
+**Given** I set a feature to "Grant"
+**When** I save
+**Then** user gets that permission even if no role provides it
+**And** it only works if the org has the feature enabled
+
+**Given** I set a feature to "Deny"
+**When** I save
+**Then** user loses that permission even if roles provide it
+
+**Given** I set a feature to "Inherit"
+**When** I save
+**Then** the override is removed
+**And** permission comes from roles only
+
+**Given** overrides exist for a user
+**When** I view their permissions
+**Then** overridden permissions are visually marked (e.g., with + or - icon)
+
+---
+
+### Story 10.12: Organization Feature Configuration
+
+> **Extends Story 7.1** - Adds a "Features" tab to the existing organization detail view. This is the first layer of the permission model (what the org can access).
+
+**As a** Super Admin,
+**I want** to configure which features each organization can access,
+**So that** different org types have appropriate capabilities.
+
+**Acceptance Criteria:**
+
+**Given** I am viewing an organization's details
+**When** I click "Features" tab
+**Then** I see all features grouped by category
+**And** each feature has an enable/disable toggle
+**And** features enabled by the org's type template are shown as defaults
+
+**Given** I toggle a feature off
+**When** I save
+**Then** no user in that org can access that feature
+**And** users see appropriate UI (hidden menu items, disabled buttons)
+
+**Given** I toggle a feature on
+**When** I save
+**Then** users with appropriate roles can access the feature
+
+**Given** I want to reset to defaults
+**When** I click "Reset to Type Defaults"
+**Then** features are reset based on org's assigned type(s)
+**And** I see confirmation before reset
+
+**Given** an org has multiple types assigned
+**When** I view features
+**Then** default features are union of all type defaults
+
+---
+
+### Story 10.13: Organization Type Management
+
+> **Extends Story 7.1** - Adds type badges and type assignment UI to the existing organization detail view. Types are tags (orgs can have multiple) that drive default feature configuration.
+
+**As a** Super Admin,
+**I want** to assign types to organizations,
+**So that** they get appropriate default features.
+
+**Acceptance Criteria:**
+
+**Given** I am viewing an organization's details
+**When** I see the header/info section
+**Then** I see assigned types as badges (e.g., "Producer", "Principal")
+
+**Given** I click "Edit Types"
+**When** the type selector opens
+**Then** I see all organization types with checkboxes
+**And** currently assigned types are checked
+
+**Given** I add a new type to an org
+**When** I save
+**Then** the type is assigned
+**And** I am prompted: "Apply default features for this type?" [Yes/No]
+**And** if Yes, features from that type template are enabled
+
+**Given** I remove a type from an org
+**When** I save
+**Then** the type assignment is removed
+**And** features are NOT automatically disabled (manual cleanup needed)
+
+**Given** an org has no types assigned
+**When** I view it
+**Then** it shows "No type" indicator
+**And** it still functions (features based on explicit configuration)
+
+---
+
+### Story 10.14: View As - Organization Impersonation
+
+> **Extends Story 6.5 and 9.2** - Goes beyond filtering (6.5) and per-org breakdown (9.2) to full impersonation. Super Admin sees exactly what org users see, including their navigation and permissions.
+
+**As a** Super Admin,
+**I want** to view the portal as any organization,
+**So that** I can test and support users.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as Super Admin
+**When** I am in platform view
+**Then** I see "View as Organization" button in the header
+
+**Given** I click "View as Organization"
+**When** the selector opens
+**Then** I see a searchable list of all organizations
+
+**Given** I select an organization
+**When** I confirm
+**Then** my view switches to that organization's context
+**And** I see a banner: "Viewing as: [Org Name] - [Exit View As]"
+**And** I see the same sidebar/navigation that org's users see
+**And** I see only that org's data
+**And** the URL includes ?viewAs=orgId for bookmarking
+
+**Given** I am in View As mode
+**When** I click "Exit View As"
+**Then** I return to platform admin view
+**And** the banner disappears
+**And** I see consolidated data again
+
+**Given** I am in View As mode
+**When** I perform actions (create, edit, delete)
+**Then** actions are performed as that organization
+**And** audit log records: actual_user_id = me, acting_as_org_id = org
+
+---
+
+### Story 10.15: View As - User Impersonation
+
+**As a** Super Admin,
+**I want** to view the portal as a specific user,
+**So that** I can see exactly what they see and debug issues.
+
+**Acceptance Criteria:**
+
+**Given** I am viewing an organization (in View As mode)
+**When** I click "View as User"
+**Then** I see a list of users in that organization
+
+**Given** I select a user
+**When** I confirm
+**Then** my view switches to exactly what that user sees
+**And** banner shows: "Viewing as: [User Name] @ [Org Name] - [Exit]"
+**And** permissions match that user's effective permissions
+**And** hidden features are hidden for me too
+
+**Given** I am in user impersonation mode
+**When** I toggle "Read-Only Mode"
+**Then** I can view but not modify anything
+**And** all action buttons are disabled
+**And** this is the default for safety
+
+**Given** I disable Read-Only Mode
+**When** I perform actions
+**Then** they execute as that user would
+**And** audit log records: actual_user_id = me, acting_as_user_id = user
+
+**Given** I exit user impersonation
+**When** I click "Exit"
+**Then** I return to org impersonation level
+**And** clicking Exit again returns to platform view
+
+---
+
+### Story 10.16: Audit Trail for Impersonation
+
+**As a** compliance officer,
+**I want** all impersonation actions logged,
+**So that** there's accountability for Super Admin actions.
+
+**Acceptance Criteria:**
+
+**Given** Super Admin enters View As mode
+**When** the mode activates
+**Then** an audit record is created:
+- event_type: "impersonation_start"
+- actual_user_id: Super Admin's ID
+- target_org_id: Org being impersonated
+- target_user_id: User being impersonated (if applicable)
+- timestamp
+
+**Given** Super Admin performs an action while impersonating
+**When** the action executes
+**Then** the action's audit record includes:
+- impersonation_context: { org_id, user_id }
+- actual_user_id: Super Admin's ID
+
+**Given** Super Admin exits View As mode
+**When** the mode deactivates
+**Then** an audit record is created:
+- event_type: "impersonation_end"
+- duration_seconds: how long impersonation lasted
+
+**Given** I am Super Admin
+**When** I view Admin > Audit Log
+**Then** I can filter by "Impersonation Actions"
+**And** I see all impersonation sessions with details
+
+---
+
+## Epic 10 Dependencies
+
+| Story | Depends On |
+|-------|------------|
+| 10.2 | 10.1 |
+| 10.3 | 10.1 |
+| 10.4 | 10.1 |
+| 10.5 | 10.1, 10.4 |
+| 10.6 | 10.5 |
+| 10.7 | 10.6 |
+| 10.8 | 10.3, 10.4, 10.6 |
+| 10.9 | 10.4 |
+| 10.10 | 10.8, 10.9 |
+| 10.11 | 10.8 |
+| 10.12 | 10.3 |
+| 10.13 | 10.2 |
+| 10.14 | 10.6 |
+| 10.15 | 10.14 |
+| 10.16 | 10.14, 10.15 |
+
+---
+
+## Epic 10 Implementation Order (Recommended)
+
+**Phase 1: Database Foundation**
+1. Story 10.1 - Core tables
+2. Story 10.2 - Org types seed
+3. Story 10.3 - Features seed
+4. Story 10.4 - Roles seed
+5. Story 10.5 - Migrate users
+
+**Phase 2: Session & Context**
+6. Story 10.6 - Session context
+7. Story 10.7 - Org switcher UI
+8. Story 10.8 - Permission checking
+
+**Phase 3: Management UIs**
+9. Story 10.9 - Role management
+10. Story 10.10 - Role assignment
+11. Story 10.11 - Permission overrides
+12. Story 10.12 - Org feature config
+13. Story 10.13 - Org type management
+
+**Phase 4: Super Admin Tools**
+14. Story 10.14 - View As org
+15. Story 10.15 - View As user
+16. Story 10.16 - Audit trail
+
+---
+
+## Epic 10 Success Criteria
+
+Epic is complete when:
+- [ ] All 9 new tables exist with appropriate indexes
+- [ ] Organization types are seeded and assignable
+- [ ] Features registry is complete with all current features
+- [ ] Default roles exist and are assignable
+- [ ] Existing users are migrated to memberships
+- [ ] Multi-org users can switch organizations
+- [ ] Permission checking uses the new 3-layer model
+- [ ] Super Admin can configure features per org
+- [ ] Super Admin can View As any org/user
+- [ ] All impersonation actions are audited

@@ -23,17 +23,20 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
 
   const supabase = await createClient();
 
+  // Use currentOrganizationId (Epic 10) with fallback to organisationId (legacy)
+  const orgId = session.currentOrganizationId || session.organisationId;
+
   // Query 1: Total available inventory volume
   // Uses same pattern as getProducerPackages: shipment packages + production packages
   let totalInventoryM3 = 0;
 
   // 1a. Shipment-sourced packages (shipped to this producer's facility, not consumed)
-  if (session.organisationId) {
+  if (orgId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: shipmentPkgs, error: shipmentError } = await (supabase as any)
       .from("inventory_packages")
       .select("volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(to_organisation_id)")
-      .eq("shipments.to_organisation_id", session.organisationId)
+      .eq("shipments.to_organisation_id", orgId)
       .neq("status", "consumed");
 
     if (shipmentError) {
@@ -45,12 +48,12 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
   }
 
   // 1b. Production-sourced packages (from this producer's organisation, status = produced)
-  if (session.organisationId) {
+  if (orgId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: productionPkgs, error: productionError } = await (supabase as any)
       .from("inventory_packages")
       .select("volume_m3, portal_production_entries!inner(organisation_id)")
-      .eq("portal_production_entries.organisation_id", session.organisationId)
+      .eq("portal_production_entries.organisation_id", orgId)
       .eq("status", "produced");
 
     if (productionError) {
@@ -62,12 +65,12 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
   }
 
   // 1c. Direct inventory packages (admin-added, no shipment or production source)
-  if (session.organisationId) {
+  if (orgId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: directPkgs, error: directError } = await (supabase as any)
       .from("inventory_packages")
       .select("volume_m3")
-      .eq("organisation_id", session.organisationId)
+      .eq("organisation_id", orgId)
       .is("shipment_id", null)
       .is("production_entry_id", null)
       .neq("status", "consumed");
@@ -81,27 +84,29 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
   }
 
   // Query 2: Production totals from validated entries (from this organisation)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: entries, error: entriesError } = await (supabase as any)
-    .from("portal_production_entries")
-    .select("total_input_m3, total_output_m3")
-    .eq("organisation_id", session.organisationId)
-    .eq("status", "validated");
-
   let totalProductionVolumeM3 = 0;
   let totalInputM3 = 0;
   let totalOutputM3 = 0;
 
-  if (entriesError) {
-    console.error("[getProducerMetrics] Failed to fetch production entries:", entriesError.message);
-  } else if (entries) {
+  if (orgId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const entry of entries as any[]) {
-      const inputM3 = Number(entry.total_input_m3) || 0;
-      const outputM3 = Number(entry.total_output_m3) || 0;
-      totalInputM3 += inputM3;
-      totalOutputM3 += outputM3;
-      totalProductionVolumeM3 += outputM3;
+    const { data: entries, error: entriesError } = await (supabase as any)
+      .from("portal_production_entries")
+      .select("total_input_m3, total_output_m3")
+      .eq("organisation_id", orgId)
+      .eq("status", "validated");
+
+    if (entriesError) {
+      console.error("[getProducerMetrics] Failed to fetch production entries:", entriesError.message);
+    } else if (entries) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const entry of entries as any[]) {
+        const inputM3 = Number(entry.total_input_m3) || 0;
+        const outputM3 = Number(entry.total_output_m3) || 0;
+        totalInputM3 += inputM3;
+        totalOutputM3 += outputM3;
+        totalProductionVolumeM3 += outputM3;
+      }
     }
   }
 

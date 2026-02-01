@@ -50,9 +50,10 @@ export async function getOrganisationById(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = supabase as any;
 
+  // Note: Must specify the FK explicitly due to multiple relationships (Epic 10 added user_roles, user_permission_overrides)
   const { data, error } = await client
     .from("organisations")
-    .select("id, code, name, is_active, created_at, updated_at, portal_users(count)")
+    .select("id, code, name, is_active, created_at, updated_at, portal_users!portal_users_party_id_fkey(count)")
     .eq("id", id)
     .single();
 

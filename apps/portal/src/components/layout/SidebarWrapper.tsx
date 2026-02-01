@@ -1,8 +1,14 @@
-import { getSession, isSuperAdmin, type UserRole } from "@/lib/auth";
+import {
+  getSession,
+  isSuperAdmin,
+  hasMultipleOrganizations,
+  type UserRole,
+} from "@/lib/auth";
 import { Sidebar, type NavItem } from "./Sidebar";
 import { getActiveOrganisations } from "@/features/shipments/actions/getActiveOrganisations";
 import { getPendingShipmentCount } from "@/features/shipments/actions/getOrgShipments";
 import type { OrganizationOption } from "./OrganizationSelector";
+import type { OrganizationSwitcherOption } from "./OrganizationSwitcher";
 
 /**
  * Navigation items for Admin users
@@ -14,6 +20,7 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/production", label: "Production", iconName: "Factory" },
   { href: "/admin/reference", label: "Reference Data", iconName: "Settings" },
   { href: "/admin/organisations", label: "Organisations", iconName: "Building2" },
+  { href: "/admin/roles", label: "Roles", iconName: "Shield" },
 ];
 
 /**
@@ -41,6 +48,7 @@ function getNavItems(role: UserRole, pendingShipmentCount: number = 0): NavItem[
  *
  * Fetches session and passes role-appropriate nav items to the client Sidebar.
  * For Super Admin, also fetches organizations for the org selector.
+ * For multi-org users, provides organization switcher data.
  */
 export async function SidebarWrapper() {
   const session = await getSession();
@@ -48,11 +56,11 @@ export async function SidebarWrapper() {
   // Super Admin (null org) → "Timber World Platform"
   // Organisation User → their org name
   // Fallback (legacy/unlinked) → "Timber World Platform"
-  const brandName = session?.organisationName || "Timber World Platform";
+  const brandName = session?.currentOrganizationName || session?.organisationName || "Timber World Platform";
 
   // Fetch pending shipment count for producer users
   let pendingShipmentCount = 0;
-  if (session?.role === "producer" && session.organisationId) {
+  if (session?.role === "producer" && (session.currentOrganizationId || session.organisationId)) {
     const countResult = await getPendingShipmentCount();
     if (countResult.success) {
       pendingShipmentCount = countResult.data;
@@ -70,5 +78,38 @@ export async function SidebarWrapper() {
     }
   }
 
-  return <Sidebar navItems={navItems} brandName={brandName} organizations={organizations} />;
+  // Prepare multi-org switcher data (Story 10.7)
+  let currentOrganization: OrganizationSwitcherOption | null = null;
+  let userMemberships: OrganizationSwitcherOption[] = [];
+
+  if (session && session.memberships.length > 0) {
+    // Convert memberships to switcher format
+    userMemberships = session.memberships.map((m) => ({
+      id: m.organizationId,
+      code: m.organizationCode,
+      name: m.organizationName,
+      isPrimary: m.isPrimary,
+    }));
+
+    // Find current organization
+    if (session.currentOrganizationId) {
+      const current = userMemberships.find(
+        (m) => m.id === session.currentOrganizationId
+      );
+      if (current) {
+        currentOrganization = current;
+      }
+    }
+  }
+
+  return (
+    <Sidebar
+      navItems={navItems}
+      brandName={brandName}
+      organizations={organizations}
+      currentOrganization={currentOrganization}
+      userMemberships={userMemberships}
+      hasMultipleOrgs={hasMultipleOrganizations(session)}
+    />
+  );
 }

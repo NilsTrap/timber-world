@@ -3,11 +3,15 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, User, LogOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { Button } from "@timber/ui";
 import { cn } from "@/lib/utils";
 import { SidebarLink, type IconName } from "./SidebarLink";
 import { OrganizationSelector, type OrganizationOption } from "./OrganizationSelector";
+import {
+  OrganizationSwitcher,
+  type OrganizationSwitcherOption,
+} from "./OrganizationSwitcher";
 import { logoutUser } from "@/features/auth/actions";
 
 /**
@@ -26,6 +30,12 @@ interface SidebarProps {
   brandName: string;
   /** Organizations for Super Admin selector (omit for regular users) */
   organizations?: OrganizationOption[];
+  /** Current organization for multi-org users */
+  currentOrganization?: OrganizationSwitcherOption | null;
+  /** All organization memberships for multi-org users */
+  userMemberships?: OrganizationSwitcherOption[];
+  /** Whether user has multiple organization memberships */
+  hasMultipleOrgs?: boolean;
 }
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
@@ -36,7 +46,14 @@ const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
  * Left sidebar that can be collapsed to show only icons.
  * Collapse state is persisted to localStorage.
  */
-export function Sidebar({ navItems, brandName, organizations }: SidebarProps) {
+export function Sidebar({
+  navItems,
+  brandName,
+  organizations,
+  currentOrganization,
+  userMemberships = [],
+  hasMultipleOrgs = false,
+}: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const searchParams = useSearchParams();
@@ -86,15 +103,30 @@ export function Sidebar({ navItems, brandName, organizations }: SidebarProps) {
           aria-label="Go to dashboard"
         >
           {isCollapsed ? (
-            <span className="text-xl font-bold text-primary">{brandName.slice(0, 2).toUpperCase()}</span>
+            <span className="text-xl font-bold text-primary">
+              {brandName.slice(0, 2).toUpperCase()}
+            </span>
           ) : (
-            <span className="font-semibold text-lg whitespace-nowrap truncate">{brandName}</span>
+            <span className="font-semibold text-lg whitespace-nowrap truncate">
+              {brandName}
+            </span>
           )}
         </Link>
       </div>
 
-      {/* Organization Selector (Super Admin only) */}
-      {organizations && organizations.length > 0 && (
+      {/* Organization Switcher for multi-org users (Story 10.7) */}
+      {userMemberships.length > 1 && (
+        <div className="border-b">
+          <OrganizationSwitcher
+            currentOrganization={currentOrganization ?? null}
+            memberships={userMemberships}
+            isCollapsed={isCollapsed}
+          />
+        </div>
+      )}
+
+      {/* Organization Selector (Super Admin only - legacy) */}
+      {organizations && organizations.length > 0 && !hasMultipleOrgs && (
         <div className="border-b">
           <OrganizationSelector
             organizations={organizations}

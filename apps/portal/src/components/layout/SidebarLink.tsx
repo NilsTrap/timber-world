@@ -12,6 +12,8 @@ import {
   User,
   Building2,
   Truck,
+  Shield,
+  Eye,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -29,6 +31,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   User,
   Building2,
   Truck,
+  Shield,
+  Eye,
 };
 
 export type IconName = keyof typeof ICON_MAP;

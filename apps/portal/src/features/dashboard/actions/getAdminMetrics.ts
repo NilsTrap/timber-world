@@ -30,10 +30,12 @@ export async function getAdminMetrics(
   const supabase = await createClient();
 
   // Fetch inventory packages with shipment info for org filtering
+  // Include organisation_id for direct inventory packages (admin-added)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: packagesData, error: packagesError } = await (supabase as any)
     .from("inventory_packages")
-    .select("volume_m3, shipment_id, production_entry_id, shipments(to_organisation_id)");
+    .select("volume_m3, shipment_id, production_entry_id, organisation_id, shipments(to_organisation_id)")
+    .neq("status", "consumed");
 
   if (packagesError) {
     console.error("[getAdminMetrics] Failed to fetch packages:", packagesError.message);
@@ -71,11 +73,11 @@ export async function getAdminMetrics(
   if (packagesData) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const pkg of packagesData as any[]) {
-      // Determine package org
-      let pkgOrgId: string | null = null;
-      if (pkg.shipments?.to_organisation_id) {
+      // Determine package org (priority: direct org_id > shipment destination > production entry org)
+      let pkgOrgId: string | null = pkg.organisation_id ?? null;
+      if (!pkgOrgId && pkg.shipments?.to_organisation_id) {
         pkgOrgId = pkg.shipments.to_organisation_id;
-      } else if (pkg.production_entry_id) {
+      } else if (!pkgOrgId && pkg.production_entry_id) {
         pkgOrgId = productionOrgMap.get(pkg.production_entry_id) ?? null;
       }
 

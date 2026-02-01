@@ -24,7 +24,10 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
-  if (!session.organisationId) {
+  // Use currentOrganizationId (Epic 10) with fallback to organisationId (legacy)
+  const orgId = session.currentOrganizationId || session.organisationId;
+
+  if (!orgId) {
     return { success: false, error: "Your account is not linked to a facility. Contact Admin.", code: "NO_ORGANISATION_LINK" };
   }
 
@@ -53,7 +56,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       ref_fsc!inventory_packages_fsc_id_fkey(value),
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
-    .eq("shipments.to_organisation_id", session.organisationId)
+    .eq("shipments.to_organisation_id", orgId)
     .neq("status", "consumed")
     .order("package_number", { ascending: true });
 
@@ -86,7 +89,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       ref_fsc!inventory_packages_fsc_id_fkey(value),
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
-    .eq("portal_production_entries.organisation_id", session.organisationId)
+    .eq("portal_production_entries.organisation_id", orgId)
     .eq("status", "produced")
     .order("package_number", { ascending: true });
 
@@ -118,7 +121,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       ref_fsc!inventory_packages_fsc_id_fkey(value),
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
-    .eq("organisation_id", session.organisationId)
+    .eq("organisation_id", orgId)
     .is("shipment_id", null)
     .is("production_entry_id", null)
     .neq("status", "consumed")
@@ -156,9 +159,9 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       length: pkg.length,
       pieces: pkg.pieces,
       volumeM3: pkg.volume_m3 != null ? Number(pkg.volume_m3) : null,
-      // Producer only sees their own org's packages, so use session org info
-      organisationName: session.organisationName,
-      organisationCode: session.organisationCode,
+      // Producer only sees their own org's packages, so use current org info
+      organisationName: session.currentOrganizationName || session.organisationName,
+      organisationCode: session.currentOrganizationCode || session.organisationCode,
     }));
 
   // Sort by package number after merging

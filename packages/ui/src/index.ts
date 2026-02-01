@@ -36,6 +36,7 @@ export {
   AlertDialogTrigger,
 } from "./components/alert-dialog";
 export { Label } from "./components/label";
+export { Checkbox } from "./components/checkbox";
 export { Toaster } from "./components/sonner";
 export { ErrorBoundary } from "./components/error-boundary";
 export {

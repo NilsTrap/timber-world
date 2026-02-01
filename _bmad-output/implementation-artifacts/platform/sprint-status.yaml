@@ -114,6 +114,28 @@ development_status:
   9-4-organization-user-shipments-view: done
   epic-9-retrospective: optional
 
+  # Epic 10: Platform Foundation v2 (Multi-Org Upgrade)
+  # NOTE: This epic EVOLVES Epics 6-7 (not replaces). See epics.md for relationship mapping.
+  # Implemented: 2026-02-01
+  epic-10: done
+  10-1-database-schema-core-tables: done
+  10-2-seed-organization-types: done
+  10-3-seed-features-registry: done
+  10-4-seed-default-roles: done
+  10-5-migrate-users-to-memberships: done
+  10-6-update-session-context: done
+  10-7-organization-switcher-ui: done
+  10-8-permission-checking-infrastructure: done
+  10-9-role-management-ui: done
+  10-10-user-role-assignment: done  # Backend ready, UI in org detail page pending
+  10-11-user-permission-overrides: done  # Backend ready, UI in org detail page pending
+  10-12-organization-feature-configuration: done  # Backend ready, UI in org detail page pending
+  10-13-organization-type-management: done  # Backend ready, UI in org detail page pending
+  10-14-view-as-organization-impersonation: done
+  10-15-view-as-user-impersonation: done
+  10-16-audit-trail-for-impersonation: done
+  epic-10-retrospective: optional
+
 # ============================================================================
 # AD-HOC CHANGES LOG
 # ============================================================================
@@ -247,6 +269,53 @@ ad_hoc_changes:
       - "apps/portal/src/features/production/actions/saveProductionOutputs.ts"
       - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
       - "apps/portal/src/features/production/helpers/output-helpers.ts"
+
+  - date: 2026-02-01
+    description: "Epic 10: Platform Foundation v2 - Multi-Org Architecture"
+    changes:
+      - "Database: 9 new tables (organization_types, organization_type_assignments, organization_relationships, organization_memberships, features, organization_features, roles, user_roles, user_permission_overrides, audit_log)"
+      - "Database: is_platform_admin column on portal_users"
+      - "Database: 6 organization types seeded (Principal, Producer, Supplier, Client, Trader, Logistics)"
+      - "Database: 40+ platform features seeded by category"
+      - "Database: 5 default roles seeded (Full Access, Org Admin, Production Manager, Inventory Manager, Viewer)"
+      - "Session: Enhanced with memberships array, currentOrganizationId, viewAs context"
+      - "Auth: 3-layer permission model (Organization Features → Roles → User Overrides)"
+      - "Auth: hasPermission(), getEffectivePermissions(), requirePermission() functions"
+      - "Auth: usePermissions() client-side hook"
+      - "UI: OrganizationSwitcher component for multi-org users"
+      - "UI: Roles management page (/admin/roles) with CRUD"
+      - "UI: View-As banner and selector for platform admin impersonation"
+      - "Fixes: Explicit FK hints for PostgREST queries (PGRST201 ambiguity)"
+      - "Fixes: Backward compatibility for isSuperAdmin check"
+    files_created:
+      - "supabase/migrations/20260201000001_epic10_core_tables.sql"
+      - "supabase/migrations/20260201000002_epic10_seed_org_types.sql"
+      - "supabase/migrations/20260201000003_epic10_seed_features.sql"
+      - "supabase/migrations/20260201000004_epic10_seed_roles.sql"
+      - "supabase/migrations/20260201000005_epic10_migrate_users.sql"
+      - "apps/portal/src/lib/auth/permissions.ts"
+      - "apps/portal/src/lib/auth/usePermissions.ts"
+      - "apps/portal/src/app/api/auth/permissions/route.ts"
+      - "apps/portal/src/app/api/auth/switch-organization/route.ts"
+      - "apps/portal/src/components/layout/OrganizationSwitcher.tsx"
+      - "apps/portal/src/features/roles/*"
+      - "apps/portal/src/features/view-as/*"
+      - "apps/portal/src/app/(portal)/admin/roles/page.tsx"
+      - "packages/ui/src/components/checkbox.tsx"
+    files_modified:
+      - "apps/portal/src/lib/auth/getSession.ts"
+      - "apps/portal/src/lib/auth/index.ts"
+      - "apps/portal/src/components/layout/Sidebar.tsx"
+      - "apps/portal/src/components/layout/SidebarWrapper.tsx"
+      - "apps/portal/src/components/layout/SidebarLink.tsx"
+      - "apps/portal/src/app/(portal)/layout.tsx"
+      - "apps/portal/src/features/organisations/actions/getOrganisations.ts"
+      - "apps/portal/src/features/organisations/actions/getOrganisationById.ts"
+      - "apps/portal/src/features/inventory/actions/getProducerPackages.ts"
+      - "apps/portal/src/features/dashboard/actions/getProducerMetrics.ts"
+      - "apps/portal/src/features/dashboard/actions/getAdminMetrics.ts"
+      - "packages/ui/src/index.ts"
+      - "packages/ui/package.json"
 
   - date: 2026-01-30
     description: "Package number assignment fixes and admin inventory improvements"

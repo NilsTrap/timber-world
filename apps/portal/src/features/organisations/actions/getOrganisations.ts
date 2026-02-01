@@ -46,9 +46,10 @@ export async function getOrganisations(
 
   // Use Supabase's ability to select with counts via foreign key relations
   // portal_users has organisation_id that references organisations.id
+  // Note: Must specify the FK explicitly due to multiple relationships (Epic 10 added user_roles, user_permission_overrides)
   let query = client
     .from("organisations")
-    .select("id, code, name, is_active, created_at, updated_at, portal_users(count)");
+    .select("id, code, name, is_active, created_at, updated_at, portal_users!portal_users_party_id_fkey(count)");
 
   if (!includeInactive) {
     query = query.eq("is_active", true);

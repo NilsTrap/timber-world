@@ -12,8 +12,8 @@ user_name: 'Nils'
 date: '2026-01-21'
 status: 'complete'
 completedAt: '2026-01-21'
-lastAddendum: '2026-01-25'
-addendumNotes: 'Multi-Tenancy & Inter-Org Transfers Addendum added'
+lastAddendum: '2026-02-01'
+addendumNotes: 'Platform Multi-Tenant Architecture v2 Addendum added'
 ---
 
 # Architecture Decision Document
@@ -2337,4 +2337,481 @@ UPDATE inventory_packages SET organisation_id = (SELECT id FROM organisations WH
 | (existing tables remain) | ... |
 
 **Total: 14 tables** (organisations rename, extended shipments - no new tables needed)
+
+---
+---
+
+# Platform Multi-Tenant Architecture v2 Addendum
+
+**Date:** 2026-02-01
+**Status:** APPROVED - Target architecture for full platform
+**Context:** Comprehensive multi-tenant, multi-user, multi-organization design
+**Reference:** `_bmad-output/analysis/multi-tenant-architecture-design-2026-02-01.md`
+
+---
+
+## Overview
+
+This addendum defines the target architecture for the full Timber World Platform, expanding beyond the current MVP to support multiple organization types (Principal, Producer, Supplier, Client, Trader, Logistics) with a unified portal approach.
+
+**Key Insight:** Timber World (the IT platform) is NOT an organization - it's the platform operator. All business entities are peer organizations with different feature sets enabled.
+
+---
+
+## Core Principles
+
+### 1. One Portal, Multiple Views
+
+All users access the same `apps/portal/` application. What they see is determined by:
+- Their organization type(s)
+- Their organization's enabled features
+- Their roles within the organization
+- Their personal permission overrides
+
+```
+apps/portal/
+├── Super Admin sees: All orgs, all data, configuration
+├── Producer sees: Inventory, production, shipments, dashboard
+├── Client sees: Orders, tracking, reorder, invoices (future)
+├── Supplier sees: Orders, deliveries, invoices (future)
+└── All use the SAME codebase with permission-based rendering
+```
+
+### 2. Platform vs Organizations
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TIMBER WORLD PLATFORM                        │
+│                      (IT Infrastructure)                        │
+│                                                                 │
+│   Super Admin: Full control, configures everything              │
+│   Delegated Admins (future): Subset of super admin powers       │
+│   NOT a business entity - just the technology layer             │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                    Manages all tenants (peer organizations)
+```
+
+### 3. All Organizations Are Peers
+
+No IT hierarchy between organizations. "Principal" is not above "Producer" in the system - they're peers with different feature sets. Relationships between orgs are edges in a graph, not a tree.
+
+---
+
+## Organization Model
+
+### Types as Tags
+
+Organization types are TAGS, not separate database entities:
+
+| Type | Definition | Default Features |
+|------|------------|------------------|
+| **Principal** | Owns materials, orchestrates supply chain | Full access: inventory, production, orders, CRM, analytics |
+| **Producer** | Manufactures products | Inventory view, production tracking, efficiency metrics |
+| **Supplier** | Provides raw materials | Order viewing, delivery confirmation, invoice submission |
+| **Client** | Buys finished products | Ordering, tracking, reorder, invoice viewing |
+| **Trader** | Intermediary | Ordering, supplier management, client management |
+| **Logistics** | Transports goods | Shipment tracking, CMR access, packing lists |
+
+**Multi-Type Support:** An organization can have multiple types (e.g., a company that is both Client and Supplier).
+
+### Database Schema Update
+
+```sql
+-- Organization types (reference table)
+CREATE TABLE organization_types (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,        -- "principal", "producer", etc.
+  description TEXT,
+  icon TEXT,
+  default_features TEXT[],          -- Template features for this type
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Type assignments (many-to-many)
+CREATE TABLE organization_type_assignments (
+  organization_id UUID REFERENCES organisations(id) ON DELETE CASCADE,
+  type_id UUID REFERENCES organization_types(id) ON DELETE CASCADE,
+  PRIMARY KEY (organization_id, type_id)
+);
+
+-- Seed initial types
+INSERT INTO organization_types (name, description, default_features) VALUES
+  ('principal', 'Owns materials, orchestrates supply chain',
+   ARRAY['inventory.*', 'production.*', 'shipments.*', 'orders.*', 'analytics.*']),
+  ('producer', 'Manufactures products',
+   ARRAY['inventory.view', 'production.*', 'shipments.*', 'dashboard.view']),
+  ('supplier', 'Provides raw materials',
+   ARRAY['orders.view', 'deliveries.*', 'invoices.*']),
+  ('client', 'Buys finished products',
+   ARRAY['orders.*', 'tracking.view', 'invoices.view']),
+  ('trader', 'Intermediary buyer/seller',
+   ARRAY['orders.*', 'suppliers.*', 'clients.*']),
+  ('logistics', 'Transports goods',
+   ARRAY['shipments.view', 'tracking.*', 'documents.view']);
+```
+
+### Organization Relationships
+
+```sql
+-- Relationships between organizations
+CREATE TABLE organization_relationships (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  party_a_id UUID REFERENCES organisations(id) NOT NULL,  -- seller/supplier role
+  party_b_id UUID REFERENCES organisations(id) NOT NULL,  -- buyer/client role
+  relationship_type TEXT NOT NULL,    -- "supplier_client", "producer_principal", etc.
+  metadata JSONB,                     -- Contract details, terms, etc.
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT different_parties CHECK (party_a_id != party_b_id)
+);
+
+-- Index for fast lookups
+CREATE INDEX idx_org_rel_party_a ON organization_relationships(party_a_id);
+CREATE INDEX idx_org_rel_party_b ON organization_relationships(party_b_id);
+```
+
+---
+
+## User Model
+
+### Multi-Organization Membership
+
+A user can belong to MULTIPLE organizations with different roles in each:
+
+```sql
+-- User memberships (replaces single organisation_id on portal_users)
+CREATE TABLE organization_memberships (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES portal_users(id) ON DELETE CASCADE,
+  organization_id UUID REFERENCES organisations(id) ON DELETE CASCADE,
+  is_active BOOLEAN DEFAULT true,
+  is_primary BOOLEAN DEFAULT false,   -- Default org on login
+  invited_at TIMESTAMPTZ,
+  invited_by UUID REFERENCES portal_users(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (user_id, organization_id)
+);
+
+-- Update portal_users to support platform-level users
+ALTER TABLE portal_users
+  ADD COLUMN is_platform_admin BOOLEAN DEFAULT false;
+
+-- Super Admin has is_platform_admin = true, no organization memberships
+-- Regular users have is_platform_admin = false, one or more memberships
+```
+
+### Session Context
+
+```typescript
+interface Session {
+  user_id: string;
+  email: string;
+  name: string;
+
+  // Platform level
+  is_platform_admin: boolean;
+
+  // Current organization context (null for platform admin in platform view)
+  current_organization_id: string | null;
+  current_organization_code: string | null;
+  current_organization_name: string | null;
+
+  // Available organizations (for org switcher)
+  memberships: Array<{
+    organization_id: string;
+    organization_code: string;
+    organization_name: string;
+    roles: string[];
+    is_primary: boolean;
+  }>;
+}
+```
+
+### Org Switcher UI
+
+Users with multiple memberships see an organization switcher in the sidebar:
+
+```
+┌─────────────────────┐
+│  Current: INERCE    │
+│  [Switch Org ▼]     │
+│                     │
+│  • INERCE (current) │
+│  • Acme Trading     │
+│  • Beta Logistics   │
+└─────────────────────┘
+```
+
+---
+
+## Permission Model
+
+### Three-Layer Architecture
+
+```
+Layer 1: Organization Features
+├── What features/pages the ORG can access
+├── Configured by Super Admin
+├── Based on org type template + customization
+└── Stored in: organization_features table
+
+Layer 2: Role Permissions
+├── Global role templates (same everywhere)
+├── Each role = bundle of feature permissions
+├── User can have multiple roles per org
+└── Stored in: roles, user_roles tables
+
+Layer 3: User Overrides
+├── Add or remove specific permissions
+├── Applies within a specific organization
+└── Stored in: user_permission_overrides table
+```
+
+### Database Schema
+
+```sql
+-- Features available in the system
+CREATE TABLE features (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL,         -- "orders.view", "inventory.edit"
+  name TEXT NOT NULL,
+  description TEXT,
+  category TEXT,                     -- For UI grouping
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Features enabled per organization
+CREATE TABLE organization_features (
+  organization_id UUID REFERENCES organisations(id) ON DELETE CASCADE,
+  feature_code TEXT NOT NULL,
+  enabled BOOLEAN DEFAULT true,
+  PRIMARY KEY (organization_id, feature_code)
+);
+
+-- Global role definitions
+CREATE TABLE roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,         -- "Sales Agent", "Org Admin", etc.
+  description TEXT,
+  permissions TEXT[],                -- Array of feature codes
+  is_system BOOLEAN DEFAULT false,   -- Built-in vs custom
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- User roles within an organization
+CREATE TABLE user_roles (
+  user_id UUID REFERENCES portal_users(id) ON DELETE CASCADE,
+  organization_id UUID REFERENCES organisations(id) ON DELETE CASCADE,
+  role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, organization_id, role_id)
+);
+
+-- User permission overrides within an organization
+CREATE TABLE user_permission_overrides (
+  user_id UUID REFERENCES portal_users(id) ON DELETE CASCADE,
+  organization_id UUID REFERENCES organisations(id) ON DELETE CASCADE,
+  feature_code TEXT NOT NULL,
+  granted BOOLEAN NOT NULL,          -- true = add, false = remove
+  PRIMARY KEY (user_id, organization_id, feature_code)
+);
+
+-- Seed default roles
+INSERT INTO roles (name, description, permissions, is_system) VALUES
+  ('Org Admin', 'Manages users within organization',
+   ARRAY['users.view', 'users.invite', 'users.edit', 'users.remove'], true),
+  ('Sales Agent', 'Handles sales and client relationships',
+   ARRAY['orders.*', 'clients.*', 'quotes.*'], true),
+  ('Production Manager', 'Manages production operations',
+   ARRAY['production.*', 'inventory.view'], true),
+  ('Viewer', 'Read-only access',
+   ARRAY['*.view'], true);
+```
+
+### Permission Calculation
+
+```typescript
+function getUserPermissions(
+  userId: string,
+  organizationId: string
+): string[] {
+  // 1. Get organization's enabled features
+  const orgFeatures = getOrgFeatures(organizationId);
+
+  // 2. Get all permissions from user's roles in this org
+  const rolePermissions = getUserRolePermissions(userId, organizationId);
+
+  // 3. Get user's overrides in this org
+  const overrides = getUserOverrides(userId, organizationId);
+
+  // 4. Calculate effective permissions
+  let effective = new Set<string>();
+
+  // Add role permissions that are within org features
+  for (const perm of rolePermissions) {
+    if (isFeatureEnabled(perm, orgFeatures)) {
+      effective.add(perm);
+    }
+  }
+
+  // Apply overrides
+  for (const override of overrides) {
+    if (override.granted) {
+      if (isFeatureEnabled(override.feature_code, orgFeatures)) {
+        effective.add(override.feature_code);
+      }
+    } else {
+      effective.delete(override.feature_code);
+    }
+  }
+
+  return Array.from(effective);
+}
+```
+
+---
+
+## Super Admin Features
+
+### View As (Impersonation)
+
+Super Admin can impersonate any organization or user for testing/support:
+
+```typescript
+interface ViewAsState {
+  active: boolean;
+  organization_id?: string;
+  user_id?: string;           // Optional: impersonate specific user
+  read_only: boolean;         // Whether actions are allowed
+}
+```
+
+**UI Implementation:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  [Platform Admin]  [View as: Select organization ▼]            │
+│                                                                 │
+│  When active:                                                   │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ ⚠️ Viewing as: INERCE / Viktor                              ││
+│  │ [Exit View As]                              [Read-Only: ✓]  ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Audit Trail:** All actions while impersonating are logged with:
+- `acting_as_user_id` - who Super Admin was impersonating
+- `actual_user_id` - the Super Admin's real ID
+- `action` - what was done
+- `timestamp`
+
+### Delegated Platform Admins (Future)
+
+```sql
+-- Platform admin permissions (future)
+CREATE TABLE platform_admin_permissions (
+  user_id UUID REFERENCES portal_users(id) ON DELETE CASCADE,
+  permission TEXT NOT NULL,           -- "orgs.manage", "users.manage", etc.
+  PRIMARY KEY (user_id, permission)
+);
+```
+
+---
+
+## Data Visibility
+
+### Default: Complete Isolation
+
+Each organization sees only their own data. All queries filter by `organisation_id`.
+
+### Cross-Org Visibility Grants (Future)
+
+For specific use cases (e.g., logistics company seeing shipments):
+
+```sql
+-- Cross-org data visibility grants (future)
+CREATE TABLE cross_org_visibility (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  grantee_org_id UUID REFERENCES organisations(id),
+  grantor_org_id UUID REFERENCES organisations(id),
+  data_type TEXT NOT NULL,            -- "shipments", "orders", etc.
+  access_level TEXT NOT NULL,         -- "view", "edit"
+  created_at TIMESTAMPTZ DEFAULT now(),
+  created_by UUID REFERENCES portal_users(id)
+);
+```
+
+---
+
+## Migration Path from Current MVP
+
+### Phase 1: Schema Updates
+
+1. Create new tables: `organization_types`, `organization_type_assignments`, `features`, `roles`, `user_roles`, `user_permission_overrides`, `organization_memberships`
+2. Migrate existing `portal_users.organisation_id` to `organization_memberships`
+3. Assign default types to existing organizations
+4. Seed roles and features
+
+### Phase 2: Code Updates
+
+1. Update session handling for multi-org membership
+2. Add org switcher to sidebar
+3. Implement permission checking using new model
+4. Update all queries to use membership context
+
+### Phase 3: Feature Enablement
+
+1. Implement org type configuration UI
+2. Implement role management UI
+3. Implement feature configuration per org
+4. Implement View As for Super Admin
+
+---
+
+## Implementation Priority
+
+| Priority | Feature | Dependencies |
+|----------|---------|--------------|
+| 1 | Organization types table + assignment | None |
+| 2 | Multi-org membership | Org types |
+| 3 | Roles and permissions tables | Memberships |
+| 4 | Permission checking in code | Roles |
+| 5 | Org switcher UI | Multi-org membership |
+| 6 | Feature configuration UI | All above |
+| 7 | View As for Super Admin | All above |
+
+---
+
+## Backward Compatibility
+
+During migration:
+- Existing users with `organisation_id` get a membership record created
+- Existing organizations get default type assignment based on current usage
+- Current permission checks (`role === 'admin'`) continue to work
+- New permission system is opt-in until fully migrated
+
+---
+
+## Summary: Key Decisions
+
+| Decision | Choice |
+|----------|--------|
+| Portal architecture | Single `apps/portal/` with role-based views |
+| Org types | Tags, not separate tables/classes |
+| User membership | One user → multiple orgs |
+| Roles | Global templates with per-user overrides |
+| Features | Configurable per org by Super Admin |
+| Org Admin | Optional role, not mandatory |
+| Data isolation | Default isolated, grantable cross-org (future) |
+| Super Admin | Platform-level, uses View As, not org member |
+
+---
+
+## Reference Documents
+
+- Analysis: `_bmad-output/analysis/multi-tenant-architecture-design-2026-02-01.md`
+- Original Vision: `_bmad-output/analysis/platform-vision-capture-2026-01-20.md`
+- Current Implementation: Epics 1-9 in sprint-status.yaml
 
