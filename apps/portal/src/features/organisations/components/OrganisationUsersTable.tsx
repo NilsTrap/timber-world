@@ -15,6 +15,8 @@ import {
   RefreshCw,
   KeyRound,
   Trash2,
+  Shield,
+  Lock,
 } from "lucide-react";
 import {
   Button,
@@ -45,6 +47,8 @@ import {
 import type { OrganisationUser } from "../types";
 import { AddUserDialog } from "./AddUserDialog";
 import { EditUserDialog } from "./EditUserDialog";
+import { UserRolesDialog } from "./UserRolesDialog";
+import { UserPermissionsDialog } from "./UserPermissionsDialog";
 
 type SortColumn = "name" | "email" | "status" | "lastLoginAt";
 type SortDirection = "asc" | "desc";
@@ -136,6 +140,10 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
   const [sendingCredentialsFor, setSendingCredentialsFor] = useState<string | null>(null);
   const [resendingCredentialsFor, setResendingCredentialsFor] = useState<string | null>(null);
   const [resettingPasswordFor, setResettingPasswordFor] = useState<string | null>(null);
+
+  // Roles and permissions dialog state
+  const [rolesUser, setRolesUser] = useState<OrganisationUser | null>(null);
+  const [permissionsUser, setPermissionsUser] = useState<OrganisationUser | null>(null);
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -393,6 +401,26 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {/* Roles button - manage user role assignments */}
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setRolesUser(user)}
+                          aria-label={`Manage roles for ${user.name}`}
+                          title="Manage roles"
+                        >
+                          <Shield className="h-4 w-4" />
+                        </Button>
+                        {/* Permissions button - manage permission overrides */}
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setPermissionsUser(user)}
+                          aria-label={`Manage permissions for ${user.name}`}
+                          title="Permission overrides"
+                        >
+                          <Lock className="h-4 w-4" />
+                        </Button>
                         {/* Send Credentials button - for created users (no auth_user_id yet) */}
                         {user.status === "created" && !user.authUserId && user.isActive && (
                           <Button
@@ -592,6 +620,24 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* User Roles Dialog */}
+      <UserRolesDialog
+        user={rolesUser}
+        organisationId={organisationId}
+        open={!!rolesUser}
+        onOpenChange={(open) => !open && setRolesUser(null)}
+        onSuccess={handleSuccess}
+      />
+
+      {/* User Permissions Dialog */}
+      <UserPermissionsDialog
+        user={permissionsUser}
+        organisationId={organisationId}
+        open={!!permissionsUser}
+        onOpenChange={(open) => !open && setPermissionsUser(null)}
+        onSuccess={handleSuccess}
+      />
     </div>
   );
 }

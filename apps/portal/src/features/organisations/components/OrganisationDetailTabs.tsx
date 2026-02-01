@@ -11,9 +11,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@timber/ui";
-import { Building2, Users } from "lucide-react";
+import { Building2, Users, Settings2 } from "lucide-react";
 import type { Organisation } from "../types";
 import { OrganisationUsersTable } from "./OrganisationUsersTable";
+import { OrganisationFeaturesTab } from "./OrganisationFeaturesTab";
+import { OrganisationTypesSection } from "./OrganisationTypesSection";
 
 interface OrganisationDetailTabsProps {
   organisation: Organisation;
@@ -31,8 +33,14 @@ export function OrganisationDetailTabs({
   organisation,
   defaultTab,
 }: OrganisationDetailTabsProps) {
+  const getDefaultTab = () => {
+    if (defaultTab === "users") return "users";
+    if (defaultTab === "features") return "features";
+    return "details";
+  };
+
   return (
-    <Tabs defaultValue={defaultTab === "users" ? "users" : "details"}>
+    <Tabs defaultValue={getDefaultTab()}>
       <TabsList>
         <TabsTrigger value="details">
           <Building2 className="h-4 w-4 mr-2" />
@@ -41,6 +49,10 @@ export function OrganisationDetailTabs({
         <TabsTrigger value="users">
           <Users className="h-4 w-4 mr-2" />
           Users ({organisation.userCount ?? 0})
+        </TabsTrigger>
+        <TabsTrigger value="features">
+          <Settings2 className="h-4 w-4 mr-2" />
+          Features
         </TabsTrigger>
       </TabsList>
 
@@ -108,6 +120,9 @@ export function OrganisationDetailTabs({
                 </p>
               </div>
             </div>
+            <div className="pt-4 border-t">
+              <OrganisationTypesSection organisationId={organisation.id} />
+            </div>
           </CardContent>
         </Card>
       </TabsContent>
@@ -119,6 +134,17 @@ export function OrganisationDetailTabs({
           </CardHeader>
           <CardContent>
             <OrganisationUsersTable organisationId={organisation.id} />
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="features">
+        <Card>
+          <CardHeader>
+            <CardTitle>Feature Configuration</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <OrganisationFeaturesTab organisationId={organisation.id} />
           </CardContent>
         </Card>
       </TabsContent>

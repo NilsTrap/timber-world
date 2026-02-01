@@ -19,3 +19,23 @@ export { sendUserCredentials } from "./sendUserCredentials";
 // Resend/Reset credential actions (Story 7.4)
 export { resendUserCredentials } from "./resendUserCredentials";
 export { resetUserPassword } from "./resetUserPassword";
+
+// User role management (Story 10.10)
+export { getUserRoles, updateUserRoles } from "./getUserRoles";
+export type { UserRoleAssignment } from "./getUserRoles";
+
+// User permission overrides (Story 10.11)
+export { getUserPermissions, updateUserPermissions } from "./getUserPermissions";
+export type { UserPermission, OverrideState } from "./getUserPermissions";
+
+// Organisation features (Story 10.12)
+export { getOrganisationFeatures, updateOrganisationFeatures } from "./getOrganisationFeatures";
+export type { OrganisationFeature } from "./getOrganisationFeatures";
+
+// Organisation types (Story 10.13)
+export {
+  getOrganisationTypes,
+  getOrganisationAssignedTypes,
+  updateOrganisationTypes,
+} from "./getOrganisationTypes";
+export type { OrganizationType } from "./getOrganisationTypes";
