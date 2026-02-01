@@ -222,3 +222,42 @@ ad_hoc_changes:
       - "apps/portal/src/features/production/actions/getProductionOutputs.ts"
       - "apps/portal/src/features/production/types.ts"
       - "apps/portal/src/features/production/helpers/output-helpers.ts"
+
+  - date: 2026-01-28
+    description: "Fix user invitation cascade delete bug"
+    changes:
+      - "Fixed bug where resending invitation deleted portal_user record"
+      - "Changed portal_users.auth_user_id FK from ON DELETE CASCADE to ON DELETE SET NULL"
+    files_created:
+      - "supabase/migrations/20260128000001_fix_auth_user_cascade.sql"
+
+  - date: 2026-01-28
+    description: "Lookup-based package number assignment for production outputs"
+    changes:
+      - "Replaced counter-based package numbering with lookup approach"
+      - "Package numbers now assigned manually via 'Assign Package Numbers' button"
+      - "Lookup checks both inventory_packages and portal_production_outputs for max number"
+      - "Removed 'pending' placeholder from new output rows"
+      - "Made package_number nullable in portal_production_outputs"
+      - "Added sort_order column to preserve row ordering"
+    files_created:
+      - "apps/portal/src/features/production/actions/assignPackageNumbers.ts"
+      - "supabase/migrations/20260128000002_nullable_package_number.sql"
+    files_modified:
+      - "apps/portal/src/features/production/actions/saveProductionOutputs.ts"
+      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
+      - "apps/portal/src/features/production/helpers/output-helpers.ts"
+
+  - date: 2026-01-30
+    description: "Package number assignment fixes and admin inventory improvements"
+    changes:
+      - "Fixed table names in assignPackageNumbers action (portal_production_entries, portal_production_outputs)"
+      - "Fixed delete draft redirect to go to active tab instead of history tab"
+      - "Made package_sequence nullable for admin-added inventory packages"
+    files_created:
+      - "supabase/migrations/20260130000001_nullable_package_sequence.sql"
+    files_modified:
+      - "apps/portal/src/features/production/actions/assignPackageNumbers.ts"
+      - "apps/portal/src/features/production/components/DeleteDraftButton.tsx"
+    database_changes:
+      - "inventory_packages.package_sequence now nullable (for admin-added packages without shipment)"

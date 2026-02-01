@@ -1,7 +1,7 @@
 ---
 project_name: 'Timber-World-Platform'
 user_name: 'Nils'
-date: '2026-01-28'
+date: '2026-01-30'
 status: 'complete'
 sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime']
 architecture_ref: '_bmad-output/planning-artifacts/architecture.md'
@@ -289,6 +289,29 @@ formatDateTime("2026-01-24T14:30:00Z") // → "24.01.2026 14:30"
 ```
 
 **NEVER** use `toLocaleDateString()` or `toLocaleString()` — these produce inconsistent results depending on the user's browser locale.
+
+### Package Number Assignment (Production Outputs)
+
+Production output package numbers are assigned manually via the "Assign Package Numbers" button, NOT auto-generated on row creation.
+
+**Format:** `N-{PROCESS_CODE}-{NNNN}` (e.g., `N-SA-0001` for Sanding)
+
+**Assignment Logic:**
+1. User creates output rows (package_number starts empty)
+2. User clicks "Assign Package Numbers" button when ready
+3. System looks up current max number from:
+   - `inventory_packages` (validated production)
+   - `portal_production_outputs` (draft production)
+4. Assigns sequential numbers starting from max + 1
+5. Numbers wrap at 9999 back to 0001
+
+**Key Files:**
+- `assignPackageNumbers.ts` - Server action for lookup-based assignment
+- `ProductionOutputsSection.tsx` - UI with "Assign Package Numbers" button
+
+**Database:**
+- `portal_production_outputs.package_number` is nullable (assigned later)
+- `portal_production_outputs.sort_order` preserves row ordering
 
 ### Volume Calculation
 
