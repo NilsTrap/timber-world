@@ -4,7 +4,7 @@ currentStep: 2
 currentStepName: 'step-02-vision'
 stepStatus: 'in-progress'
 inputDocuments:
-  - '_bmad-output/analysis/brainstorming-session-2026-01-30.md'
+  - '_bmad-output/analysis/brainstorming-supplier-portal-2026-01-30.md'
   - '_bmad-output/analysis/platform-vision-capture-2026-01-20.md'
 date: 2026-01-30
 author: Nils

@@ -11,7 +11,7 @@ This is a **BMad Method Framework** installation (v6.0.0-alpha.22) for the **Tim
 **Timber World has evolved from a single marketing website to a B2B Supply Chain Platform.**
 
 The platform will include multiple apps serving different user types:
-- **Marketing App** - Public-facing website (partially implemented)
+- **Marketing Website** - Public-facing website (partially implemented)
 - **Client Portal** - B2B customers (orders, tracking, reorder)
 - **Producer Portal** - Factories (production tracking, efficiency, inventory)
 - **Admin Portal(s)** - Internal staff (quotes, orders, analytics)
@@ -25,8 +25,8 @@ The platform will include multiple apps serving different user types:
 |-----------|--------|
 | Turborepo monorepo structure | ✅ Implemented |
 | Shared packages (@timber/*) | ✅ Implemented |
-| Marketing App (Epic 1-2) | ✅ Complete |
-| Marketing App (Epic 3-8) | 📋 Backlog |
+| Marketing Website (Epic 1-2) | ✅ Complete |
+| Marketing Website (Epic 3-8) | 📋 Backlog |
 | Platform Product Brief | ❌ Not yet created |
 | Platform PRD | ❌ Not yet created |
 | Platform Architecture | ❌ Not yet created |
@@ -36,10 +36,10 @@ The platform will include multiple apps serving different user types:
 
 | Document | Scope | Notes |
 |----------|-------|-------|
-| `product-brief-*.md` | Marketing app only | Valid for marketing app |
-| `prd.md` | Marketing app only | Valid for marketing app |
-| `architecture.md` | Marketing app only | **Outdated** - code is now monorepo |
-| `epic-*.yaml` | Marketing app only | Valid for marketing app |
+| `product-brief-*.md` | Marketing website only | Valid for marketing website |
+| `prd.md` | Marketing website only | Valid for marketing website |
+| `architecture.md` | Marketing website only | **Outdated** - code is now monorepo |
+| `epic-*.yaml` | Marketing website only | Valid for marketing website |
 | `platform-vision-capture-*.md` | Platform overview | **Start here** for platform planning |
 
 ## Directory Structure

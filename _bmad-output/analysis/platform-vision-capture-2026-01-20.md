@@ -54,7 +54,7 @@ timber-world/                    # Turborepo monorepo
 
 ## User Types & Portals
 
-### 1. Marketing App (Public)
+### 1. Marketing Website (Public)
 - **Users:** Anonymous visitors, prospects
 - **Purpose:** Brand showcase, product catalog, lead generation, quote requests
 - **Status:** ✅ Foundation complete (Epic 1-2 done)
@@ -192,10 +192,10 @@ timber-world/                    # Turborepo monorepo
 
 | Document | Current Scope | Needed Update |
 |----------|---------------|---------------|
-| `product-brief-Timber-International-2026-01-04.md` | Marketing website only | Keep as "Marketing App Brief", create Platform Brief |
-| `prd.md` | Marketing website (56 FRs) | Keep as "Marketing App PRD", create Platform PRD |
+| `product-brief-marketing-website-2026-01-04.md` | Marketing website only | Keep as "Marketing Website Brief", create Platform Brief |
+| `prd.md` | Marketing website (56 FRs) | Keep as "Marketing Website PRD", create Platform PRD |
 | `architecture.md` | Single Next.js app | **Outdated** - code is now monorepo. Needs platform architecture doc |
-| `epic-*.yaml` | Marketing website features | Keep as marketing app stories, create stories for other apps |
+| `epic-*.yaml` | Marketing website features | Keep as marketing website stories, create stories for other apps |
 | `sprint-status.yaml` | Marketing app progress | Restructure for multi-app tracking |
 
 ---

@@ -4,7 +4,7 @@ user_name: 'Nils'
 date: '2026-01-30'
 status: 'complete'
 sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime']
-architecture_ref: '_bmad-output/planning-artifacts/architecture.md'
+architecture_ref: '_bmad-output/planning-artifacts/platform/architecture.md'
 ---
 
 # Project Context for AI Agents
@@ -325,4 +325,4 @@ Volume auto-calculates when all conditions are met:
 ## Architecture Reference
 
 For complete architectural decisions, patterns, and project structure, see:
-`_bmad-output/planning-artifacts/architecture.md`
+`_bmad-output/planning-artifacts/platform/architecture.md`
