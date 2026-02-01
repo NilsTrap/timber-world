@@ -5,7 +5,8 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@timber/ui";
 import type { PackageListItem } from "@/features/shipments/types";
 import type { ProductionInput } from "../types";
-import { getAvailablePackages, getProductionInputs } from "../actions";
+import { getAvailablePackages, getProductionInputs, getPackagesInDrafts } from "../actions";
+import type { DraftPackageInfo } from "../actions";
 import { PackageSelector } from "./PackageSelector";
 import { ProductionInputsTable, type ProductionInputsTableHandle } from "./ProductionInputsTable";
 
@@ -37,18 +38,34 @@ export function ProductionInputsSection({
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [packages, setPackages] = useState<PackageListItem[]>(initialPackages);
   const [inputs, setInputs] = useState<ProductionInput[]>(initialInputs);
+  const [packagesInDrafts, setPackagesInDrafts] = useState<DraftPackageInfo[]>([]);
   const [, startTransition] = useTransition();
   const [inputsFilterActive, setInputsFilterActive] = useState(false);
   const tableRef = useRef<ProductionInputsTableHandle>(null);
 
   const refreshData = useCallback(() => {
     startTransition(async () => {
-      const [pkgResult, inputResult] = await Promise.all([
+      const [pkgResult, inputResult, draftsResult] = await Promise.all([
         getAvailablePackages(productionEntryId),
         getProductionInputs(productionEntryId),
+        getPackagesInDrafts(),
       ]);
       if (pkgResult.success) setPackages(pkgResult.data);
       if (inputResult.success) setInputs(inputResult.data);
+      if (draftsResult.success) {
+        // Filter out packages from the current draft
+        setPackagesInDrafts(draftsResult.data.filter(d => d.draftId !== productionEntryId));
+      }
+    });
+  }, [productionEntryId]);
+
+  // Initial fetch of packages in drafts
+  useEffect(() => {
+    startTransition(async () => {
+      const draftsResult = await getPackagesInDrafts();
+      if (draftsResult.success) {
+        setPackagesInDrafts(draftsResult.data.filter(d => d.draftId !== productionEntryId));
+      }
     });
   }, [productionEntryId]);
 
@@ -132,6 +149,7 @@ export function ProductionInputsSection({
           onOpenChange={setSelectorOpen}
           productionEntryId={productionEntryId}
           packages={packages}
+          packagesInDrafts={packagesInDrafts}
           onInputAdded={refreshData}
         />
       )}

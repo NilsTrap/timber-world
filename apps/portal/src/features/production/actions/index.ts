@@ -16,3 +16,5 @@ export { validateProduction } from "./validateProduction";
 export { deleteProductionEntry } from "./deleteProductionEntry";
 export { revertFailedValidation } from "./revertFailedValidation";
 export { assignPackageNumbers } from "./assignPackageNumbers";
+export { getPackagesInDrafts } from "./getPackagesInDrafts";
+export type { DraftPackageInfo } from "./getPackagesInDrafts";

@@ -28,7 +28,7 @@ export async function getValidatedProductions(orgId?: string): Promise<
   let query = (supabase as any)
     .from("portal_production_entries")
     .select(
-      "id, production_date, total_input_m3, total_output_m3, outcome_percentage, waste_percentage, validated_at, entry_type, organisation_id, ref_processes(value), organisations(code, name)"
+      "id, production_date, total_input_m3, total_output_m3, outcome_percentage, waste_percentage, validated_at, entry_type, organisation_id, created_by, ref_processes(value), organisations(code, name)"
     )
     .eq("status", "validated")
     .order("validated_at", { ascending: false });
@@ -48,6 +48,22 @@ export async function getValidatedProductions(orgId?: string): Promise<
     return { success: false, error: error.message, code: "QUERY_FAILED" };
   }
 
+  // Get unique auth user IDs to fetch user names
+  const authUserIds = [...new Set((data ?? []).map((row: any) => row.created_by).filter(Boolean))];
+
+  // Fetch user names from portal_users
+  let userMap = new Map<string, string>();
+  if (authUserIds.length > 0) {
+    const { data: users } = await (supabase as any)
+      .from("portal_users")
+      .select("auth_user_id, name")
+      .in("auth_user_id", authUserIds);
+
+    (users ?? []).forEach((u: any) => {
+      if (u.auth_user_id) userMap.set(u.auth_user_id, u.name);
+    });
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const items: ProductionHistoryItem[] = (data ?? []).map((row: any) => ({
     id: row.id,
@@ -61,6 +77,7 @@ export async function getValidatedProductions(orgId?: string): Promise<
     entryType: row.entry_type ?? "standard",
     organisationCode: row.organisations?.code ?? null,
     organisationName: row.organisations?.name ?? null,
+    createdByName: row.created_by ? userMap.get(row.created_by) ?? null : null,
   }));
 
   return { success: true, data: items };

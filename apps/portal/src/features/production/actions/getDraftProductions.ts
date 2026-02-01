@@ -27,7 +27,7 @@ export async function getDraftProductions(orgId?: string): Promise<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("portal_production_entries")
-    .select("id, production_date, status, created_at, organisation_id, ref_processes(value)")
+    .select("id, production_date, status, created_at, organisation_id, created_by, ref_processes(value)")
     .eq("status", "draft")
     .order("created_at", { ascending: false });
 
@@ -46,12 +46,29 @@ export async function getDraftProductions(orgId?: string): Promise<
     return { success: false, error: error.message, code: "QUERY_FAILED" };
   }
 
+  // Get unique auth user IDs to fetch user names
+  const authUserIds = [...new Set((data ?? []).map((row: any) => row.created_by).filter(Boolean))];
+
+  // Fetch user names from portal_users
+  let userMap = new Map<string, string>();
+  if (authUserIds.length > 0) {
+    const { data: users } = await (supabase as any)
+      .from("portal_users")
+      .select("auth_user_id, name")
+      .in("auth_user_id", authUserIds);
+
+    (users ?? []).forEach((u: any) => {
+      if (u.auth_user_id) userMap.set(u.auth_user_id, u.name);
+    });
+  }
+
   const items: ProductionListItem[] = (data ?? []).map((row: any) => ({
     id: row.id,
     processName: row.ref_processes?.value ?? "Unknown",
     productionDate: row.production_date,
     status: row.status,
     createdAt: row.created_at,
+    createdByName: row.created_by ? userMap.get(row.created_by) ?? null : null,
   }));
 
   return { success: true, data: items };

@@ -58,6 +58,12 @@ export {
 } from "./components/popover";
 export { Badge, badgeVariants } from "./components/badge";
 export {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "./components/tooltip";
+export {
   ColumnHeaderMenu,
   type ColumnSortState,
   type SortDirection,

@@ -1,18 +1,33 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef } from "react";
-import { DataEntryTable, Button, type ColumnDef, type DataEntryTableHandle } from "@timber/ui";
-import { X } from "lucide-react";
+import { DataEntryTable, Button, type ColumnDef, type DataEntryTableHandle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@timber/ui";
+import { X, FileText } from "lucide-react";
 import { SummaryCards } from "@/features/shipments/components/SummaryCards";
 import type { PackageListItem } from "../types";
+import type { DraftPackageInfo } from "@/features/production/actions";
 
 interface ProducerInventoryProps {
   packages: PackageListItem[];
+  packagesInDrafts?: DraftPackageInfo[];
 }
 
-export function ProducerInventory({ packages }: ProducerInventoryProps) {
+export function ProducerInventory({ packages, packagesInDrafts = [] }: ProducerInventoryProps) {
   const tableRef = useRef<DataEntryTableHandle>(null);
   const [hasActiveFilters, setHasActiveFilters] = useState(false);
+
+  // Create a map for quick lookup of draft info by package ID
+  const draftsMap = useMemo(() => {
+    const map = new Map<string, DraftPackageInfo>();
+    packagesInDrafts.forEach((d) => map.set(d.packageId, d));
+    return map;
+  }, [packagesInDrafts]);
+
+  // Format date for tooltip
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  };
 
   const columns: ColumnDef<PackageListItem>[] = useMemo(
     () => [
@@ -25,10 +40,31 @@ export function ProducerInventory({ packages }: ProducerInventoryProps) {
       {
         key: "packageNumber",
         label: "Package",
-        type: "readonly",
+        type: "custom",
         getValue: (row) => row.packageNumber,
         totalType: "count",
         formatTotal: (v) => String(v),
+        renderCell: (row) => {
+          const draftInfo = draftsMap.get(row.id);
+          return (
+            <div className="flex items-center gap-1.5">
+              <span>{row.packageNumber}</span>
+              {draftInfo && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <FileText className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>In draft: {draftInfo.processName}</p>
+                      <p className="text-xs text-muted-foreground">{formatDate(draftInfo.productionDate)}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+          );
+        },
       },
       {
         key: "productName",
@@ -124,7 +160,7 @@ export function ProducerInventory({ packages }: ProducerInventoryProps) {
         formatTotal: (v) => v.toFixed(3).replace(".", ","),
       },
     ],
-    []
+    [draftsMap]
   );
 
   const [displayedPackages, setDisplayedPackages] = useState<PackageListItem[]>(packages);
@@ -180,6 +216,7 @@ export function ProducerInventory({ packages }: ProducerInventoryProps) {
         collapseStorageKey="producer-inventory-collapsed"
         onDisplayRowsChange={handleDisplayRowsChange}
         onFilterActiveChange={setHasActiveFilters}
+        getRowClassName={(row) => draftsMap.has(row.id) ? "bg-amber-50" : undefined}
       />
     </div>
   );

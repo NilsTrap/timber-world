@@ -41,6 +41,7 @@ type ColumnKey =
   | "productionDate"
   | "organisationCode"
   | "processName"
+  | "createdByName"
   | "totalInputM3"
   | "totalOutputM3"
   | "outcomePercentage"
@@ -105,6 +106,8 @@ export function ProductionHistoryTable({
         return entry.organisationCode ?? "";
       case "processName":
         return entry.processName;
+      case "createdByName":
+        return entry.createdByName ?? "";
       case "totalInputM3":
         return fmt3(entry.totalInputM3);
       case "totalOutputM3":
@@ -122,6 +125,7 @@ export function ProductionHistoryTable({
       "productionDate",
       "organisationCode",
       "processName",
+      "createdByName",
       "totalInputM3",
       "totalOutputM3",
       "outcomePercentage",
@@ -168,6 +172,7 @@ export function ProductionHistoryTable({
       "productionDate",
       "organisationCode",
       "processName",
+      "createdByName",
       "totalInputM3",
       "totalOutputM3",
       "outcomePercentage",
@@ -215,6 +220,7 @@ export function ProductionHistoryTable({
     { key: "productionDate", label: "Date", numeric: false, align: "text-left" },
     { key: "organisationCode", label: "Organisation", numeric: false, align: "text-left" },
     { key: "processName", label: "Process", numeric: false, align: "text-left" },
+    { key: "createdByName", label: "User", numeric: false, align: "text-left" },
     { key: "totalInputM3", label: "Input m³", numeric: true, align: "text-right" },
     { key: "totalOutputM3", label: "Output m³", numeric: true, align: "text-right" },
     { key: "outcomePercentage", label: "Outcome %", numeric: true, align: "text-right" },
@@ -356,6 +362,9 @@ export function ProductionHistoryTable({
                       </span>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {entry.createdByName ?? "-"}
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {fmt3(entry.totalInputM3)}
                   </td>
@@ -411,6 +420,7 @@ export function ProductionHistoryTable({
               <tr className="border-t bg-muted/30 font-bold">
                 <td className="px-4 py-3" />
                 {showOrganisation && <td className="px-4 py-3" />}
+                <td className="px-4 py-3" />
                 <td className="px-4 py-3" />
                 <td className="px-4 py-3 text-right tabular-nums">
                   {fmt3(filteredEntries.reduce((sum, e) => sum + e.totalInputM3, 0))}

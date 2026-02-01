@@ -127,6 +127,10 @@ export interface DataEntryTableProps<TRow> {
   onDisplayRowsChange?: (rows: TRow[]) => void;
   /** Called when filter/sort active state changes. Useful for showing external clear button. */
   onFilterActiveChange?: (hasActiveFilters: boolean) => void;
+
+  // ─── Row Styling ─────────────────────────────────────────────────────
+  /** Returns additional CSS classes for a row. Useful for highlighting specific rows. */
+  getRowClassName?: (row: TRow) => string | undefined;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -157,6 +161,7 @@ function DataEntryTableInner<TRow>(
     readOnly = false,
     onDisplayRowsChange,
     onFilterActiveChange,
+    getRowClassName,
   }: DataEntryTableProps<TRow>,
   ref: React.ForwardedRef<DataEntryTableHandle>
 ) {
@@ -836,7 +841,7 @@ function DataEntryTableInner<TRow>(
 
           <TableBody>
             {displayRows.map(({ row, originalIndex }, renderIndex) => (
-              <TableRow key={getRowKey(row)}>
+              <TableRow key={getRowKey(row)} className={getRowClassName?.(row)}>
                 {columns.map((col) => {
                   const isCollapsed = col.collapsible && collapsedColumns.has(col.key);
                   const currentValue = col.getValue(row);

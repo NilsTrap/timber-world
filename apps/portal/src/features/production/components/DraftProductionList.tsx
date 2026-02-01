@@ -69,6 +69,7 @@ export function DraftProductionList({ drafts }: DraftProductionListProps) {
                 <p className="text-xs text-muted-foreground">
                   {formatDate(entry.productionDate)} &middot; Created{" "}
                   {formatDateTime(entry.createdAt)}
+                  {entry.createdByName && ` by ${entry.createdByName}`}
                 </p>
               </div>
             </Link>

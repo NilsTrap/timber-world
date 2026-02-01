@@ -2,7 +2,28 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Loader2, Tag, Building } from "lucide-react";
+import {
+  Loader2,
+  Tag,
+  Building,
+  Building2,
+  Factory,
+  Truck,
+  ShoppingCart,
+  ArrowLeftRight,
+  Package,
+  type LucideIcon,
+} from "lucide-react";
+
+// Map icon names from database to Lucide components
+const iconMap: Record<string, LucideIcon> = {
+  "building-2": Building2,
+  "factory": Factory,
+  "truck": Truck,
+  "shopping-cart": ShoppingCart,
+  "arrows-exchange": ArrowLeftRight,
+  "package": Package,
+};
 import {
   Button,
   Checkbox,
@@ -165,11 +186,14 @@ export function OrganisationTypesSection({
                 htmlFor={`type-${type.id}`}
                 className="flex items-center gap-2 cursor-pointer"
               >
-                {type.icon ? (
-                  <span className="text-lg">{type.icon}</span>
-                ) : (
-                  <Building className="h-4 w-4 text-muted-foreground" />
-                )}
+                {(() => {
+                  const IconComponent = type.icon ? iconMap[type.icon] : null;
+                  return IconComponent ? (
+                    <IconComponent className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Building className="h-4 w-4 text-muted-foreground" />
+                  );
+                })()}
                 <span className="font-medium">{type.name}</span>
               </Label>
               <p className="text-xs text-muted-foreground mt-0.5">

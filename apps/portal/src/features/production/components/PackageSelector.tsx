@@ -16,11 +16,17 @@ import {
   Button,
   Input,
   ColumnHeaderMenu,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   type ColumnSortState,
 } from "@timber/ui";
 import { toast } from "sonner";
+import { FileText } from "lucide-react";
 import type { PackageListItem } from "@/features/shipments/types";
 import { addProductionInput } from "../actions";
+import type { DraftPackageInfo } from "../actions";
 
 interface PackageSelectorProps {
   open: boolean;
@@ -28,6 +34,7 @@ interface PackageSelectorProps {
   productionEntryId: string;
   packages: PackageListItem[];
   onInputAdded: () => void;
+  packagesInDrafts?: DraftPackageInfo[];
 }
 
 interface SelectedPackage {
@@ -95,9 +102,23 @@ export function PackageSelector({
   productionEntryId,
   packages,
   onInputAdded,
+  packagesInDrafts = [],
 }: PackageSelectorProps) {
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState<Map<string, SelectedPackage>>(new Map());
+
+  // Create a map for quick lookup of draft info by package ID
+  const draftsMap = useMemo(() => {
+    const map = new Map<string, DraftPackageInfo>();
+    packagesInDrafts.forEach((d) => map.set(d.packageId, d));
+    return map;
+  }, [packagesInDrafts]);
+
+  // Format date for tooltip
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  };
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
   const [sortState, setSortState] = useState<ColumnSortState | null>(null);
   const [filterState, setFilterState] = useState<Record<string, Set<string>>>({});
@@ -543,10 +564,19 @@ export function PackageSelector({
                     const hasPieces = pkg.pieces && pkg.pieces !== "-" && pkg.pieces !== "";
                     const volumeIsCalculated = !!hasPieces && isSingleNumber(pkg.thickness) && isSingleNumber(pkg.width) && isSingleNumber(pkg.length);
 
+                    const draftInfo = draftsMap.get(pkg.id);
+                    const isDraft = !!draftInfo;
+
                     return (
                       <TableRow
                         key={pkg.id}
-                        className={isSelected ? "bg-accent/30 hover:bg-accent/40" : "hover:bg-accent/10 cursor-pointer"}
+                        className={
+                          isSelected
+                            ? "bg-accent/30 hover:bg-accent/40"
+                            : isDraft
+                            ? "bg-amber-50 hover:bg-amber-100/70 cursor-pointer"
+                            : "hover:bg-accent/10 cursor-pointer"
+                        }
                         onClick={() => handleToggleSelect(pkg)}
                       >
                         {/* Checkbox */}
@@ -573,6 +603,28 @@ export function PackageSelector({
                                 title={value ? `${col.label}: ${value}` : `${col.label}: (empty)`}
                               >
                                 {abbrev}
+                              </TableCell>
+                            );
+                          }
+
+                          // Special rendering for packageNumber to show draft icon
+                          if (col.key === "packageNumber" && draftInfo) {
+                            return (
+                              <TableCell key={col.key} className="px-1 text-xs whitespace-nowrap">
+                                <div className="flex items-center gap-1">
+                                  <span>{value || "-"}</span>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <FileText className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>In draft: {draftInfo.processName}</p>
+                                        <p className="text-xs text-muted-foreground">{formatDate(draftInfo.productionDate)}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </div>
                               </TableCell>
                             );
                           }

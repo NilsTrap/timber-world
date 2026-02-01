@@ -4,6 +4,7 @@
 
 export interface Process {
   id: string;
+  code: string;
   value: string;
   sortOrder: number;
 }
@@ -33,6 +34,7 @@ export interface ProductionListItem {
   productionDate: string;
   status: "draft" | "validated";
   createdAt: string;
+  createdByName: string | null;
 }
 
 export interface ProductionHistoryItem {
@@ -47,6 +49,7 @@ export interface ProductionHistoryItem {
   entryType: EntryType;
   organisationCode: string | null;
   organisationName: string | null;
+  createdByName: string | null;
 }
 
 export interface ProductionInput {

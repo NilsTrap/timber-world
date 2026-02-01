@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Package } from "lucide-react";
 import { getSession, isAdmin } from "@/lib/auth";
 import { getProducerPackages } from "@/features/inventory/actions";
+import { getPackagesInDrafts } from "@/features/production/actions";
 import { ProducerInventory } from "@/features/inventory/components/ProducerInventory";
 
 export const metadata: Metadata = {
@@ -30,7 +31,10 @@ export default async function InventoryPage() {
   }
 
   // Producer flow
-  const result = await getProducerPackages();
+  const [result, draftsResult] = await Promise.all([
+    getProducerPackages(),
+    getPackagesInDrafts(),
+  ]);
 
   if (!result.success) {
     // Handle error state (e.g., producer not linked to facility)
@@ -93,7 +97,10 @@ export default async function InventoryPage() {
         </p>
       </div>
 
-      <ProducerInventory packages={packages} />
+      <ProducerInventory
+        packages={packages}
+        packagesInDrafts={draftsResult.success ? draftsResult.data : []}
+      />
     </div>
   );
 }

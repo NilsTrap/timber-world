@@ -18,9 +18,9 @@ export async function getProcesses(): Promise<ActionResult<Process[]>> {
 
   const { data, error } = await (supabase as any)
     .from("ref_processes")
-    .select("id, value, sort_order")
+    .select("id, code, value, sort_order")
     .eq("is_active", true)
-    .order("sort_order", { ascending: true });
+    .order("value", { ascending: true });
 
   if (error) {
     return { success: false, error: error.message };
@@ -28,6 +28,7 @@ export async function getProcesses(): Promise<ActionResult<Process[]>> {
 
   const processes: Process[] = (data ?? []).map((row: any) => ({
     id: row.id,
+    code: row.code,
     value: row.value,
     sortOrder: row.sort_order,
   }));

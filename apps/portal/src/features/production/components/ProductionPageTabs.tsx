@@ -5,6 +5,7 @@ import type { Process, ProductionListItem, ProductionHistoryItem } from "../type
 import { NewProductionForm } from "./NewProductionForm";
 import { DraftProductionList } from "./DraftProductionList";
 import { ProductionHistoryTable } from "./ProductionHistoryTable";
+import { ProcessesTab } from "./ProcessesTab";
 
 interface ProductionPageTabsProps {
   processes: Process[];
@@ -34,10 +35,11 @@ export function ProductionPageTabs({
   canDeleteHistory = false,
 }: ProductionPageTabsProps) {
   return (
-    <Tabs defaultValue={defaultTab === "history" ? "history" : "active"}>
+    <Tabs defaultValue={defaultTab === "history" ? "history" : defaultTab === "processes" ? "processes" : "active"}>
       <TabsList>
         <TabsTrigger value="active">Active</TabsTrigger>
         <TabsTrigger value="history">History</TabsTrigger>
+        <TabsTrigger value="processes">Processes</TabsTrigger>
       </TabsList>
 
       <TabsContent value="active">
@@ -52,6 +54,10 @@ export function ProductionPageTabs({
 
       <TabsContent value="history">
         <ProductionHistoryTable entries={history} defaultProcess={defaultProcess} showOrganisation={showOrganisation} canDelete={canDeleteHistory} />
+      </TabsContent>
+
+      <TabsContent value="processes">
+        <ProcessesTab processes={processes} />
       </TabsContent>
     </Tabs>
   );
