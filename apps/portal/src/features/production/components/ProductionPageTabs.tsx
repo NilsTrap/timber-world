@@ -26,10 +26,10 @@ interface ProductionPageTabsProps {
 /**
  * Production Page Tabs
  *
- * Wraps production page content in "Active" and "History" tabs.
- * Active tab: new production form + draft list.
- * History tab: validated production entries with sort/filter.
- * Processes tab: view and edit process descriptions.
+ * Wraps production page content in three tabs:
+ * - Drafts: new production form + draft list
+ * - Completed: validated production entries with sort/filter
+ * - Process List: view and edit process descriptions
  */
 export function ProductionPageTabs({
   processes,
@@ -46,9 +46,9 @@ export function ProductionPageTabs({
   return (
     <Tabs defaultValue={defaultTab === "history" ? "history" : defaultTab === "processes" ? "processes" : "active"}>
       <TabsList>
-        <TabsTrigger value="active">Active</TabsTrigger>
-        <TabsTrigger value="history">History</TabsTrigger>
-        <TabsTrigger value="processes">Processes</TabsTrigger>
+        <TabsTrigger value="active">Drafts</TabsTrigger>
+        <TabsTrigger value="history">Completed</TabsTrigger>
+        <TabsTrigger value="processes">Process List</TabsTrigger>
       </TabsList>
 
       <TabsContent value="active">
