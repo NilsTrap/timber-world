@@ -30,6 +30,89 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
     return null;
   }
 
+  const tableContent = (
+    <>
+      {/* Header for print */}
+      <div className="mb-6 print:mb-4">
+        <h1 className="text-xl font-bold">Production Input Packages</h1>
+        {processName && (
+          <p className="text-sm text-muted-foreground print:text-black">
+            Process: {processName}
+          </p>
+        )}
+        {productionDate && (
+          <p className="text-sm text-muted-foreground print:text-black">
+            Date: {productionDate}
+          </p>
+        )}
+        <p className="text-sm text-muted-foreground print:text-black">
+          Total packages: {inputs.length} | Total volume: {totalVolume.toFixed(3).replace(".", ",")} m³
+        </p>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto print:overflow-visible">
+        <table className="text-sm border-collapse whitespace-nowrap">
+          <thead>
+            <tr className="border-b-2 border-black">
+              <th className="text-left py-2 px-2 font-semibold">#</th>
+              <th className="text-left py-2 px-2 font-semibold">Shipment</th>
+              <th className="text-left py-2 px-2 font-semibold">Package</th>
+              <th className="text-left py-2 px-2 font-semibold">Product</th>
+              <th className="text-left py-2 px-2 font-semibold">Species</th>
+              <th className="text-left py-2 px-2 font-semibold">Dims (TxWxL)</th>
+              <th className="text-right py-2 px-2 font-semibold">Pieces</th>
+              <th className="text-right py-2 px-2 font-semibold">Vol m³</th>
+              <th className="text-center py-2 px-2 font-semibold print:w-8">✓</th>
+            </tr>
+          </thead>
+          <tbody>
+            {inputs.map((input, index) => (
+              <tr key={input.id} className="border-b border-gray-300">
+                <td className="py-2 px-2">{index + 1}</td>
+                <td className="py-2 px-2">{input.shipmentCode}</td>
+                <td className="py-2 px-2 font-medium">{input.packageNumber}</td>
+                <td className="py-2 px-2">{input.productName || "-"}</td>
+                <td className="py-2 px-2">{input.woodSpecies || "-"}</td>
+                <td className="py-2 px-2">
+                  {input.thickness && input.width && input.length
+                    ? `${input.thickness}x${input.width}x${input.length}`
+                    : "-"}
+                </td>
+                <td className="py-2 px-2 text-right tabular-nums">
+                  {input.piecesUsed ?? input.availablePieces ?? "-"}
+                </td>
+                <td className="py-2 px-2 text-right tabular-nums">
+                  {input.volumeM3.toFixed(3).replace(".", ",")}
+                </td>
+                <td className="py-2 px-2 text-center">
+                  <div className="w-5 h-5 border-2 border-gray-400 mx-auto" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-black font-bold">
+              <td colSpan={6} className="py-2 px-2">Total</td>
+              <td className="py-2 px-2 text-right tabular-nums">
+                {inputs.reduce((sum, i) => sum + (i.piecesUsed ?? (parseInt(i.availablePieces || "0", 10) || 0)), 0)}
+              </td>
+              <td className="py-2 px-2 text-right tabular-nums">
+                {totalVolume.toFixed(3).replace(".", ",")}
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Print timestamp */}
+      <p className="mt-4 text-xs text-muted-foreground print:text-gray-500">
+        Printed: {new Date().toLocaleString("en-GB")}
+      </p>
+    </>
+  );
+
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
@@ -37,96 +120,26 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
         Print
       </Button>
 
+      {/* Print-only content - rendered outside dialog, hidden on screen */}
+      {open && (
+        <div id="print-area" className="hidden print:block print:fixed print:inset-0 print:bg-white print:p-5 print:z-[9999]">
+          {tableContent}
+        </div>
+      )}
+
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-auto print:max-w-none print:max-h-none print:overflow-visible print:shadow-none print:border-none sm:max-w-fit">
-          <DialogHeader className="print:hidden">
+        <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-auto sm:max-w-fit print:hidden">
+          <DialogHeader>
             <DialogTitle>Print Input Packages</DialogTitle>
           </DialogHeader>
 
-          {/* Print-friendly content */}
-          <div className="print-content">
-            {/* Header for print */}
-            <div className="mb-6 print:mb-4">
-              <h1 className="text-xl font-bold">Production Input Packages</h1>
-              {processName && (
-                <p className="text-sm text-muted-foreground print:text-black">
-                  Process: {processName}
-                </p>
-              )}
-              {productionDate && (
-                <p className="text-sm text-muted-foreground print:text-black">
-                  Date: {productionDate}
-                </p>
-              )}
-              <p className="text-sm text-muted-foreground print:text-black">
-                Total packages: {inputs.length} | Total volume: {totalVolume.toFixed(3).replace(".", ",")} m³
-              </p>
-            </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto">
-            <table className="text-sm border-collapse whitespace-nowrap">
-              <thead>
-                <tr className="border-b-2 border-black">
-                  <th className="text-left py-2 px-2 font-semibold">#</th>
-                  <th className="text-left py-2 px-2 font-semibold">Shipment</th>
-                  <th className="text-left py-2 px-2 font-semibold">Package</th>
-                  <th className="text-left py-2 px-2 font-semibold">Product</th>
-                  <th className="text-left py-2 px-2 font-semibold">Species</th>
-                  <th className="text-left py-2 px-2 font-semibold">Dims (TxWxL)</th>
-                  <th className="text-right py-2 px-2 font-semibold">Pieces</th>
-                  <th className="text-right py-2 px-2 font-semibold">Vol m³</th>
-                  <th className="text-center py-2 px-2 font-semibold print:w-8">✓</th>
-                </tr>
-              </thead>
-              <tbody>
-                {inputs.map((input, index) => (
-                  <tr key={input.id} className="border-b border-gray-300">
-                    <td className="py-2 px-2">{index + 1}</td>
-                    <td className="py-2 px-2">{input.shipmentCode}</td>
-                    <td className="py-2 px-2 font-medium">{input.packageNumber}</td>
-                    <td className="py-2 px-2">{input.productName || "-"}</td>
-                    <td className="py-2 px-2">{input.woodSpecies || "-"}</td>
-                    <td className="py-2 px-2">
-                      {input.thickness && input.width && input.length
-                        ? `${input.thickness}x${input.width}x${input.length}`
-                        : "-"}
-                    </td>
-                    <td className="py-2 px-2 text-right tabular-nums">
-                      {input.piecesUsed ?? input.availablePieces ?? "-"}
-                    </td>
-                    <td className="py-2 px-2 text-right tabular-nums">
-                      {input.volumeM3.toFixed(3).replace(".", ",")}
-                    </td>
-                    <td className="py-2 px-2 text-center">
-                      <div className="w-5 h-5 border-2 border-gray-400 mx-auto" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-black font-bold">
-                  <td colSpan={6} className="py-2 px-2">Total</td>
-                  <td className="py-2 px-2 text-right tabular-nums">
-                    {inputs.reduce((sum, i) => sum + (i.piecesUsed ?? (parseInt(i.availablePieces || "0", 10) || 0)), 0)}
-                  </td>
-                  <td className="py-2 px-2 text-right tabular-nums">
-                    {totalVolume.toFixed(3).replace(".", ",")}
-                  </td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-            </div>
-
-            {/* Print timestamp */}
-            <p className="mt-4 text-xs text-muted-foreground print:text-gray-500">
-              Printed: {new Date().toLocaleString("en-GB")}
-            </p>
+          {/* Screen preview content */}
+          <div className="print:hidden">
+            {tableContent}
           </div>
 
-          {/* Print button - hidden when printing */}
-          <div className="flex justify-end gap-2 mt-4 print:hidden">
+          {/* Print button */}
+          <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Close
             </Button>
@@ -141,29 +154,23 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
       {/* Print-specific styles */}
       <style jsx global>{`
         @media print {
-          body * {
-            visibility: hidden;
-          }
-          .print-content,
-          .print-content * {
-            visibility: visible;
-          }
-          .print-content {
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 100%;
-            padding: 20px;
-            background: white;
-          }
-          .print\\:hidden {
+          /* Hide everything except print area */
+          body > *:not(#print-area) {
             display: none !important;
           }
-          /* Hide dialog backdrop and overlay */
-          [data-radix-dialog-overlay],
-          [data-radix-dialog-content] {
-            position: static !important;
-            transform: none !important;
+          #print-area {
+            display: block !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            background: white !important;
+            padding: 20px !important;
+            z-index: 9999 !important;
+          }
+          /* Reset any portal containers */
+          [data-radix-portal] {
+            display: none !important;
           }
         }
       `}</style>
