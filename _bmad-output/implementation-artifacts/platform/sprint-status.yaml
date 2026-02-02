@@ -354,3 +354,28 @@ ad_hoc_changes:
       - "apps/portal/src/features/inventory/components/AdminInventoryViewTab.tsx"
       - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
       - "apps/portal/src/features/production/components/ProductionEntryClient.tsx"
+
+  - date: 2026-02-02
+    description: "Organization-specific process notes with print functionality"
+    changes:
+      - "Producers can add their own descriptions/explanations for each production process"
+      - "Notes are stored per-organization (each producer sees their own notes)"
+      - "Inline editing with Ctrl+Enter to save, Escape to cancel"
+      - "Print button to print processes with descriptions for posting on walls"
+      - "Added Textarea component to @timber/ui package"
+    files_created:
+      - "supabase/migrations/20260202000001_organization_process_notes.sql"
+      - "apps/portal/src/features/production/actions/saveProcessNote.ts"
+      - "apps/portal/src/features/production/components/PrintProcessesButton.tsx"
+      - "packages/ui/src/components/textarea.tsx"
+    files_modified:
+      - "apps/portal/src/app/(portal)/production/page.tsx"
+      - "apps/portal/src/features/production/actions/getProcesses.ts"
+      - "apps/portal/src/features/production/actions/index.ts"
+      - "apps/portal/src/features/production/components/ProcessesTab.tsx"
+      - "apps/portal/src/features/production/components/ProductionPageTabs.tsx"
+      - "apps/portal/src/features/production/types.ts"
+      - "packages/ui/src/index.ts"
+    database_changes:
+      - "New table: organization_process_notes (id, organization_id, process_id, notes, created_at, updated_at)"
+      - "RLS policies for organization-scoped access"
