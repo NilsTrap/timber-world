@@ -389,3 +389,33 @@ ad_hoc_changes:
     files_modified:
       - "apps/portal/src/features/production/components/ProductionPageTabs.tsx"
       - "apps/portal/src/features/production/actions/getProcesses.ts"
+
+  - date: 2026-02-02
+    description: "Package-level notes for production outputs"
+    changes:
+      - "Added notes field to production output packages"
+      - "Comment icon next to package number (blue when note exists, gray when empty)"
+      - "Read-only mode: Tooltip shows note on hover"
+      - "Edit mode: Popover with textarea for editing notes"
+      - "Keyboard shortcuts: Ctrl+Enter to save, Escape to cancel"
+      - "Notes saved with output packages to database"
+    files_created:
+      - "supabase/migrations/20260202000002_production_output_notes.sql"
+    files_modified:
+      - "apps/portal/src/features/production/types.ts"
+      - "apps/portal/src/features/production/components/ProductionOutputsTable.tsx"
+      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
+      - "apps/portal/src/features/production/actions/saveProductionOutputs.ts"
+      - "apps/portal/src/features/production/actions/getProductionOutputs.ts"
+      - "apps/portal/src/features/production/helpers/output-helpers.ts"
+    database_changes:
+      - "Added notes column (TEXT) to portal_production_outputs table"
+
+  - date: 2026-02-02
+    description: "TypeScript build fixes for Vercel deployment"
+    changes:
+      - "Fixed null-to-undefined type conversions for processNotesOrgId and organizationName props"
+      - "Added missing notes property to tempRow object in ProductionOutputsSection"
+    files_modified:
+      - "apps/portal/src/app/(portal)/production/page.tsx"
+      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
