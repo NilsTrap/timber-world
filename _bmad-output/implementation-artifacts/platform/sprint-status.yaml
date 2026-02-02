@@ -450,3 +450,22 @@ ad_hoc_changes:
       - "apps/portal/src/features/production/actions/validateProduction.ts"
     database_changes:
       - "Backfilled notes from portal_production_outputs to inventory_packages for existing validated productions"
+
+  - date: 2026-02-02
+    description: "Package number dropdown for selecting from all processes"
+    changes:
+      - "Output package numbers now selectable via dropdown instead of auto-assigned"
+      - "Dropdown shows next available number for ALL processes (not just current process)"
+      - "Allows selecting package numbers from other process codes (e.g., N-KD-xxx for a drying output)"
+      - "'Assign Package Numbers' button only assigns to rows with empty package numbers"
+      - "Preserves manually selected package numbers when adding/deleting rows"
+      - "Fixed row ordering by using sort_order column instead of package_number"
+      - "Added save queue mechanism to prevent race conditions with concurrent saves"
+    files_created:
+      - "apps/portal/src/features/production/actions/getNextPackageNumbers.ts"
+    files_modified:
+      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
+      - "apps/portal/src/features/production/components/ProductionOutputsTable.tsx"
+      - "apps/portal/src/features/production/actions/assignPackageNumbers.ts"
+      - "apps/portal/src/features/production/actions/getProductionOutputs.ts"
+      - "apps/portal/src/features/production/actions/index.ts"
