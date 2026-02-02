@@ -4,6 +4,7 @@ import { useMemo, useState, useCallback, useRef } from "react";
 import { DataEntryTable, Button, type ColumnDef, type DataEntryTableHandle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@timber/ui";
 import { X, FileText } from "lucide-react";
 import { SummaryCards } from "@/features/shipments/components/SummaryCards";
+import { PrintInventoryButton } from "./PrintInventoryButton";
 import type { PackageListItem } from "../types";
 import type { DraftPackageInfo } from "@/features/production/actions";
 
@@ -194,17 +195,23 @@ export function ProducerInventory({ packages, packagesInDrafts = [] }: ProducerI
     <div className="space-y-4 w-fit max-w-full">
       <div className="relative">
         <SummaryCards items={summaryItems} />
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => tableRef.current?.clearFilters()}
-            className="text-xs h-7 absolute right-0 bottom-0"
-          >
-            <X className="h-3 w-3 mr-1" />
-            Clear Filters
-          </Button>
-        )}
+        <div className="flex gap-2 absolute right-0 bottom-0">
+          <PrintInventoryButton
+            packages={displayedPackages}
+            title="Inventory Packages"
+          />
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => tableRef.current?.clearFilters()}
+              className="text-xs h-7"
+            >
+              <X className="h-3 w-3 mr-1" />
+              Clear Filters
+            </Button>
+          )}
+        </div>
       </div>
 
       <DataEntryTable<PackageListItem>
