@@ -97,6 +97,7 @@ export interface ProductionOutput {
   length: string | null;
   pieces: string | null;
   volumeM3: number;
+  notes: string | null;
   createdAt: string;
 }
 
@@ -118,6 +119,7 @@ export interface OutputRow {
   pieces: string;
   volumeM3: string;
   volumeIsCalculated: boolean;
+  notes: string;
 }
 
 export interface ReferenceOption {

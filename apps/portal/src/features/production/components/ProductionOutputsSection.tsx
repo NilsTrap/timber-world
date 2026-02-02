@@ -55,6 +55,7 @@ function dbOutputToRow(output: ProductionOutput, index: number, code: string): O
     pieces: output.pieces || "",
     volumeM3: output.volumeM3 ? output.volumeM3.toFixed(3) : "",
     volumeIsCalculated: false,
+    notes: output.notes || "",
   };
 }
 
@@ -125,6 +126,7 @@ export function ProductionOutputsSection({
           length: r.length,
           pieces: r.pieces,
           volumeM3: parseFloat(r.volumeM3) || 0,
+          notes: r.notes,
         }));
 
         const result = await saveProductionOutputs(productionEntryId, rowInputs);
@@ -223,6 +225,19 @@ export function ProductionOutputsSection({
       debouncedSave(newRows);
     },
     [debouncedSave]
+  );
+
+  // ─── Note Change Handler ──────────────────────────────────────────────────────
+
+  const handleNoteChange = useCallback(
+    (clientId: string, note: string) => {
+      const newRows = rows.map((row) =>
+        row.clientId === clientId ? { ...row, notes: note } : row
+      );
+      setRows(newRows);
+      debouncedSave(newRows);
+    },
+    [rows, debouncedSave]
   );
 
   // ─── Auto-Generate from Inputs ──────────────────────────────────────────────
@@ -481,6 +496,7 @@ export function ProductionOutputsSection({
         onRowsChange={handleRowsChange}
         processCode={processCode}
         readOnly={readOnly}
+        onNoteChange={handleNoteChange}
       />
 
       {!readOnly && (

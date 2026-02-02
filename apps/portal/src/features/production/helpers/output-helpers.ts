@@ -67,5 +67,6 @@ export function createEmptyOutputRow(index: number, code: string = "OUT"): Outpu
     pieces: "",
     volumeM3: "",
     volumeIsCalculated: false,
+    notes: "",
   };
 }

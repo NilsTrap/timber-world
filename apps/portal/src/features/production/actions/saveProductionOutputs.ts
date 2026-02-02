@@ -22,6 +22,7 @@ interface OutputRowInput {
   length: string;
   pieces: string;
   volumeM3: number;
+  notes: string;
 }
 
 interface SaveResult {
@@ -128,7 +129,7 @@ export async function saveProductionOutputs(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existingRows, error: fetchError } = await (supabase as any)
     .from("portal_production_outputs")
-    .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3")
+    .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes")
     .eq("production_entry_id", productionEntryId);
 
   if (fetchError) {
@@ -201,6 +202,7 @@ export async function saveProductionOutputs(
       length: row.length || null,
       pieces: row.pieces || null,
       volume_m3: row.volumeM3,
+      notes: row.notes || null,
       sort_order: index,
     };
   }
@@ -246,6 +248,7 @@ export async function saveProductionOutputs(
     if ((row.length || null) !== existing.length) return true;
     if ((row.pieces || null) !== existing.pieces) return true;
     if (row.volumeM3 !== parseFloat(existing.volume_m3)) return true;
+    if ((row.notes || null) !== existing.notes) return true;
     return false;
   }
 

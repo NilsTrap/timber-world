@@ -1,7 +1,21 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
-import { Input, DataEntryTable, type ColumnDef } from "@timber/ui";
+import { useCallback, useMemo, useState } from "react";
+import { MessageSquare } from "lucide-react";
+import {
+  Input,
+  DataEntryTable,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Textarea,
+  Button,
+  type ColumnDef,
+} from "@timber/ui";
 import type { OutputRow, ReferenceDropdowns } from "../types";
 import {
   generateClientId,
@@ -18,6 +32,7 @@ interface ProductionOutputsTableProps {
   onRowsChange: (rows: OutputRow[]) => void;
   processCode: string;
   readOnly?: boolean;
+  onNoteChange?: (clientId: string, note: string) => void;
 }
 
 /** Dropdown column configuration */
@@ -65,7 +80,79 @@ function normalizeVolumePrecision(value: string): string {
   return num.toFixed(3);
 }
 
-// ─── Row Helpers ──────────────────────────────────────────────────────────────
+// ─── Note Popover ─────────────────────────────────────────────────────────────
+
+interface NotePopoverProps {
+  note: string;
+  hasNote: boolean;
+  onSave: (note: string) => void;
+}
+
+function NotePopover({ note, hasNote, onSave }: NotePopoverProps) {
+  const [open, setOpen] = useState(false);
+  const [editValue, setEditValue] = useState(note);
+
+  const handleOpen = (isOpen: boolean) => {
+    if (isOpen) {
+      setEditValue(note);
+    }
+    setOpen(isOpen);
+  };
+
+  const handleSave = () => {
+    onSave(editValue);
+    setOpen(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
+
+  return (
+    <Popover open={open} onOpenChange={handleOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`p-0.5 rounded hover:bg-muted transition-colors flex-shrink-0 ${
+            hasNote ? "text-blue-500" : "text-muted-foreground/40 hover:text-muted-foreground"
+          }`}
+          title={hasNote ? "View/edit note" : "Add note"}
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72" align="start">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Package Note</label>
+          <Textarea
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Add a note for this package..."
+            className="min-h-[80px] text-sm"
+            autoFocus
+          />
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-muted-foreground">Ctrl+Enter to save</span>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSave}>
+                Save
+              </Button>
+            </div>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -75,6 +162,7 @@ export function ProductionOutputsTable({
   onRowsChange,
   processCode,
   readOnly,
+  onNoteChange,
 }: ProductionOutputsTableProps) {
   const columns: ColumnDef<OutputRow>[] = useMemo(() => {
     const cols: ColumnDef<OutputRow>[] = [
@@ -89,13 +177,46 @@ export function ProductionOutputsTable({
             },
           ]
         : []),
-      // Package number (readonly, auto-generated)
+      // Package number (readonly, auto-generated) with comment icon
       {
         key: "packageNumber",
         label: "Package",
-        type: "readonly",
+        type: "custom",
         getValue: (row) => row.packageNumber,
         totalType: "count",
+        renderCell: (row, renderIndex, _originalIndex, onChange, onKeyDown) => {
+          const hasNote = !!row.notes;
+
+          return (
+            <div className="flex items-center gap-1">
+              <span className="text-xs md:text-sm">{row.packageNumber || "-"}</span>
+              {readOnly ? (
+                // Read-only mode: just show icon with tooltip if note exists
+                hasNote ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <MessageSquare className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-xs">
+                        <p className="whitespace-pre-wrap text-sm">{row.notes}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : null
+              ) : (
+                // Edit mode: show popover for editing
+                <NotePopover
+                  note={row.notes}
+                  hasNote={hasNote}
+                  onSave={(newNote) => {
+                    onNoteChange?.(row.clientId, newNote);
+                  }}
+                />
+              )}
+            </div>
+          );
+        },
       },
       // 7 dropdown columns
       ...DROPDOWN_COLUMNS.map((dc): ColumnDef<OutputRow> => ({
