@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { X, Calendar, Trash2 } from "lucide-react";
+import { X, Calendar, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -18,7 +18,7 @@ import {
 } from "@timber/ui";
 import { ColumnHeaderMenu, type ColumnSortState } from "@timber/ui";
 import { formatDate } from "@/lib/utils";
-import { deleteProductionEntry } from "../actions";
+import { deleteProductionEntry, cancelProductionEntry } from "../actions";
 import type { ProductionHistoryItem } from "../types";
 
 interface ProductionHistoryTableProps {
@@ -69,6 +69,7 @@ export function ProductionHistoryTable({
   const router = useRouter();
   const [sortState, setSortState] = useState<ColumnSortState | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [localEntries, setLocalEntries] = useState(entries);
 
   const handleDelete = async (entryId: string) => {
@@ -81,6 +82,18 @@ export function ProductionHistoryTable({
       toast.error(result.error);
     }
     setDeletingId(null);
+  };
+
+  const handleCancel = async (entryId: string) => {
+    setCancellingId(entryId);
+    const result = await cancelProductionEntry(entryId);
+    if (result.success) {
+      toast.success("Production entry cancelled and inventory restored");
+      setLocalEntries((prev) => prev.filter((e) => e.id !== entryId));
+    } else {
+      toast.error(result.error);
+    }
+    setCancellingId(null);
   };
   const [filterState, setFilterState] = useState<Record<string, Set<string>>>(
     defaultProcess ? { processName: new Set([defaultProcess]) } : {}
@@ -379,36 +392,72 @@ export function ProductionHistoryTable({
                   </td>
                   {canDelete && (
                     <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                            disabled={deletingId === entry.id}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete production entry?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will permanently delete this production entry ({entry.processName} - {formatDate(entry.productionDate)}) and all its inputs and outputs. This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDelete(entry.id)}
-                              disabled={deletingId === entry.id}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      <div className="flex items-center justify-center gap-1">
+                        {/* Cancel button - restores inventory */}
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-amber-600"
+                              disabled={cancellingId === entry.id}
+                              title="Cancel and restore inventory"
                             >
-                              {deletingId === entry.id ? "Deleting..." : "Delete"}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Cancel production and restore inventory?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will cancel the production entry ({entry.processName} - {formatDate(entry.productionDate)}) and restore the inventory to its previous state. Input packages will have their volume restored, and output packages will be removed.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Keep Entry</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleCancel(entry.id)}
+                                disabled={cancellingId === entry.id}
+                                className="bg-amber-600 text-white hover:bg-amber-700"
+                              >
+                                {cancellingId === entry.id ? "Cancelling..." : "Cancel & Restore"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                        {/* Delete button - permanent deletion */}
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                              disabled={deletingId === entry.id}
+                              title="Delete permanently"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete production entry?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently delete this production entry ({entry.processName} - {formatDate(entry.productionDate)}) and all its inputs and outputs. This action cannot be undone and will NOT restore inventory.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDelete(entry.id)}
+                                disabled={deletingId === entry.id}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                {deletingId === entry.id ? "Deleting..." : "Delete"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </td>
                   )}
                 </tr>
