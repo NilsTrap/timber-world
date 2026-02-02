@@ -158,6 +158,8 @@ export default async function ProductionEntryPage({
         initialOutputTotal={initialOutputTotal}
         readOnly={!isDraft}
         hideMetrics={isCorrection}
+        processName={processName}
+        productionDate={productionDate}
       />
     </div>
   );

@@ -24,6 +24,10 @@ interface ProductionEntryClientProps {
   initialOutputTotal: number;
   readOnly?: boolean;
   hideMetrics?: boolean;
+  /** Process name for print header */
+  processName?: string;
+  /** Production date (formatted) for print header */
+  productionDate?: string;
 }
 
 /**
@@ -44,6 +48,8 @@ export function ProductionEntryClient({
   initialOutputTotal,
   readOnly,
   hideMetrics,
+  processName,
+  productionDate,
 }: ProductionEntryClientProps) {
   const router = useRouter();
   const [inputTotalM3, setInputTotalM3] = useState(initialInputTotal);
@@ -99,6 +105,8 @@ export function ProductionEntryClient({
         onCountChange={setInputCount}
         onInputsChange={setCurrentInputs}
         readOnly={readOnly}
+        processName={processName}
+        productionDate={productionDate}
       />
 
       <ProductionOutputsSection

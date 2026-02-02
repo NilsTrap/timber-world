@@ -9,6 +9,7 @@ import { getAvailablePackages, getProductionInputs, getPackagesInDrafts } from "
 import type { DraftPackageInfo } from "../actions";
 import { PackageSelector } from "./PackageSelector";
 import { ProductionInputsTable, type ProductionInputsTableHandle } from "./ProductionInputsTable";
+import { PrintInputsButton } from "./PrintInputsButton";
 
 interface ProductionInputsSectionProps {
   productionEntryId: string;
@@ -18,6 +19,10 @@ interface ProductionInputsSectionProps {
   onCountChange?: (count: number) => void;
   onInputsChange?: (inputs: ProductionInput[]) => void;
   readOnly?: boolean;
+  /** Process name for print header */
+  processName?: string;
+  /** Production date for print header (formatted) */
+  productionDate?: string;
 }
 
 /**
@@ -34,6 +39,8 @@ export function ProductionInputsSection({
   onCountChange,
   onInputsChange,
   readOnly,
+  processName,
+  productionDate,
 }: ProductionInputsSectionProps) {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [packages, setPackages] = useState<PackageListItem[]>(initialPackages);
@@ -114,6 +121,11 @@ export function ProductionInputsSection({
               Clear Filters
             </Button>
           )}
+          <PrintInputsButton
+            inputs={inputs}
+            processName={processName}
+            productionDate={productionDate}
+          />
           {!readOnly && (
             <Button variant="outline" size="sm" onClick={() => setSelectorOpen(true)}>
               <Plus className="h-4 w-4 mr-1" />
