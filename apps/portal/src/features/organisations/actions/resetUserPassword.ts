@@ -92,9 +92,7 @@ export async function resetUserPassword(
     type: "recovery",
     email: portalUser.email as string,
     options: {
-      redirectTo: process.env.NEXT_PUBLIC_APP_URL
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/accept-invite`
-        : undefined,
+      redirectTo: "https://timber-world-portal.vercel.app/accept-invite",
     },
   });
 

@@ -119,9 +119,7 @@ export async function sendUserCredentials(
         role: portalUser.role as string,
         organisation_name: organisationName,
       },
-      redirectTo: process.env.NEXT_PUBLIC_APP_URL
-        ? `${process.env.NEXT_PUBLIC_APP_URL}/accept-invite`
-        : undefined,
+      redirectTo: "https://timber-world-portal.vercel.app/accept-invite",
     });
 
   if (authError || !authData.user) {
