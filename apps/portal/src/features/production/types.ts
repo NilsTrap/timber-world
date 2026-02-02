@@ -77,6 +77,7 @@ export interface ProductionInput {
   totalVolumeM3: number | null;
   piecesUsed: number | null;
   volumeM3: number;
+  notes: string | null;
   createdAt: string;
 }
 

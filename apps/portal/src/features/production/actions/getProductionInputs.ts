@@ -36,7 +36,7 @@ export async function getProductionInputs(
     .select(`
       id, pieces_used, volume_m3, created_at,
       inventory_packages!portal_production_inputs_package_id_fkey(
-        id, package_number, shipment_id, thickness, width, length, pieces, volume_m3,
+        id, package_number, shipment_id, thickness, width, length, pieces, volume_m3, notes,
         shipments!inventory_packages_shipment_id_fkey(shipment_code),
         ref_product_names!inventory_packages_product_name_id_fkey(value),
         ref_wood_species!inventory_packages_wood_species_id_fkey(value),
@@ -78,6 +78,7 @@ export async function getProductionInputs(
       totalVolumeM3: pkg?.volume_m3 != null ? Number(pkg.volume_m3) : null,
       piecesUsed: row.pieces_used != null ? Number(row.pieces_used) : null,
       volumeM3: Number(row.volume_m3),
+      notes: pkg?.notes ?? null,
       createdAt: row.created_at,
     };
   });

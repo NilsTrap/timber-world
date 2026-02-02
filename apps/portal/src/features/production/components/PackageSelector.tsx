@@ -23,7 +23,7 @@ import {
   type ColumnSortState,
 } from "@timber/ui";
 import { toast } from "sonner";
-import { FileText } from "lucide-react";
+import { FileText, MessageSquare } from "lucide-react";
 import type { PackageListItem } from "@/features/shipments/types";
 import { addProductionInput } from "../actions";
 import type { DraftPackageInfo } from "../actions";
@@ -607,26 +607,43 @@ export function PackageSelector({
                             );
                           }
 
-                          // Special rendering for packageNumber to show draft icon
-                          if (col.key === "packageNumber" && draftInfo) {
-                            return (
-                              <TableCell key={col.key} className="px-1 text-xs whitespace-nowrap">
-                                <div className="flex items-center gap-1">
-                                  <span>{value || "-"}</span>
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <FileText className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>In draft: {draftInfo.processName}</p>
-                                        <p className="text-xs text-muted-foreground">{formatDate(draftInfo.productionDate)}</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                </div>
-                              </TableCell>
-                            );
+                          // Special rendering for packageNumber to show notes and draft icons
+                          if (col.key === "packageNumber") {
+                            const hasNote = !!pkg.notes;
+                            if (hasNote || draftInfo) {
+                              return (
+                                <TableCell key={col.key} className="px-1 text-xs whitespace-nowrap">
+                                  <div className="flex items-center gap-1">
+                                    <span>{value || "-"}</span>
+                                    {hasNote && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <MessageSquare className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                                          </TooltipTrigger>
+                                          <TooltipContent side="right" className="max-w-xs">
+                                            <p className="whitespace-pre-wrap text-sm">{pkg.notes}</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                    {draftInfo && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <FileText className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>In draft: {draftInfo.processName}</p>
+                                            <p className="text-xs text-muted-foreground">{formatDate(draftInfo.productionDate)}</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              );
+                            }
                           }
 
                           return (

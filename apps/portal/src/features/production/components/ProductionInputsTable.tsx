@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useTransition, useEffect, forwardRef, useImperativeHandle } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, MessageSquare } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -13,6 +13,10 @@ import {
   Button,
   Input,
   ColumnHeaderMenu,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   type ColumnSortState,
 } from "@timber/ui";
 import { toast } from "sonner";
@@ -390,6 +394,27 @@ export const ProductionInputsTable = forwardRef<ProductionInputsTableHandle, Pro
                           title={value ? `${col.label}: ${value}` : `${col.label}: (empty)`}
                         >
                           {abbrev}
+                        </TableCell>
+                      );
+                    }
+
+                    // Special rendering for packageNumber to show notes icon
+                    if (col.key === "packageNumber" && row.notes) {
+                      return (
+                        <TableCell key={col.key} className="px-1 text-xs whitespace-nowrap">
+                          <div className="flex items-center gap-1">
+                            <span>{value || "-"}</span>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <MessageSquare className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-xs">
+                                  <p className="whitespace-pre-wrap text-sm">{row.notes}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
                         </TableCell>
                       );
                     }

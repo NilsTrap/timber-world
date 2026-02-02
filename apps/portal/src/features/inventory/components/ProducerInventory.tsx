@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback, useRef } from "react";
 import { DataEntryTable, Button, type ColumnDef, type DataEntryTableHandle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@timber/ui";
-import { X, FileText } from "lucide-react";
+import { X, FileText, MessageSquare } from "lucide-react";
 import { SummaryCards } from "@/features/shipments/components/SummaryCards";
 import { PrintInventoryButton } from "./PrintInventoryButton";
 import type { PackageListItem } from "../types";
@@ -47,9 +47,22 @@ export function ProducerInventory({ packages, packagesInDrafts = [] }: ProducerI
         formatTotal: (v) => String(v),
         renderCell: (row) => {
           const draftInfo = draftsMap.get(row.id);
+          const hasNote = !!row.notes;
           return (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 whitespace-nowrap">
               <span>{row.packageNumber}</span>
+              {hasNote && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <MessageSquare className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      <p className="whitespace-pre-wrap text-sm">{row.notes}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               {draftInfo && (
                 <TooltipProvider>
                   <Tooltip>

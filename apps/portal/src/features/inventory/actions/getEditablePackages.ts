@@ -49,6 +49,7 @@ export async function getEditablePackages(orgId?: string): Promise<ActionResult<
       pieces,
       volume_m3,
       volume_is_calculated,
+      notes,
       ref_product_names!inventory_packages_product_name_id_fkey(value),
       ref_wood_species!inventory_packages_wood_species_id_fkey(value),
       ref_humidity!inventory_packages_humidity_id_fkey(value),
@@ -142,6 +143,7 @@ export async function getEditablePackages(orgId?: string): Promise<ActionResult<
       volumeIsCalculated: pkg.volume_is_calculated ?? false,
       organisationName: org?.name ?? null,
       organisationCode: org?.code ?? null,
+      notes: pkg.notes ?? null,
     };
   });
 

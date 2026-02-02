@@ -64,7 +64,7 @@ export async function getAvailablePackages(
   let shipmentQuery = (supabase as any)
     .from("inventory_packages")
     .select(`
-      id, package_number, shipment_id, thickness, width, length, pieces, volume_m3,
+      id, package_number, shipment_id, thickness, width, length, pieces, volume_m3, notes,
       shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, to_organisation_id),
       ${refSelect}
     `)
@@ -83,7 +83,7 @@ export async function getAvailablePackages(
   let productionQuery = (supabase as any)
     .from("inventory_packages")
     .select(`
-      id, package_number, shipment_id, thickness, width, length, pieces, volume_m3,
+      id, package_number, shipment_id, thickness, width, length, pieces, volume_m3, notes,
       portal_production_entries!inner(organisation_id),
       ${refSelect}
     `)
@@ -102,7 +102,7 @@ export async function getAvailablePackages(
   let directQuery = (supabase as any)
     .from("inventory_packages")
     .select(`
-      id, package_number, shipment_id, thickness, width, length, pieces, volume_m3,
+      id, package_number, shipment_id, thickness, width, length, pieces, volume_m3, notes,
       ${refSelect}
     `)
     .eq("organisation_id", session.organisationId)
@@ -171,6 +171,7 @@ export async function getAvailablePackages(
     // Producer only sees their own org's packages, so use session org info
     organisationName: session.organisationName,
     organisationCode: session.organisationCode,
+    notes: pkg.notes ?? null,
   }));
 
   // Sort by package number after merging

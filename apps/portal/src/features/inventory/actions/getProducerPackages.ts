@@ -47,6 +47,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       pieces,
       volume_m3,
       status,
+      notes,
       shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, to_organisation_id),
       ref_product_names!inventory_packages_product_name_id_fkey(value),
       ref_wood_species!inventory_packages_wood_species_id_fkey(value),
@@ -80,6 +81,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       pieces,
       volume_m3,
       status,
+      notes,
       portal_production_entries!inner(organisation_id),
       ref_product_names!inventory_packages_product_name_id_fkey(value),
       ref_wood_species!inventory_packages_wood_species_id_fkey(value),
@@ -113,6 +115,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       pieces,
       volume_m3,
       status,
+      notes,
       ref_product_names!inventory_packages_product_name_id_fkey(value),
       ref_wood_species!inventory_packages_wood_species_id_fkey(value),
       ref_humidity!inventory_packages_humidity_id_fkey(value),
@@ -162,6 +165,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       // Producer only sees their own org's packages, so use current org info
       organisationName: session.currentOrganizationName || session.organisationName,
       organisationCode: session.currentOrganizationCode || session.organisationCode,
+      notes: pkg.notes ?? null,
     }));
 
   // Sort by package number after merging

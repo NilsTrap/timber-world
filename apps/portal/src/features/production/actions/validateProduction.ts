@@ -226,7 +226,7 @@ export async function validateProduction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: outputs, error: outputsError } = await (supabase as any)
     .from("portal_production_outputs")
-    .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3")
+    .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes")
     .eq("production_entry_id", productionEntryId)
     .order("package_number", { ascending: true });
 
@@ -579,6 +579,7 @@ export async function validateProduction(
     volume_m3: output.volume_m3,
     volume_is_calculated: false,
     status: "produced",
+    notes: output.notes || null,
   }));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

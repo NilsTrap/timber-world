@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef } from "react";
-import { DataEntryTable, Button, type ColumnDef, type DataEntryTableHandle } from "@timber/ui";
-import { X } from "lucide-react";
+import { DataEntryTable, Button, type ColumnDef, type DataEntryTableHandle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@timber/ui";
+import { X, MessageSquare } from "lucide-react";
 import { SummaryCards } from "@/features/shipments/components/SummaryCards";
 import { PrintInventoryButton } from "./PrintInventoryButton";
 import type { EditablePackageItem } from "@/features/shipments/types";
@@ -39,10 +39,30 @@ export function AdminInventoryViewTab({ packages }: AdminInventoryViewTabProps) 
       {
         key: "packageNumber",
         label: "Package",
-        type: "readonly",
+        type: "custom",
         getValue: (row) => row.packageNumber,
         totalType: "count",
         formatTotal: (v) => String(v),
+        renderCell: (row) => {
+          const hasNote = !!row.notes;
+          return (
+            <div className="flex items-center gap-1.5 whitespace-nowrap">
+              <span>{row.packageNumber}</span>
+              {hasNote && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <MessageSquare className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      <p className="whitespace-pre-wrap text-sm">{row.notes}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+          );
+        },
       },
       {
         key: "productName",

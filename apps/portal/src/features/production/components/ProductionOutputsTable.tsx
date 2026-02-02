@@ -312,7 +312,7 @@ export function ProductionOutputsTable({
       },
     ];
     return cols;
-  }, [dropdowns, readOnly]);
+  }, [dropdowns, readOnly, onNoteChange]);
 
   const handleCellChange = useCallback(
     (row: OutputRow, columnKey: string, value: string): OutputRow => {

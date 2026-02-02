@@ -189,6 +189,7 @@ export interface PackageListItem {
   volumeM3: number | null;
   organisationName: string | null;
   organisationCode: string | null;
+  notes: string | null;
 }
 
 /** Editable package item with both IDs and display values for admin editing */

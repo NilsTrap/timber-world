@@ -231,13 +231,15 @@ export function ProductionOutputsSection({
 
   const handleNoteChange = useCallback(
     (clientId: string, note: string) => {
-      const newRows = rows.map((row) =>
-        row.clientId === clientId ? { ...row, notes: note } : row
-      );
-      setRows(newRows);
-      debouncedSave(newRows);
+      setRows((prevRows) => {
+        const newRows = prevRows.map((row) =>
+          row.clientId === clientId ? { ...row, notes: note } : row
+        );
+        debouncedSave(newRows);
+        return newRows;
+      });
     },
-    [rows, debouncedSave]
+    [debouncedSave]
   );
 
   // ─── Auto-Generate from Inputs ──────────────────────────────────────────────
