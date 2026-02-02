@@ -22,6 +22,7 @@ function isAdminOnlyRoute(pathname: string): boolean {
  * - Unauthenticated users accessing protected routes → redirect to /login
  * - Authenticated users accessing auth pages → redirect to /dashboard
  * - Non-admin users accessing admin routes → redirect to dashboard with access_denied
+ * - Users with incomplete setup (status="invited") → redirect to /accept-invite
  */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -65,6 +66,8 @@ export async function middleware(request: NextRequest) {
   const isAuthRoute =
     pathname.startsWith("/login") || pathname.startsWith("/register");
 
+  const isAcceptInviteRoute = pathname.startsWith("/accept-invite");
+
   const isProtectedRoute =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/inventory") ||
@@ -84,6 +87,22 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Check if user has completed their account setup (for invited users)
+  // This prevents users from accessing the app before setting their password
+  if (user && (isProtectedRoute || isRootPath)) {
+    const { data: portalUser } = await supabase
+      .from("portal_users")
+      .select("status")
+      .eq("auth_user_id", user.id)
+      .single();
+
+    if (portalUser?.status === "invited") {
+      // User hasn't completed setup - redirect to accept-invite
+      const acceptInviteUrl = new URL("/accept-invite", request.url);
+      return NextResponse.redirect(acceptInviteUrl);
+    }
+  }
+
   // Admin route protection - check role for admin-only routes
   if (user && isAdminOnlyRoute(pathname)) {
     const role = user.user_metadata?.role;
@@ -95,10 +114,24 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (isAuthRoute && user) {
-    // Redirect authenticated users away from auth pages
-    const dashboardUrl = new URL("/dashboard", request.url);
-    return NextResponse.redirect(dashboardUrl);
+  if ((isAuthRoute || isAcceptInviteRoute) && user) {
+    // Check if user needs to complete invite setup
+    const { data: portalUser } = await supabase
+      .from("portal_users")
+      .select("status")
+      .eq("auth_user_id", user.id)
+      .single();
+
+    if (portalUser?.status === "invited" && isAcceptInviteRoute) {
+      // Allow invited users to access accept-invite page
+      return response;
+    }
+
+    if (portalUser?.status !== "invited") {
+      // Redirect fully authenticated users away from auth pages
+      const dashboardUrl = new URL("/dashboard", request.url);
+      return NextResponse.redirect(dashboardUrl);
+    }
   }
 
   if (isRootPath) {
