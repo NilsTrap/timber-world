@@ -213,6 +213,7 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
       pieces: null,
       volumeM3: null,
       volumeIsCalculated: false,
+      notes: null,
     };
   }, [organisations]);
 
@@ -248,6 +249,7 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
       pieces: row.pieces,
       volumeM3: row.volumeM3,
       volumeIsCalculated: row.volumeIsCalculated,
+      notes: row.notes,
     };
   }, []);
 

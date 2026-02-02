@@ -44,6 +44,7 @@ export async function getPackages(orgId?: string): Promise<ActionResult<PackageL
       length,
       pieces,
       volume_m3,
+      notes,
       shipments!inventory_packages_shipment_id_fkey(shipment_code, to_organisation_id),
       ref_product_names!inventory_packages_product_name_id_fkey(value),
       ref_wood_species!inventory_packages_wood_species_id_fkey(value),
@@ -128,6 +129,7 @@ export async function getPackages(orgId?: string): Promise<ActionResult<PackageL
       length: pkg.length,
       pieces: pkg.pieces,
       volumeM3: pkg.volume_m3 != null ? Number(pkg.volume_m3) : null,
+      notes: pkg.notes ?? null,
       organisationName: org?.name ?? null,
       organisationCode: org?.code ?? null,
       _organisationId: organisationId, // Internal field for filtering

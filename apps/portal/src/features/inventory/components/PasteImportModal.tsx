@@ -281,6 +281,7 @@ export function PasteImportModal({
         pieces: pkg.pieces ?? null,
         volumeM3: pkg.volumeM3 ?? null,
         volumeIsCalculated: pkg.volumeIsCalculated ?? false,
+        notes: null,
       };
     });
   }, [parsedData.rows, columnMappings, dropdowns, organisations, findRefId, findOrgId]);
