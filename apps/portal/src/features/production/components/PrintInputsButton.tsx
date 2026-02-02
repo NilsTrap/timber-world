@@ -38,7 +38,7 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[95vw] w-fit min-w-[600px] max-h-[90vh] overflow-auto print:max-w-none print:max-h-none print:overflow-visible print:shadow-none print:border-none">
+        <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-auto print:max-w-none print:max-h-none print:overflow-visible print:shadow-none print:border-none sm:max-w-fit">
           <DialogHeader className="print:hidden">
             <DialogTitle>Print Input Packages</DialogTitle>
           </DialogHeader>
@@ -64,7 +64,8 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
             </div>
 
             {/* Table */}
-            <table className="w-full text-sm border-collapse whitespace-nowrap">
+            <div className="overflow-x-auto">
+            <table className="text-sm border-collapse whitespace-nowrap">
               <thead>
                 <tr className="border-b-2 border-black">
                   <th className="text-left py-2 px-2 font-semibold">#</th>
@@ -116,6 +117,7 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
                 </tr>
               </tfoot>
             </table>
+            </div>
 
             {/* Print timestamp */}
             <p className="mt-4 text-xs text-muted-foreground print:text-gray-500">
@@ -147,14 +149,21 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
             visibility: visible;
           }
           .print-content {
-            position: absolute;
+            position: fixed;
             left: 0;
             top: 0;
             width: 100%;
             padding: 20px;
+            background: white;
           }
           .print\\:hidden {
             display: none !important;
+          }
+          /* Hide dialog backdrop and overlay */
+          [data-radix-dialog-overlay],
+          [data-radix-dialog-content] {
+            position: static !important;
+            transform: none !important;
           }
         }
       `}</style>
