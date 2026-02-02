@@ -38,7 +38,7 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto print:max-w-none print:max-h-none print:overflow-visible print:shadow-none print:border-none">
+        <DialogContent className="max-w-[95vw] w-fit min-w-[600px] max-h-[90vh] overflow-auto print:max-w-none print:max-h-none print:overflow-visible print:shadow-none print:border-none">
           <DialogHeader className="print:hidden">
             <DialogTitle>Print Input Packages</DialogTitle>
           </DialogHeader>
@@ -64,7 +64,7 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
             </div>
 
             {/* Table */}
-            <table className="w-full text-sm border-collapse">
+            <table className="w-full text-sm border-collapse whitespace-nowrap">
               <thead>
                 <tr className="border-b-2 border-black">
                   <th className="text-left py-2 px-2 font-semibold">#</th>
