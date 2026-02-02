@@ -182,13 +182,14 @@ export function ProductionOutputsTable({
         key: "packageNumber",
         label: "Package",
         type: "custom",
+        width: "w-[7rem]",
         getValue: (row) => row.packageNumber,
         totalType: "count",
         renderCell: (row, renderIndex, _originalIndex, onChange, onKeyDown) => {
           const hasNote = !!row.notes;
 
           return (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 whitespace-nowrap">
               <span className="text-xs md:text-sm">{row.packageNumber || "-"}</span>
               {readOnly ? (
                 // Read-only mode: just show icon with tooltip if note exists
