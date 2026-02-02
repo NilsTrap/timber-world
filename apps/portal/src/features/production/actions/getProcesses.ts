@@ -38,7 +38,7 @@ export async function getProcesses(): Promise<ActionResult<Process[]>> {
 
 /**
  * Fetch all active processes with organization-specific notes.
- * Used by the Processes tab to display and edit process descriptions.
+ * Used by the Process List tab to display and edit process descriptions.
  */
 export async function getProcessesWithNotes(
   organizationId?: string

@@ -1,4 +1,6 @@
-# Story 5.1: Production Page Tabs (Active + History)
+# Story 5.1: Production Page Tabs (Drafts + Completed)
+
+> **Note**: Tabs were renamed on 2026-02-02: Active → Drafts, History → Completed, Processes → Process List
 
 Status: done
 

@@ -379,3 +379,13 @@ ad_hoc_changes:
     database_changes:
       - "New table: organization_process_notes (id, organization_id, process_id, notes, created_at, updated_at)"
       - "RLS policies for organization-scoped access"
+
+  - date: 2026-02-02
+    description: "Rename production page tabs for clarity"
+    changes:
+      - "Active → Drafts (shows new production form + draft entries)"
+      - "History → Completed (shows validated production entries)"
+      - "Processes → Process List (shows process codes with notes)"
+    files_modified:
+      - "apps/portal/src/features/production/components/ProductionPageTabs.tsx"
+      - "apps/portal/src/features/production/actions/getProcesses.ts"

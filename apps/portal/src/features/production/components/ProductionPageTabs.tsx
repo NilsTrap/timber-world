@@ -17,7 +17,7 @@ interface ProductionPageTabsProps {
   showOrganisation?: boolean;
   /** If true, shows delete button for history entries (Super Admin only) */
   canDeleteHistory?: boolean;
-  /** Organization name for the Processes tab */
+  /** Organization name for the Process List tab */
   organizationName?: string;
   /** Organization ID for saving process notes */
   organizationId?: string;
