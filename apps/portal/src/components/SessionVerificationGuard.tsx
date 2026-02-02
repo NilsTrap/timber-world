@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -24,10 +24,14 @@ export function SessionVerificationGuard({
   const pathname = usePathname();
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const hasChecked = useRef(false);
 
   useEffect(() => {
-    // Prevent running multiple times
+    // Only check once per component lifecycle
+    if (hasChecked.current) return;
     if (isSigningOut) return;
+
+    hasChecked.current = true;
 
     // Check if this window/tab has verified the session
     const verified = sessionStorage.getItem(SESSION_VERIFIED_KEY);
