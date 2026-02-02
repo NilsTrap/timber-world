@@ -419,3 +419,34 @@ ad_hoc_changes:
     files_modified:
       - "apps/portal/src/app/(portal)/production/page.tsx"
       - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
+
+  - date: 2026-02-02
+    description: "Package notes displayed throughout the application"
+    changes:
+      - "Notes icon (blue comment) shown in producer inventory view"
+      - "Notes icon shown in admin inventory view"
+      - "Notes icon shown in package selector dialog (when selecting production inputs)"
+      - "Notes icon shown in production inputs table (selected inputs)"
+      - "Notes copied from production outputs to inventory packages during validation"
+      - "Backfill migration to sync existing notes from production outputs to inventory"
+      - "Fixed stale closure bug in handleNoteChange callback (used functional setState)"
+      - "Widened package column to prevent text wrapping with notes icon"
+      - "Added notes field to PackageListItem and ProductionInput types"
+    files_created:
+      - "supabase/migrations/20260202000003_backfill_inventory_notes.sql"
+    files_modified:
+      - "apps/portal/src/features/shipments/types.ts"
+      - "apps/portal/src/features/production/types.ts"
+      - "apps/portal/src/features/inventory/components/ProducerInventory.tsx"
+      - "apps/portal/src/features/inventory/components/AdminInventoryViewTab.tsx"
+      - "apps/portal/src/features/inventory/actions/getProducerPackages.ts"
+      - "apps/portal/src/features/inventory/actions/getEditablePackages.ts"
+      - "apps/portal/src/features/production/components/PackageSelector.tsx"
+      - "apps/portal/src/features/production/components/ProductionInputsTable.tsx"
+      - "apps/portal/src/features/production/components/ProductionOutputsTable.tsx"
+      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
+      - "apps/portal/src/features/production/actions/getAvailablePackages.ts"
+      - "apps/portal/src/features/production/actions/getProductionInputs.ts"
+      - "apps/portal/src/features/production/actions/validateProduction.ts"
+    database_changes:
+      - "Backfilled notes from portal_production_outputs to inventory_packages for existing validated productions"
