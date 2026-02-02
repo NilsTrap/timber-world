@@ -129,6 +129,8 @@ export function ProductionEntryClient({
         onCountChange={setOutputCount}
         readOnly={readOnly}
         isAdminEdit={isAdminEdit}
+        processName={processName}
+        productionDate={productionDate}
       />
 
       {/* Validate Button — for draft entries and admin edit mode */}

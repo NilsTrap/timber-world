@@ -7,6 +7,7 @@ import { Button } from "@timber/ui";
 import { saveProductionOutputs, assignPackageNumbers } from "../actions";
 import { ProductionOutputsTable } from "./ProductionOutputsTable";
 import { OutputPasteImportModal, type PartialOutputRow } from "./OutputPasteImportModal";
+import { PrintOutputsButton } from "./PrintOutputsButton";
 import {
   generateClientId,
   generateOutputNumber,
@@ -27,6 +28,10 @@ interface ProductionOutputsSectionProps {
   readOnly?: boolean;
   /** True when admin is editing a validated entry */
   isAdminEdit?: boolean;
+  /** Process name for print header */
+  processName?: string;
+  /** Production date for print header */
+  productionDate?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -73,6 +78,8 @@ export function ProductionOutputsSection({
   onCountChange,
   readOnly,
   isAdminEdit,
+  processName,
+  productionDate,
 }: ProductionOutputsSectionProps) {
   const [rows, setRows] = useState<OutputRow[]>(() =>
     initialOutputs.map((o, i) => dbOutputToRow(o, i, processCode))
@@ -419,41 +426,53 @@ export function ProductionOutputsSection({
             <span className="text-xs text-muted-foreground animate-pulse">Saving...</span>
           )}
         </div>
-        {!readOnly && (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setImportModalOpen(true)}
-              disabled={isPending || isAssigningNumbers}
-            >
-              <ClipboardPaste className="h-3.5 w-3.5 mr-1.5" />
-              Paste Import
-            </Button>
-            {inputs.length > 0 && (
+        <div className="flex items-center gap-2">
+          {/* Print button - always visible when there are rows */}
+          {rows.length > 0 && (
+            <PrintOutputsButton
+              rows={rows}
+              dropdowns={dropdowns}
+              processName={processName}
+              productionDate={productionDate}
+            />
+          )}
+          {/* Edit actions - only when not read-only */}
+          {!readOnly && (
+            <>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleAutoGenerate}
+                onClick={() => setImportModalOpen(true)}
                 disabled={isPending || isAssigningNumbers}
               >
-                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                Auto-Generate from Inputs
+                <ClipboardPaste className="h-3.5 w-3.5 mr-1.5" />
+                Paste Import
               </Button>
-            )}
-            {rows.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleAssignNumbers}
-                disabled={isPending || isAssigningNumbers}
-              >
-                <Hash className="h-3.5 w-3.5 mr-1.5" />
-                {isAssigningNumbers ? "Assigning..." : "Assign Package Numbers"}
-              </Button>
-            )}
-          </div>
-        )}
+              {inputs.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAutoGenerate}
+                  disabled={isPending || isAssigningNumbers}
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  Auto-Generate from Inputs
+                </Button>
+              )}
+              {rows.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAssignNumbers}
+                  disabled={isPending || isAssigningNumbers}
+                >
+                  <Hash className="h-3.5 w-3.5 mr-1.5" />
+                  {isAssigningNumbers ? "Assigning..." : "Assign Package Numbers"}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       <ProductionOutputsTable
