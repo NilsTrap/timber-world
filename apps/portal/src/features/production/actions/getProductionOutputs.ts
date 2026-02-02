@@ -35,9 +35,9 @@ export async function getProductionOutputs(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("portal_production_outputs")
-    .select("id, production_entry_id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes, created_at")
+    .select("id, production_entry_id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes, sort_order, created_at")
     .eq("production_entry_id", productionEntryId)
-    .order("package_number", { ascending: true });
+    .order("sort_order", { ascending: true });
 
   if (error) {
     console.error("Failed to fetch production outputs:", error);

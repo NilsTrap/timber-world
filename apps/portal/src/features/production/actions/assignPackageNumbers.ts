@@ -121,11 +121,11 @@ export async function assignPackageNumbers(
     return { success: false, error: "No outputs to assign numbers to" };
   }
 
-  // Filter outputs that need numbers (empty or no valid number)
-  const validNumberRegex = new RegExp(`^N-${processCode}-\\d{4}$`);
+  // Filter outputs that need numbers (only those with NO package number at all)
+  // Don't overwrite package numbers from other processes that were selected via dropdown
   const outputsNeedingNumbers = outputs.filter(
     (o: { package_number: string | null }) =>
-      !o.package_number || !validNumberRegex.test(o.package_number)
+      !o.package_number || o.package_number.trim() === ""
   );
 
   if (outputsNeedingNumbers.length === 0) {

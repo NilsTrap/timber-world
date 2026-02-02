@@ -17,6 +17,7 @@ import {
   type ColumnDef,
 } from "@timber/ui";
 import type { OutputRow, ReferenceDropdowns } from "../types";
+import type { NextPackageNumber } from "../actions";
 import {
   generateClientId,
   generateOutputNumber,
@@ -33,6 +34,8 @@ interface ProductionOutputsTableProps {
   processCode: string;
   readOnly?: boolean;
   onNoteChange?: (clientId: string, note: string) => void;
+  availablePackageNumbers?: NextPackageNumber[];
+  onPackageNumberChange?: (clientId: string, packageNumber: string) => void;
 }
 
 /** Dropdown column configuration */
@@ -163,6 +166,8 @@ export function ProductionOutputsTable({
   processCode,
   readOnly,
   onNoteChange,
+  availablePackageNumbers,
+  onPackageNumberChange,
 }: ProductionOutputsTableProps) {
   const columns: ColumnDef<OutputRow>[] = useMemo(() => {
     const cols: ColumnDef<OutputRow>[] = [
@@ -177,23 +182,23 @@ export function ProductionOutputsTable({
             },
           ]
         : []),
-      // Package number (readonly, auto-generated) with comment icon
+      // Package number with dropdown for selecting from available numbers
       {
         key: "packageNumber",
         label: "Package",
         type: "custom",
-        width: "w-[7rem]",
+        width: "w-[9rem]",
         getValue: (row) => row.packageNumber,
         totalType: "count",
         renderCell: (row, renderIndex, _originalIndex, onChange, onKeyDown) => {
           const hasNote = !!row.notes;
 
-          return (
-            <div className="flex items-center gap-1 whitespace-nowrap">
-              <span className="text-xs md:text-sm">{row.packageNumber || "-"}</span>
-              {readOnly ? (
-                // Read-only mode: just show icon with tooltip if note exists
-                hasNote ? (
+          // Read-only mode: just show the value and note icon
+          if (readOnly) {
+            return (
+              <div className="flex items-center gap-1 whitespace-nowrap">
+                <span className="text-xs md:text-sm">{row.packageNumber || "-"}</span>
+                {hasNote && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -204,17 +209,57 @@ export function ProductionOutputsTable({
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                ) : null
-              ) : (
-                // Edit mode: show popover for editing
-                <NotePopover
-                  note={row.notes}
-                  hasNote={hasNote}
-                  onSave={(newNote) => {
-                    onNoteChange?.(row.clientId, newNote);
-                  }}
-                />
-              )}
+                )}
+              </div>
+            );
+          }
+
+          // Edit mode: show dropdown with available numbers + note popover
+          // Build options: current value (if any) + all available numbers
+          const options: { value: string; label: string }[] = [];
+
+          // Add current value as first option if it exists
+          if (row.packageNumber) {
+            options.push({
+              value: row.packageNumber,
+              label: row.packageNumber,
+            });
+          }
+
+          // Add available numbers (these are the "next" numbers for each process)
+          for (const avail of availablePackageNumbers ?? []) {
+            // Don't add duplicates
+            if (!options.some((o) => o.value === avail.nextNumber)) {
+              options.push({
+                value: avail.nextNumber,
+                label: avail.nextNumber,
+              });
+            }
+          }
+
+          return (
+            <div className="flex items-center gap-1 whitespace-nowrap">
+              <select
+                value={row.packageNumber || ""}
+                onChange={(e) => {
+                  onPackageNumberChange?.(row.clientId, e.target.value);
+                }}
+                className="h-7 text-xs rounded-md border border-input bg-transparent px-1 py-0.5 shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring w-[7rem]"
+              >
+                <option value="">-</option>
+                {options.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <NotePopover
+                note={row.notes}
+                hasNote={hasNote}
+                onSave={(newNote) => {
+                  onNoteChange?.(row.clientId, newNote);
+                }}
+              />
             </div>
           );
         },
@@ -312,7 +357,7 @@ export function ProductionOutputsTable({
       },
     ];
     return cols;
-  }, [dropdowns, readOnly, onNoteChange]);
+  }, [dropdowns, readOnly, onNoteChange, availablePackageNumbers, onPackageNumberChange]);
 
   const handleCellChange = useCallback(
     (row: OutputRow, columnKey: string, value: string): OutputRow => {
@@ -355,7 +400,8 @@ export function ProductionOutputsTable({
     (updatedRows: OutputRow[]): OutputRow[] =>
       updatedRows.map((row, i) => ({
         ...row,
-        packageNumber: generateOutputNumber(i, processCode),
+        // Preserve existing package numbers, only generate for new rows without one
+        packageNumber: row.packageNumber || generateOutputNumber(i, processCode),
       })),
     [processCode]
   );

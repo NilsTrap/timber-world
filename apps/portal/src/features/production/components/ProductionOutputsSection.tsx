@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { Sparkles, ClipboardPaste, Hash } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@timber/ui";
-import { saveProductionOutputs, assignPackageNumbers } from "../actions";
+import { saveProductionOutputs, assignPackageNumbers, getNextPackageNumbers } from "../actions";
+import type { NextPackageNumber } from "../actions";
 import { ProductionOutputsTable } from "./ProductionOutputsTable";
 import { OutputPasteImportModal, type PartialOutputRow } from "./OutputPasteImportModal";
 import { PrintOutputsButton } from "./PrintOutputsButton";
@@ -88,7 +89,37 @@ export function ProductionOutputsSection({
   const [isPending, startTransition] = useTransition();
   const [isAssigningNumbers, setIsAssigningNumbers] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingRowsRef = useRef<OutputRow[] | null>(null); // Track rows with pending save
+  const latestRowsRef = useRef<OutputRow[]>(rows); // Always keep latest rows for saves
+  const saveInProgressRef = useRef<boolean>(false); // Prevent concurrent saves
+  const saveQueuedRef = useRef<boolean>(false); // Track if another save is queued
   const [importModalOpen, setImportModalOpen] = useState(false);
+
+  // Keep latestRowsRef in sync with rows state
+  useEffect(() => {
+    latestRowsRef.current = rows;
+  }, [rows]);
+  const [availablePackageNumbers, setAvailablePackageNumbers] = useState<NextPackageNumber[]>([]);
+
+  // Compute which package numbers are "taken" in the current draft rows
+  const takenPackageNumbers = useMemo(() => {
+    return rows
+      .map((r) => r.packageNumber)
+      .filter((num) => num && num !== "");
+  }, [rows]);
+
+  // Fetch available package numbers on mount and when taken numbers change
+  const fetchAvailableNumbers = useCallback(async () => {
+    if (readOnly) return;
+    const result = await getNextPackageNumbers(productionEntryId, takenPackageNumbers);
+    if (result.success) {
+      setAvailablePackageNumbers(result.data);
+    }
+  }, [productionEntryId, takenPackageNumbers, readOnly]);
+
+  useEffect(() => {
+    fetchAvailableNumbers();
+  }, [fetchAvailableNumbers]);
 
   // Total output m³
   const totalM3 = useMemo(() => {
@@ -108,62 +139,116 @@ export function ProductionOutputsSection({
 
   // ─── Save Logic ─────────────────────────────────────────────────────────────
 
-  const performSave = useCallback(
-    (currentRows: OutputRow[]) => {
-      startTransition(async () => {
-        const rowInputs = currentRows.map((r) => ({
-          dbId: r.dbId,
-          packageNumber: r.packageNumber,
-          productNameId: r.productNameId,
-          woodSpeciesId: r.woodSpeciesId,
-          humidityId: r.humidityId,
-          typeId: r.typeId,
-          processingId: r.processingId,
-          fscId: r.fscId,
-          qualityId: r.qualityId,
-          thickness: r.thickness,
-          width: r.width,
-          length: r.length,
-          pieces: r.pieces,
-          volumeM3: parseFloat(r.volumeM3) || 0,
-          notes: r.notes,
-        }));
+  // Async version of save that returns a Promise - for use when we need to wait
+  const performSaveAsync = useCallback(
+    async (currentRows: OutputRow[]): Promise<boolean> => {
+      // Prevent concurrent saves - if save is in progress, queue another one
+      if (saveInProgressRef.current) {
+        saveQueuedRef.current = true;
+        return true; // Return true so caller doesn't think it failed
+      }
 
-        const result = await saveProductionOutputs(productionEntryId, rowInputs);
+      saveInProgressRef.current = true;
 
-        if (!result.success) {
-          toast.error(result.error);
-          return;
+      const rowInputs = currentRows.map((r) => ({
+        dbId: r.dbId,
+        packageNumber: r.packageNumber,
+        productNameId: r.productNameId,
+        woodSpeciesId: r.woodSpeciesId,
+        humidityId: r.humidityId,
+        typeId: r.typeId,
+        processingId: r.processingId,
+        fscId: r.fscId,
+        qualityId: r.qualityId,
+        thickness: r.thickness,
+        width: r.width,
+        length: r.length,
+        pieces: r.pieces,
+        volumeM3: parseFloat(r.volumeM3) || 0,
+        notes: r.notes,
+      }));
+
+      const result = await saveProductionOutputs(productionEntryId, rowInputs);
+
+      if (!result.success) {
+        toast.error(result.error);
+        // Clear save in progress on error too
+        saveInProgressRef.current = false;
+        // Still process queued saves even on error
+        if (saveQueuedRef.current) {
+          saveQueuedRef.current = false;
+          setTimeout(() => {
+            performSaveAsync(latestRowsRef.current);
+          }, 50);
         }
+        return false;
+      }
 
-        // Update rows with newly assigned dbIds and server-generated package numbers
-        if (Object.keys(result.data.insertedIds).length > 0) {
-          setRows((prev) =>
-            prev.map((row, i) => {
-              const newId = result.data.insertedIds[i];
-              const newPackageNumber = result.data.packageNumbers[i];
-              if (newId && !row.dbId) {
-                return {
-                  ...row,
-                  dbId: newId,
-                  packageNumber: newPackageNumber || row.packageNumber,
-                };
-              }
-              return row;
-            })
-          );
-        }
-      });
+      // Save completed successfully - clear pending rows
+      pendingRowsRef.current = null;
+
+      // Update rows with newly assigned dbIds and server-generated package numbers
+      if (Object.keys(result.data.insertedIds).length > 0) {
+        setRows((prev) => {
+          const updated = prev.map((row, i) => {
+            const newId = result.data.insertedIds[i];
+            const newPackageNumber = result.data.packageNumbers[i];
+            if (newId && !row.dbId) {
+              return {
+                ...row,
+                dbId: newId,
+                packageNumber: newPackageNumber || row.packageNumber,
+              };
+            }
+            return row;
+          });
+          // Also update the ref
+          latestRowsRef.current = updated;
+          return updated;
+        });
+      }
+
+      // Mark save as complete
+      saveInProgressRef.current = false;
+
+      // If another save was queued while this one was running, trigger it now
+      if (saveQueuedRef.current) {
+        saveQueuedRef.current = false;
+        // Use setTimeout to let state updates settle
+        setTimeout(() => {
+          performSaveAsync(latestRowsRef.current);
+        }, 50);
+      }
+
+      return true;
     },
     [productionEntryId]
   );
 
-  const debouncedSave = useCallback(
+  const performSave = useCallback(
     (currentRows: OutputRow[]) => {
+      startTransition(() => {
+        performSaveAsync(currentRows);
+      });
+    },
+    [performSaveAsync]
+  );
+
+  const debouncedSave = useCallback(
+    (rowsToSave?: OutputRow[]) => {
+      // If rows are provided, update the ref immediately (before render)
+      if (rowsToSave) {
+        latestRowsRef.current = rowsToSave;
+      }
+      // Mark that we have pending changes
+      pendingRowsRef.current = latestRowsRef.current;
+
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
       saveTimeoutRef.current = setTimeout(() => {
+        // Use the LATEST rows when the timeout fires, not the captured ones
+        const currentRows = latestRowsRef.current;
         performSave(currentRows);
       }, 800);
     },
@@ -173,18 +258,26 @@ export function ProductionOutputsSection({
   // ─── Assign Package Numbers Handler ──────────────────────────────────────────
 
   const handleAssignNumbers = useCallback(async () => {
+    // Use latest rows from ref, not stale closure
+    const currentRows = latestRowsRef.current;
+
     // Check if there are rows without package numbers
-    const rowsNeedingNumbers = rows.filter((r) => !r.packageNumber || r.packageNumber === "");
+    const rowsNeedingNumbers = currentRows.filter((r) => !r.packageNumber || r.packageNumber === "");
     if (rowsNeedingNumbers.length === 0) {
       toast.info("All outputs already have package numbers assigned");
       return;
     }
 
-    // First, ensure all rows are saved
+    // First, ensure all rows are saved - use async version to actually wait
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
-    await performSave(rows);
+
+    const saveSuccess = await performSaveAsync(latestRowsRef.current);
+    if (!saveSuccess) {
+      toast.error("Failed to save outputs before assigning numbers");
+      return;
+    }
 
     setIsAssigningNumbers(true);
     const result = await assignPackageNumbers(productionEntryId);
@@ -198,12 +291,11 @@ export function ProductionOutputsSection({
     if (result.assignedNumbers && result.assignedNumbers.length > 0) {
       toast.success(`Assigned ${result.assignedNumbers.length} package number${result.assignedNumbers.length !== 1 ? "s" : ""}`);
 
-      // Reload the outputs to get the new package numbers
-      // We'll update the local state with the assigned numbers
-      // Since we don't have a refetch, we'll need to update based on what was assigned
+      // Update local state with the assigned numbers
+      // Use latest rows from ref to avoid stale data
       setRows((prev) => {
         let numberIndex = 0;
-        return prev.map((row) => {
+        const updated = prev.map((row) => {
           if (!row.packageNumber || row.packageNumber === "") {
             const newNumber = result.assignedNumbers?.[numberIndex];
             numberIndex++;
@@ -211,11 +303,14 @@ export function ProductionOutputsSection({
           }
           return row;
         });
+        // Update the ref to keep it in sync
+        latestRowsRef.current = updated;
+        return updated;
       });
     } else {
       toast.info("No package numbers needed to be assigned");
     }
-  }, [rows, productionEntryId, performSave]);
+  }, [productionEntryId, performSaveAsync]);
 
   // ─── Row Change Handler ─────────────────────────────────────────────────────
 
@@ -231,13 +326,24 @@ export function ProductionOutputsSection({
 
   const handleNoteChange = useCallback(
     (clientId: string, note: string) => {
-      setRows((prevRows) => {
-        const newRows = prevRows.map((row) =>
-          row.clientId === clientId ? { ...row, notes: note } : row
-        );
-        debouncedSave(newRows);
-        return newRows;
-      });
+      const newRows = latestRowsRef.current.map((row) =>
+        row.clientId === clientId ? { ...row, notes: note } : row
+      );
+      setRows(newRows);
+      debouncedSave(newRows);
+    },
+    [debouncedSave]
+  );
+
+  // ─── Package Number Change Handler ─────────────────────────────────────────────
+
+  const handlePackageNumberChange = useCallback(
+    (clientId: string, packageNumber: string) => {
+      const newRows = latestRowsRef.current.map((row) =>
+        row.clientId === clientId ? { ...row, packageNumber } : row
+      );
+      setRows(newRows);
+      debouncedSave(newRows);
     },
     [debouncedSave]
   );
@@ -423,14 +529,43 @@ export function ProductionOutputsSection({
     return () => document.removeEventListener("keydown", handler);
   }, [handleAddRow, readOnly]);
 
-  // Cleanup timeout on unmount
+  // Cleanup on unmount: save any pending changes immediately (fire-and-forget)
   useEffect(() => {
+    const entryId = productionEntryId; // Capture for closure
+
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
+      // If there are pending changes, save them immediately without waiting
+      const pendingRows = pendingRowsRef.current;
+      if (pendingRows) {
+        // Fire-and-forget save - don't use startTransition or state updates
+        const rowInputs = pendingRows.map((r) => ({
+          dbId: r.dbId,
+          packageNumber: r.packageNumber,
+          productNameId: r.productNameId,
+          woodSpeciesId: r.woodSpeciesId,
+          humidityId: r.humidityId,
+          typeId: r.typeId,
+          processingId: r.processingId,
+          fscId: r.fscId,
+          qualityId: r.qualityId,
+          thickness: r.thickness,
+          width: r.width,
+          length: r.length,
+          pieces: r.pieces,
+          volumeM3: parseFloat(r.volumeM3) || 0,
+          notes: r.notes,
+        }));
+        // Call save without awaiting - the request will complete even after unmount
+        saveProductionOutputs(entryId, rowInputs).catch((err) => {
+          console.error("Failed to save on unmount:", err);
+        });
+        pendingRowsRef.current = null;
+      }
     };
-  }, []);
+  }, [productionEntryId]);
 
   return (
     <div className="space-y-3">
@@ -500,6 +635,8 @@ export function ProductionOutputsSection({
         processCode={processCode}
         readOnly={readOnly}
         onNoteChange={handleNoteChange}
+        availablePackageNumbers={availablePackageNumbers}
+        onPackageNumberChange={handlePackageNumberChange}
       />
 
       {!readOnly && (

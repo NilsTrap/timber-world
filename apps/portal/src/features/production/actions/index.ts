@@ -18,6 +18,8 @@ export { deleteProductionEntry } from "./deleteProductionEntry";
 export { cancelProductionEntry } from "./cancelProductionEntry";
 export { revertFailedValidation } from "./revertFailedValidation";
 export { assignPackageNumbers } from "./assignPackageNumbers";
+export { getNextPackageNumbers } from "./getNextPackageNumbers";
+export type { NextPackageNumber } from "./getNextPackageNumbers";
 export { getPackagesInDrafts } from "./getPackagesInDrafts";
 export type { DraftPackageInfo } from "./getPackagesInDrafts";
 export { recalculateEntryMetrics } from "./recalculateEntryMetrics";
