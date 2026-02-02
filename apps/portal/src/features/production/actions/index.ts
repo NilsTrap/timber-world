@@ -1,4 +1,5 @@
-export { getProcesses } from "./getProcesses";
+export { getProcesses, getProcessesWithNotes } from "./getProcesses";
+export { saveProcessNote } from "./saveProcessNote";
 export { createProductionEntry } from "./createProductionEntry";
 export { createCorrectionEntry } from "./createCorrectionEntry";
 export { getDraftProductions } from "./getDraftProductions";

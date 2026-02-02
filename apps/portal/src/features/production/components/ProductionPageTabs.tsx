@@ -1,7 +1,7 @@
 "use client";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@timber/ui";
-import type { Process, ProductionListItem, ProductionHistoryItem } from "../types";
+import type { Process, ProcessWithNotes, ProductionListItem, ProductionHistoryItem } from "../types";
 import { NewProductionForm } from "./NewProductionForm";
 import { DraftProductionList } from "./DraftProductionList";
 import { ProductionHistoryTable } from "./ProductionHistoryTable";
@@ -9,6 +9,7 @@ import { ProcessesTab } from "./ProcessesTab";
 
 interface ProductionPageTabsProps {
   processes: Process[];
+  processesWithNotes: ProcessWithNotes[];
   drafts: ProductionListItem[];
   history: ProductionHistoryItem[];
   defaultTab?: string;
@@ -16,6 +17,10 @@ interface ProductionPageTabsProps {
   showOrganisation?: boolean;
   /** If true, shows delete button for history entries (Super Admin only) */
   canDeleteHistory?: boolean;
+  /** Organization name for the Processes tab */
+  organizationName?: string;
+  /** Organization ID for saving process notes */
+  organizationId?: string;
 }
 
 /**
@@ -24,15 +29,19 @@ interface ProductionPageTabsProps {
  * Wraps production page content in "Active" and "History" tabs.
  * Active tab: new production form + draft list.
  * History tab: validated production entries with sort/filter.
+ * Processes tab: view and edit process descriptions.
  */
 export function ProductionPageTabs({
   processes,
+  processesWithNotes,
   drafts,
   history,
   defaultTab,
   defaultProcess,
   showOrganisation = false,
   canDeleteHistory = false,
+  organizationName,
+  organizationId,
 }: ProductionPageTabsProps) {
   return (
     <Tabs defaultValue={defaultTab === "history" ? "history" : defaultTab === "processes" ? "processes" : "active"}>
@@ -57,7 +66,11 @@ export function ProductionPageTabs({
       </TabsContent>
 
       <TabsContent value="processes">
-        <ProcessesTab processes={processes} />
+        <ProcessesTab
+          processes={processesWithNotes}
+          organizationName={organizationName}
+          organizationId={organizationId}
+        />
       </TabsContent>
     </Tabs>
   );

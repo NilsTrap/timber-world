@@ -1,6 +1,7 @@
 // Components
 export { Button, buttonVariants } from "./components/button";
 export { Input } from "./components/input";
+export { Textarea } from "./components/textarea";
 export {
   Card,
   CardHeader,

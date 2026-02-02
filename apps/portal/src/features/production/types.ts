@@ -9,6 +9,11 @@ export interface Process {
   sortOrder: number;
 }
 
+export interface ProcessWithNotes extends Process {
+  notes: string;
+  noteId: string | null;
+}
+
 export type EntryType = "standard" | "correction";
 
 export interface ProductionEntry {

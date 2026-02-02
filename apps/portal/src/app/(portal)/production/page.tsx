@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import {
   getProcesses,
+  getProcessesWithNotes,
   getDraftProductions,
   getValidatedProductions,
 } from "@/features/production/actions";
@@ -35,13 +36,18 @@ export default async function ProductionPage({
   // Pass org filter to queries for Super Admin
   const orgFilter = isSuperAdmin(session) ? selectedOrgId : undefined;
 
-  const [processesResult, draftsResult, historyResult] = await Promise.all([
+  // Determine which org to use for processes with notes
+  const processNotesOrgId = orgFilter || session.organisationId;
+
+  const [processesResult, processesWithNotesResult, draftsResult, historyResult] = await Promise.all([
     getProcesses(),
+    getProcessesWithNotes(processNotesOrgId),
     getDraftProductions(orgFilter),
     getValidatedProductions(orgFilter),
   ]);
 
   const processes = processesResult.success ? processesResult.data : [];
+  const processesWithNotes = processesWithNotesResult.success ? processesWithNotesResult.data : [];
   const drafts = draftsResult.success ? draftsResult.data : [];
   const history = historyResult.success ? historyResult.data : [];
 
@@ -56,12 +62,15 @@ export default async function ProductionPage({
 
       <ProductionPageTabs
         processes={processes}
+        processesWithNotes={processesWithNotes}
         drafts={drafts}
         history={history}
         defaultTab={tab}
         defaultProcess={process}
         showOrganisation={isSuperAdmin(session)}
         canDeleteHistory={isSuperAdmin(session)}
+        organizationName={session.organisationName}
+        organizationId={processNotesOrgId}
       />
     </div>
   );
