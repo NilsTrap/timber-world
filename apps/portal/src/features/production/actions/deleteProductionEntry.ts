@@ -67,18 +67,43 @@ export async function deleteProductionEntry(
     };
   }
 
+  // Get package numbers from outputs BEFORE deleting (needed for cleanup)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: outputs } = await (supabase as any)
+    .from("portal_production_outputs")
+    .select("package_number")
+    .eq("production_entry_id", entryId);
+
+  const outputPackageNumbers = (outputs || [])
+    .map((o: { package_number: string | null }) => o.package_number)
+    .filter((pn: string | null): pn is string => !!pn);
+
   // For validated entries, check if any output packages are used as inputs elsewhere
   if (entry.status === "validated") {
-    // Get packages created by this production entry
+    // Get packages created by this production entry (by production_entry_id link)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: packages } = await (supabase as any)
+    const { data: linkedPackages } = await (supabase as any)
       .from("inventory_packages")
       .select("id")
       .eq("production_entry_id", entryId);
 
-    if (packages && packages.length > 0) {
-      const packageIds = packages.map((p: { id: string }) => p.id);
+    // Also get packages by package_number (catches orphaned packages)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: packagesByNumber } = outputPackageNumbers.length > 0
+      ? await (supabase as any)
+          .from("inventory_packages")
+          .select("id")
+          .eq("organisation_id", entry.organisation_id)
+          .in("package_number", outputPackageNumbers)
+      : { data: [] };
 
+    // Combine all package IDs (deduplicate)
+    const allPackageIds = new Set<string>();
+    for (const p of linkedPackages || []) allPackageIds.add(p.id);
+    for (const p of packagesByNumber || []) allPackageIds.add(p.id);
+    const packageIds = Array.from(allPackageIds);
+
+    if (packageIds.length > 0) {
       // Check if any of these packages are used as inputs in OTHER production entries
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: usedInputs } = await (supabase as any)
@@ -95,12 +120,12 @@ export async function deleteProductionEntry(
         };
       }
 
-      // Delete inventory packages created by this production
+      // Delete inventory packages by ID (covers both linked and orphaned)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: packagesDeleteError } = await (supabase as any)
         .from("inventory_packages")
         .delete()
-        .eq("production_entry_id", entryId);
+        .in("id", packageIds);
 
       if (packagesDeleteError) {
         return { success: false, error: `Failed to delete inventory packages: ${packagesDeleteError.message}`, code: "DELETE_FAILED" };
