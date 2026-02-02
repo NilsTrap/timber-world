@@ -24,7 +24,7 @@ function isAdminOnlyRoute(pathname: string): boolean {
  * - Non-admin users accessing admin routes → redirect to dashboard with access_denied
  * - Users with incomplete setup (status="invited") → redirect to /accept-invite
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: request.headers,
