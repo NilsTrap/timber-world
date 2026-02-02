@@ -300,6 +300,7 @@ export function ProductionOutputsSection({
         pieces,
         volumeM3: "",
         volumeIsCalculated: false,
+        notes: "",
       };
 
       if (shouldAutoCalculate(tempRow)) {

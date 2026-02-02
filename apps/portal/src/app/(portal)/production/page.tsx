@@ -37,7 +37,7 @@ export default async function ProductionPage({
   const orgFilter = isSuperAdmin(session) ? selectedOrgId : undefined;
 
   // Determine which org to use for processes with notes
-  const processNotesOrgId = orgFilter || session.organisationId;
+  const processNotesOrgId = orgFilter || session.organisationId || undefined;
 
   const [processesResult, processesWithNotesResult, draftsResult, historyResult] = await Promise.all([
     getProcesses(),
@@ -69,7 +69,7 @@ export default async function ProductionPage({
         defaultProcess={process}
         showOrganisation={isSuperAdmin(session)}
         canDeleteHistory={isSuperAdmin(session)}
-        organizationName={session.organisationName}
+        organizationName={session.organisationName || undefined}
         organizationId={processNotesOrgId}
       />
     </div>
