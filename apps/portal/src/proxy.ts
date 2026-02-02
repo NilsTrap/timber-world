@@ -114,24 +114,16 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  if ((isAuthRoute || isAcceptInviteRoute) && user) {
-    // Check if user needs to complete invite setup
-    const { data: portalUser } = await supabase
-      .from("portal_users")
-      .select("status")
-      .eq("auth_user_id", user.id)
-      .single();
+  // Allow access to /accept-invite for both password reset and invite flows
+  // The page handles token validation and shows appropriate UI
+  if (isAcceptInviteRoute) {
+    return response;
+  }
 
-    if (portalUser?.status === "invited" && isAcceptInviteRoute) {
-      // Allow invited users to access accept-invite page
-      return response;
-    }
-
-    if (portalUser?.status !== "invited") {
-      // Redirect fully authenticated users away from auth pages
-      const dashboardUrl = new URL("/dashboard", request.url);
-      return NextResponse.redirect(dashboardUrl);
-    }
+  if (isAuthRoute && user) {
+    // Redirect authenticated users away from login/register pages
+    const dashboardUrl = new URL("/dashboard", request.url);
+    return NextResponse.redirect(dashboardUrl);
   }
 
   if (isRootPath) {
