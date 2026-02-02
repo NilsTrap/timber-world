@@ -240,6 +240,67 @@ export async function validateProduction(
     return { success: false, error: "At least one output is required", code: "VALIDATION_FAILED" };
   }
 
+  // Validate all required fields are filled for each output
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (let i = 0; i < outputs.length; i++) {
+    const output = outputs[i] as any;
+    const rowNum = i + 1;
+
+    // Check required reference fields
+    if (!output.product_name_id) {
+      await revertChanges();
+      return { success: false, error: `Output row ${rowNum}: Product is required`, code: "VALIDATION_FAILED" };
+    }
+    if (!output.wood_species_id) {
+      await revertChanges();
+      return { success: false, error: `Output row ${rowNum}: Wood species is required`, code: "VALIDATION_FAILED" };
+    }
+    if (!output.humidity_id) {
+      await revertChanges();
+      return { success: false, error: `Output row ${rowNum}: Humidity is required`, code: "VALIDATION_FAILED" };
+    }
+    if (!output.type_id) {
+      await revertChanges();
+      return { success: false, error: `Output row ${rowNum}: Type is required`, code: "VALIDATION_FAILED" };
+    }
+    if (!output.processing_id) {
+      await revertChanges();
+      return { success: false, error: `Output row ${rowNum}: Processing is required`, code: "VALIDATION_FAILED" };
+    }
+    if (!output.fsc_id) {
+      await revertChanges();
+      return { success: false, error: `Output row ${rowNum}: FSC is required`, code: "VALIDATION_FAILED" };
+    }
+    if (!output.quality_id) {
+      await revertChanges();
+      return { success: false, error: `Output row ${rowNum}: Quality is required`, code: "VALIDATION_FAILED" };
+    }
+
+    // Check required dimension fields
+    if (!output.thickness || output.thickness === "" || output.thickness === "0") {
+      await revertChanges();
+      return { success: false, error: `Output row ${rowNum}: Thickness is required`, code: "VALIDATION_FAILED" };
+    }
+    if (!output.width || output.width === "" || output.width === "0") {
+      await revertChanges();
+      return { success: false, error: `Output row ${rowNum}: Width is required`, code: "VALIDATION_FAILED" };
+    }
+    if (!output.length || output.length === "" || output.length === "0") {
+      await revertChanges();
+      return { success: false, error: `Output row ${rowNum}: Length is required`, code: "VALIDATION_FAILED" };
+    }
+
+    // Check pieces OR volume is provided
+    // Pieces can be empty only if volume is manually entered (volume > 0)
+    const hasPieces = output.pieces && output.pieces !== "" && output.pieces !== "0";
+    const hasVolume = output.volume_m3 && Number(output.volume_m3) > 0;
+
+    if (!hasPieces && !hasVolume) {
+      await revertChanges();
+      return { success: false, error: `Output row ${rowNum}: Either pieces or volume must be provided`, code: "VALIDATION_FAILED" };
+    }
+  }
+
   // Check all outputs have volume > 0
   const invalidOutput = outputs.find((o: { volume_m3: number }) => !o.volume_m3 || Number(o.volume_m3) <= 0);
   if (invalidOutput) {
