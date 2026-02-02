@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer } from "@/lib/auth";
+import { getSession, isProducer, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 const UUID_REGEX =
@@ -39,6 +39,9 @@ interface SaveResult {
  * - Rows with dbId that differ → UPDATE
  * - DB rows not in client list → DELETE
  *
+ * Changes are staged in portal_production_outputs. Inventory changes
+ * are only applied when the entry is validated via validateProduction.
+ *
  * Returns the newly inserted row IDs mapped by their index.
  */
 export async function saveProductionOutputs(
@@ -50,7 +53,8 @@ export async function saveProductionOutputs(
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  if (!isProducer(session)) {
+  const isAdmin = isSuperAdmin(session);
+  if (!isProducer(session) && !isAdmin) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -64,19 +68,31 @@ export async function saveProductionOutputs(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: entry, error: entryError } = await (supabase as any)
     .from("portal_production_entries")
-    .select("id, created_by, organisation_id, process_id, ref_processes!inner(code, value)")
+    .select("id, created_by, status, organisation_id, process_id, ref_processes!inner(code, value)")
     .eq("id", productionEntryId)
     .single();
 
   if (entryError || !entry) {
     return { success: false, error: "Production entry not found", code: "NOT_FOUND" };
   }
-  if (entry.created_by !== session.id) {
+
+  // Admins can edit any entry; regular users only their own
+  if (!isAdmin && entry.created_by !== session.id) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
+  // Regular users can only modify drafts; admins can modify validated entries too
+  if (!isAdmin && entry.status !== "draft") {
+    return { success: false, error: "Cannot modify a validated production entry", code: "VALIDATION_FAILED" };
+  }
+  if (isAdmin && entry.status !== "draft" && entry.status !== "validated") {
+    return { success: false, error: "Cannot modify entry in this status", code: "VALIDATION_FAILED" };
+  }
+
+  const isValidated = entry.status === "validated";
+
   const organisationId = entry.organisation_id;
-  let processCode = entry.ref_processes?.code;
+  const processCode = entry.ref_processes?.code;
   const processName = entry.ref_processes?.value;
 
   // For "Sorting" process, inherit the process code from input packages
@@ -125,6 +141,34 @@ export async function saveProductionOutputs(
 
   // DELETE: DB rows not in client list
   const toDelete = [...existingMap.keys()].filter((id) => !clientDbIds.has(id));
+
+  // For validated entries, check if deleted outputs are used as inputs elsewhere
+  if (isValidated && toDelete.length > 0) {
+    // Get the package numbers of outputs being deleted
+    const packageNumbersToDelete = toDelete
+      .map((id) => existingMap.get(id)?.package_number)
+      .filter(Boolean);
+
+    if (packageNumbersToDelete.length > 0) {
+      // Check if any of these packages are used as inputs in other production entries
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: usedAsInput } = await (supabase as any)
+        .from("portal_production_inputs")
+        .select("inventory_packages!inner(package_number)")
+        .in("inventory_packages.package_number", packageNumbersToDelete);
+
+      if (usedAsInput && usedAsInput.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const usedPackages = usedAsInput.map((u: any) => u.inventory_packages.package_number).join(", ");
+        return {
+          success: false,
+          error: `Cannot delete outputs that are used as inputs in other production entries: ${usedPackages}`,
+          code: "VALIDATION_FAILED",
+        };
+      }
+    }
+  }
+
   if (toDelete.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: deleteError } = await (supabase as any)
@@ -161,6 +205,31 @@ export async function saveProductionOutputs(
     };
   }
 
+  // Helper to build inventory package payload
+  function toInventoryPackage(row: OutputRowInput, index: number) {
+    return {
+      organisation_id: organisationId,
+      production_entry_id: productionEntryId,
+      shipment_id: null,
+      package_number: row.packageNumber,
+      package_sequence: index + 1,
+      product_name_id: row.productNameId || null,
+      wood_species_id: row.woodSpeciesId || null,
+      humidity_id: row.humidityId || null,
+      type_id: row.typeId || null,
+      processing_id: row.processingId || null,
+      fsc_id: row.fscId || null,
+      quality_id: row.qualityId || null,
+      thickness: row.thickness || null,
+      width: row.width || null,
+      length: row.length || null,
+      pieces: row.pieces || null,
+      volume_m3: row.volumeM3,
+      volume_is_calculated: false,
+      status: "produced",
+    };
+  }
+
   // Helper to check if a row has changed compared to DB
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function hasChanged(row: OutputRowInput, existing: any): boolean {
@@ -181,17 +250,18 @@ export async function saveProductionOutputs(
   }
 
   // Separate rows into inserts and updates
-  const toInsert: { index: number; payload: ReturnType<typeof toDbRow> }[] = [];
-  const toUpdate: { id: string; payload: ReturnType<typeof toDbRow> }[] = [];
+  const toInsert: { index: number; row: OutputRowInput; payload: ReturnType<typeof toDbRow> }[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const toUpdate: { id: string; row: OutputRowInput; existing: any; payload: ReturnType<typeof toDbRow> }[] = [];
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
     if (!row.dbId) {
-      toInsert.push({ index: i, payload: toDbRow(row, i) });
+      toInsert.push({ index: i, row, payload: toDbRow(row, i) });
     } else {
       const existing = existingMap.get(row.dbId);
       if (existing && hasChanged(row, existing)) {
-        toUpdate.push({ id: row.dbId, payload: toDbRow(row, i) });
+        toUpdate.push({ id: row.dbId, row, existing, payload: toDbRow(row, i) });
       }
     }
   }
@@ -199,7 +269,7 @@ export async function saveProductionOutputs(
   // INSERT new rows without package numbers
   // Package numbers are assigned later via "Assign Package Numbers" button
   if (toInsert.length > 0) {
-    for (const { index, payload } of toInsert) {
+    for (const { index, row, payload } of toInsert) {
       // Insert the row without package number (will be assigned later)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: inserted, error: insertError } = await (supabase as any)
@@ -219,7 +289,7 @@ export async function saveProductionOutputs(
   }
 
   // UPDATE only changed rows (individual queries — Supabase doesn't support batch update)
-  for (const { id, payload } of toUpdate) {
+  for (const { id, row, existing, payload } of toUpdate) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: updateError } = await (supabase as any)
       .from("portal_production_outputs")

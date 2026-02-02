@@ -19,3 +19,4 @@ export { revertFailedValidation } from "./revertFailedValidation";
 export { assignPackageNumbers } from "./assignPackageNumbers";
 export { getPackagesInDrafts } from "./getPackagesInDrafts";
 export type { DraftPackageInfo } from "./getPackagesInDrafts";
+export { recalculateEntryMetrics } from "./recalculateEntryMetrics";

@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer } from "@/lib/auth";
+import { getSession, isProducer, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -17,6 +17,7 @@ interface UpdateProductionInputParams {
  *
  * Updates pieces_used and/or volume_m3 for an input line.
  * Validates pieces_used <= available pieces and volume_m3 <= package total volume.
+ * Changes are staged until the entry is validated via validateProduction.
  */
 export async function updateProductionInput(
   params: UpdateProductionInputParams
@@ -26,7 +27,8 @@ export async function updateProductionInput(
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  if (!isProducer(session)) {
+  const isAdmin = isSuperAdmin(session);
+  if (!isProducer(session) && !isAdmin) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -44,13 +46,13 @@ export async function updateProductionInput(
 
   const supabase = await createClient();
 
-  // Fetch the input + package to validate constraints
+  // Fetch the input + package to validate constraints (include current values for diff calculation)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: input, error: fetchError } = await (supabase as any)
     .from("portal_production_inputs")
     .select(`
-      id, package_id, production_entry_id,
-      inventory_packages!portal_production_inputs_package_id_fkey(pieces, volume_m3)
+      id, package_id, production_entry_id, pieces_used, volume_m3,
+      inventory_packages!portal_production_inputs_package_id_fkey(pieces, volume_m3, status)
     `)
     .eq("id", inputId)
     .single();
@@ -59,7 +61,7 @@ export async function updateProductionInput(
     return { success: false, error: "Input not found", code: "NOT_FOUND" };
   }
 
-  // Verify production entry ownership and draft status
+  // Verify production entry ownership and status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: entry, error: entryError } = await (supabase as any)
     .from("portal_production_entries")
@@ -67,16 +69,26 @@ export async function updateProductionInput(
     .eq("id", input.production_entry_id)
     .single();
 
-  if (entryError || !entry || entry.created_by !== session.id) {
+  if (entryError || !entry) {
+    return { success: false, error: "Production entry not found", code: "NOT_FOUND" };
+  }
+
+  // Admins can edit any entry; regular users only their own
+  if (!isAdmin && entry.created_by !== session.id) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
-  if (entry.status !== "draft") {
+
+  // Regular users can only modify drafts; admins can modify validated entries too
+  if (!isAdmin && entry.status !== "draft") {
     return { success: false, error: "Cannot modify a validated production entry", code: "VALIDATION_FAILED" };
+  }
+  if (isAdmin && entry.status !== "draft" && entry.status !== "validated") {
+    return { success: false, error: "Cannot modify entry in this status", code: "VALIDATION_FAILED" };
   }
 
   const pkg = input.inventory_packages;
 
-  // Validate pieces_used <= available pieces
+  // Validate against package totals
   if (piecesUsed !== null && pkg?.pieces) {
     const availablePieces = parseInt(pkg.pieces, 10);
     if (!isNaN(availablePieces) && piecesUsed > availablePieces) {
@@ -84,7 +96,6 @@ export async function updateProductionInput(
     }
   }
 
-  // Validate volume_m3 <= package total volume (with precision tolerance matching display)
   if (pkg?.volume_m3 != null) {
     const packageVolume = Number(pkg.volume_m3);
     const roundedRequest = Math.round(volumeM3 * 1000) / 1000;
@@ -94,6 +105,7 @@ export async function updateProductionInput(
     }
   }
 
+  // Update the input record
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("portal_production_inputs")

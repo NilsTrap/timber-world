@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer } from "@/lib/auth";
+import { getSession, isProducer, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -22,7 +22,8 @@ export async function revertFailedValidation(
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  if (!isProducer(session)) {
+  const isAdmin = isSuperAdmin(session);
+  if (!isProducer(session) && !isAdmin) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -44,12 +45,14 @@ export async function revertFailedValidation(
     return { success: false, error: "Production entry not found", code: "NOT_FOUND" };
   }
 
-  if (entry.created_by !== session.id) {
+  // Admins can revert any entry; regular users only their own
+  if (!isAdmin && entry.created_by !== session.id) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
-  // Only allow reverting entries that are in draft or validating status
-  if (entry.status !== "draft" && entry.status !== "validating") {
+  // Only allow reverting entries that are in draft, validating, or validated (admin only) status
+  const allowedStatuses = isAdmin ? ["draft", "validating", "validated"] : ["draft", "validating"];
+  if (!allowedStatuses.includes(entry.status)) {
     return { success: false, error: `Cannot revert entry with status: ${entry.status}`, code: "INVALID_STATUS" };
   }
 

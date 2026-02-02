@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer } from "@/lib/auth";
+import { getSession, isProducer, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,7 +27,8 @@ export async function addProductionInput(
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  if (!isProducer(session)) {
+  const isAdmin = isSuperAdmin(session);
+  if (!isProducer(session) && !isAdmin) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -48,7 +49,7 @@ export async function addProductionInput(
 
   const supabase = await createClient();
 
-  // Verify production entry exists, belongs to this user, and is still draft
+  // Verify production entry exists, belongs to this user (or user is admin), and check status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: entry, error: entryError } = await (supabase as any)
     .from("portal_production_entries")
@@ -59,11 +60,16 @@ export async function addProductionInput(
   if (entryError || !entry) {
     return { success: false, error: "Production entry not found", code: "NOT_FOUND" };
   }
-  if (entry.created_by !== session.id) {
+  // Admins can edit any entry; regular users only their own
+  if (!isAdmin && entry.created_by !== session.id) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
-  if (entry.status !== "draft") {
+  // Regular users can only modify drafts; admins can modify validated entries too
+  if (!isAdmin && entry.status !== "draft") {
     return { success: false, error: "Cannot modify a validated production entry", code: "VALIDATION_FAILED" };
+  }
+  if (isAdmin && entry.status !== "draft" && entry.status !== "validated") {
+    return { success: false, error: "Cannot modify entry in this status", code: "VALIDATION_FAILED" };
   }
 
   // Fetch the package to validate constraints

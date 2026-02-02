@@ -19,6 +19,8 @@ interface ProductionInputsSectionProps {
   onCountChange?: (count: number) => void;
   onInputsChange?: (inputs: ProductionInput[]) => void;
   readOnly?: boolean;
+  /** True when admin is editing a validated entry */
+  isAdminEdit?: boolean;
   /** Process name for print header */
   processName?: string;
   /** Production date for print header (formatted) */
@@ -39,6 +41,7 @@ export function ProductionInputsSection({
   onCountChange,
   onInputsChange,
   readOnly,
+  isAdminEdit,
   processName,
   productionDate,
 }: ProductionInputsSectionProps) {

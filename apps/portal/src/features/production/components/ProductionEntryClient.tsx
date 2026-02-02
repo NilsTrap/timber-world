@@ -23,6 +23,8 @@ interface ProductionEntryClientProps {
   initialInputTotal: number;
   initialOutputTotal: number;
   readOnly?: boolean;
+  /** True when admin is editing a validated entry */
+  isAdminEdit?: boolean;
   hideMetrics?: boolean;
   /** Process name for print header */
   processName?: string;
@@ -47,6 +49,7 @@ export function ProductionEntryClient({
   initialInputTotal,
   initialOutputTotal,
   readOnly,
+  isAdminEdit,
   hideMetrics,
   processName,
   productionDate,
@@ -62,9 +65,9 @@ export function ProductionEntryClient({
 
   const canValidate = !readOnly && inputTotalM3 > 0 && outputTotalM3 > 0;
 
-  // Ctrl+Enter keyboard shortcut to open validation dialog
+  // Ctrl+Enter keyboard shortcut to open validation dialog (only for drafts, not admin edit)
   useEffect(() => {
-    if (readOnly) return;
+    if (readOnly || isAdminEdit) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && canValidate) {
         e.preventDefault();
@@ -73,7 +76,7 @@ export function ProductionEntryClient({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [canValidate, readOnly]);
+  }, [canValidate, readOnly, isAdminEdit]);
 
   const handleConfirmValidation = () => {
     startTransition(async () => {
@@ -90,6 +93,12 @@ export function ProductionEntryClient({
 
   return (
     <div className="space-y-6">
+      {isAdminEdit && (
+        <div className="rounded-lg border border-amber-500/50 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm text-amber-800 dark:text-amber-200">
+          <strong>Admin Edit Mode:</strong> You are editing a validated production entry. Click &quot;Validate&quot; to apply your changes to inventory.
+        </div>
+      )}
+
       {!hideMetrics && (
         <ProductionSummary
           inputTotalM3={inputTotalM3}
@@ -105,6 +114,7 @@ export function ProductionEntryClient({
         onCountChange={setInputCount}
         onInputsChange={setCurrentInputs}
         readOnly={readOnly}
+        isAdminEdit={isAdminEdit}
         processName={processName}
         productionDate={productionDate}
       />
@@ -118,9 +128,10 @@ export function ProductionEntryClient({
         onTotalChange={setOutputTotalM3}
         onCountChange={setOutputCount}
         readOnly={readOnly}
+        isAdminEdit={isAdminEdit}
       />
 
-      {/* Validate Button — only for draft entries */}
+      {/* Validate Button — for draft entries and admin edit mode */}
       {!readOnly && (
         <>
           <div className="flex justify-end">

@@ -71,8 +71,8 @@ export default async function ProductionEntryPage({
   if (outputResult.success) initialOutputs = outputResult.data;
   if (dropdownResult.success) dropdowns = dropdownResult.data;
 
-  // Only fetch packages for draft entries (edit-only data)
-  if (isDraft) {
+  // Fetch packages for draft entries OR for admin editing validated entries
+  if (isDraft || isUserSuperAdmin) {
     const pkgResult = await getAvailablePackages(id);
     if (pkgResult.success) initialPackages = pkgResult.data;
   }
@@ -156,7 +156,8 @@ export default async function ProductionEntryPage({
         processCode={isCorrection ? "CR" : processCode}
         initialInputTotal={initialInputTotal}
         initialOutputTotal={initialOutputTotal}
-        readOnly={!isDraft}
+        readOnly={!isDraft && !isUserSuperAdmin}
+        isAdminEdit={!isDraft && isUserSuperAdmin}
         hideMetrics={isCorrection}
         processName={processName}
         productionDate={productionDate}

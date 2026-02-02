@@ -25,6 +25,8 @@ interface ProductionOutputsSectionProps {
   onTotalChange?: (totalM3: number) => void;
   onCountChange?: (count: number) => void;
   readOnly?: boolean;
+  /** True when admin is editing a validated entry */
+  isAdminEdit?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,6 +72,7 @@ export function ProductionOutputsSection({
   onTotalChange,
   onCountChange,
   readOnly,
+  isAdminEdit,
 }: ProductionOutputsSectionProps) {
   const [rows, setRows] = useState<OutputRow[]>(() =>
     initialOutputs.map((o, i) => dbOutputToRow(o, i, processCode))
