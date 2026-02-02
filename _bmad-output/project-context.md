@@ -1,9 +1,9 @@
 ---
 project_name: 'Timber-World-Platform'
 user_name: 'Nils'
-date: '2026-01-30'
+date: '2026-02-02'
 status: 'complete'
-sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime']
+sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime', 'session_verification', 'print_functionality']
 architecture_ref: '_bmad-output/planning-artifacts/platform/architecture.md'
 ---
 
@@ -313,6 +313,26 @@ Production output package numbers are assigned manually via the "Assign Package 
 - `portal_production_outputs.package_number` is nullable (assigned later)
 - `portal_production_outputs.sort_order` preserves row ordering
 
+### Production Validation Requirements
+
+Before a production entry can be validated, ALL output rows must have complete data:
+
+**Required Fields (each output row):**
+- Product Name
+- Wood Species
+- Humidity
+- Type
+- Processing
+- FSC
+- Quality
+- Thickness, Width, Length (all three dimensions)
+- Pieces OR Volume (at least one must be set)
+
+**Validation Logic (`validateProduction.ts`):**
+- Checks each output row sequentially
+- Returns specific error message indicating which row and field is missing
+- Prevents inventory creation with incomplete package data
+
 ### Volume Calculation
 
 Volume auto-calculates when all conditions are met:
@@ -321,6 +341,57 @@ Volume auto-calculates when all conditions are met:
 - Formula: `(thickness × width × length × pieces) / 1,000,000,000` (mm³ → m³)
 - When conditions aren't met, user enters volume manually
 - Display format: Latvian locale with 3 decimal places (`0,000`) for both input and display
+
+### Session Verification (Per-Window Authentication)
+
+The portal requires users to authenticate for each new browser window/tab via `SessionVerificationGuard`:
+
+**How it works:**
+1. On successful login, `markSessionVerified()` sets a sessionStorage flag
+2. When loading any protected page, `SessionVerificationGuard` checks for this flag
+3. If flag is missing (new window/tab), user is signed out and redirected to login
+4. Uses `hasChecked` ref to only verify once per component lifecycle (prevents re-checks on navigation)
+
+**Key Files:**
+- `src/components/SessionVerificationGuard.tsx` - Guard component and utility functions
+- `src/features/auth/components/LoginForm.tsx` - Calls `markSessionVerified()` on success
+- `src/app/(portal)/layout.tsx` - Wraps portal content with guard
+
+**Functions:**
+- `markSessionVerified()` - Call after successful login
+- `clearSessionVerification()` - Call on logout
+
+### Print Functionality Pattern
+
+For printable views (inventory, production outputs), use React portals with print-specific CSS:
+
+**Pattern:**
+1. Create print button component with dialog preview
+2. Use `createPortal()` to render `#print-area` div to `document.body`
+3. Hide print area on screen, show only when printing via `@media print`
+
+**Print CSS Template:**
+```css
+@media print {
+  @page { size: landscape; margin: 10mm; }
+  body > *:not(#print-area) { display: none !important; }
+  #print-area {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+  }
+  #print-area table { width: 100% !important; font-size: 10pt !important; }
+}
+```
+
+**Key Files:**
+- `src/features/inventory/components/PrintInventoryButton.tsx`
+- `src/features/production/components/PrintOutputsButton.tsx`
+
+**Notes:**
+- Print respects current table filters (pass `displayedPackages` not `allPackages`)
+- Resolve dropdown IDs to display values for print output
+- Include summary (total packages, pieces, volume) in header
 
 ## Architecture Reference
 

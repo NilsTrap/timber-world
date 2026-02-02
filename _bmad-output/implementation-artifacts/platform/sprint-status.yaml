@@ -330,3 +330,27 @@ ad_hoc_changes:
       - "apps/portal/src/features/production/components/DeleteDraftButton.tsx"
     database_changes:
       - "inventory_packages.package_sequence now nullable (for admin-added packages without shipment)"
+
+  - date: 2026-02-02
+    description: "Security, validation, and print functionality improvements"
+    changes:
+      - "Session verification per browser window: Users must log in when opening new browser windows/tabs (uses sessionStorage)"
+      - "Login form autofill: Added proper form attributes for password manager support"
+      - "Production delete cleanup: Package numbers are now properly cleaned up when deleting validated production entries"
+      - "Output field validation: Prevent validation of production entries with incomplete output fields (product, species, humidity, type, processing, FSC, quality, dimensions, pieces/volume)"
+      - "Inventory print button: Print functionality respects current filters, landscape mode with 10pt font"
+      - "Production outputs print button: Print button for both draft and validated (history) production outputs"
+      - "Fixed unexpected logouts: Added hasChecked ref to prevent repeated session verification on navigation"
+    files_created:
+      - "apps/portal/src/components/SessionVerificationGuard.tsx"
+      - "apps/portal/src/features/inventory/components/PrintInventoryButton.tsx"
+      - "apps/portal/src/features/production/components/PrintOutputsButton.tsx"
+    files_modified:
+      - "apps/portal/src/app/(portal)/layout.tsx"
+      - "apps/portal/src/features/auth/components/LoginForm.tsx"
+      - "apps/portal/src/features/production/actions/deleteProductionEntry.ts"
+      - "apps/portal/src/features/production/actions/validateProduction.ts"
+      - "apps/portal/src/features/inventory/components/ProducerInventory.tsx"
+      - "apps/portal/src/features/inventory/components/AdminInventoryViewTab.tsx"
+      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
+      - "apps/portal/src/features/production/components/ProductionEntryClient.tsx"

@@ -304,6 +304,7 @@ pnpm create next-app@latest . \
 - MFA available (TOTP) for enhanced security
 - Session management with 24h expiry
 - Password reset via email
+- Per-window session verification (requires login for each new browser window/tab via sessionStorage)
 
 **Authorization: Custom RBAC System**
 
