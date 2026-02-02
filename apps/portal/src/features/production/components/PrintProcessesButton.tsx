@@ -109,7 +109,7 @@ export function PrintProcessesButton({
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[1100px] max-h-[90vh] overflow-auto">
+        <DialogContent className="max-w-[2000px] max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>Print Production Processes</DialogTitle>
           </DialogHeader>
