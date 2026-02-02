@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { User } from "lucide-react";
 import { getSession } from "@/lib/auth";
-import { ProfileForm } from "@/features/profile/components";
+import { ProfileForm, ChangePasswordForm } from "@/features/profile/components";
 
 export const metadata: Metadata = {
   title: "Profile",
@@ -49,6 +49,12 @@ export default async function ProfilePage() {
         <div className="border-t pt-6">
           <h3 className="text-lg font-medium mb-4">Edit Profile</h3>
           <ProfileForm initialName={session.name} />
+        </div>
+
+        {/* Change Password Section */}
+        <div className="border-t pt-6 mt-6">
+          <h3 className="text-lg font-medium mb-4">Change Password</h3>
+          <ChangePasswordForm />
         </div>
 
         {/* Read-Only Information Section */}
