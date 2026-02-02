@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
@@ -86,15 +85,15 @@ export async function resetUserPassword(
     };
   }
 
-  // 6. Send password reset email via Supabase Auth Admin API
-  const supabaseAdmin = createAdminClient();
-  const { error: resetError } = await supabaseAdmin.auth.admin.generateLink({
-    type: "recovery",
-    email: portalUser.email as string,
-    options: {
+  // 6. Send password reset email via Supabase Auth
+  // Note: Using resetPasswordForEmail which actually sends the email
+  // (generateLink only generates a link without sending)
+  const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+    portalUser.email as string,
+    {
       redirectTo: "https://timber-world-portal.vercel.app/accept-invite",
-    },
-  });
+    }
+  );
 
   if (resetError) {
     console.error("Failed to send password reset:", resetError);
