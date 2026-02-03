@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Sparkles, ClipboardPaste, Hash } from "lucide-react";
+import { Sparkles, ClipboardPaste, Hash, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@timber/ui";
 import { saveProductionOutputs, assignPackageNumbers, getNextPackageNumbers } from "../actions";
@@ -435,6 +435,66 @@ export function ProductionOutputsSection({
     toast.success(`Generated ${newRows.length} output row${newRows.length > 1 ? "s" : ""} from inputs`);
   }, [inputs, rows, dropdowns, debouncedSave, processCode]);
 
+  // ─── Copy from Inputs (1:1) ───────────────────────────────────────────────────
+
+  const handleCopyFromInputs = useCallback(() => {
+    if (inputs.length === 0) {
+      toast.error("No inputs to copy");
+      return;
+    }
+
+    const startIndex = rows.length;
+    const newRows: OutputRow[] = inputs.map((input, idx) => {
+      const thickness = input.thickness || "";
+      const width = input.width || "";
+      const length = input.length || "";
+      const pieces = input.piecesUsed ? String(input.piecesUsed) : "";
+
+      let volumeM3 = "";
+      let volumeIsCalculated = false;
+
+      const tempRow: OutputRow = {
+        clientId: generateClientId(),
+        dbId: null,
+        packageNumber: "",
+        shipmentCode: "",
+        productNameId: findRefId(dropdowns.productNames, input.productName),
+        woodSpeciesId: findRefId(dropdowns.woodSpecies, input.woodSpecies),
+        humidityId: findRefId(dropdowns.humidity, input.humidity),
+        typeId: findRefId(dropdowns.types, input.typeName),
+        processingId: findRefId(dropdowns.processing, input.processing),
+        fscId: findRefId(dropdowns.fsc, input.fsc),
+        qualityId: findRefId(dropdowns.quality, input.quality),
+        thickness,
+        width,
+        length,
+        pieces,
+        volumeM3: "",
+        volumeIsCalculated: false,
+        notes: "",
+      };
+
+      if (shouldAutoCalculate(tempRow)) {
+        const vol = calculateVolume(thickness, width, length, pieces);
+        if (vol !== null) {
+          volumeM3 = vol.toFixed(3);
+          volumeIsCalculated = true;
+        }
+      }
+
+      return {
+        ...tempRow,
+        volumeM3,
+        volumeIsCalculated,
+      };
+    });
+
+    const updatedRows = [...rows, ...newRows];
+    setRows(updatedRows);
+    debouncedSave(updatedRows);
+    toast.success(`Copied ${newRows.length} input${newRows.length > 1 ? "s" : ""} to outputs`);
+  }, [inputs, rows, dropdowns, debouncedSave]);
+
   // ─── Handle Paste Import ───────────────────────────────────────────────────
 
   const handleImportRows = useCallback(
@@ -602,15 +662,26 @@ export function ProductionOutputsSection({
                 Paste Import
               </Button>
               {inputs.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAutoGenerate}
-                  disabled={isPending || isAssigningNumbers}
-                >
-                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                  Auto-Generate from Inputs
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyFromInputs}
+                    disabled={isPending || isAssigningNumbers}
+                  >
+                    <Copy className="h-3.5 w-3.5 mr-1.5" />
+                    Copy from Inputs
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAutoGenerate}
+                    disabled={isPending || isAssigningNumbers}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    Auto-Generate
+                  </Button>
+                </>
               )}
               {rows.length > 0 && (
                 <Button
