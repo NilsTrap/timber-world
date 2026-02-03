@@ -7,6 +7,57 @@ import type { ActionResult } from "../types";
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Lookup the next available package number by checking both
+ * inventory_packages and production_outputs tables.
+ */
+async function lookupNextNumber(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organisationId: string,
+  processCode: string
+): Promise<number> {
+  const pattern = `N-${processCode}-%`;
+  const regex = `^N-${processCode}-(\\d+)$`;
+
+  // Query max from inventory_packages
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: invData } = await (supabase as any)
+    .from("inventory_packages")
+    .select("package_number")
+    .eq("organisation_id", organisationId)
+    .like("package_number", pattern);
+
+  // Query max from portal_production_outputs (for drafts not yet in inventory)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: prodData } = await (supabase as any)
+    .from("portal_production_outputs")
+    .select("package_number, portal_production_entries!inner(organisation_id)")
+    .eq("portal_production_entries.organisation_id", organisationId)
+    .like("package_number", pattern);
+
+  // Find the maximum number from both sources
+  let maxNumber = 0;
+  const numberRegex = new RegExp(regex);
+
+  for (const row of invData || []) {
+    const match = row.package_number?.match(numberRegex);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNumber) maxNumber = num;
+    }
+  }
+
+  for (const row of prodData || []) {
+    const match = row.package_number?.match(numberRegex);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNumber) maxNumber = num;
+    }
+  }
+
+  return maxNumber >= 9999 ? 1 : maxNumber + 1;
+}
+
 interface OutputRowInput {
   dbId: string | null;
   packageNumber: string;
@@ -269,15 +320,20 @@ export async function saveProductionOutputs(
     }
   }
 
-  // INSERT new rows without package numbers
-  // Package numbers are assigned later via "Assign Package Numbers" button
+  // INSERT new rows with auto-assigned package numbers
   if (toInsert.length > 0) {
+    // Get the next available package number
+    let nextNumber = await lookupNextNumber(supabase, organisationId, effectiveProcessCode);
+
     for (const { index, row, payload } of toInsert) {
-      // Insert the row without package number (will be assigned later)
+      // Auto-assign package number if not already set
+      const assignedPackageNumber = row.packageNumber || `N-${effectiveProcessCode}-${String(nextNumber).padStart(4, "0")}`;
+      const payloadWithNumber = { ...payload, package_number: assignedPackageNumber };
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: inserted, error: insertError } = await (supabase as any)
         .from("portal_production_outputs")
-        .insert(payload)
+        .insert(payloadWithNumber)
         .select("id, package_number")
         .single();
 
@@ -288,6 +344,11 @@ export async function saveProductionOutputs(
 
       insertedIds[index] = inserted.id;
       packageNumbers[index] = inserted.package_number || "";
+
+      // Only increment if we auto-assigned (not if user provided one)
+      if (!row.packageNumber) {
+        nextNumber = nextNumber >= 9999 ? 1 : nextNumber + 1;
+      }
     }
   }
 

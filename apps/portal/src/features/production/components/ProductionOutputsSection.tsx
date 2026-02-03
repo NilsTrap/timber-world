@@ -1,17 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Sparkles, ClipboardPaste, Hash, Copy } from "lucide-react";
+import { ClipboardPaste, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@timber/ui";
-import { saveProductionOutputs, assignPackageNumbers, getNextPackageNumbers } from "../actions";
+import { saveProductionOutputs, getNextPackageNumbers } from "../actions";
 import type { NextPackageNumber } from "../actions";
 import { ProductionOutputsTable } from "./ProductionOutputsTable";
 import { OutputPasteImportModal, type PartialOutputRow } from "./OutputPasteImportModal";
 import { PrintOutputsButton } from "./PrintOutputsButton";
 import {
   generateClientId,
-  generateOutputNumber,
   shouldAutoCalculate,
   calculateVolume,
   createEmptyOutputRow,
@@ -87,7 +86,6 @@ export function ProductionOutputsSection({
     initialOutputs.map((o, i) => dbOutputToRow(o, i, processCode))
   );
   const [isPending, startTransition] = useTransition();
-  const [isAssigningNumbers, setIsAssigningNumbers] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pendingRowsRef = useRef<OutputRow[] | null>(null); // Track rows with pending save
   const latestRowsRef = useRef<OutputRow[]>(rows); // Always keep latest rows for saves
@@ -100,6 +98,8 @@ export function ProductionOutputsSection({
     latestRowsRef.current = rows;
   }, [rows]);
   const [availablePackageNumbers, setAvailablePackageNumbers] = useState<NextPackageNumber[]>([]);
+  // Track numbers claimed locally but not yet persisted (assigned to new rows)
+  const locallyClaimedNumbersRef = useRef<Set<string>>(new Set());
 
   // Compute which package numbers are "taken" in the current draft rows
   const takenPackageNumbers = useMemo(() => {
@@ -114,12 +114,72 @@ export function ProductionOutputsSection({
     const result = await getNextPackageNumbers(productionEntryId, takenPackageNumbers);
     if (result.success) {
       setAvailablePackageNumbers(result.data);
+      // Clear locally claimed numbers - if they were saved, they're now in takenPackageNumbers
+      // If not saved yet, they'll still be in rows and thus in takenPackageNumbers
+      locallyClaimedNumbersRef.current.clear();
     }
   }, [productionEntryId, takenPackageNumbers, readOnly]);
 
   useEffect(() => {
     fetchAvailableNumbers();
   }, [fetchAvailableNumbers]);
+
+  // Get the next available package number for this process and claim it locally
+  const claimNextPackageNumber = useCallback((): string => {
+    // Find the entry for the current process code
+    const available = availablePackageNumbers.find((a) => a.processCode === processCode);
+    if (!available) {
+      // Fallback: generate based on existing rows if no available numbers fetched yet
+      const existingNumbers = rows
+        .map((r) => r.packageNumber)
+        .filter((n) => n && n.startsWith(`N-${processCode}-`))
+        .map((n) => parseInt(n.split("-")[2] || "0", 10))
+        .filter((n) => !isNaN(n));
+
+      // Also check locally claimed
+      for (const claimed of locallyClaimedNumbersRef.current) {
+        if (claimed.startsWith(`N-${processCode}-`)) {
+          const num = parseInt(claimed.split("-")[2] || "0", 10);
+          if (!isNaN(num)) existingNumbers.push(num);
+        }
+      }
+
+      const maxNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+      const nextNum = maxNum >= 9999 ? 1 : maxNum + 1;
+      const nextNumber = `N-${processCode}-${String(nextNum).padStart(4, "0")}`;
+      locallyClaimedNumbersRef.current.add(nextNumber);
+      return nextNumber;
+    }
+
+    // Check if the available number has been locally claimed already
+    let nextNumber = available.nextNumber;
+    if (locallyClaimedNumbersRef.current.has(nextNumber)) {
+      // Need to find a higher number
+      const regex = new RegExp(`^N-${processCode}-(\\d+)$`);
+      const match = nextNumber.match(regex);
+      if (match && match[1]) {
+        let num = parseInt(match[1], 10);
+        // Keep incrementing until we find one not claimed
+        while (locallyClaimedNumbersRef.current.has(`N-${processCode}-${String(num).padStart(4, "0")}`)) {
+          num = num >= 9999 ? 1 : num + 1;
+        }
+        nextNumber = `N-${processCode}-${String(num).padStart(4, "0")}`;
+      }
+    }
+
+    locallyClaimedNumbersRef.current.add(nextNumber);
+    return nextNumber;
+  }, [availablePackageNumbers, processCode, rows]);
+
+  // Create a new row with an immediately assigned package number
+  const createRowWithPackageNumber = useCallback(
+    (index: number): OutputRow => {
+      const row = createEmptyOutputRow(index, processCode);
+      row.packageNumber = claimNextPackageNumber();
+      return row;
+    },
+    [processCode, claimNextPackageNumber]
+  );
 
   // Total output m³
   const totalM3 = useMemo(() => {
@@ -255,63 +315,6 @@ export function ProductionOutputsSection({
     [performSave]
   );
 
-  // ─── Assign Package Numbers Handler ──────────────────────────────────────────
-
-  const handleAssignNumbers = useCallback(async () => {
-    // Use latest rows from ref, not stale closure
-    const currentRows = latestRowsRef.current;
-
-    // Check if there are rows without package numbers
-    const rowsNeedingNumbers = currentRows.filter((r) => !r.packageNumber || r.packageNumber === "");
-    if (rowsNeedingNumbers.length === 0) {
-      toast.info("All outputs already have package numbers assigned");
-      return;
-    }
-
-    // First, ensure all rows are saved - use async version to actually wait
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    const saveSuccess = await performSaveAsync(latestRowsRef.current);
-    if (!saveSuccess) {
-      toast.error("Failed to save outputs before assigning numbers");
-      return;
-    }
-
-    setIsAssigningNumbers(true);
-    const result = await assignPackageNumbers(productionEntryId);
-    setIsAssigningNumbers(false);
-
-    if (!result.success) {
-      toast.error(result.error || "Failed to assign package numbers");
-      return;
-    }
-
-    if (result.assignedNumbers && result.assignedNumbers.length > 0) {
-      toast.success(`Assigned ${result.assignedNumbers.length} package number${result.assignedNumbers.length !== 1 ? "s" : ""}`);
-
-      // Update local state with the assigned numbers
-      // Use latest rows from ref to avoid stale data
-      setRows((prev) => {
-        let numberIndex = 0;
-        const updated = prev.map((row) => {
-          if (!row.packageNumber || row.packageNumber === "") {
-            const newNumber = result.assignedNumbers?.[numberIndex];
-            numberIndex++;
-            return { ...row, packageNumber: newNumber || row.packageNumber };
-          }
-          return row;
-        });
-        // Update the ref to keep it in sync
-        latestRowsRef.current = updated;
-        return updated;
-      });
-    } else {
-      toast.info("No package numbers needed to be assigned");
-    }
-  }, [productionEntryId, performSaveAsync]);
-
   // ─── Row Change Handler ─────────────────────────────────────────────────────
 
   const handleRowsChange = useCallback(
@@ -422,7 +425,7 @@ export function ProductionOutputsSection({
       newRows.push({
         ...tempRow,
         clientId: generateClientId(),
-        packageNumber: generateOutputNumber(startIndex + idx, processCode),
+        packageNumber: claimNextPackageNumber(),
         volumeM3,
         volumeIsCalculated,
       });
@@ -433,7 +436,7 @@ export function ProductionOutputsSection({
     setRows(updatedRows);
     debouncedSave(updatedRows);
     toast.success(`Generated ${newRows.length} output row${newRows.length > 1 ? "s" : ""} from inputs`);
-  }, [inputs, rows, dropdowns, debouncedSave, processCode]);
+  }, [inputs, rows, dropdowns, debouncedSave, claimNextPackageNumber]);
 
   // ─── Copy from Inputs (1:1) ───────────────────────────────────────────────────
 
@@ -484,6 +487,7 @@ export function ProductionOutputsSection({
 
       return {
         ...tempRow,
+        packageNumber: claimNextPackageNumber(),
         volumeM3,
         volumeIsCalculated,
       };
@@ -493,7 +497,7 @@ export function ProductionOutputsSection({
     setRows(updatedRows);
     debouncedSave(updatedRows);
     toast.success(`Copied ${newRows.length} input${newRows.length > 1 ? "s" : ""} to outputs`);
-  }, [inputs, rows, dropdowns, debouncedSave]);
+  }, [inputs, rows, dropdowns, debouncedSave, claimNextPackageNumber]);
 
   // ─── Handle Paste Import ───────────────────────────────────────────────────
 
@@ -539,7 +543,7 @@ export function ProductionOutputsSection({
       if (partialRows.length > rows.length) {
         for (let i = rows.length; i < partialRows.length; i++) {
           const partialData = partialRows[i]!;
-          const newRow = createEmptyOutputRow(i, processCode);
+          const newRow = createRowWithPackageNumber(i);
 
           // Apply mapped fields to new row
           for (const field of mappedFields) {
@@ -565,17 +569,17 @@ export function ProductionOutputsSection({
       debouncedSave(updatedRows);
       toast.success(`Updated ${Math.min(partialRows.length, rows.length)} row${Math.min(partialRows.length, rows.length) !== 1 ? "s" : ""}${partialRows.length > rows.length ? `, added ${partialRows.length - rows.length} new` : ""}`);
     },
-    [rows, debouncedSave, processCode]
+    [rows, debouncedSave, createRowWithPackageNumber]
   );
 
   // ─── Keyboard Shortcut: Ctrl+O ─────────────────────────────────────────────
 
   const handleAddRow = useCallback(() => {
-    const newRow = createEmptyOutputRow(rows.length, processCode);
+    const newRow = createRowWithPackageNumber(rows.length);
     const updatedRows = [...rows, newRow];
     setRows(updatedRows);
     debouncedSave(updatedRows);
-  }, [rows, debouncedSave, processCode]);
+  }, [rows, debouncedSave, createRowWithPackageNumber]);
 
   useEffect(() => {
     if (readOnly) return;
@@ -656,7 +660,7 @@ export function ProductionOutputsSection({
                 variant="outline"
                 size="sm"
                 onClick={() => setImportModalOpen(true)}
-                disabled={isPending || isAssigningNumbers}
+                disabled={isPending}
               >
                 <ClipboardPaste className="h-3.5 w-3.5 mr-1.5" />
                 Paste Import
@@ -667,32 +671,12 @@ export function ProductionOutputsSection({
                     variant="outline"
                     size="sm"
                     onClick={handleCopyFromInputs}
-                    disabled={isPending || isAssigningNumbers}
+                    disabled={isPending}
                   >
                     <Copy className="h-3.5 w-3.5 mr-1.5" />
                     Copy from Inputs
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAutoGenerate}
-                    disabled={isPending || isAssigningNumbers}
-                  >
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                    Auto-Generate
-                  </Button>
                 </>
-              )}
-              {rows.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAssignNumbers}
-                  disabled={isPending || isAssigningNumbers}
-                >
-                  <Hash className="h-3.5 w-3.5 mr-1.5" />
-                  {isAssigningNumbers ? "Assigning..." : "Assign Package Numbers"}
-                </Button>
               )}
             </>
           )}
@@ -708,6 +692,7 @@ export function ProductionOutputsSection({
         onNoteChange={handleNoteChange}
         availablePackageNumbers={availablePackageNumbers}
         onPackageNumberChange={handlePackageNumberChange}
+        createRow={createRowWithPackageNumber}
       />
 
       {!readOnly && (

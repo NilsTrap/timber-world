@@ -36,6 +36,7 @@ interface ProductionOutputsTableProps {
   onNoteChange?: (clientId: string, note: string) => void;
   availablePackageNumbers?: NextPackageNumber[];
   onPackageNumberChange?: (clientId: string, packageNumber: string) => void;
+  createRow?: (index: number) => OutputRow;
 }
 
 /** Dropdown column configuration */
@@ -168,6 +169,7 @@ export function ProductionOutputsTable({
   onNoteChange,
   availablePackageNumbers,
   onPackageNumberChange,
+  createRow: createRowProp,
 }: ProductionOutputsTableProps) {
   const columns: ColumnDef<OutputRow>[] = useMemo(() => {
     const cols: ColumnDef<OutputRow>[] = [
@@ -406,13 +408,16 @@ export function ProductionOutputsTable({
     [processCode]
   );
 
+  // Use provided createRow or fall back to default
+  const effectiveCreateRow = createRowProp ?? ((index: number) => createEmptyOutputRow(index, processCode));
+
   return (
     <DataEntryTable<OutputRow>
       columns={columns}
       rows={rows}
       onRowsChange={onRowsChange}
       getRowKey={(row) => row.clientId}
-      createRow={(index) => createEmptyOutputRow(index, processCode)}
+      createRow={effectiveCreateRow}
       copyRow={handleCopyRow}
       renumberRows={renumberRows}
       onCellChange={handleCellChange}
