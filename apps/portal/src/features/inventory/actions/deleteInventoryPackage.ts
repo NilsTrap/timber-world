@@ -33,17 +33,19 @@ export async function deleteInventoryPackage(
 
   const supabase = await createClient();
 
-  // Check if package exists
+  // Check if package exists and get its shipment_id
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: pkg, error: fetchError } = await (supabase as any)
     .from("inventory_packages")
-    .select("id")
+    .select("id, shipment_id")
     .eq("id", packageId)
     .single();
 
   if (fetchError || !pkg) {
     return { success: false, error: "Package not found", code: "NOT_FOUND" };
   }
+
+  const shipmentId = pkg.shipment_id;
 
   // Check if package is used as input in any production entry
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -70,6 +72,28 @@ export async function deleteInventoryPackage(
 
   if (deleteError) {
     return { success: false, error: deleteError.message, code: "DELETE_FAILED" };
+  }
+
+  // Clean up orphaned shipment if this was the last package
+  if (shipmentId) {
+    // Check if shipment has any remaining packages
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: remainingPackages } = await (supabase as any)
+      .from("inventory_packages")
+      .select("id")
+      .eq("shipment_id", shipmentId)
+      .limit(1);
+
+    // If no packages remain, delete the shipment
+    if (!remainingPackages || remainingPackages.length === 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from("shipments")
+        .delete()
+        .eq("id", shipmentId);
+      // Note: We don't fail the operation if shipment delete fails
+      // The package is already deleted, which was the primary goal
+    }
   }
 
   return { success: true, data: null };
