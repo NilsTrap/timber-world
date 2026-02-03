@@ -105,7 +105,7 @@ export async function saveInventoryPackages(
           from_organisation_id: null,
           to_organisation_id: organisationId,
           shipment_date: new Date().toISOString().split("T")[0],
-          status: "received",
+          status: "completed",
         })
         .select("id")
         .single();
