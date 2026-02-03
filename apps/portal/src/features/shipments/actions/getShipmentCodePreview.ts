@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { isValidUUID } from "../types";
 import type { ActionResult } from "../types";
 
@@ -9,8 +9,8 @@ import type { ActionResult } from "../types";
  * Get Shipment Code Preview
  *
  * Previews the auto-generated shipment code for selected from/to organisations.
- * Calls the `generate_shipment_code` DB function.
- * Admin only.
+ * Calculates the code based on organisation codes and existing shipment count.
+ * Available to any authenticated user.
  */
 export async function getShipmentCodePreview(
   fromOrganisationId: string,
@@ -19,10 +19,6 @@ export async function getShipmentCodePreview(
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  }
-
-  if (!isAdmin(session)) {
-    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   if (!isValidUUID(fromOrganisationId) || !isValidUUID(toOrganisationId)) {
@@ -35,18 +31,45 @@ export async function getShipmentCodePreview(
 
   const supabase = await createClient();
 
-  // Call the DB function to generate the shipment code preview
+  // Get organisation codes
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .rpc("generate_shipment_code", {
-      p_from_organisation_id: fromOrganisationId,
-      p_to_organisation_id: toOrganisationId,
-    });
+  const { data: fromOrg, error: fromError } = await (supabase as any)
+    .from("organisations")
+    .select("code")
+    .eq("id", fromOrganisationId)
+    .single();
 
-  if (error) {
-    console.error("Failed to generate shipment code:", error);
-    return { success: false, error: "Failed to generate shipment code", code: "RPC_FAILED" };
+  if (fromError || !fromOrg?.code) {
+    return { success: false, error: "Source organisation not found", code: "ORG_NOT_FOUND" };
   }
 
-  return { success: true, data: { code: data as string } };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: toOrg, error: toError } = await (supabase as any)
+    .from("organisations")
+    .select("code")
+    .eq("id", toOrganisationId)
+    .single();
+
+  if (toError || !toOrg?.code) {
+    return { success: false, error: "Destination organisation not found", code: "ORG_NOT_FOUND" };
+  }
+
+  // Count existing shipments between these organisations
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count, error: countError } = await (supabase as any)
+    .from("shipments")
+    .select("id", { count: "exact", head: true })
+    .eq("from_organisation_id", fromOrganisationId)
+    .eq("to_organisation_id", toOrganisationId);
+
+  if (countError) {
+    console.error("Failed to count shipments:", countError);
+    return { success: false, error: "Failed to generate shipment code", code: "COUNT_FAILED" };
+  }
+
+  // Generate code: FROM-TO-001
+  const sequenceNumber = String((count ?? 0) + 1).padStart(3, "0");
+  const code = `${fromOrg.code}-${toOrg.code}-${sequenceNumber}`;
+
+  return { success: true, data: { code } };
 }

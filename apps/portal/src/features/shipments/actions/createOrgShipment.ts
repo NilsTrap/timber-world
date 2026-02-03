@@ -62,6 +62,31 @@ export async function createOrgShipment(
 
   const supabase = await createClient();
 
+  // Verify both organisations have codes (required for shipment code generation)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: fromOrg, error: fromOrgError } = await (supabase as any)
+    .from("organisations")
+    .select("code")
+    .eq("id", fromOrganisationId)
+    .single();
+
+  if (fromOrgError || !fromOrg?.code) {
+    console.error("From organisation missing code:", fromOrgError);
+    return { success: false, error: "Source organisation is missing a code", code: "ORG_NO_CODE" };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: toOrg, error: toOrgError } = await (supabase as any)
+    .from("organisations")
+    .select("code")
+    .eq("id", toOrganisationId)
+    .single();
+
+  if (toOrgError || !toOrg?.code) {
+    console.error("To organisation missing code:", toOrgError);
+    return { success: false, error: "Destination organisation is missing a code", code: "ORG_NO_CODE" };
+  }
+
   // Transform packages to snake_case JSONB for the DB function
   const packagesJsonb = packages.map((pkg) => ({
     product_name_id: pkg.productNameId || null,
