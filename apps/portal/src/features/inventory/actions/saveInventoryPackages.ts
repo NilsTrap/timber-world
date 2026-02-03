@@ -64,28 +64,100 @@ export async function saveInventoryPackages(
   const newPackages = packages.filter((p) => p.isNew || p.id.startsWith("new-"));
   const existingPackages = packages.filter((p) => !p.isNew && !p.id.startsWith("new-"));
 
+  // Cache shipment IDs by (organisationId, shipmentCode) to avoid duplicate lookups/creates
+  const shipmentCache = new Map<string, string | null>();
+
+  // Helper function to find or create shipment for a given code and organisation
+  async function findOrCreateShipment(shipmentCode: string, organisationId: string): Promise<string | null> {
+    const cacheKey = `${organisationId}:${shipmentCode}`;
+
+    if (shipmentCache.has(cacheKey)) {
+      return shipmentCache.get(cacheKey) ?? null;
+    }
+
+    // Try to find existing shipment with this code for this organisation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingShipments } = await (supabase as any)
+      .from("shipments")
+      .select("id")
+      .eq("shipment_code", shipmentCode)
+      .eq("to_organisation_id", organisationId)
+      .limit(1);
+
+    let shipmentId: string | null = null;
+
+    if (existingShipments && existingShipments.length > 0) {
+      shipmentId = existingShipments[0].id;
+    } else {
+      // Get next shipment number from sequence
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: seqData } = await (supabase as any).rpc("get_next_shipment_number");
+      const shipmentNumber = seqData ?? Math.floor(Date.now() / 1000); // Fallback
+
+      // Create a new admin shipment with this code
+      // from_organisation_id is null for admin-added inventory
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newShipment, error: shipmentError } = await (supabase as any)
+        .from("shipments")
+        .insert({
+          shipment_code: shipmentCode,
+          shipment_number: shipmentNumber,
+          from_organisation_id: null,
+          to_organisation_id: organisationId,
+          shipment_date: new Date().toISOString().split("T")[0],
+          status: "received",
+        })
+        .select("id")
+        .single();
+
+      if (shipmentError) {
+        errors.push(`Failed to create shipment "${shipmentCode}": ${shipmentError.message}`);
+      } else if (newShipment) {
+        shipmentId = newShipment.id;
+      }
+    }
+
+    shipmentCache.set(cacheKey, shipmentId);
+    return shipmentId;
+  }
+
   // Update existing packages
   for (const pkg of existingPackages) {
+    // Handle shipment code for existing packages
+    let shipmentId: string | null = null;
+    const shipmentCode = pkg.shipmentCode?.trim().toUpperCase();
+    if (shipmentCode && shipmentCode !== "" && shipmentCode !== "-" && pkg.organisationId) {
+      shipmentId = await findOrCreateShipment(shipmentCode, pkg.organisationId);
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateData: any = {
+      package_number: pkg.packageNumber,
+      organisation_id: pkg.organisationId,
+      product_name_id: pkg.productNameId || null,
+      wood_species_id: pkg.woodSpeciesId || null,
+      humidity_id: pkg.humidityId || null,
+      type_id: pkg.typeId || null,
+      processing_id: pkg.processingId || null,
+      fsc_id: pkg.fscId || null,
+      quality_id: pkg.qualityId || null,
+      thickness: pkg.thickness,
+      width: pkg.width,
+      length: pkg.length,
+      pieces: pkg.pieces,
+      volume_m3: pkg.volumeM3,
+      volume_is_calculated: pkg.volumeIsCalculated,
+    };
+
+    // Only update shipment_id if a shipment code was provided
+    if (shipmentCode && shipmentCode !== "" && shipmentCode !== "-") {
+      updateData.shipment_id = shipmentId;
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)
       .from("inventory_packages")
-      .update({
-        package_number: pkg.packageNumber,
-        organisation_id: pkg.organisationId,
-        product_name_id: pkg.productNameId || null,
-        wood_species_id: pkg.woodSpeciesId || null,
-        humidity_id: pkg.humidityId || null,
-        type_id: pkg.typeId || null,
-        processing_id: pkg.processingId || null,
-        fsc_id: pkg.fscId || null,
-        quality_id: pkg.qualityId || null,
-        thickness: pkg.thickness,
-        width: pkg.width,
-        length: pkg.length,
-        pieces: pkg.pieces,
-        volume_m3: pkg.volumeM3,
-        volume_is_calculated: pkg.volumeIsCalculated,
-      })
+      .update(updateData)
       .eq("id", pkg.id);
 
     if (error) {
@@ -95,10 +167,7 @@ export async function saveInventoryPackages(
     }
   }
 
-  // Create new packages - link to shipments if shipment code provided
-  // Cache shipment IDs by (organisationId, shipmentCode) to avoid duplicate lookups/creates
-  const shipmentCache = new Map<string, string | null>();
-
+  // Create new packages
   for (const pkg of newPackages) {
     if (!pkg.organisationId) {
       errors.push(`Cannot create package without organisation: ${pkg.packageNumber || "unnamed"}`);
@@ -111,52 +180,7 @@ export async function saveInventoryPackages(
     // If shipment code provided, find or create a shipment
     const shipmentCode = pkg.shipmentCode?.trim().toUpperCase();
     if (shipmentCode && shipmentCode !== "" && shipmentCode !== "-") {
-      const cacheKey = `${pkg.organisationId}:${shipmentCode}`;
-
-      if (shipmentCache.has(cacheKey)) {
-        shipmentId = shipmentCache.get(cacheKey) ?? null;
-      } else {
-        // Try to find existing shipment with this code for this organisation
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: existingShipments } = await (supabase as any)
-          .from("shipments")
-          .select("id")
-          .eq("shipment_code", shipmentCode)
-          .eq("to_organisation_id", pkg.organisationId)
-          .limit(1);
-
-        if (existingShipments && existingShipments.length > 0) {
-          shipmentId = existingShipments[0].id;
-        } else {
-          // Get next shipment number from sequence
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: seqData } = await (supabase as any).rpc("get_next_shipment_number");
-          const shipmentNumber = seqData ?? Math.floor(Date.now() / 1000); // Fallback
-
-          // Create a new admin shipment with this code
-          // from_organisation_id is null for admin-added inventory
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: newShipment, error: shipmentError } = await (supabase as any)
-            .from("shipments")
-            .insert({
-              shipment_code: shipmentCode,
-              shipment_number: shipmentNumber,
-              from_organisation_id: null,
-              to_organisation_id: pkg.organisationId,
-              shipment_date: new Date().toISOString().split("T")[0],
-              status: "received",
-            })
-            .select("id")
-            .single();
-
-          if (shipmentError) {
-            errors.push(`Failed to create shipment "${shipmentCode}": ${shipmentError.message}`);
-          } else if (newShipment) {
-            shipmentId = newShipment.id;
-          }
-        }
-        shipmentCache.set(cacheKey, shipmentId);
-      }
+      shipmentId = await findOrCreateShipment(shipmentCode, pkg.organisationId);
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
