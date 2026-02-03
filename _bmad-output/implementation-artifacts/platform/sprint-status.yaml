@@ -469,3 +469,21 @@ ad_hoc_changes:
       - "apps/portal/src/features/production/actions/assignPackageNumbers.ts"
       - "apps/portal/src/features/production/actions/getProductionOutputs.ts"
       - "apps/portal/src/features/production/actions/index.ts"
+
+  - date: 2026-02-03
+    description: "Producer shipment package selector from inventory"
+    changes:
+      - "Add 'Add from Inventory' button to producer new shipment form"
+      - "Create NewShipmentPackageSelector dialog to select packages from producer's inventory"
+      - "Create getShipmentAvailablePackages action to fetch available packages with IDs"
+      - "Selected packages populate the shipment form with all fields pre-filled"
+      - "Track selected packages to prevent duplicate selection in dialog"
+      - "Add inventoryPackageId field to PackageRow type for tracking source packages"
+    files_created:
+      - "apps/portal/src/features/shipments/actions/getShipmentAvailablePackages.ts"
+      - "apps/portal/src/features/shipments/components/NewShipmentPackageSelector.tsx"
+    files_modified:
+      - "apps/portal/src/features/shipments/components/ProducerNewShipmentForm.tsx"
+      - "apps/portal/src/features/shipments/components/index.ts"
+      - "apps/portal/src/features/shipments/actions/index.ts"
+      - "apps/portal/src/features/shipments/types.ts"
