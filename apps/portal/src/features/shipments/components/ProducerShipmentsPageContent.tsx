@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Button } from "@timber/ui";
-import { ProducerNewShipmentForm } from "./ProducerNewShipmentForm";
+import { NewShipmentDialog } from "./NewShipmentDialog";
 import { ProducerShipmentsDraftsTable } from "./ProducerShipmentsDraftsTable";
 import { ProducerShipmentsCompletedTable } from "./ProducerShipmentsCompletedTable";
 import type { OrganisationOption } from "../types";
@@ -25,7 +25,7 @@ function ProducerShipmentsPageContentInner({
   const [activeTab, setActiveTab] = useState(
     defaultTab || searchParams.get("tab") || "drafts"
   );
-  const [showNewForm, setShowNewForm] = useState(false);
+  const [showNewDialog, setShowNewDialog] = useState(false);
 
   // Sync activeTab when defaultTab changes (e.g., from navigation)
   useEffect(() => {
@@ -36,7 +36,6 @@ function ProducerShipmentsPageContentInner({
 
   const setTab = useCallback((tab: string) => {
     setActiveTab(tab);
-    setShowNewForm(false); // Reset form visibility when switching tabs
     const params = new URLSearchParams(window.location.search);
     params.set("tab", tab);
     window.history.replaceState(null, "", `?${params.toString()}`);
@@ -57,14 +56,6 @@ function ProducerShipmentsPageContentInner({
 
     return { draftShipments: drafts, completedShipments: completed };
   }, [shipments]);
-
-  const handleNewShipmentClick = useCallback(() => {
-    setShowNewForm(true);
-  }, []);
-
-  const handleCancelNewShipment = useCallback(() => {
-    setShowNewForm(false);
-  }, []);
 
   return (
     <div className="space-y-6">
@@ -108,30 +99,21 @@ function ProducerShipmentsPageContentInner({
       <div role="tabpanel" id={`panel-${activeTab}`}>
         {activeTab === "drafts" ? (
           <div className="space-y-6">
-            {/* New Shipment Section */}
-            {showNewForm ? (
-              <ProducerNewShipmentForm
-                userOrganisation={userOrganisation}
-                onCancel={handleCancelNewShipment}
-              />
-            ) : (
-              <div className="flex justify-start">
-                <Button onClick={handleNewShipmentClick}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Shipment
-                </Button>
-              </div>
-            )}
+            {/* New Shipment Button */}
+            <div className="flex justify-start">
+              <Button onClick={() => setShowNewDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Shipment
+              </Button>
+            </div>
 
             {/* Draft Shipments List */}
-            {!showNewForm && draftShipments.length > 0 && (
+            {draftShipments.length > 0 ? (
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Draft Shipments</h3>
                 <ProducerShipmentsDraftsTable shipments={draftShipments} />
               </div>
-            )}
-
-            {!showNewForm && draftShipments.length === 0 && (
+            ) : (
               <div className="text-center py-8 text-muted-foreground border rounded-lg bg-muted/20">
                 <p>No draft shipments</p>
                 <p className="text-sm mt-1">Click "New Shipment" to create one</p>
@@ -142,6 +124,9 @@ function ProducerShipmentsPageContentInner({
           <ProducerShipmentsCompletedTable shipments={completedShipments} />
         )}
       </div>
+
+      {/* New Shipment Dialog */}
+      <NewShipmentDialog open={showNewDialog} onOpenChange={setShowNewDialog} />
     </div>
   );
 }

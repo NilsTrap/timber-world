@@ -21,3 +21,4 @@ export { ProducerShipmentsPageContent } from "./ProducerShipmentsPageContent";
 export { ProducerShipmentsDraftsTable } from "./ProducerShipmentsDraftsTable";
 export { ProducerShipmentsCompletedTable } from "./ProducerShipmentsCompletedTable";
 export { NewShipmentPackageSelector } from "./NewShipmentPackageSelector";
+export { NewShipmentDialog } from "./NewShipmentDialog";
