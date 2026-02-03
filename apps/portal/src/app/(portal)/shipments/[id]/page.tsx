@@ -2,14 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Button,
-  Badge,
-} from "@timber/ui";
+import Link from "next/link";
+import { Button } from "@timber/ui";
 import {
   Table,
   TableBody,
@@ -28,10 +22,11 @@ import { toast } from "sonner";
 import { ShipmentPackageSelector } from "@/features/shipments/components/ShipmentPackageSelector";
 import { SubmitShipmentDialog } from "@/features/shipments/components/SubmitShipmentDialog";
 import { AcceptRejectButtons } from "@/features/shipments/components/AcceptRejectButtons";
+import { DeleteShipmentDraftButton } from "@/features/shipments/components/DeleteShipmentDraftButton";
 
 const statusColors: Record<ShipmentStatus, string> = {
-  draft: "bg-gray-100 text-gray-800",
-  pending: "bg-yellow-100 text-yellow-800",
+  draft: "bg-yellow-100 text-yellow-800",
+  pending: "bg-orange-100 text-orange-800",
   accepted: "bg-blue-100 text-blue-800",
   completed: "bg-green-100 text-green-800",
   rejected: "bg-red-100 text-red-800",
@@ -44,6 +39,14 @@ const statusLabels: Record<ShipmentStatus, string> = {
   completed: "Completed",
   rejected: "Rejected",
 };
+
+function formatVolume(vol: number | null): string {
+  if (vol === null || vol === 0) return "-";
+  return vol.toLocaleString("de-DE", {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  });
+}
 
 /**
  * Shipment Detail Page
@@ -116,14 +119,6 @@ export default function ShipmentDetailPage() {
     setCanceling(false);
   };
 
-  const formatVolume = (vol: number | null) => {
-    if (vol === null) return "-";
-    return vol.toLocaleString("de-DE", {
-      minimumFractionDigits: 3,
-      maximumFractionDigits: 3,
-    });
-  };
-
   const totalVolume = shipment?.packages.reduce(
     (sum, pkg) => sum + (pkg.volumeM3 ?? 0),
     0
@@ -150,30 +145,36 @@ export default function ShipmentDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/shipments")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold">{shipment.shipmentCode}</h1>
-              <Badge className={statusColors[shipment.status]}>
-                {statusLabels[shipment.status]}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">
-              {isOwner ? "To" : "From"}: {isOwner ? shipment.toOrganisationName : shipment.fromOrganisationName}
-            </p>
-          </div>
-        </div>
+      {/* Back Link - same style as production */}
+      <Link
+        href={isDraft ? "/shipments" : "/shipments?tab=completed"}
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Link>
 
-        <div className="flex gap-3">
+      {/* Header - same layout as production */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            {shipment.shipmentCode}
+          </h1>
+          <p className="text-muted-foreground">
+            {isOwner ? "To" : "From"}: {isOwner ? shipment.toOrganisationName : shipment.fromOrganisationName}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {isDraft && isOwner && (
+            <DeleteShipmentDraftButton
+              shipmentId={shipment.id}
+              shipmentCode={shipment.shipmentCode}
+            />
+          )}
           {canSubmit && (
             <Button onClick={() => setShowSubmitDialog(true)}>
               <Send className="h-4 w-4 mr-2" />
-              Submit for Acceptance
+              Submit
             </Button>
           )}
           {canCancel && (
@@ -186,7 +187,7 @@ export default function ShipmentDetailPage() {
               ) : (
                 <>
                   <X className="h-4 w-4 mr-2" />
-                  Cancel Submission
+                  Cancel
                 </>
               )}
             </Button>
@@ -200,120 +201,125 @@ export default function ShipmentDetailPage() {
               onSuccess={fetchShipment}
             />
           )}
+          <span
+            className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[shipment.status]}`}
+          >
+            {statusLabels[shipment.status]}
+          </span>
         </div>
       </div>
 
-      {/* Shipment Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Shipment Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <dt className="text-muted-foreground">From</dt>
-              <dd className="font-medium">{shipment.fromOrganisationName}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">To</dt>
-              <dd className="font-medium">{shipment.toOrganisationName}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Date</dt>
-              <dd className="font-medium">{formatDate(shipment.shipmentDate)}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Total Volume</dt>
-              <dd className="font-medium">{formatVolume(totalVolume)} m³</dd>
-            </div>
-          </dl>
+      {/* Summary Cards - same style as ProductionSummary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-sm text-muted-foreground">From</p>
+          <p className="text-xl font-semibold truncate">{shipment.fromOrganisationName}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-sm text-muted-foreground">To</p>
+          <p className="text-xl font-semibold truncate">{shipment.toOrganisationName}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-sm text-muted-foreground">Date</p>
+          <p className="text-xl font-semibold">{formatDate(shipment.shipmentDate)}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-sm text-muted-foreground">Total Volume</p>
+          <p className="text-xl font-semibold">{formatVolume(totalVolume)} m³</p>
+        </div>
+      </div>
+
+      {/* Notes & Rejection Reason */}
+      {(shipment.notes || (shipment.status === "rejected" && shipment.rejectionReason)) && (
+        <div className="rounded-lg border bg-card p-4">
           {shipment.notes && (
-            <div className="mt-4 pt-4 border-t">
-              <dt className="text-sm text-muted-foreground mb-1">Notes</dt>
-              <dd className="text-sm">{shipment.notes}</dd>
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Notes</p>
+              <p className="text-sm">{shipment.notes}</p>
             </div>
           )}
           {shipment.status === "rejected" && shipment.rejectionReason && (
-            <div className="mt-4 pt-4 border-t">
-              <dt className="text-sm text-red-600 font-medium mb-1">Rejection Reason</dt>
-              <dd className="text-sm text-red-700">{shipment.rejectionReason}</dd>
+            <div className={shipment.notes ? "mt-4 pt-4 border-t" : ""}>
+              <p className="text-sm text-red-600 font-medium mb-1">Rejection Reason</p>
+              <p className="text-sm text-red-700">{shipment.rejectionReason}</p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
-      {/* Packages */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg">
-            Packages ({shipment.packages.length})
-          </CardTitle>
+      {/* Packages Section - same style as ProductionInputsSection */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Packages</h2>
+            {shipment.packages.length > 0 && (
+              <p className="text-sm text-muted-foreground">
+                Total: {formatVolume(totalVolume)} m³
+              </p>
+            )}
+          </div>
           {canEdit && (
-            <Button onClick={() => setShowPackageSelector(true)}>
-              <Plus className="h-4 w-4 mr-2" />
+            <Button variant="outline" size="sm" onClick={() => setShowPackageSelector(true)}>
+              <Plus className="h-4 w-4 mr-1" />
               Add Packages
             </Button>
           )}
-        </CardHeader>
-        <CardContent className="p-0">
-          {shipment.packages.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              No packages added yet
-              {canEdit && (
-                <div className="mt-2">
-                  <Button variant="outline" onClick={() => setShowPackageSelector(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Packages
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Package #</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Species</TableHead>
-                    <TableHead>Dimensions</TableHead>
-                    <TableHead className="text-right">Pieces</TableHead>
-                    <TableHead className="text-right">Volume m³</TableHead>
-                    {canEdit && <TableHead className="w-[50px]"></TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {shipment.packages.map((pkg) => (
-                    <TableRow key={pkg.id}>
-                      <TableCell className="font-medium">{pkg.packageNumber}</TableCell>
-                      <TableCell>{pkg.productName ?? "-"}</TableCell>
-                      <TableCell>{pkg.woodSpecies ?? "-"}</TableCell>
+        </div>
+
+        {shipment.packages.length === 0 ? (
+          <div
+            className={`rounded-lg border bg-card p-6 text-center ${canEdit ? "cursor-pointer hover:border-primary/50 hover:bg-accent/50 transition-colors" : ""}`}
+            onClick={canEdit ? () => setShowPackageSelector(true) : undefined}
+          >
+            <p className="text-sm text-muted-foreground">
+              {canEdit ? "No packages added yet. Click here to select packages from inventory." : "No packages in this shipment."}
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Package #</TableHead>
+                  <TableHead>Product</TableHead>
+                  <TableHead>Species</TableHead>
+                  <TableHead>Dimensions</TableHead>
+                  <TableHead className="text-right">Pieces</TableHead>
+                  <TableHead className="text-right">Volume m³</TableHead>
+                  {canEdit && <TableHead className="w-[50px]"></TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {shipment.packages.map((pkg) => (
+                  <TableRow key={pkg.id}>
+                    <TableCell className="font-medium">{pkg.packageNumber}</TableCell>
+                    <TableCell>{pkg.productName ?? "-"}</TableCell>
+                    <TableCell>{pkg.woodSpecies ?? "-"}</TableCell>
+                    <TableCell>
+                      {pkg.thickness && pkg.width && pkg.length
+                        ? `${pkg.thickness} × ${pkg.width} × ${pkg.length}`
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="text-right">{pkg.pieces ?? "-"}</TableCell>
+                    <TableCell className="text-right">{formatVolume(pkg.volumeM3)}</TableCell>
+                    {canEdit && (
                       <TableCell>
-                        {pkg.thickness && pkg.width && pkg.length
-                          ? `${pkg.thickness} × ${pkg.width} × ${pkg.length}`
-                          : "-"}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemovePackage(pkg.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        </Button>
                       </TableCell>
-                      <TableCell className="text-right">{pkg.pieces ?? "-"}</TableCell>
-                      <TableCell className="text-right">{formatVolume(pkg.volumeM3)}</TableCell>
-                      {canEdit && (
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemovePackage(pkg.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
 
       {/* Package Selector Dialog */}
       {showPackageSelector && (

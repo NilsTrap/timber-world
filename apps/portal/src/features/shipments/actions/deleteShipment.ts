@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
@@ -11,7 +12,8 @@ const UUID_REGEX =
  * Delete a shipment and all its related packages.
  *
  * Multi-tenancy:
- * - Only Super Admin can delete shipments
+ * - Super Admin can delete any shipment
+ * - Org users can delete their own draft shipments
  * - Validates that no packages from this shipment are used as production inputs
  */
 export async function deleteShipment(
@@ -22,27 +24,34 @@ export async function deleteShipment(
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  // Only Super Admin can delete shipments
-  if (!isSuperAdmin(session)) {
-    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
-  }
-
   if (!shipmentId || !UUID_REGEX.test(shipmentId)) {
     return { success: false, error: "Invalid shipment ID", code: "INVALID_INPUT" };
   }
 
   const supabase = await createClient();
 
-  // Check if shipment exists
+  // Check if shipment exists and get details for authorization
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: shipment, error: fetchError } = await (supabase as any)
     .from("shipments")
-    .select("id")
+    .select("id, status, from_organisation_id")
     .eq("id", shipmentId)
     .single();
 
   if (fetchError || !shipment) {
     return { success: false, error: "Shipment not found", code: "NOT_FOUND" };
+  }
+
+  // Authorization check:
+  // - Super Admin can delete any shipment
+  // - Org users can only delete their own draft shipments
+  const isAdmin = isSuperAdmin(session);
+  const isOwnDraft =
+    shipment.status === "draft" &&
+    shipment.from_organisation_id === session.organisationId;
+
+  if (!isAdmin && !isOwnDraft) {
+    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   // Get packages from this shipment
@@ -93,6 +102,8 @@ export async function deleteShipment(
   if (deleteError) {
     return { success: false, error: deleteError.message, code: "DELETE_FAILED" };
   }
+
+  revalidatePath("/shipments");
 
   return { success: true, data: null };
 }
