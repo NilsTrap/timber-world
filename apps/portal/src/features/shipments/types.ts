@@ -49,6 +49,7 @@ export interface ReferenceDropdowns {
 export interface PackageRow {
   clientId: string; // Temporary client-side ID for React key
   packageNumber: string; // Preview number (actual generated server-side)
+  inventoryPackageId?: string; // Original inventory package ID (when selected from inventory)
   productNameId: string;
   woodSpeciesId: string;
   humidityId: string;

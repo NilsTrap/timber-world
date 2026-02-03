@@ -13,3 +13,5 @@ export { getAllOrgShipments } from "./getAllOrgShipments";
 export type { OrgShipmentListItem } from "./getAllOrgShipments";
 export { createShipmentDraft, getShipmentDestinations } from "./createShipmentDraft";
 export { getUserOrganisation } from "./getUserOrganisation";
+export { getShipmentAvailablePackages } from "./getShipmentAvailablePackages";
+export type { ShipmentAvailablePackage } from "./getShipmentAvailablePackages";
