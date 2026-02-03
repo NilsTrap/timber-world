@@ -330,13 +330,15 @@ export async function validateProduction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const packageNumbers = outputs.map((o: any) => o.package_number);
 
-  // Pre-check: verify package numbers won't conflict with existing inventory
+  // Pre-check: verify package numbers won't conflict with existing inventory within the same organization
+  // Package numbers are unique per organization, not globally
   // For re-validation, exclude packages from this entry (they'll be deleted)
   if (packageNumbers.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (supabase as any)
       .from("inventory_packages")
       .select("package_number")
+      .eq("organisation_id", organisationId)
       .in("package_number", packageNumbers);
 
     if (isRevalidation) {
