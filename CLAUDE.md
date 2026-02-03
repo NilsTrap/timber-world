@@ -178,6 +178,139 @@ All editable tables related to **inventory, production, and product data** must 
 
 **Not required for:** Other tables in the system (e.g., admin listings, analytics dashboards, user management) may use different table patterns as appropriate.
 
+### Page Layout Components (Portal Pages)
+
+All portal pages must use the standard page layout components from `@timber/ui` for consistent design. These components are defined in `packages/ui/src/components/page-layout.tsx`.
+
+**Import:** `import { PageHeader, StatusBadge, SummaryGrid, SummaryCard, SectionHeader, EmptyState, ListCard } from "@timber/ui";`
+
+#### PageHeader
+Standard page header with back link, title, subtitle, and actions. Use at the top of every detail/edit page.
+
+```tsx
+<PageHeader
+  backHref="/shipments"
+  backLabel="Back"
+  title="INE-TWP-001"
+  subtitle="To: Timber World"
+  actions={<Button>Submit</Button>}
+  badge={<StatusBadge variant="draft">Draft</StatusBadge>}
+/>
+```
+
+#### StatusBadge
+Consistent status badge styling with predefined color variants.
+
+```tsx
+<StatusBadge variant="draft">Draft</StatusBadge>
+<StatusBadge variant="success">Validated</StatusBadge>
+// Variants: draft, pending, success, error, info, warning
+```
+
+#### SummaryGrid + SummaryCard
+Grid of summary cards for key metrics. Use below page header for important data points.
+
+```tsx
+<SummaryGrid columns={4}>
+  <SummaryCard label="From" value="Inekon" />
+  <SummaryCard label="To" value="Timber World" />
+  <SummaryCard label="Date" value="15.01.2026" />
+  <SummaryCard label="Total Volume" value="12,345 m³" />
+</SummaryGrid>
+```
+
+#### SectionHeader
+Section header with title, subtitle, and action button. Use above tables or content sections.
+
+```tsx
+<SectionHeader
+  title="Packages"
+  subtitle="Total: 12,345 m³"
+  action={<Button variant="outline" size="sm"><Plus /> Add Package</Button>}
+/>
+```
+
+#### EmptyState
+Empty state card with message. Optionally clickable for adding items.
+
+```tsx
+<EmptyState
+  message="No packages added yet. Click here to add."
+  onClick={() => setOpen(true)}
+/>
+```
+
+#### ListCard
+Card-based list item for draft entries. Use with `StatusBadge`.
+
+```tsx
+<ListCard
+  href="/production/123"
+  icon={<FileText className="h-5 w-5" />}
+  title="Sawing"
+  subtitle="15.01.2026 · Created 14:30"
+  badge={<StatusBadge variant="draft">Draft</StatusBadge>}
+  action={<DeleteButton />}
+/>
+```
+
+### Portal Page Structure
+
+Every portal detail page should follow this structure:
+
+```tsx
+<div className="space-y-6">
+  {/* 1. Page Header with back link, title, actions, badge */}
+  <PageHeader ... />
+
+  {/* 2. Summary Cards for key metrics */}
+  <SummaryGrid>
+    <SummaryCard ... />
+  </SummaryGrid>
+
+  {/* 3. Content Sections with headers */}
+  <div className="space-y-3">
+    <SectionHeader ... />
+    {/* Table or content */}
+  </div>
+
+  {/* 4. Action buttons at bottom if needed */}
+</div>
+```
+
+### Portal List Page Structure (with Tabs)
+
+```tsx
+<div className="space-y-6">
+  {/* Header */}
+  <div>
+    <h1 className="text-3xl font-semibold tracking-tight">Page Title</h1>
+    <p className="text-muted-foreground">Description text</p>
+  </div>
+
+  {/* Tabs */}
+  <Tabs defaultValue="drafts">
+    <TabsList>
+      <TabsTrigger value="drafts">Drafts</TabsTrigger>
+      <TabsTrigger value="completed">Completed</TabsTrigger>
+    </TabsList>
+
+    <TabsContent value="drafts">
+      {/* New Entry Form in card */}
+      <div className="rounded-lg border bg-card p-6 shadow-sm">
+        <h2 className="text-lg font-semibold mb-4">New Entry</h2>
+        {/* Form content */}
+      </div>
+
+      {/* Draft list using ListCard */}
+      <div className="grid gap-2">
+        <ListCard ... />
+      </div>
+    </TabsContent>
+  </Tabs>
+</div>
+```
+
 ## Working with BMad
 
 1. **Check status**: Use `/bmad:bmm:workflows:workflow-status` to see where the project is
