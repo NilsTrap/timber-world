@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, Suspense } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { ProducerNewShipmentForm } from "./ProducerNewShipmentForm";
 import { ProducerShipmentsTab } from "./ProducerShipmentsTab";
@@ -22,6 +22,13 @@ function ProducerShipmentsPageContentInner({
   const [activeTab, setActiveTab] = useState(
     defaultTab || searchParams.get("tab") || "new"
   );
+
+  // Sync activeTab when defaultTab changes (e.g., from navigation)
+  useEffect(() => {
+    if (defaultTab) {
+      setActiveTab(defaultTab);
+    }
+  }, [defaultTab]);
 
   const setTab = useCallback((tab: string) => {
     setActiveTab(tab);
