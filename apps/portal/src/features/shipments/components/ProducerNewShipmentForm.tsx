@@ -15,6 +15,8 @@ import type { OrganisationOption, ReferenceDropdowns, PackageRow, PackageInput }
 interface ProducerNewShipmentFormProps {
   /** The current user's organization (locked as From) */
   userOrganisation: OrganisationOption;
+  /** Optional callback when Cancel is clicked (hides the form) */
+  onCancel?: () => void;
 }
 
 /** Create an empty package row */
@@ -81,7 +83,7 @@ function clearDraft() {
  * Client component for producers to create shipments.
  * The "From" organisation is locked to the user's organisation.
  */
-export function ProducerNewShipmentForm({ userOrganisation }: ProducerNewShipmentFormProps) {
+export function ProducerNewShipmentForm({ userOrganisation, onCancel }: ProducerNewShipmentFormProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -307,7 +309,13 @@ export function ProducerNewShipmentForm({ userOrganisation }: ProducerNewShipmen
       <div className="flex justify-end gap-3">
         <Button
           variant="outline"
-          onClick={() => router.push("/shipments?tab=list")}
+          onClick={() => {
+            if (onCancel) {
+              onCancel();
+            } else {
+              router.push("/shipments?tab=completed");
+            }
+          }}
           disabled={isSaving}
         >
           Cancel

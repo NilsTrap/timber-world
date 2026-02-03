@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useCallback, useEffect, Suspense } from "react";
+import { useState, useCallback, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { Plus } from "lucide-react";
+import { Button } from "@timber/ui";
 import { ProducerNewShipmentForm } from "./ProducerNewShipmentForm";
-import { ProducerShipmentsTab } from "./ProducerShipmentsTab";
+import { ProducerShipmentsDraftsTable } from "./ProducerShipmentsDraftsTable";
+import { ProducerShipmentsCompletedTable } from "./ProducerShipmentsCompletedTable";
 import type { OrganisationOption } from "../types";
 import type { OrgShipmentListItem } from "../actions";
 
@@ -20,8 +23,9 @@ function ProducerShipmentsPageContentInner({
 }: ProducerShipmentsPageContentProps) {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(
-    defaultTab || searchParams.get("tab") || "new"
+    defaultTab || searchParams.get("tab") || "drafts"
   );
+  const [showNewForm, setShowNewForm] = useState(false);
 
   // Sync activeTab when defaultTab changes (e.g., from navigation)
   useEffect(() => {
@@ -32,9 +36,34 @@ function ProducerShipmentsPageContentInner({
 
   const setTab = useCallback((tab: string) => {
     setActiveTab(tab);
+    setShowNewForm(false); // Reset form visibility when switching tabs
     const params = new URLSearchParams(window.location.search);
     params.set("tab", tab);
     window.history.replaceState(null, "", `?${params.toString()}`);
+  }, []);
+
+  // Split shipments into drafts and completed
+  const { draftShipments, completedShipments } = useMemo(() => {
+    const drafts: OrgShipmentListItem[] = [];
+    const completed: OrgShipmentListItem[] = [];
+
+    for (const shipment of shipments) {
+      if (shipment.status === "draft") {
+        drafts.push(shipment);
+      } else {
+        completed.push(shipment);
+      }
+    }
+
+    return { draftShipments: drafts, completedShipments: completed };
+  }, [shipments]);
+
+  const handleNewShipmentClick = useCallback(() => {
+    setShowNewForm(true);
+  }, []);
+
+  const handleCancelNewShipment = useCallback(() => {
+    setShowNewForm(false);
   }, []);
 
   return (
@@ -49,38 +78,68 @@ function ProducerShipmentsPageContentInner({
       <div className="flex gap-1 border-b" role="tablist" aria-label="Shipment views">
         <button
           role="tab"
-          aria-selected={activeTab === "new"}
-          aria-controls="panel-new"
-          onClick={() => setTab("new")}
+          aria-selected={activeTab === "drafts"}
+          aria-controls="panel-drafts"
+          onClick={() => setTab("drafts")}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "new"
+            activeTab === "drafts"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          New Shipment
+          Drafts {draftShipments.length > 0 && `(${draftShipments.length})`}
         </button>
         <button
           role="tab"
-          aria-selected={activeTab === "list"}
-          aria-controls="panel-list"
-          onClick={() => setTab("list")}
+          aria-selected={activeTab === "completed"}
+          aria-controls="panel-completed"
+          onClick={() => setTab("completed")}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "list"
+            activeTab === "completed"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          Shipments ({shipments.length})
+          Completed {completedShipments.length > 0 && `(${completedShipments.length})`}
         </button>
       </div>
 
       {/* Tab Content */}
       <div role="tabpanel" id={`panel-${activeTab}`}>
-        {activeTab === "new" ? (
-          <ProducerNewShipmentForm userOrganisation={userOrganisation} />
+        {activeTab === "drafts" ? (
+          <div className="space-y-6">
+            {/* New Shipment Section */}
+            {showNewForm ? (
+              <ProducerNewShipmentForm
+                userOrganisation={userOrganisation}
+                onCancel={handleCancelNewShipment}
+              />
+            ) : (
+              <div className="flex justify-start">
+                <Button onClick={handleNewShipmentClick}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Shipment
+                </Button>
+              </div>
+            )}
+
+            {/* Draft Shipments List */}
+            {!showNewForm && draftShipments.length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Draft Shipments</h3>
+                <ProducerShipmentsDraftsTable shipments={draftShipments} />
+              </div>
+            )}
+
+            {!showNewForm && draftShipments.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground border rounded-lg bg-muted/20">
+                <p>No draft shipments</p>
+                <p className="text-sm mt-1">Click "New Shipment" to create one</p>
+              </div>
+            )}
+          </div>
         ) : (
-          <ProducerShipmentsTab shipments={shipments} />
+          <ProducerShipmentsCompletedTable shipments={completedShipments} />
         )}
       </div>
     </div>

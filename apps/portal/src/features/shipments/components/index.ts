@@ -18,4 +18,6 @@ export { ShipmentsPageContent } from "./ShipmentsPageContent";
 export { ProducerNewShipmentForm } from "./ProducerNewShipmentForm";
 export { ProducerShipmentsTab } from "./ProducerShipmentsTab";
 export { ProducerShipmentsPageContent } from "./ProducerShipmentsPageContent";
+export { ProducerShipmentsDraftsTable } from "./ProducerShipmentsDraftsTable";
+export { ProducerShipmentsCompletedTable } from "./ProducerShipmentsCompletedTable";
 export { NewShipmentPackageSelector } from "./NewShipmentPackageSelector";
