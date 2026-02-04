@@ -303,10 +303,12 @@ export async function saveProductionOutputs(
     return false;
   }
 
-  // Separate rows into inserts and updates
+  // Separate rows into inserts, updates, and rows needing package number assignment
   const toInsert: { index: number; row: OutputRowInput; payload: ReturnType<typeof toDbRow> }[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toUpdate: { id: string; row: OutputRowInput; existing: any; payload: ReturnType<typeof toDbRow> }[] = [];
+  // Existing rows that need a package number assigned (already in DB but missing number)
+  const needsPackageNumber: { index: number; id: string }[] = [];
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
@@ -314,8 +316,14 @@ export async function saveProductionOutputs(
       toInsert.push({ index: i, row, payload: toDbRow(row, i) });
     } else {
       const existing = existingMap.get(row.dbId);
-      if (existing && hasChanged(row, existing)) {
-        toUpdate.push({ id: row.dbId, row, existing, payload: toDbRow(row, i) });
+      if (existing) {
+        // Check if this existing row needs a package number assigned
+        if (!existing.package_number && !row.packageNumber) {
+          needsPackageNumber.push({ index: i, id: row.dbId });
+        }
+        if (hasChanged(row, existing)) {
+          toUpdate.push({ id: row.dbId, row, existing, payload: toDbRow(row, i) });
+        }
       }
     }
   }
@@ -363,6 +371,32 @@ export async function saveProductionOutputs(
     if (updateError) {
       console.error(`Failed to update output row ${id}:`, updateError);
       return { success: false, error: `Failed to update output: ${updateError.message}`, code: "UPDATE_FAILED" };
+    }
+  }
+
+  // ASSIGN package numbers to existing rows that are missing them
+  if (needsPackageNumber.length > 0) {
+    // Reuse nextNumber from inserts if available, otherwise look it up
+    let nextNumber =
+      toInsert.length > 0
+        ? await lookupNextNumber(supabase, organisationId, effectiveProcessCode)
+        : await lookupNextNumber(supabase, organisationId, effectiveProcessCode);
+
+    for (const { index, id } of needsPackageNumber) {
+      const assignedNumber = `N-${effectiveProcessCode}-${String(nextNumber).padStart(4, "0")}`;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: assignError } = await (supabase as any)
+        .from("portal_production_outputs")
+        .update({ package_number: assignedNumber })
+        .eq("id", id);
+
+      if (assignError) {
+        console.error(`Failed to assign package number to row ${id}:`, assignError);
+      } else {
+        packageNumbers[index] = assignedNumber;
+        nextNumber = nextNumber >= 9999 ? 1 : nextNumber + 1;
+      }
     }
   }
 

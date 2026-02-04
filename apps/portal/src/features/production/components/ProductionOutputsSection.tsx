@@ -248,16 +248,26 @@ export function ProductionOutputsSection({
       pendingRowsRef.current = null;
 
       // Update rows with newly assigned dbIds and server-generated package numbers
-      if (Object.keys(result.data.insertedIds).length > 0) {
+      const hasInserts = Object.keys(result.data.insertedIds).length > 0;
+      const hasPackageNumbers = Object.keys(result.data.packageNumbers).length > 0;
+      if (hasInserts || hasPackageNumbers) {
         setRows((prev) => {
           const updated = prev.map((row, i) => {
             const newId = result.data.insertedIds[i];
             const newPackageNumber = result.data.packageNumbers[i];
+            // New row: assign dbId and package number
             if (newId && !row.dbId) {
               return {
                 ...row,
                 dbId: newId,
                 packageNumber: newPackageNumber || row.packageNumber,
+              };
+            }
+            // Existing row: update package number if server assigned one
+            if (newPackageNumber && !row.packageNumber) {
+              return {
+                ...row,
+                packageNumber: newPackageNumber,
               };
             }
             return row;
@@ -314,6 +324,29 @@ export function ProductionOutputsSection({
     },
     [performSave]
   );
+
+  // ─── Auto-assign package numbers to existing rows ─────────────────────────
+  // Rows created before auto-assignment was implemented may be missing numbers.
+  // Once availablePackageNumbers are fetched, assign numbers and save.
+  const hasAssignedExistingRef = useRef(false);
+  useEffect(() => {
+    if (readOnly || hasAssignedExistingRef.current) return;
+    if (availablePackageNumbers.length === 0) return;
+
+    const rowsMissingNumbers = rows.filter((r) => r.dbId && !r.packageNumber);
+    if (rowsMissingNumbers.length === 0) return;
+
+    // Assign numbers to existing rows missing them
+    hasAssignedExistingRef.current = true;
+    const updatedRows = rows.map((row) => {
+      if (row.dbId && !row.packageNumber) {
+        return { ...row, packageNumber: claimNextPackageNumber() };
+      }
+      return row;
+    });
+    setRows(updatedRows);
+    debouncedSave(updatedRows);
+  }, [availablePackageNumbers, rows, readOnly, claimNextPackageNumber, debouncedSave]);
 
   // ─── Row Change Handler ─────────────────────────────────────────────────────
 
