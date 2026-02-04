@@ -19,21 +19,20 @@ async function lookupNextNumber(
   const pattern = `N-${processCode}-%`;
   const regex = `^N-${processCode}-(\\d+)$`;
 
-  // Query max from inventory_packages
+  // Fetch from both sources in parallel (independent reads)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invData } = await (supabase as any)
-    .from("inventory_packages")
-    .select("package_number")
-    .eq("organisation_id", organisationId)
-    .like("package_number", pattern);
-
-  // Query max from portal_production_outputs (for drafts not yet in inventory)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: prodData } = await (supabase as any)
-    .from("portal_production_outputs")
-    .select("package_number, portal_production_entries!inner(organisation_id)")
-    .eq("portal_production_entries.organisation_id", organisationId)
-    .like("package_number", pattern);
+  const [{ data: invData }, { data: prodData }] = await Promise.all([
+    (supabase as any)
+      .from("inventory_packages")
+      .select("package_number")
+      .eq("organisation_id", organisationId)
+      .like("package_number", pattern),
+    (supabase as any)
+      .from("portal_production_outputs")
+      .select("package_number, portal_production_entries!inner(organisation_id)")
+      .eq("portal_production_entries.organisation_id", organisationId)
+      .like("package_number", pattern),
+  ]);
 
   // Find the maximum number from both sources
   let maxNumber = 0;
@@ -116,13 +115,22 @@ export async function saveProductionOutputs(
 
   const supabase = await createClient();
 
-  // Verify production entry ownership and get org/process info for package numbering
+  // Fetch entry and existing outputs in parallel (independent reads)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: entry, error: entryError } = await (supabase as any)
-    .from("portal_production_entries")
-    .select("id, created_by, status, organisation_id, process_id, ref_processes!inner(code, value)")
-    .eq("id", productionEntryId)
-    .single();
+  const [entryResult, existingResult] = await Promise.all([
+    (supabase as any)
+      .from("portal_production_entries")
+      .select("id, created_by, status, organisation_id, process_id, ref_processes!inner(code, value)")
+      .eq("id", productionEntryId)
+      .single(),
+    (supabase as any)
+      .from("portal_production_outputs")
+      .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes")
+      .eq("production_entry_id", productionEntryId),
+  ]);
+
+  const { data: entry, error: entryError } = entryResult;
+  const { data: existingRows, error: fetchError } = existingResult;
 
   if (entryError || !entry) {
     return { success: false, error: "Production entry not found", code: "NOT_FOUND" };
@@ -139,6 +147,10 @@ export async function saveProductionOutputs(
   }
   if (isAdmin && entry.status !== "draft" && entry.status !== "validated") {
     return { success: false, error: "Cannot modify entry in this status", code: "VALIDATION_FAILED" };
+  }
+
+  if (fetchError) {
+    return { success: false, error: `Failed to fetch existing outputs: ${fetchError.message}`, code: "QUERY_FAILED" };
   }
 
   const isValidated = entry.status === "validated";
@@ -175,17 +187,6 @@ export async function saveProductionOutputs(
 
   // Use inherited code for Sorting, otherwise use the process's own code
   const effectiveProcessCode = inheritedProcessCode || processCode;
-
-  // Fetch existing DB rows with full data for diff comparison
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existingRows, error: fetchError } = await (supabase as any)
-    .from("portal_production_outputs")
-    .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes")
-    .eq("production_entry_id", productionEntryId);
-
-  if (fetchError) {
-    return { success: false, error: `Failed to fetch existing outputs: ${fetchError.message}`, code: "QUERY_FAILED" };
-  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const existingMap = new Map<string, any>((existingRows || []).map((r: any) => [r.id, r]));
@@ -328,74 +329,90 @@ export async function saveProductionOutputs(
     }
   }
 
-  // INSERT new rows with auto-assigned package numbers
+  // INSERT new rows with auto-assigned package numbers (batch insert)
   if (toInsert.length > 0) {
     // Get the next available package number
     let nextNumber = await lookupNextNumber(supabase, organisationId, effectiveProcessCode);
 
+    // Pre-compute all package numbers and build payloads
+    const insertPayloads: { index: number; payload: ReturnType<typeof toDbRow> }[] = [];
     for (const { index, row, payload } of toInsert) {
-      // Auto-assign package number if not already set
       const assignedPackageNumber = row.packageNumber || `N-${effectiveProcessCode}-${String(nextNumber).padStart(4, "0")}`;
-      const payloadWithNumber = { ...payload, package_number: assignedPackageNumber };
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: inserted, error: insertError } = await (supabase as any)
-        .from("portal_production_outputs")
-        .insert(payloadWithNumber)
-        .select("id, package_number")
-        .single();
-
-      if (insertError) {
-        console.error("Failed to insert output row:", insertError);
-        return { success: false, error: `Failed to save output: ${insertError.message}`, code: "INSERT_FAILED" };
-      }
-
-      insertedIds[index] = inserted.id;
-      packageNumbers[index] = inserted.package_number || "";
-
-      // Only increment if we auto-assigned (not if user provided one)
+      insertPayloads.push({ index, payload: { ...payload, package_number: assignedPackageNumber } });
       if (!row.packageNumber) {
         nextNumber = nextNumber >= 9999 ? 1 : nextNumber + 1;
       }
     }
-  }
 
-  // UPDATE only changed rows (individual queries — Supabase doesn't support batch update)
-  for (const { id, row, existing, payload } of toUpdate) {
+    // Single batch insert instead of N sequential inserts
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase as any)
+    const { data: inserted, error: insertError } = await (supabase as any)
       .from("portal_production_outputs")
-      .update(payload)
-      .eq("id", id);
+      .insert(insertPayloads.map((p) => p.payload))
+      .select("id, package_number");
 
-    if (updateError) {
-      console.error(`Failed to update output row ${id}:`, updateError);
-      return { success: false, error: `Failed to update output: ${updateError.message}`, code: "UPDATE_FAILED" };
+    if (insertError) {
+      console.error("Failed to insert output rows:", insertError);
+      return { success: false, error: `Failed to save outputs: ${insertError.message}`, code: "INSERT_FAILED" };
+    }
+
+    // Map results back to client indices (Supabase returns in insertion order)
+    if (inserted) {
+      for (let i = 0; i < inserted.length; i++) {
+        const clientIndex = insertPayloads[i]!.index;
+        insertedIds[clientIndex] = inserted[i].id;
+        packageNumbers[clientIndex] = inserted[i].package_number || "";
+      }
     }
   }
 
-  // ASSIGN package numbers to existing rows that are missing them
+  // UPDATE changed rows in parallel (Supabase doesn't support batch update)
+  if (toUpdate.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateResults = await Promise.all(
+      toUpdate.map(({ id, payload }) =>
+        (supabase as any)
+          .from("portal_production_outputs")
+          .update(payload)
+          .eq("id", id)
+      )
+    );
+
+    for (let i = 0; i < updateResults.length; i++) {
+      if (updateResults[i].error) {
+        console.error(`Failed to update output row ${toUpdate[i]!.id}:`, updateResults[i].error);
+        return { success: false, error: `Failed to update output: ${updateResults[i].error.message}`, code: "UPDATE_FAILED" };
+      }
+    }
+  }
+
+  // ASSIGN package numbers to existing rows that are missing them (parallel)
   if (needsPackageNumber.length > 0) {
-    // Reuse nextNumber from inserts if available, otherwise look it up
-    let nextNumber =
-      toInsert.length > 0
-        ? await lookupNextNumber(supabase, organisationId, effectiveProcessCode)
-        : await lookupNextNumber(supabase, organisationId, effectiveProcessCode);
+    let nextNumber = await lookupNextNumber(supabase, organisationId, effectiveProcessCode);
 
-    for (const { index, id } of needsPackageNumber) {
+    // Pre-compute all assignments
+    const assignments = needsPackageNumber.map(({ index, id }) => {
       const assignedNumber = `N-${effectiveProcessCode}-${String(nextNumber).padStart(4, "0")}`;
+      nextNumber = nextNumber >= 9999 ? 1 : nextNumber + 1;
+      return { index, id, assignedNumber };
+    });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: assignError } = await (supabase as any)
-        .from("portal_production_outputs")
-        .update({ package_number: assignedNumber })
-        .eq("id", id);
+    // Execute all assignments in parallel
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const assignResults = await Promise.all(
+      assignments.map(({ id, assignedNumber }) =>
+        (supabase as any)
+          .from("portal_production_outputs")
+          .update({ package_number: assignedNumber })
+          .eq("id", id)
+      )
+    );
 
-      if (assignError) {
-        console.error(`Failed to assign package number to row ${id}:`, assignError);
+    for (let i = 0; i < assignResults.length; i++) {
+      if (assignResults[i].error) {
+        console.error(`Failed to assign package number to row ${assignments[i]!.id}:`, assignResults[i].error);
       } else {
-        packageNumbers[index] = assignedNumber;
-        nextNumber = nextNumber >= 9999 ? 1 : nextNumber + 1;
+        packageNumbers[assignments[i]!.index] = assignments[i]!.assignedNumber;
       }
     }
   }

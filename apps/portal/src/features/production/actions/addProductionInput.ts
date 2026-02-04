@@ -49,13 +49,23 @@ export async function addProductionInput(
 
   const supabase = await createClient();
 
-  // Verify production entry exists, belongs to this user (or user is admin), and check status
+  // Fetch entry and package in parallel (independent reads)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: entry, error: entryError } = await (supabase as any)
-    .from("portal_production_entries")
-    .select("id, created_by, status")
-    .eq("id", productionEntryId)
-    .single();
+  const [entryResult, pkgResult] = await Promise.all([
+    (supabase as any)
+      .from("portal_production_entries")
+      .select("id, created_by, status")
+      .eq("id", productionEntryId)
+      .single(),
+    (supabase as any)
+      .from("inventory_packages")
+      .select("pieces, volume_m3")
+      .eq("id", packageId)
+      .single(),
+  ]);
+
+  const { data: entry, error: entryError } = entryResult;
+  const { data: pkg, error: pkgError } = pkgResult;
 
   if (entryError || !entry) {
     return { success: false, error: "Production entry not found", code: "NOT_FOUND" };
@@ -71,14 +81,6 @@ export async function addProductionInput(
   if (isAdmin && entry.status !== "draft" && entry.status !== "validated") {
     return { success: false, error: "Cannot modify entry in this status", code: "VALIDATION_FAILED" };
   }
-
-  // Fetch the package to validate constraints
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: pkg, error: pkgError } = await (supabase as any)
-    .from("inventory_packages")
-    .select("pieces, volume_m3")
-    .eq("id", packageId)
-    .single();
 
   if (pkgError || !pkg) {
     return { success: false, error: "Package not found", code: "NOT_FOUND" };

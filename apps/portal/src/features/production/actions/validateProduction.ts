@@ -104,113 +104,124 @@ export async function validateProduction(
     console.log(`[validateProduction] Rolling back - deducted: ${deductedPackages.length}, restored: ${restoredPackages.length}, deleted outputs: ${deletedOutputPackages.length}`);
 
     try {
-      // 1. Undo deductions (add back what was deducted)
-      for (const pkg of deductedPackages) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: currentPkg, error: fetchError } = await (supabase as any)
-          .from("inventory_packages")
-          .select("pieces, volume_m3, status")
-          .eq("id", pkg.packageId)
-          .single();
+      // 1. Batch-fetch all packages that need rollback
+      const allRollbackIds = [
+        ...deductedPackages.map((p) => p.packageId),
+        ...restoredPackages.map((p) => p.packageId),
+      ];
+      const uniqueRollbackIds = [...new Set(allRollbackIds)];
 
-        if (fetchError) {
-          console.error(`[validateProduction] Failed to fetch package ${pkg.packageId} for rollback:`, fetchError);
-          continue;
-        }
-
-        if (currentPkg) {
-          const currentPieces = parseInt(currentPkg.pieces || "0", 10);
-          const currentVolume = Number(currentPkg.volume_m3) || 0;
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: updateError } = await (supabase as any)
-            .from("inventory_packages")
-            .update({
-              pieces: String(currentPieces + pkg.piecesDeducted),
-              volume_m3: currentVolume + pkg.volumeDeducted,
-              status: pkg.wasConsumed ? pkg.originalStatus : currentPkg.status,
-            })
-            .eq("id", pkg.packageId);
-
-          if (updateError) {
-            console.error(`[validateProduction] Failed to restore package ${pkg.packageId}:`, updateError);
-          } else {
-            console.log(`[validateProduction] Restored package ${pkg.packageId}: +${pkg.piecesDeducted} pieces, +${pkg.volumeDeducted} m³`);
-          }
-        }
-      }
-
-      // 2. Undo restoration (subtract what was restored) - for re-validation
-      for (const pkg of restoredPackages) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: currentPkg, error: fetchError } = await (supabase as any)
-          .from("inventory_packages")
-          .select("pieces, volume_m3")
-          .eq("id", pkg.packageId)
-          .single();
-
-        if (fetchError) {
-          console.error(`[validateProduction] Failed to fetch package ${pkg.packageId} for un-restore:`, fetchError);
-          continue;
-        }
-
-        if (currentPkg) {
-          const currentPieces = parseInt(currentPkg.pieces || "0", 10);
-          const currentVolume = Number(currentPkg.volume_m3) || 0;
-
-          const newPieces = Math.max(0, currentPieces - pkg.piecesRestored);
-          const newVolume = Math.max(0, currentVolume - pkg.volumeRestored);
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: updateError } = await (supabase as any)
-            .from("inventory_packages")
-            .update({
-              pieces: String(newPieces),
-              volume_m3: newVolume,
-              status: pkg.wasConsumed ? "consumed" : undefined,
-            })
-            .eq("id", pkg.packageId);
-
-          if (updateError) {
-            console.error(`[validateProduction] Failed to un-restore package ${pkg.packageId}:`, updateError);
-          }
-        }
-      }
-
-      // 3. Recreate deleted output packages - for re-validation
-      if (deletedOutputPackages.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: insertError } = await (supabase as any)
-          .from("inventory_packages")
-          .insert(deletedOutputPackages);
-
-        if (insertError) {
-          console.error(`[validateProduction] Failed to recreate deleted outputs:`, insertError);
-        }
-      }
-
-      // 4. Revert entry status
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: statusError } = await (supabase as any)
-        .from("portal_production_entries")
-        .update({ status: previousStatus })
-        .eq("id", productionEntryId)
-        .eq("status", "validating");
+      let rollbackPkgMap = new Map<string, any>();
+      if (uniqueRollbackIds.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: rollbackPkgs } = await (supabase as any)
+          .from("inventory_packages")
+          .select("id, pieces, volume_m3, status")
+          .in("id", uniqueRollbackIds);
 
-      if (statusError) {
-        console.error(`[validateProduction] Failed to revert entry status:`, statusError);
+        rollbackPkgMap = new Map(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (rollbackPkgs || []).map((p: any) => [p.id, { ...p }])
+        );
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rollbackUpdates: Array<{ packageId: string; update: any }> = [];
+
+      // Undo deductions (add back what was deducted)
+      for (const pkg of deductedPackages) {
+        const currentPkg = rollbackPkgMap.get(pkg.packageId);
+        if (!currentPkg) {
+          console.error(`[validateProduction] Package ${pkg.packageId} not found for rollback`);
+          continue;
+        }
+        const currentPieces = parseInt(currentPkg.pieces || "0", 10);
+        const currentVolume = Number(currentPkg.volume_m3) || 0;
+        // Update in-memory state for cumulative rollback
+        currentPkg.pieces = String(currentPieces + pkg.piecesDeducted);
+        currentPkg.volume_m3 = currentVolume + pkg.volumeDeducted;
+        if (pkg.wasConsumed) currentPkg.status = pkg.originalStatus;
+      }
+
+      // Undo restoration (subtract what was restored) - for re-validation
+      for (const pkg of restoredPackages) {
+        const currentPkg = rollbackPkgMap.get(pkg.packageId);
+        if (!currentPkg) {
+          console.error(`[validateProduction] Package ${pkg.packageId} not found for un-restore`);
+          continue;
+        }
+        const currentPieces = parseInt(currentPkg.pieces || "0", 10);
+        const currentVolume = Number(currentPkg.volume_m3) || 0;
+        currentPkg.pieces = String(Math.max(0, currentPieces - pkg.piecesRestored));
+        currentPkg.volume_m3 = Math.max(0, currentVolume - pkg.volumeRestored);
+        if (pkg.wasConsumed) currentPkg.status = "consumed";
+      }
+
+      // Build final update payloads from accumulated in-memory state
+      for (const [packageId, pkg] of rollbackPkgMap) {
+        rollbackUpdates.push({
+          packageId,
+          update: { pieces: pkg.pieces, volume_m3: pkg.volume_m3, status: pkg.status },
+        });
+      }
+
+      // Execute all rollback operations in parallel
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rollbackPromises: Promise<any>[] = rollbackUpdates.map(({ packageId, update }) =>
+        (supabase as any)
+          .from("inventory_packages")
+          .update(update)
+          .eq("id", packageId)
+      );
+
+      // Recreate deleted output packages - for re-validation
+      if (deletedOutputPackages.length > 0) {
+        rollbackPromises.push(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (supabase as any)
+            .from("inventory_packages")
+            .insert(deletedOutputPackages)
+        );
+      }
+
+      // Revert entry status
+      rollbackPromises.push(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("portal_production_entries")
+          .update({ status: previousStatus })
+          .eq("id", productionEntryId)
+          .eq("status", "validating")
+      );
+
+      const rollbackResults = await Promise.all(rollbackPromises);
+      for (const result of rollbackResults) {
+        if (result.error) {
+          console.error(`[validateProduction] Rollback operation failed:`, result.error);
+        }
       }
     } catch (err) {
       console.error(`[validateProduction] Rollback failed with exception:`, err);
     }
   };
 
-  // 2. Fetch all inputs
+  // 2+3. Fetch all inputs and outputs in parallel (independent reads)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: inputs, error: inputsError } = await (supabase as any)
-    .from("portal_production_inputs")
-    .select("id, package_id, pieces_used, volume_m3")
-    .eq("production_entry_id", productionEntryId);
+  const [inputsResult, outputsResult] = await Promise.all([
+    (supabase as any)
+      .from("portal_production_inputs")
+      .select("id, package_id, pieces_used, volume_m3")
+      .eq("production_entry_id", productionEntryId),
+    (supabase as any)
+      .from("portal_production_outputs")
+      .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes")
+      .eq("production_entry_id", productionEntryId)
+      .order("package_number", { ascending: true }),
+  ]);
+
+  const { data: inputs, error: inputsError } = inputsResult;
+  const { data: outputs, error: outputsError } = outputsResult;
 
   if (inputsError) {
     await revertChanges();
@@ -221,14 +232,6 @@ export async function validateProduction(
     await revertChanges();
     return { success: false, error: "At least one input is required", code: "VALIDATION_FAILED" };
   }
-
-  // 3. Fetch all outputs (ordered by package_number to preserve row sequence)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: outputs, error: outputsError } = await (supabase as any)
-    .from("portal_production_outputs")
-    .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes")
-    .eq("production_entry_id", productionEntryId)
-    .order("package_number", { ascending: true });
 
   if (outputsError) {
     await revertChanges();
@@ -356,54 +359,83 @@ export async function validateProduction(
 
   // For re-validation: NOW restore inventory and delete outputs (after all preconditions passed)
   if (isRevalidation) {
-    // 1. Restore each input package to pre-validation state
-    for (const input of inputs) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: pkg } = await (supabase as any)
+    // 1. Batch-fetch all input packages + existing outputs in parallel
+    const inputPackageIds = [...new Set(inputs.map((i: { package_id: string }) => i.package_id))];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [inputPkgsResult, existingOutputsResult] = await Promise.all([
+      (supabase as any)
         .from("inventory_packages")
-        .select("pieces, volume_m3, status")
-        .eq("id", input.package_id)
-        .single();
+        .select("id, pieces, volume_m3, status")
+        .in("id", inputPackageIds),
+      (supabase as any)
+        .from("inventory_packages")
+        .select("*")
+        .eq("production_entry_id", productionEntryId),
+    ]);
 
-      if (pkg) {
-        const currentPieces = parseInt(pkg.pieces || "0", 10);
-        const currentVolume = Number(pkg.volume_m3) || 0;
-        const piecesToRestore = input.pieces_used || 0;
-        const volumeToRestore = Number(input.volume_m3) || 0;
-        const wasConsumed = pkg.status === "consumed";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pkgMap = new Map<string, any>(
+      (inputPkgsResult.data || []).map((p: any) => [p.id, p])
+    );
 
-        const restoredPieces = currentPieces + piecesToRestore;
-        const restoredVolume = currentVolume + volumeToRestore;
+    if (existingOutputsResult.data) {
+      deletedOutputPackages = existingOutputsResult.data;
+    }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any)
-          .from("inventory_packages")
-          .update({
-            pieces: String(restoredPieces),
-            volume_m3: restoredVolume,
-            status: wasConsumed ? "produced" : pkg.status,
-          })
-          .eq("id", input.package_id);
-
-        // Track restoration for rollback
-        restoredPackages.push({
-          packageId: input.package_id,
-          piecesRestored: piecesToRestore,
-          volumeRestored: volumeToRestore,
-          wasConsumed,
-        });
+    // Group inputs by package_id (handle duplicates safely by summing deductions)
+    const deductionsByPkg = new Map<string, { piecesToRestore: number; volumeToRestore: number }>();
+    for (const input of inputs) {
+      const existing = deductionsByPkg.get(input.package_id);
+      const piecesToRestore = input.pieces_used || 0;
+      const volumeToRestore = Number(input.volume_m3) || 0;
+      if (existing) {
+        existing.piecesToRestore += piecesToRestore;
+        existing.volumeToRestore += volumeToRestore;
+      } else {
+        deductionsByPkg.set(input.package_id, { piecesToRestore, volumeToRestore });
       }
     }
 
-    // 2. Save existing output packages before deleting (for rollback)
+    // Compute updates and execute in parallel
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingOutputs } = await (supabase as any)
-      .from("inventory_packages")
-      .select("*")
-      .eq("production_entry_id", productionEntryId);
+    const restoreUpdates: Array<{ packageId: string; update: any; piecesRestored: number; volumeRestored: number; wasConsumed: boolean }> = [];
+    for (const [packageId, { piecesToRestore, volumeToRestore }] of deductionsByPkg) {
+      const pkg = pkgMap.get(packageId);
+      if (!pkg) continue;
 
-    if (existingOutputs) {
-      deletedOutputPackages = existingOutputs;
+      const currentPieces = parseInt(pkg.pieces || "0", 10);
+      const currentVolume = Number(pkg.volume_m3) || 0;
+      const wasConsumed = pkg.status === "consumed";
+
+      restoreUpdates.push({
+        packageId,
+        update: {
+          pieces: String(currentPieces + piecesToRestore),
+          volume_m3: currentVolume + volumeToRestore,
+          status: wasConsumed ? "produced" : pkg.status,
+        },
+        piecesRestored: piecesToRestore,
+        volumeRestored: volumeToRestore,
+        wasConsumed,
+      });
+    }
+
+    // Execute all restore updates in parallel (each targets a different package)
+    if (restoreUpdates.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await Promise.all(
+        restoreUpdates.map(({ packageId, update }) =>
+          (supabase as any)
+            .from("inventory_packages")
+            .update(update)
+            .eq("id", packageId)
+        )
+      );
+
+      // Track restorations for rollback
+      for (const { packageId, piecesRestored, volumeRestored, wasConsumed } of restoreUpdates) {
+        restoredPackages.push({ packageId, piecesRestored, volumeRestored, wasConsumed });
+      }
     }
 
     // 3. Delete existing output inventory packages for this entry
@@ -421,23 +453,42 @@ export async function validateProduction(
   const wastePercentage = 100 - outcomePercentage;
 
   // 6. Deduct from input inventory packages
-  for (const input of inputs) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: pkg, error: pkgError } = await (supabase as any)
-      .from("inventory_packages")
-      .select("id, pieces, volume_m3")
-      .eq("id", input.package_id)
-      .single();
+  // Batch-fetch all input packages in one query instead of N sequential fetches
+  const deductionPackageIds = [...new Set(inputs.map((i: { package_id: string }) => i.package_id))];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: deductionPkgs, error: deductionFetchError } = await (supabase as any)
+    .from("inventory_packages")
+    .select("id, pieces, volume_m3, status")
+    .in("id", deductionPackageIds);
 
-    if (pkgError || !pkg) {
+  if (deductionFetchError) {
+    await revertChanges();
+    return { success: false, error: "Failed to fetch input packages", code: "QUERY_FAILED" };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const deductionPkgMap = new Map<string, any>(
+    (deductionPkgs || []).map((p: any) => [p.id, { ...p }])
+  );
+
+  // Verify all packages exist
+  for (const input of inputs) {
+    if (!deductionPkgMap.has(input.package_id)) {
       await revertChanges();
       return { success: false, error: `Input package not found: ${input.package_id}`, code: "NOT_FOUND" };
     }
+  }
+
+  // Process deductions in memory (handles duplicate package_ids by mutating the map copy)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pendingDeductions: Array<{ packageId: string; update: any; deduction: typeof deductedPackages[0] }> = [];
+
+  for (const input of inputs) {
+    const pkg = deductionPkgMap.get(input.package_id)!;
 
     if (input.pieces_used && pkg.pieces) {
       const currentPieces = parseInt(pkg.pieces, 10);
 
-      // Guard: reject if pieces_used exceeds currently available pieces
       if (!isNaN(currentPieces) && input.pieces_used > currentPieces) {
         await revertChanges();
         return {
@@ -448,62 +499,36 @@ export async function validateProduction(
       }
 
       const remaining = currentPieces - input.pieces_used;
-
       const pkgVolume = Number(pkg.volume_m3) || 0;
 
       if (remaining <= 0) {
-        // Fully consumed
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: updateError } = await (supabase as any)
-          .from("inventory_packages")
-          .update({ status: "consumed", pieces: "0", volume_m3: 0 })
-          .eq("id", pkg.id);
-
-        if (updateError) {
-          await revertChanges();
-          return { success: false, error: `Failed to update package: ${updateError.message}`, code: "UPDATE_FAILED" };
-        }
-
-        // Track deduction for rollback
-        deductedPackages.push({
+        pendingDeductions.push({
           packageId: pkg.id,
-          piecesDeducted: currentPieces,
-          volumeDeducted: pkgVolume,
-          wasConsumed: true,
-          originalStatus: "produced",
+          update: { status: "consumed", pieces: "0", volume_m3: 0 },
+          deduction: { packageId: pkg.id, piecesDeducted: currentPieces, volumeDeducted: pkgVolume, wasConsumed: true, originalStatus: pkg.status || "produced" },
         });
+        // Update in-memory state for duplicate package_id handling
+        pkg.pieces = "0";
+        pkg.volume_m3 = 0;
+        pkg.status = "consumed";
       } else {
-        // Partial consumption: reduce pieces and volume proportionally
         const ratio = remaining / currentPieces;
         const newVolume = pkgVolume * ratio;
         const volumeDeducted = pkgVolume - newVolume;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: updateError } = await (supabase as any)
-          .from("inventory_packages")
-          .update({ pieces: String(remaining), volume_m3: newVolume })
-          .eq("id", pkg.id);
-
-        if (updateError) {
-          await revertChanges();
-          return { success: false, error: `Failed to update package: ${updateError.message}`, code: "UPDATE_FAILED" };
-        }
-
-        // Track deduction for rollback
-        deductedPackages.push({
+        pendingDeductions.push({
           packageId: pkg.id,
-          piecesDeducted: input.pieces_used,
-          volumeDeducted: volumeDeducted,
-          wasConsumed: false,
-          originalStatus: "produced",
+          update: { pieces: String(remaining), volume_m3: newVolume },
+          deduction: { packageId: pkg.id, piecesDeducted: input.pieces_used, volumeDeducted, wasConsumed: false, originalStatus: pkg.status || "produced" },
         });
+        // Update in-memory state
+        pkg.pieces = String(remaining);
+        pkg.volume_m3 = newVolume;
       }
     } else {
-      // No countable pieces — use volume deduction
       const currentVolume = Number(pkg.volume_m3) || 0;
       const inputVolume = Number(input.volume_m3);
 
-      // Guard: reject if volume exceeds currently available
       if (inputVolume > currentVolume) {
         await revertChanges();
         return {
@@ -516,46 +541,58 @@ export async function validateProduction(
       const newVolume = Math.max(0, currentVolume - inputVolume);
 
       if (newVolume <= 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: updateError } = await (supabase as any)
-          .from("inventory_packages")
-          .update({ status: "consumed", volume_m3: 0 })
-          .eq("id", pkg.id);
-
-        if (updateError) {
-          await revertChanges();
-          return { success: false, error: `Failed to update package: ${updateError.message}`, code: "UPDATE_FAILED" };
-        }
-
-        // Track deduction for rollback
-        deductedPackages.push({
+        pendingDeductions.push({
           packageId: pkg.id,
-          piecesDeducted: 0,
-          volumeDeducted: currentVolume,
-          wasConsumed: true,
-          originalStatus: "produced",
+          update: { status: "consumed", volume_m3: 0 },
+          deduction: { packageId: pkg.id, piecesDeducted: 0, volumeDeducted: currentVolume, wasConsumed: true, originalStatus: pkg.status || "produced" },
         });
+        pkg.volume_m3 = 0;
+        pkg.status = "consumed";
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: updateError } = await (supabase as any)
-          .from("inventory_packages")
-          .update({ volume_m3: newVolume })
-          .eq("id", pkg.id);
-
-        if (updateError) {
-          await revertChanges();
-          return { success: false, error: `Failed to update package: ${updateError.message}`, code: "UPDATE_FAILED" };
-        }
-
-        // Track deduction for rollback
-        deductedPackages.push({
+        pendingDeductions.push({
           packageId: pkg.id,
-          piecesDeducted: 0,
-          volumeDeducted: inputVolume,
-          wasConsumed: false,
-          originalStatus: "produced",
+          update: { volume_m3: newVolume },
+          deduction: { packageId: pkg.id, piecesDeducted: 0, volumeDeducted: inputVolume, wasConsumed: false, originalStatus: pkg.status || "produced" },
         });
+        pkg.volume_m3 = newVolume;
       }
+    }
+  }
+
+  // Merge deductions for same package (last update wins since we processed sequentially in memory)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mergedDeductions = new Map<string, { update: any; deductions: typeof deductedPackages }>();
+  for (const { packageId, update, deduction } of pendingDeductions) {
+    const existing = mergedDeductions.get(packageId);
+    if (existing) {
+      existing.update = update; // Last update wins (cumulative state)
+      existing.deductions.push(deduction);
+    } else {
+      mergedDeductions.set(packageId, { update, deductions: [deduction] });
+    }
+  }
+
+  // Apply all deductions in parallel (each targets a different package)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const deductionResults = await Promise.all(
+    [...mergedDeductions.entries()].map(([packageId, { update }]) =>
+      (supabase as any)
+        .from("inventory_packages")
+        .update(update)
+        .eq("id", packageId)
+    )
+  );
+
+  // Check results and track for rollback
+  const mergedEntries = [...mergedDeductions.entries()];
+  for (let i = 0; i < deductionResults.length; i++) {
+    if (deductionResults[i].error) {
+      await revertChanges();
+      return { success: false, error: `Failed to update package: ${deductionResults[i].error.message}`, code: "UPDATE_FAILED" };
+    }
+    // Track all deductions for this package
+    for (const d of mergedEntries[i]![1].deductions) {
+      deductedPackages.push(d);
     }
   }
 
