@@ -228,7 +228,7 @@ export async function getAvailablePackagesForShipment(
       ref_wood_species!inventory_packages_wood_species_id_fkey(value)
     `)
     .eq("organisation_id", session.organisationId)
-    .eq("status", "available")
+    .in("status", ["available", "produced"])
     .neq("shipment_id", shipmentId)
     .order("package_number");
 
