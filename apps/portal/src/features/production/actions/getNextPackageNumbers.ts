@@ -66,12 +66,12 @@ export async function getNextPackageNumbers(
       .from("inventory_packages")
       .select("package_number")
       .eq("organisation_id", organisationId)
-      .like("package_number", "N-%-"),
+      .like("package_number", "N-%-%"),
     (supabase as any)
       .from("portal_production_outputs")
       .select("package_number, portal_production_entries!inner(organisation_id)")
       .eq("portal_production_entries.organisation_id", organisationId)
-      .like("package_number", "N-%-"),
+      .like("package_number", "N-%-%"),
   ]);
 
   // Build a map of processCode → Set<number> from all existing package numbers
