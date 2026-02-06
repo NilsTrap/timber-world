@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback, useRef } from "react";
 import { DataEntryTable, Button, type ColumnDef, type DataEntryTableHandle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@timber/ui";
-import { X, MessageSquare } from "lucide-react";
+import { X, MessageSquare, Truck } from "lucide-react";
 import { SummaryCards } from "@/features/shipments/components/SummaryCards";
 import { PrintInventoryButton } from "./PrintInventoryButton";
 import type { EditablePackageItem } from "@/features/shipments/types";
@@ -26,9 +26,27 @@ export function AdminInventoryViewTab({ packages }: AdminInventoryViewTabProps) 
       {
         key: "organisationCode",
         label: "Org",
-        type: "readonly",
+        type: "custom",
         getValue: (row) => row.organisationCode ?? "",
         width: "w-[3.5rem]",
+        renderCell: (row) => {
+          if (row.isOnTheWay) {
+            return (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Truck className="h-4 w-4 text-amber-600 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="font-medium">On The Way</p>
+                    <p className="text-xs text-muted-foreground">{row.onTheWayFrom} → {row.onTheWayTo}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            );
+          }
+          return <span>{row.organisationCode ?? ""}</span>;
+        },
       },
       {
         key: "shipmentCode",
@@ -217,6 +235,7 @@ export function AdminInventoryViewTab({ packages }: AdminInventoryViewTabProps) 
         columns={columns}
         rows={packages}
         getRowKey={(row) => row.id}
+        getRowClassName={(row) => row.isOnTheWay ? "bg-amber-50" : undefined}
         readOnly
         collapseStorageKey="admin-inventory-view-collapsed"
         onDisplayRowsChange={handleDisplayRowsChange}

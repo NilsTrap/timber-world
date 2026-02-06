@@ -31,12 +31,14 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
   let totalInventoryM3 = 0;
 
   // 1a. Shipment-sourced packages (shipped to this producer's facility, not consumed)
+  // Only include packages from shipments that have been accepted or completed
   if (orgId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: shipmentPkgs, error: shipmentError } = await (supabase as any)
       .from("inventory_packages")
-      .select("volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(to_organisation_id)")
+      .select("volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(to_organisation_id, status)")
       .eq("shipments.to_organisation_id", orgId)
+      .in("shipments.status", ["accepted", "completed"])
       .neq("status", "consumed");
 
     if (shipmentError) {
@@ -80,6 +82,25 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
     } else if (directPkgs) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       totalInventoryM3 += directPkgs.reduce((sum: number, pkg: any) => sum + (Number(pkg.volume_m3) || 0), 0);
+    }
+  }
+
+  // 1d. Packages in outgoing draft shipments (still in this org's inventory)
+  // Only drafts stay in inventory - once "on the way" (pending), they leave inventory
+  if (orgId) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: outgoingDraftPkgs, error: outgoingDraftError } = await (supabase as any)
+      .from("inventory_packages")
+      .select("volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(from_organisation_id, status)")
+      .eq("shipments.from_organisation_id", orgId)
+      .eq("shipments.status", "draft")
+      .neq("status", "consumed");
+
+    if (outgoingDraftError) {
+      console.error("[getProducerMetrics] Failed to fetch outgoing draft packages:", outgoingDraftError.message);
+    } else if (outgoingDraftPkgs) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      totalInventoryM3 += outgoingDraftPkgs.reduce((sum: number, pkg: any) => sum + (Number(pkg.volume_m3) || 0), 0);
     }
   }
 

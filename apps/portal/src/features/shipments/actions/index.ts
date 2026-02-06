@@ -15,3 +15,5 @@ export { createShipmentDraft, getShipmentDestinations } from "./createShipmentDr
 export { getUserOrganisation } from "./getUserOrganisation";
 export { getShipmentAvailablePackages } from "./getShipmentAvailablePackages";
 export type { ShipmentAvailablePackage } from "./getShipmentAvailablePackages";
+export { getPackagesInShipmentDrafts } from "./getPackagesInShipmentDrafts";
+export type { ShipmentDraftPackageInfo } from "./getPackagesInShipmentDrafts";

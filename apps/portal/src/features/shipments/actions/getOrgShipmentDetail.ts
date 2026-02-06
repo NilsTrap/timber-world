@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
-import type { ActionResult, ShipmentDetail, PackageDetail, ShipmentStatus } from "../types";
+import type { ActionResult, ShipmentDetail, PackageDetail, ShipmentPallet, ShipmentStatus } from "../types";
 
 interface OrgShipmentDetailResult {
   shipment: ShipmentDetail;
@@ -69,6 +69,26 @@ export async function getOrgShipmentDetail(
     return { success: false, error: "Access denied", code: "FORBIDDEN" };
   }
 
+  // Fetch pallets for this shipment
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: pallets, error: palletsError } = await (supabase as any)
+    .from("shipment_pallets")
+    .select("id, pallet_number, notes")
+    .eq("shipment_id", shipmentId)
+    .order("pallet_number", { ascending: true });
+
+  if (palletsError) {
+    console.error("Failed to fetch pallets:", palletsError);
+    return { success: false, error: `Failed to fetch pallets: ${palletsError.message}`, code: "QUERY_FAILED" };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const palletDetails: ShipmentPallet[] = (pallets as any[]).map((p: any) => ({
+    id: p.id,
+    palletNumber: p.pallet_number,
+    notes: p.notes ?? null,
+  }));
+
   // Fetch packages with all reference joins
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: packages, error: packagesError } = await (supabase as any)
@@ -77,6 +97,7 @@ export async function getOrgShipmentDetail(
       id,
       package_number,
       package_sequence,
+      pallet_id,
       product_name_id,
       wood_species_id,
       humidity_id,
@@ -131,6 +152,7 @@ export async function getOrgShipmentDetail(
     pieces: pkg.pieces,
     volumeM3: pkg.volume_m3 != null ? Number(pkg.volume_m3) : null,
     volumeIsCalculated: pkg.volume_is_calculated ?? false,
+    palletId: pkg.pallet_id ?? null,
   }));
 
   const result: ShipmentDetail = {
@@ -138,9 +160,9 @@ export async function getOrgShipmentDetail(
     shipmentCode: shipment.shipment_code,
     shipmentNumber: shipment.shipment_number,
     fromOrganisationId: shipment.from_organisation_id,
-    fromOrganisationName: `${shipment.from_organisation?.code ?? ""} - ${shipment.from_organisation?.name ?? ""}`,
+    fromOrganisationName: shipment.from_organisation?.name ?? "",
     toOrganisationId: shipment.to_organisation_id,
-    toOrganisationName: `${shipment.to_organisation?.code ?? ""} - ${shipment.to_organisation?.name ?? ""}`,
+    toOrganisationName: shipment.to_organisation?.name ?? "",
     shipmentDate: shipment.shipment_date,
     transportCostEur: shipment.transport_cost_eur != null ? Number(shipment.transport_cost_eur) : null,
     notes: shipment.notes ?? null,
@@ -152,6 +174,7 @@ export async function getOrgShipmentDetail(
     rejectionReason: shipment.rejection_reason ?? null,
     completedAt: shipment.completed_at ?? null,
     packages: packageDetails,
+    pallets: palletDetails,
   };
 
   return {

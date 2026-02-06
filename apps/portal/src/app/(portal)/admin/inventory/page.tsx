@@ -11,8 +11,8 @@ export const metadata: Metadata = {
  * Inventory Page (Admin)
  *
  * Two tabs:
- * - Inventory: View and edit all packages (filtered by sidebar org selector)
- * - Add Inventory: Form to add inventory to organizations
+ * - View: Read-only view of all packages (includes "on the way" packages)
+ * - Edit: Full editing capabilities
  */
 export default async function InventoryPage({
   searchParams,

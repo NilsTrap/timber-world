@@ -60,15 +60,17 @@ export async function getAvailablePackages(
   `;
 
   // Query 1: Shipment-sourced packages at producer's facility (exclude consumed and zero-pieces, allow null pieces)
+  // Only include packages from shipments that have been accepted or completed
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let shipmentQuery = (supabase as any)
     .from("inventory_packages")
     .select(`
       id, package_number, shipment_id, thickness, width, length, pieces, volume_m3, notes,
-      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, to_organisation_id),
+      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, to_organisation_id, status),
       ${refSelect}
     `)
     .eq("shipments.to_organisation_id", session.organisationId)
+    .in("shipments.status", ["accepted", "completed"])
     .neq("status", "consumed")
     .or("pieces.neq.0,pieces.is.null")
     .order("package_number", { ascending: true });
@@ -116,10 +118,31 @@ export async function getAvailablePackages(
     directQuery = directQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
   }
 
-  const [shipmentResult, productionResult, directResult] = await Promise.all([
+  // Query 4: Packages in outgoing draft shipments FROM this org (still in inventory)
+  // Only drafts stay in inventory - once "on the way" (pending), they leave inventory
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let outgoingDraftQuery = (supabase as any)
+    .from("inventory_packages")
+    .select(`
+      id, package_number, shipment_id, thickness, width, length, pieces, volume_m3, notes,
+      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, from_organisation_id, status),
+      ${refSelect}
+    `)
+    .eq("shipments.from_organisation_id", session.organisationId)
+    .eq("shipments.status", "draft")
+    .neq("status", "consumed")
+    .or("pieces.neq.0,pieces.is.null")
+    .order("package_number", { ascending: true });
+
+  if (usedPackageIds.length > 0) {
+    outgoingDraftQuery = outgoingDraftQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
+  }
+
+  const [shipmentResult, productionResult, directResult, outgoingDraftResult] = await Promise.all([
     shipmentQuery,
     productionQuery,
     directQuery,
+    outgoingDraftQuery,
   ]);
 
   if (shipmentResult.error) {
@@ -137,11 +160,17 @@ export async function getAvailablePackages(
     // Non-fatal: continue with other packages
   }
 
+  if (outgoingDraftResult.error) {
+    console.error("Failed to fetch outgoing draft packages:", outgoingDraftResult.error);
+    // Non-fatal: continue with other packages
+  }
+
   // Merge all result sets and deduplicate by id
   const allData = [
     ...(shipmentResult.data ?? []),
     ...(productionResult.data ?? []),
     ...(directResult.data ?? []),
+    ...(outgoingDraftResult.data ?? []),
   ];
   const seenIds = new Set<string>();
   const uniqueData = allData.filter((pkg: { id: string }) => {

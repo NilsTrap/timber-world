@@ -10,8 +10,13 @@ import {
   Popover,
   PopoverTrigger,
   PopoverContent,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   type ColumnDef,
 } from "@timber/ui";
+import { Truck } from "lucide-react";
 import { SummaryCards } from "@/features/shipments/components/SummaryCards";
 import { deleteInventoryPackage, saveInventoryPackages, updateShipmentCode } from "../actions";
 import { getReferenceDropdowns } from "@/features/shipments/actions";
@@ -462,14 +467,31 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
           getValue: (row) => row.organisationId ?? "",
           getDisplayValue: (row) => row.organisationCode ?? "",
           width: "w-[3.5rem]",
-          renderCell: (row, _renderIndex, _originalIndex, onChange) => (
-            <OrgDropdown
-              value={row.organisationId}
-              displayValue={row.organisationCode}
-              options={organisations}
-              onChange={onChange}
-            />
-          ),
+          renderCell: (row, _renderIndex, _originalIndex, onChange) => {
+            if (row.isOnTheWay) {
+              return (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Truck className="h-4 w-4 text-amber-600 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-medium">On The Way</p>
+                      <p className="text-xs text-muted-foreground">{row.onTheWayFrom} → {row.onTheWayTo}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              );
+            }
+            return (
+              <OrgDropdown
+                value={row.organisationId}
+                displayValue={row.organisationCode}
+                options={organisations}
+                onChange={onChange}
+              />
+            );
+          },
         },
         {
           key: "shipmentCode",
@@ -712,6 +734,7 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
         rows={localPackages}
         onRowsChange={handleRowsChange}
         getRowKey={(row) => row.id}
+        getRowClassName={(row) => row.isOnTheWay ? "bg-amber-50" : undefined}
         onCellChange={handleCellChange}
         createRow={createRow}
         copyRow={copyRow}

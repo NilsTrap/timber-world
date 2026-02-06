@@ -29,6 +29,8 @@ export interface ShipmentAvailablePackage {
   pieces: string | null;
   volumeM3: number | null;
   notes: string | null;
+  /** True if this package is in a production draft (cannot be added to shipment) */
+  inProductionDraft: boolean;
 }
 
 /**
@@ -57,7 +59,24 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
 
   const supabase = await createClient();
 
+  // First, get packages that are in production drafts (to exclude them)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: draftInputs } = await (supabase as any)
+    .from("portal_production_inputs")
+    .select(`
+      package_id,
+      portal_production_entries!inner(status, organisation_id)
+    `)
+    .eq("portal_production_entries.status", "draft")
+    .eq("portal_production_entries.organisation_id", orgId);
+
+  const packagesInProductionDrafts = new Set<string>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (draftInputs ?? []).map((row: any) => row.package_id)
+  );
+
   // Query 1: Shipment-sourced packages (shipped to this producer's facility)
+  // Only include packages from shipments that have been accepted or completed
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: shipmentData, error: shipmentError } = await (supabase as any)
     .from("inventory_packages")
@@ -79,7 +98,7 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
       volume_m3,
       status,
       notes,
-      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, to_organisation_id),
+      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, to_organisation_id, status),
       ref_product_names!inventory_packages_product_name_id_fkey(value),
       ref_wood_species!inventory_packages_wood_species_id_fkey(value),
       ref_humidity!inventory_packages_humidity_id_fkey(value),
@@ -89,6 +108,7 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
     .eq("shipments.to_organisation_id", orgId)
+    .in("shipments.status", ["accepted", "completed"])
     .in("status", ["available", "produced"])
     .order("package_number", { ascending: true });
 
@@ -176,7 +196,7 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
     console.error("Failed to fetch direct packages:", directError);
   }
 
-  // Merge and deduplicate
+  // Merge and deduplicate (keep packages in production drafts - they'll be shown as disabled)
   const allData = [...(shipmentData ?? []), ...(productionData ?? []), ...(directData ?? [])];
   const seenIds = new Set<string>();
   const uniqueData = allData.filter((pkg: { id: string }) => {
@@ -210,6 +230,7 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
     pieces: pkg.pieces,
     volumeM3: pkg.volume_m3 != null ? Number(pkg.volume_m3) : null,
     notes: pkg.notes ?? null,
+    inProductionDraft: packagesInProductionDrafts.has(pkg.id),
   }));
 
   packages.sort((a, b) => (a.packageNumber ?? "").localeCompare(b.packageNumber ?? ""));

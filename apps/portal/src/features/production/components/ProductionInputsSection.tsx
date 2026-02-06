@@ -7,6 +7,7 @@ import type { PackageListItem } from "@/features/shipments/types";
 import type { ProductionInput } from "../types";
 import { getAvailablePackages, getProductionInputs, getPackagesInDrafts } from "../actions";
 import type { DraftPackageInfo } from "../actions";
+import { getPackagesInShipmentDrafts, type ShipmentDraftPackageInfo } from "@/features/shipments/actions";
 import { PackageSelector } from "./PackageSelector";
 import { ProductionInputsTable, type ProductionInputsTableHandle } from "./ProductionInputsTable";
 import { PrintInputsButton } from "./PrintInputsButton";
@@ -49,16 +50,18 @@ export function ProductionInputsSection({
   const [packages, setPackages] = useState<PackageListItem[]>(initialPackages);
   const [inputs, setInputs] = useState<ProductionInput[]>(initialInputs);
   const [packagesInDrafts, setPackagesInDrafts] = useState<DraftPackageInfo[]>([]);
+  const [packagesInShipmentDrafts, setPackagesInShipmentDrafts] = useState<ShipmentDraftPackageInfo[]>([]);
   const [, startTransition] = useTransition();
   const [inputsFilterActive, setInputsFilterActive] = useState(false);
   const tableRef = useRef<ProductionInputsTableHandle>(null);
 
   const refreshData = useCallback(() => {
     startTransition(async () => {
-      const [pkgResult, inputResult, draftsResult] = await Promise.all([
+      const [pkgResult, inputResult, draftsResult, shipmentDraftsResult] = await Promise.all([
         getAvailablePackages(productionEntryId),
         getProductionInputs(productionEntryId),
         getPackagesInDrafts(),
+        getPackagesInShipmentDrafts(),
       ]);
       if (pkgResult.success) setPackages(pkgResult.data);
       if (inputResult.success) setInputs(inputResult.data);
@@ -66,15 +69,24 @@ export function ProductionInputsSection({
         // Filter out packages from the current draft
         setPackagesInDrafts(draftsResult.data.filter(d => d.draftId !== productionEntryId));
       }
+      if (shipmentDraftsResult.success) {
+        setPackagesInShipmentDrafts(shipmentDraftsResult.data);
+      }
     });
   }, [productionEntryId]);
 
-  // Initial fetch of packages in drafts
+  // Initial fetch of packages in drafts (production and shipment)
   useEffect(() => {
     startTransition(async () => {
-      const draftsResult = await getPackagesInDrafts();
+      const [draftsResult, shipmentDraftsResult] = await Promise.all([
+        getPackagesInDrafts(),
+        getPackagesInShipmentDrafts(),
+      ]);
       if (draftsResult.success) {
         setPackagesInDrafts(draftsResult.data.filter(d => d.draftId !== productionEntryId));
+      }
+      if (shipmentDraftsResult.success) {
+        setPackagesInShipmentDrafts(shipmentDraftsResult.data);
       }
     });
   }, [productionEntryId]);
@@ -165,6 +177,7 @@ export function ProductionInputsSection({
           productionEntryId={productionEntryId}
           packages={packages}
           packagesInDrafts={packagesInDrafts}
+          packagesInShipmentDrafts={packagesInShipmentDrafts}
           onInputAdded={refreshData}
         />
       )}

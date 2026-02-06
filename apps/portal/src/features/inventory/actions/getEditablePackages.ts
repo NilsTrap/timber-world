@@ -66,18 +66,18 @@ export async function getEditablePackages(orgId?: string): Promise<ActionResult<
     return { success: false, error: `Failed to fetch packages: ${packagesError.message}`, code: "QUERY_FAILED" };
   }
 
-  // Fetch shipments separately to reliably get shipment codes
+  // Fetch shipments separately to reliably get shipment codes and status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const shipmentIds = [...new Set((packagesData as any[] || [])
     .map((pkg) => pkg.shipment_id)
     .filter(Boolean))];
 
-  const shipmentsMap = new Map<string, string>();
+  const shipmentsMap = new Map<string, { shipmentCode: string; status: string; fromOrgId: string | null; toOrgId: string | null }>();
   if (shipmentIds.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: shipmentsData, error: shipmentsError } = await (supabase as any)
       .from("shipments")
-      .select("id, shipment_code")
+      .select("id, shipment_code, status, from_organisation_id, to_organisation_id")
       .in("id", shipmentIds);
 
     if (shipmentsError) {
@@ -85,7 +85,12 @@ export async function getEditablePackages(orgId?: string): Promise<ActionResult<
     } else if (shipmentsData) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const shipment of shipmentsData as any[]) {
-        shipmentsMap.set(shipment.id, shipment.shipment_code);
+        shipmentsMap.set(shipment.id, {
+          shipmentCode: shipment.shipment_code,
+          status: shipment.status,
+          fromOrgId: shipment.from_organisation_id,
+          toOrgId: shipment.to_organisation_id,
+        });
       }
     }
   }
@@ -111,7 +116,13 @@ export async function getEditablePackages(orgId?: string): Promise<ActionResult<
   const allPackages = (packagesData as any[]).map((pkg: any) => {
     const organisationId = pkg.organisation_id;
     const org = organisationId ? orgsMap.get(organisationId) : null;
-    const shipmentCode = pkg.shipment_id ? (shipmentsMap.get(pkg.shipment_id) ?? "") : "";
+    const shipmentInfo = pkg.shipment_id ? shipmentsMap.get(pkg.shipment_id) : null;
+    const shipmentCode = shipmentInfo?.shipmentCode ?? "";
+
+    // Check if package is "on the way" (in a pending shipment)
+    const isOnTheWay = shipmentInfo?.status === "pending";
+    const fromOrg = isOnTheWay && shipmentInfo?.fromOrgId ? orgsMap.get(shipmentInfo.fromOrgId) : null;
+    const toOrg = isOnTheWay && shipmentInfo?.toOrgId ? orgsMap.get(shipmentInfo.toOrgId) : null;
 
     return {
       id: pkg.id,
@@ -144,6 +155,10 @@ export async function getEditablePackages(orgId?: string): Promise<ActionResult<
       organisationName: org?.name ?? null,
       organisationCode: org?.code ?? null,
       notes: pkg.notes ?? null,
+      // On the way status
+      isOnTheWay,
+      onTheWayFrom: fromOrg?.name ?? null,
+      onTheWayTo: toOrg?.name ?? null,
     };
   });
 

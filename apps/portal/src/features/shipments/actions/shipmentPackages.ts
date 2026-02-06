@@ -88,17 +88,14 @@ export async function addPackagesToShipment(
 
   // Update packages to link to this shipment
   // For inter-org shipments, we're essentially "marking" which packages are part of the shipment
-  // We'll update the shipment_id and generate new package numbers
+  // Keep original package numbers - only update shipment_id and sequence
   for (const pkgId of validPackageIds) {
-    const packageNumber = `TWP-${String(shipment.shipment_number).padStart(3, "0")}-${String(nextSequence).padStart(3, "0")}`;
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
       .from("inventory_packages")
       .update({
         shipment_id: shipmentId,
         package_sequence: nextSequence,
-        package_number: packageNumber,
       })
       .eq("id", pkgId);
 
@@ -165,18 +162,19 @@ export async function removePackageFromShipment(
     return { success: false, error: "Package not in this shipment", code: "WRONG_SHIPMENT" };
   }
 
-  // For now, we'll just delete the package from the shipment
-  // In a more complete implementation, we might want to "unlink" it
-  // and return it to available inventory
+  // Unlink the package from the shipment (return to available inventory)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: deleteError } = await (supabase as any)
+  const { error: unlinkError } = await (supabase as any)
     .from("inventory_packages")
-    .delete()
+    .update({
+      shipment_id: null,
+      package_sequence: null,
+    })
     .eq("id", packageId);
 
-  if (deleteError) {
-    console.error("Failed to remove package:", deleteError);
-    return { success: false, error: "Failed to remove package", code: "DELETE_FAILED" };
+  if (unlinkError) {
+    console.error("Failed to unlink package:", unlinkError);
+    return { success: false, error: "Failed to remove package", code: "UPDATE_FAILED" };
   }
 
   return { success: true, data: { removed: true } };

@@ -2,27 +2,36 @@
 
 import { useMemo, useState, useCallback, useRef } from "react";
 import { DataEntryTable, Button, type ColumnDef, type DataEntryTableHandle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@timber/ui";
-import { X, FileText, MessageSquare } from "lucide-react";
+import { X, FileText, MessageSquare, Truck } from "lucide-react";
 import { SummaryCards } from "@/features/shipments/components/SummaryCards";
 import { PrintInventoryButton } from "./PrintInventoryButton";
 import type { PackageListItem } from "../types";
 import type { DraftPackageInfo } from "@/features/production/actions";
+import type { ShipmentDraftPackageInfo } from "@/features/shipments/actions";
 
 interface ProducerInventoryProps {
   packages: PackageListItem[];
   packagesInDrafts?: DraftPackageInfo[];
+  packagesInShipmentDrafts?: ShipmentDraftPackageInfo[];
 }
 
-export function ProducerInventory({ packages, packagesInDrafts = [] }: ProducerInventoryProps) {
+export function ProducerInventory({ packages, packagesInDrafts = [], packagesInShipmentDrafts = [] }: ProducerInventoryProps) {
   const tableRef = useRef<DataEntryTableHandle>(null);
   const [hasActiveFilters, setHasActiveFilters] = useState(false);
 
-  // Create a map for quick lookup of draft info by package ID
+  // Create a map for quick lookup of production draft info by package ID
   const draftsMap = useMemo(() => {
     const map = new Map<string, DraftPackageInfo>();
     packagesInDrafts.forEach((d) => map.set(d.packageId, d));
     return map;
   }, [packagesInDrafts]);
+
+  // Create a map for quick lookup of shipment draft info by package ID
+  const shipmentDraftsMap = useMemo(() => {
+    const map = new Map<string, ShipmentDraftPackageInfo>();
+    packagesInShipmentDrafts.forEach((d) => map.set(d.packageId, d));
+    return map;
+  }, [packagesInShipmentDrafts]);
 
   // Format date for tooltip
   const formatDate = (dateStr: string) => {
@@ -47,6 +56,7 @@ export function ProducerInventory({ packages, packagesInDrafts = [] }: ProducerI
         formatTotal: (v) => String(v),
         renderCell: (row) => {
           const draftInfo = draftsMap.get(row.id);
+          const shipmentDraftInfo = shipmentDraftsMap.get(row.id);
           const hasNote = !!row.notes;
           return (
             <div className="flex items-center gap-1.5 whitespace-nowrap">
@@ -72,6 +82,19 @@ export function ProducerInventory({ packages, packagesInDrafts = [] }: ProducerI
                     <TooltipContent>
                       <p>In draft: {draftInfo.processName}</p>
                       <p className="text-xs text-muted-foreground">{formatDate(draftInfo.productionDate)}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {shipmentDraftInfo && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Truck className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>In shipment: {shipmentDraftInfo.shipmentCode}</p>
+                      <p className="text-xs text-muted-foreground">To: {shipmentDraftInfo.toOrganisationName}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -174,7 +197,7 @@ export function ProducerInventory({ packages, packagesInDrafts = [] }: ProducerI
         formatTotal: (v) => v.toFixed(3).replace(".", ","),
       },
     ],
-    [draftsMap]
+    [draftsMap, shipmentDraftsMap]
   );
 
   const [displayedPackages, setDisplayedPackages] = useState<PackageListItem[]>(packages);
@@ -236,7 +259,11 @@ export function ProducerInventory({ packages, packagesInDrafts = [] }: ProducerI
         collapseStorageKey="producer-inventory-collapsed"
         onDisplayRowsChange={handleDisplayRowsChange}
         onFilterActiveChange={setHasActiveFilters}
-        getRowClassName={(row) => draftsMap.has(row.id) ? "bg-amber-50" : undefined}
+        getRowClassName={(row) => {
+          if (draftsMap.has(row.id)) return "bg-amber-50";
+          if (shipmentDraftsMap.has(row.id)) return "bg-blue-50";
+          return undefined;
+        }}
       />
     </div>
   );

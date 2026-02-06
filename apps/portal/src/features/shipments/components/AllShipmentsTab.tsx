@@ -35,7 +35,7 @@ const statusColors: Record<ShipmentStatus, string> = {
 
 const statusLabels: Record<ShipmentStatus, string> = {
   draft: "Draft",
-  pending: "Pending",
+  pending: "On The Way",
   accepted: "Accepted",
   completed: "Completed",
   rejected: "Rejected",
@@ -135,17 +135,17 @@ export function AllShipmentsTab({ organizations }: AllShipmentsTabProps) {
           >
             <option value="all">All</option>
             <option value="draft">Draft</option>
-            <option value="pending">Pending</option>
+            <option value="pending">On The Way</option>
             <option value="completed">Completed</option>
             <option value="rejected">Rejected</option>
           </select>
         </div>
       </div>
 
-      {/* Pending count info */}
+      {/* On The Way count info */}
       {pendingCount > 0 && filters.status === "all" && (
         <div className="text-sm text-muted-foreground">
-          <span className="font-medium text-yellow-700">{pendingCount} pending</span> shipment(s) awaiting acceptance
+          <span className="font-medium text-yellow-700">{pendingCount} on the way</span> shipment(s) awaiting acceptance
         </div>
       )}
 

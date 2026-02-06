@@ -50,7 +50,7 @@ function StatusBadge({ status }: { status: string }) {
 
   const labels: Record<string, string> = {
     draft: "Draft",
-    pending: "Pending",
+    pending: "On The Way",
     accepted: "Accepted",
     completed: "Completed",
     rejected: "Rejected",

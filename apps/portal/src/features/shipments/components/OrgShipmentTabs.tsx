@@ -34,7 +34,7 @@ const statusColors: Record<ShipmentStatus, string> = {
 
 const statusLabels: Record<ShipmentStatus, string> = {
   draft: "Draft",
-  pending: "Pending",
+  pending: "On The Way",
   accepted: "Accepted",
   completed: "Completed",
   rejected: "Rejected",

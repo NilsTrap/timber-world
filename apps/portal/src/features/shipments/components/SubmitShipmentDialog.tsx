@@ -10,7 +10,7 @@ import {
   DialogTitle,
   Button,
 } from "@timber/ui";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Truck } from "lucide-react";
 import { submitShipmentForAcceptance } from "../actions/submitShipment";
 import { toast } from "sonner";
 
@@ -44,7 +44,7 @@ export function SubmitShipmentDialog({
     setSubmitting(true);
     const result = await submitShipmentForAcceptance(shipmentId);
     if (result.success) {
-      toast.success("Shipment submitted for acceptance");
+      toast.success("Shipment is on the way");
       onSuccess();
     } else {
       toast.error(result.error);
@@ -56,7 +56,7 @@ export function SubmitShipmentDialog({
     <Dialog open onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Submit Shipment for Acceptance?</DialogTitle>
+          <DialogTitle>Send Shipment?</DialogTitle>
           <DialogDescription>
             The receiving organization will be notified and must accept this shipment
             before inventory is transferred.
@@ -88,12 +88,12 @@ export function SubmitShipmentDialog({
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Submitting...
+                Sending...
               </>
             ) : (
               <>
-                <Send className="h-4 w-4 mr-2" />
-                Submit for Acceptance
+                <Truck className="h-4 w-4 mr-2" />
+                On The Way
               </>
             )}
           </Button>

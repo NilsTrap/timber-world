@@ -90,7 +90,7 @@ export function StartShipmentForm() {
           <option value="">Select destination...</option>
           {destinations.map((org) => (
             <option key={org.id} value={org.id}>
-              {org.code} - {org.name}
+              {org.name}
             </option>
           ))}
         </select>

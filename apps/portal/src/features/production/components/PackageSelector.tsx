@@ -23,10 +23,11 @@ import {
   type ColumnSortState,
 } from "@timber/ui";
 import { toast } from "sonner";
-import { FileText, MessageSquare } from "lucide-react";
+import { FileText, MessageSquare, Truck } from "lucide-react";
 import type { PackageListItem } from "@/features/shipments/types";
 import { addProductionInput } from "../actions";
 import type { DraftPackageInfo } from "../actions";
+import type { ShipmentDraftPackageInfo } from "@/features/shipments/actions";
 
 interface PackageSelectorProps {
   open: boolean;
@@ -35,6 +36,7 @@ interface PackageSelectorProps {
   packages: PackageListItem[];
   onInputAdded: () => void;
   packagesInDrafts?: DraftPackageInfo[];
+  packagesInShipmentDrafts?: ShipmentDraftPackageInfo[];
 }
 
 interface SelectedPackage {
@@ -103,16 +105,24 @@ export function PackageSelector({
   packages,
   onInputAdded,
   packagesInDrafts = [],
+  packagesInShipmentDrafts = [],
 }: PackageSelectorProps) {
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState<Map<string, SelectedPackage>>(new Map());
 
-  // Create a map for quick lookup of draft info by package ID
+  // Create a map for quick lookup of production draft info by package ID
   const draftsMap = useMemo(() => {
     const map = new Map<string, DraftPackageInfo>();
     packagesInDrafts.forEach((d) => map.set(d.packageId, d));
     return map;
   }, [packagesInDrafts]);
+
+  // Create a map for quick lookup of shipment draft info by package ID
+  const shipmentDraftsMap = useMemo(() => {
+    const map = new Map<string, ShipmentDraftPackageInfo>();
+    packagesInShipmentDrafts.forEach((d) => map.set(d.packageId, d));
+    return map;
+  }, [packagesInShipmentDrafts]);
 
   // Format date for tooltip
   const formatDate = (dateStr: string) => {
@@ -204,6 +214,9 @@ export function PackageSelector({
   );
 
   const handleToggleSelect = useCallback((pkg: PackageListItem) => {
+    // Don't allow selecting packages in shipment drafts
+    if (shipmentDraftsMap.has(pkg.id)) return;
+
     setSelected((prev) => {
       const next = new Map(prev);
       if (next.has(pkg.id)) {
@@ -219,7 +232,7 @@ export function PackageSelector({
       }
       return next;
     });
-  }, []);
+  }, [shipmentDraftsMap]);
 
   const handleUpdateField = useCallback((packageId: string, field: "piecesUsed" | "volumeM3", value: string) => {
     setSelected((prev) => {
@@ -565,28 +578,33 @@ export function PackageSelector({
                     const volumeIsCalculated = !!hasPieces && isSingleNumber(pkg.thickness) && isSingleNumber(pkg.width) && isSingleNumber(pkg.length);
 
                     const draftInfo = draftsMap.get(pkg.id);
+                    const shipmentDraftInfo = shipmentDraftsMap.get(pkg.id);
+                    const isInShipmentDraft = !!shipmentDraftInfo;
                     const isDraft = !!draftInfo;
 
                     return (
                       <TableRow
                         key={pkg.id}
                         className={
-                          isSelected
+                          isInShipmentDraft
+                            ? "bg-blue-50 opacity-60 cursor-not-allowed"
+                            : isSelected
                             ? "bg-accent/30 hover:bg-accent/40"
                             : isDraft
                             ? "bg-amber-50 hover:bg-amber-100/70 cursor-pointer"
                             : "hover:bg-accent/10 cursor-pointer"
                         }
-                        onClick={() => handleToggleSelect(pkg)}
+                        onClick={isInShipmentDraft ? undefined : () => handleToggleSelect(pkg)}
                       >
                         {/* Checkbox */}
-                        <TableCell className="px-2 sticky left-0 bg-background z-10">
+                        <TableCell className={`px-2 sticky left-0 z-10 ${isInShipmentDraft ? "bg-blue-50" : "bg-background"}`}>
                           <input
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => handleToggleSelect(pkg)}
                             onClick={(e) => e.stopPropagation()}
                             className="h-4 w-4 rounded border-input"
+                            disabled={isInShipmentDraft}
                           />
                         </TableCell>
 
@@ -607,10 +625,10 @@ export function PackageSelector({
                             );
                           }
 
-                          // Special rendering for packageNumber to show notes and draft icons
+                          // Special rendering for packageNumber to show notes, draft, and shipment icons
                           if (col.key === "packageNumber") {
                             const hasNote = !!pkg.notes;
-                            if (hasNote || draftInfo) {
+                            if (hasNote || draftInfo || shipmentDraftInfo) {
                               return (
                                 <TableCell key={col.key} className="px-1 text-xs whitespace-nowrap">
                                   <div className="flex items-center gap-1">
@@ -636,6 +654,19 @@ export function PackageSelector({
                                           <TooltipContent>
                                             <p>In draft: {draftInfo.processName}</p>
                                             <p className="text-xs text-muted-foreground">{formatDate(draftInfo.productionDate)}</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                    {shipmentDraftInfo && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Truck className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>In shipment: {shipmentDraftInfo.shipmentCode}</p>
+                                            <p className="text-xs text-muted-foreground">To: {shipmentDraftInfo.toOrganisationName}</p>
                                           </TooltipContent>
                                         </Tooltip>
                                       </TooltipProvider>

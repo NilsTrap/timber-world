@@ -1,6 +1,13 @@
 /** Shipment status workflow states */
 export type ShipmentStatus = 'draft' | 'pending' | 'accepted' | 'completed' | 'rejected';
 
+/** Pallet within a shipment for grouping packages */
+export interface ShipmentPallet {
+  id: string;
+  palletNumber: number;
+  notes: string | null;
+}
+
 /** Shipment record from database */
 export interface Shipment {
   id: string;
@@ -145,6 +152,7 @@ export interface PackageDetail {
   pieces: string | null;
   volumeM3: number | null;
   volumeIsCalculated: boolean;
+  palletId: string | null;
 }
 
 /** Shipment detail with all packages */
@@ -168,6 +176,7 @@ export interface ShipmentDetail {
   rejectionReason: string | null;
   completedAt: string | null;
   packages: PackageDetail[];
+  pallets: ShipmentPallet[];
 }
 
 /** Package list item for packages overview tab */
@@ -206,6 +215,12 @@ export interface EditablePackageItem extends PackageListItem {
   volumeIsCalculated: boolean;
   /** True if this is a new row not yet saved to DB */
   isNew?: boolean;
+  /** True if this package is in a pending shipment (on the way) */
+  isOnTheWay?: boolean;
+  /** Source organisation name if on the way */
+  onTheWayFrom?: string | null;
+  /** Destination organisation name if on the way */
+  onTheWayTo?: string | null;
 }
 
 /** Input for updating shipment packages */

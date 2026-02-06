@@ -4,17 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@timber/ui";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@timber/ui";
-import { ArrowLeft, Plus, Trash2, Send, Loader2, X } from "lucide-react";
+import { ArrowLeft, Plus, Truck, Loader2, X } from "lucide-react";
 import { getOrgShipmentDetail } from "@/features/shipments/actions/getOrgShipmentDetail";
-import { removePackageFromShipment } from "@/features/shipments/actions/shipmentPackages";
 import { cancelShipmentSubmission } from "@/features/shipments/actions/submitShipment";
 import type { ShipmentDetail, ShipmentStatus } from "@/features/shipments/types";
 import { formatDate } from "@/lib/utils";
@@ -23,6 +14,7 @@ import { ShipmentPackageSelector } from "@/features/shipments/components/Shipmen
 import { SubmitShipmentDialog } from "@/features/shipments/components/SubmitShipmentDialog";
 import { AcceptRejectButtons } from "@/features/shipments/components/AcceptRejectButtons";
 import { DeleteShipmentDraftButton } from "@/features/shipments/components/DeleteShipmentDraftButton";
+import { ShipmentPalletTable } from "@/features/shipments/components/ShipmentPalletTable";
 
 const statusColors: Record<ShipmentStatus, string> = {
   draft: "bg-yellow-100 text-yellow-800",
@@ -34,7 +26,7 @@ const statusColors: Record<ShipmentStatus, string> = {
 
 const statusLabels: Record<ShipmentStatus, string> = {
   draft: "Draft",
-  pending: "Pending Acceptance",
+  pending: "On The Way",
   accepted: "Accepted",
   completed: "Completed",
   rejected: "Rejected",
@@ -83,18 +75,6 @@ export default function ShipmentDetailPage() {
   useEffect(() => {
     fetchShipment();
   }, [fetchShipment]);
-
-  const handleRemovePackage = async (packageId: string) => {
-    if (!shipment) return;
-
-    const result = await removePackageFromShipment(shipment.id, packageId);
-    if (result.success) {
-      toast.success("Package removed");
-      fetchShipment();
-    } else {
-      toast.error(result.error);
-    }
-  };
 
   const handlePackagesAdded = () => {
     setShowPackageSelector(false);
@@ -154,16 +134,11 @@ export default function ShipmentDetailPage() {
         Back
       </Link>
 
-      {/* Header - same layout as production */}
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {shipment.shipmentCode}
-          </h1>
-          <p className="text-muted-foreground">
-            {isOwner ? "To" : "From"}: {isOwner ? shipment.toOrganisationName : shipment.fromOrganisationName}
-          </p>
-        </div>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          {shipment.shipmentCode}
+        </h1>
         <div className="flex items-center gap-3">
           {isDraft && isOwner && (
             <DeleteShipmentDraftButton
@@ -173,8 +148,8 @@ export default function ShipmentDetailPage() {
           )}
           {canSubmit && (
             <Button onClick={() => setShowSubmitDialog(true)}>
-              <Send className="h-4 w-4 mr-2" />
-              Submit
+              <Truck className="h-4 w-4 mr-2" />
+              On The Way
             </Button>
           )}
           {canCancel && (
@@ -247,7 +222,7 @@ export default function ShipmentDetailPage() {
         </div>
       )}
 
-      {/* Packages Section - same style as ProductionInputsSection */}
+      {/* Packages Section */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -276,48 +251,13 @@ export default function ShipmentDetailPage() {
             </p>
           </div>
         ) : (
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Package #</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Species</TableHead>
-                  <TableHead>Dimensions</TableHead>
-                  <TableHead className="text-right">Pieces</TableHead>
-                  <TableHead className="text-right">Volume m³</TableHead>
-                  {canEdit && <TableHead className="w-[50px]"></TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {shipment.packages.map((pkg) => (
-                  <TableRow key={pkg.id}>
-                    <TableCell className="font-medium">{pkg.packageNumber}</TableCell>
-                    <TableCell>{pkg.productName ?? "-"}</TableCell>
-                    <TableCell>{pkg.woodSpecies ?? "-"}</TableCell>
-                    <TableCell>
-                      {pkg.thickness && pkg.width && pkg.length
-                        ? `${pkg.thickness} × ${pkg.width} × ${pkg.length}`
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-right">{pkg.pieces ?? "-"}</TableCell>
-                    <TableCell className="text-right">{formatVolume(pkg.volumeM3)}</TableCell>
-                    {canEdit && (
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemovePackage(pkg.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <ShipmentPalletTable
+            shipmentId={shipment.id}
+            packages={shipment.packages}
+            pallets={shipment.pallets}
+            canEdit={canEdit}
+            onRefresh={fetchShipment}
+          />
         )}
       </div>
 

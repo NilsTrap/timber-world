@@ -4,6 +4,7 @@ import { Package } from "lucide-react";
 import { getSession, isAdmin } from "@/lib/auth";
 import { getProducerPackages } from "@/features/inventory/actions";
 import { getPackagesInDrafts } from "@/features/production/actions";
+import { getPackagesInShipmentDrafts } from "@/features/shipments/actions";
 import { ProducerInventory } from "@/features/inventory/components/ProducerInventory";
 
 export const metadata: Metadata = {
@@ -31,9 +32,10 @@ export default async function InventoryPage() {
   }
 
   // Producer flow
-  const [result, draftsResult] = await Promise.all([
+  const [result, draftsResult, shipmentDraftsResult] = await Promise.all([
     getProducerPackages(),
     getPackagesInDrafts(),
+    getPackagesInShipmentDrafts(),
   ]);
 
   if (!result.success) {
@@ -100,6 +102,7 @@ export default async function InventoryPage() {
       <ProducerInventory
         packages={packages}
         packagesInDrafts={draftsResult.success ? draftsResult.data : []}
+        packagesInShipmentDrafts={shipmentDraftsResult.success ? shipmentDraftsResult.data : []}
       />
     </div>
   );

@@ -34,6 +34,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
   const supabase = await createClient();
 
   // Query 1: Shipment-sourced packages (shipped to this producer's facility)
+  // Only include packages from shipments that have been accepted or completed
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: shipmentData, error: shipmentError } = await (supabase as any)
     .from("inventory_packages")
@@ -48,7 +49,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       volume_m3,
       status,
       notes,
-      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, to_organisation_id),
+      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, to_organisation_id, status),
       ref_product_names!inventory_packages_product_name_id_fkey(value),
       ref_wood_species!inventory_packages_wood_species_id_fkey(value),
       ref_humidity!inventory_packages_humidity_id_fkey(value),
@@ -58,6 +59,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
     .eq("shipments.to_organisation_id", orgId)
+    .in("shipments.status", ["accepted", "completed"])
     .neq("status", "consumed")
     .order("package_number", { ascending: true });
 
@@ -135,8 +137,43 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     // Non-fatal: continue with other results
   }
 
+  // Query 4: Packages in outgoing draft shipments FROM this organisation
+  // Only drafts stay in inventory - once "on the way" (pending), they leave inventory
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: outgoingDraftData, error: outgoingDraftError } = await (supabase as any)
+    .from("inventory_packages")
+    .select(`
+      id,
+      package_number,
+      shipment_id,
+      thickness,
+      width,
+      length,
+      pieces,
+      volume_m3,
+      status,
+      notes,
+      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, from_organisation_id, status),
+      ref_product_names!inventory_packages_product_name_id_fkey(value),
+      ref_wood_species!inventory_packages_wood_species_id_fkey(value),
+      ref_humidity!inventory_packages_humidity_id_fkey(value),
+      ref_types!inventory_packages_type_id_fkey(value),
+      ref_processing!inventory_packages_processing_id_fkey(value),
+      ref_fsc!inventory_packages_fsc_id_fkey(value),
+      ref_quality!inventory_packages_quality_id_fkey(value)
+    `)
+    .eq("shipments.from_organisation_id", orgId)
+    .eq("shipments.status", "draft")
+    .neq("status", "consumed")
+    .order("package_number", { ascending: true });
+
+  if (outgoingDraftError) {
+    console.error("Failed to fetch outgoing draft packages:", outgoingDraftError);
+    // Non-fatal: continue with other results
+  }
+
   // Merge all result sets and deduplicate by id
-  const allData = [...(shipmentData ?? []), ...(productionData ?? []), ...(directData ?? [])];
+  const allData = [...(shipmentData ?? []), ...(productionData ?? []), ...(directData ?? []), ...(outgoingDraftData ?? [])];
   const seenIds = new Set<string>();
   const uniqueData = allData.filter((pkg: { id: string }) => {
     if (seenIds.has(pkg.id)) return false;

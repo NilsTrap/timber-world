@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin } from "@/lib/auth";
-import type { ActionResult, ShipmentDetail, PackageDetail } from "../types";
+import type { ActionResult, ShipmentDetail, PackageDetail, ShipmentPallet } from "../types";
 
 /**
  * Get Shipment Detail
@@ -58,6 +58,26 @@ export async function getShipmentDetail(
     return { success: false, error: `Failed to fetch shipment: ${shipmentError.message}`, code: "QUERY_FAILED" };
   }
 
+  // Fetch pallets for this shipment
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: pallets, error: palletsError } = await (supabase as any)
+    .from("shipment_pallets")
+    .select("id, pallet_number, notes")
+    .eq("shipment_id", shipmentId)
+    .order("pallet_number", { ascending: true });
+
+  if (palletsError) {
+    console.error("Failed to fetch pallets:", palletsError);
+    return { success: false, error: `Failed to fetch pallets: ${palletsError.message}`, code: "QUERY_FAILED" };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const palletDetails: ShipmentPallet[] = (pallets as any[]).map((p: any) => ({
+    id: p.id,
+    palletNumber: p.pallet_number,
+    notes: p.notes ?? null,
+  }));
+
   // Fetch packages with all reference joins
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: packages, error: packagesError } = await (supabase as any)
@@ -66,6 +86,7 @@ export async function getShipmentDetail(
       id,
       package_number,
       package_sequence,
+      pallet_id,
       product_name_id,
       wood_species_id,
       humidity_id,
@@ -120,6 +141,7 @@ export async function getShipmentDetail(
     pieces: pkg.pieces,
     volumeM3: pkg.volume_m3 != null ? Number(pkg.volume_m3) : null,
     volumeIsCalculated: pkg.volume_is_calculated ?? false,
+    palletId: pkg.pallet_id ?? null,
   }));
 
   const result: ShipmentDetail = {
@@ -142,6 +164,7 @@ export async function getShipmentDetail(
     rejectionReason: shipment.rejection_reason ?? null,
     completedAt: shipment.completed_at ?? null,
     packages: packageDetails,
+    pallets: palletDetails,
   };
 
   return { success: true, data: result };
