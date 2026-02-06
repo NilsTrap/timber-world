@@ -44,8 +44,7 @@ export function HeroSection() {
               });
             }}
           >
-            <source src="/hero/forest.webm" type="video/webm" />
-            <source src="/hero/forest.mp4" type="video/mp4" />
+            <source src="/hero/hero.mp4" type="video/mp4" />
           </video>
           {/* Fallback image shown behind video (visible if video fails to load) */}
           <Image
