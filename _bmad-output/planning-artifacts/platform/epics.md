@@ -14,8 +14,8 @@ storyCount: 54  # 19 original + 19 (Epics 6-9) + 16 (Epic 10)
 workflowComplete: true
 completedDate: '2026-01-25'
 status: 'ready-for-implementation'
-lastUpdated: '2026-02-01'
-updateNote: 'Added Epic 10 for Platform Foundation v2 (multi-org membership, roles, permissions, impersonation)'
+lastUpdated: '2026-02-06'
+updateNote: 'Updated Epic 8 with pallet grouping, on-the-way status, and draft blocking features'
 ---
 
 # Timber-World Producer MVP - Epic Breakdown
@@ -1344,14 +1344,19 @@ NFR46: Loading states for operations > 1 second
 **Goal:** Organizations can send inventory to each other with a review/approval process
 
 **Requirements covered:**
-- Two-stage shipment flow: Draft → Pending → Accept/Reject → Complete
+- Two-stage shipment flow: Draft → Pending ("On The Way") → Accept/Reject → Complete
 - Shipment creation with package selection
 - Receiver acceptance/rejection workflow
 - Inventory movement on completion only
+- Pallet grouping for physical organization of packages (Added 2026-02-06)
+- On-the-way status tracking with admin visibility (Added 2026-02-06)
+- Bidirectional draft blocking (production ↔ shipment) (Added 2026-02-06)
 
 **Standalone Value:** Complete goods movement between orgs. Builds on Epics 6-7.
 
 **Note:** This extends the existing `shipments` table with status workflow for inter-org movements.
+
+**Enhancement (2026-02-06):** Added pallet grouping (`shipment_pallets` table), renamed "Pending" to "On The Way" throughout UI, added draft blocking between production and shipment workflows, packages removed from sender inventory when marked "On The Way".
 
 ---
 
@@ -1370,12 +1375,27 @@ NFR46: Loading states for operations > 1 second
 - submitted_at (TIMESTAMPTZ, nullable)
 - reviewed_at, reviewed_by (for acceptance/rejection)
 - rejection_reason (TEXT, nullable)
+- completed_at (TIMESTAMPTZ, nullable)
 
 **And** `shipment_packages` table (existing) supports partial quantities:
 - pieces (INTEGER) - pieces being shipped
 - volume_m3 (DECIMAL) - volume being shipped
 
 **And** existing shipments are marked with status = 'completed' (no approval needed for legacy data)
+
+**Enhancement (2026-02-06):** Additional schema for pallet grouping:
+
+**Given** the pallet feature is implemented
+**When** migrations are applied
+**Then** `shipment_pallets` table is created with:
+- id (UUID, PK)
+- shipment_id (UUID, FK to shipments, ON DELETE CASCADE)
+- pallet_number (INTEGER, sequential within shipment)
+- notes (TEXT, nullable)
+- UNIQUE(shipment_id, pallet_number)
+
+**And** `inventory_packages` table has:
+- pallet_id (UUID, FK to shipment_pallets, ON DELETE SET NULL)
 
 ---
 
@@ -1403,13 +1423,38 @@ NFR46: Loading states for operations > 1 second
 
 **Given** I have selected packages
 **When** I view the shipment draft
-**Then** I see all selected packages with: Package#, Product, Dimensions, Pieces, Volume
+**Then** I see all selected packages with: Pallet, Package#, Product, Dimensions, Pieces, Volume
 **And** I see totals: Total Packages, Total m³
 
 **Given** I have a draft shipment
 **When** I remove a package from the selection
-**Then** the package is removed from the shipment
+**Then** the package is unlinked from the shipment (not deleted)
+**And** the package returns to available inventory
 **And** totals are recalculated
+
+**Enhancement (2026-02-06):** Pallet grouping:
+
+**Given** I am viewing a shipment draft
+**When** I click the Pallet dropdown on a package row
+**Then** I see options: "-" (without pallet), "Pallet 1", "Pallet 2", ..., "+ New Pallet"
+
+**Given** I select "+ New Pallet"
+**When** the action completes
+**Then** a new pallet is created with next sequential number
+**And** the package is assigned to the new pallet
+
+**Given** packages are assigned to pallets
+**When** I view the shipment draft
+**Then** packages are grouped by pallet with per-pallet subtotals
+**And** packages without a pallet appear in "Without Pallet" section
+
+**Enhancement (2026-02-06):** Draft blocking:
+
+**Given** a package is in a production draft (selected as input)
+**When** I open the package selector for shipment
+**Then** the package appears in the list but is disabled (grayed out)
+**And** the package shows a FileText icon indicating production draft
+**And** the package cannot be selected for shipment
 
 ---
 
@@ -1422,24 +1467,36 @@ NFR46: Loading states for operations > 1 second
 **Acceptance Criteria:**
 
 **Given** I have a draft shipment with at least one package
-**When** I click "Submit for Acceptance"
+**When** I click "On The Way" (with truck icon)
 **Then** I see a confirmation dialog showing: destination org, package count, total m³
 
 **Given** I confirm the submission
 **When** the action completes
 **Then** shipment status changes from "draft" to "pending"
 **And** `submitted_at` timestamp is set
-**And** I see success message "Shipment submitted for acceptance"
+**And** I see success message "Shipment is on the way"
 
-**Given** a shipment is pending
+**Given** a shipment is pending ("On The Way")
 **When** I view it
 **Then** I can no longer add or remove packages
-**And** I see status "Pending Acceptance"
+**And** I see status "On The Way" (not "Pending")
 **And** I see a "Cancel" button (returns to draft)
 
 **Given** I try to submit a shipment with no packages
-**When** I click "Submit"
+**When** I click "On The Way"
 **Then** I see error "At least one package is required"
+
+**Enhancement (2026-02-06):** Inventory lifecycle changes:
+
+**Given** a shipment is marked "On The Way"
+**When** the status changes to pending
+**Then** packages are removed from sender's inventory view
+**And** packages appear in admin inventory with truck icon and amber background
+**And** hovering the truck icon shows "From Org → To Org"
+
+**Given** a package is in a pending shipment
+**When** viewed in producer inventory
+**Then** the package is NOT visible (excluded from query)
 
 ---
 
@@ -1521,21 +1578,27 @@ NFR46: Loading states for operations > 1 second
 **Given** I am viewing the Outgoing tab
 **When** I see the table
 **Then** I see columns: Code, To Org, Packages, Volume m³, Status, Date
-**And** status shows: Draft, Pending, Completed, Rejected
+**And** status shows: Draft, On The Way, Completed, Rejected
 
 **Given** I am viewing the Incoming tab
 **When** I see the table
 **Then** I see columns: Code, From Org, Packages, Volume m³, Status, Date
-**And** pending shipments are highlighted
+**And** "On The Way" shipments are highlighted
 
 **Given** I click on any shipment
 **When** the detail view opens
-**Then** I see full shipment details including all packages
+**Then** I see full shipment details including all packages grouped by pallet
 **And** if rejected, I see the rejection reason
 
 **Given** I am Super Admin
 **When** I view Shipments
 **Then** I see an "All Shipments" tab showing shipments between all organizations
+
+**Enhancement (2026-02-06):** Shipment entry display format:
+
+**Given** I am viewing the shipments list
+**When** I see a shipment entry
+**Then** the format shows: "CODE  From Org → To Org" (e.g., "TIM-TWG-001  Timber International → The Wooden Good")
 
 ---
 

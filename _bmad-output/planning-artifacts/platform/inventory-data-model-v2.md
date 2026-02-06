@@ -2,6 +2,7 @@
 
 **Date:** 2026-01-22
 **Status:** APPROVED
+**Last Updated:** 2026-02-06
 **Scope:** Replaces original product-based inventory with flat shipment/package model
 
 ---
@@ -177,6 +178,34 @@ async function generateShipmentCode(fromPartyId: string, toPartyId: string): Pro
 
 ---
 
+## Shipment Pallets Table (Added 2026-02-06)
+
+### Schema
+
+```sql
+CREATE TABLE shipment_pallets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shipment_id UUID REFERENCES shipments(id) ON DELETE CASCADE NOT NULL,
+  pallet_number INTEGER NOT NULL,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(shipment_id, pallet_number)
+);
+
+CREATE INDEX idx_shipment_pallets_shipment ON shipment_pallets(shipment_id);
+```
+
+### Purpose
+
+Pallets allow grouping packages within a shipment for physical organization:
+- Each pallet has a sequential number (1, 2, 3, etc.)
+- Packages can be assigned to a pallet or remain "without pallet"
+- Per-pallet subtotals shown in UI (package count, pieces, volume)
+- Pallets are deleted when empty (cascade from packages)
+
+---
+
 ## Inventory Packages Table
 
 ### Schema
@@ -189,6 +218,9 @@ CREATE TABLE inventory_packages (
   shipment_id UUID REFERENCES shipments(id) NOT NULL,
   package_number TEXT NOT NULL UNIQUE,     -- e.g., "TWP-001-001"
   package_sequence INTEGER NOT NULL,       -- Sequence within shipment
+
+  -- Pallet Reference (Added 2026-02-06)
+  pallet_id UUID REFERENCES shipment_pallets(id) ON DELETE SET NULL,
 
   -- Dropdown Fields (Foreign Keys)
   product_name_id UUID REFERENCES ref_product_names(id),
@@ -221,6 +253,7 @@ CREATE INDEX idx_inventory_packages_shipment ON inventory_packages(shipment_id);
 CREATE INDEX idx_inventory_packages_number ON inventory_packages(package_number);
 CREATE INDEX idx_inventory_packages_product ON inventory_packages(product_name_id);
 CREATE INDEX idx_inventory_packages_species ON inventory_packages(wood_species_id);
+CREATE INDEX idx_inventory_packages_pallet ON inventory_packages(pallet_id);
 ```
 
 ### Package Number Generation

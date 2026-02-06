@@ -12,8 +12,8 @@ user_name: 'Nils'
 date: '2026-01-21'
 status: 'complete'
 completedAt: '2026-01-21'
-lastAddendum: '2026-02-01'
-addendumNotes: 'Platform Multi-Tenant Architecture v2 Addendum added'
+lastAddendum: '2026-02-06'
+addendumNotes: 'Shipment Workflow Enhancement Addendum added (pallets, on-the-way status, draft blocking)'
 ---
 
 # Architecture Decision Document
@@ -2815,4 +2815,175 @@ During migration:
 - Analysis: `_bmad-output/analysis/multi-tenant-architecture-design-2026-02-01.md`
 - Original Vision: `_bmad-output/analysis/platform-vision-capture-2026-01-20.md`
 - Current Implementation: Epics 1-9 in sprint-status.yaml
+
+---
+
+# Shipment Workflow Enhancement Addendum
+
+**Date Added:** 2026-02-06
+**Scope:** Pallet grouping, On-The-Way status, inventory lifecycle improvements
+**Status:** IMPLEMENTED
+
+---
+
+## Pallet Grouping for Shipments
+
+Packages within a shipment can be grouped into pallets for physical organization.
+
+### Database Schema
+
+```sql
+CREATE TABLE shipment_pallets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shipment_id UUID REFERENCES shipments(id) ON DELETE CASCADE NOT NULL,
+  pallet_number INTEGER NOT NULL,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(shipment_id, pallet_number)
+);
+
+-- Add pallet_id to inventory_packages
+ALTER TABLE inventory_packages
+  ADD COLUMN pallet_id UUID REFERENCES shipment_pallets(id) ON DELETE SET NULL;
+```
+
+### UI Implementation
+
+The `ShipmentPalletTable` component displays packages grouped by pallet:
+
+```
+[Pallet 1]                          3 pkgs | 150 pcs | 2.456 m³
+  | Pallet ▼ | Pkg # | Product | ... | Pieces | Volume |
+  | Pallet 1 | 001   | Boards  | ... | 50     | 0.820  |
+
+[Without Pallet]                    1 pkg  | 25 pcs  | 0.410 m³
+  |    -     | 006   | Strips  | ... | 25     | 0.410  |
+
+Total                               4 pkgs | 175 pcs | 2.866 m³
+```
+
+**Features:**
+- Pallet dropdown in first column: "-" (none), "Pallet 1", "Pallet 2", "+ New Pallet"
+- Per-pallet subtotals (package count, pieces, volume)
+- "Without Pallet" section for unassigned packages
+- Collapsible pallet groups
+
+---
+
+## Shipment Status Workflow
+
+### Status Transitions
+
+```
+draft → pending ("On The Way") → accepted/rejected → completed
+```
+
+| Status | Label in UI | Description |
+|--------|-------------|-------------|
+| `draft` | Draft | Being prepared, editable |
+| `pending` | On The Way | Sent from sender, in transit |
+| `accepted` | Accepted | Received and verified by recipient |
+| `rejected` | Rejected | Returned or refused |
+| `completed` | Completed | Fully processed |
+
+### Inventory Lifecycle
+
+**When shipment goes "On The Way" (pending):**
+- Packages are removed from sender's inventory view
+- Packages appear in admin inventory with truck icon and amber background
+- Tooltip shows "From Org → To Org"
+
+**When shipment is accepted:**
+- Packages appear in recipient's inventory
+- Packages are available for production input selection
+
+### UI Components
+
+**Submit Dialog:** Button shows "On The Way" with truck icon
+**Status Badge:** "On The Way" instead of "Pending"
+**Admin Inventory:** Truck icon for packages in transit
+
+---
+
+## Bidirectional Draft Blocking
+
+Packages cannot be in both production drafts and shipment drafts simultaneously.
+
+### Production Draft → Shipment Selector
+
+When selecting packages for a shipment, packages already in production drafts:
+- Appear in the list (for visibility)
+- Are disabled (cannot be selected)
+- Show FileText icon indicating production draft status
+- Have amber background (`bg-amber-50`)
+
+### Shipment Draft → Production Selector
+
+When selecting packages for production input, packages already in shipment drafts:
+- Appear in the list (for visibility)
+- Are disabled (cannot be selected)
+- Show Truck icon with tooltip (shipment code + destination)
+- Have blue background (`bg-blue-50`)
+
+### Implementation
+
+```typescript
+// In getShipmentAvailablePackages:
+// Query packages in production drafts
+const { data: draftInputs } = await supabase
+  .from("portal_production_inputs")
+  .select(`package_id, portal_production_entries!inner(status)`)
+  .eq("portal_production_entries.status", "draft");
+
+// Mark packages with inProductionDraft: true
+
+// In getAvailablePackages:
+// Query packages in shipment drafts
+const { data: draftShipments } = await supabase
+  .from("inventory_packages")
+  .select(`id, shipments!inner(status, shipment_code, to_organisation_id)`)
+  .eq("shipments.status", "draft");
+```
+
+---
+
+## Package Number Preservation
+
+When adding existing packages to a shipment draft:
+- Original package numbers are preserved (no renumbering)
+- Only `shipment_id` and `package_sequence` are updated
+- Removing a package from draft unlinks it (doesn't delete)
+
+---
+
+## Types Added
+
+```typescript
+// In types.ts
+interface ShipmentPallet {
+  id: string;
+  palletNumber: number;
+  notes: string | null;
+}
+
+interface EditablePackageItem {
+  // ... existing fields
+  isOnTheWay?: boolean;
+  onTheWayFrom?: string | null;
+  onTheWayTo?: string | null;
+}
+```
+
+---
+
+## Server Actions
+
+| Action | Purpose |
+|--------|---------|
+| `createPallet` | Create new pallet for shipment |
+| `deletePallet` | Delete pallet (packages become unassigned) |
+| `assignPackageToPallet` | Assign package to pallet or unassign |
+| `getPackagesInShipmentDrafts` | Get packages in draft shipments for blocking |
+| `getOnTheWayPackages` | Get packages in pending shipments for admin view |
 

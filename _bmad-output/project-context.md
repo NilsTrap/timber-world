@@ -1,9 +1,9 @@
 ---
 project_name: 'Timber-World-Platform'
 user_name: 'Nils'
-date: '2026-02-02'
+date: '2026-02-06'
 status: 'complete'
-sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime', 'session_verification', 'print_functionality']
+sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime', 'session_verification', 'print_functionality', 'shipment_workflow', 'pallet_grouping', 'draft_blocking']
 architecture_ref: '_bmad-output/planning-artifacts/platform/architecture.md'
 ---
 
@@ -183,20 +183,23 @@ When displaying package data, always use these columns in this order:
 
 | # | Column | Type | Notes |
 |---|--------|------|-------|
-| 1 | Shipment | readonly | `shipment_code` |
-| 2 | Package | readonly | `package_number`, totalType: "count" |
-| 3 | Product | dropdown, collapsible | `ref_product_names` |
-| 4 | Species | dropdown, collapsible | `ref_wood_species` |
-| 5 | Humidity | dropdown, collapsible | `ref_humidity` |
-| 6 | Type | dropdown, collapsible | `ref_types` |
-| 7 | Processing | dropdown, collapsible | `ref_processing` |
-| 8 | FSC | dropdown, collapsible | `ref_fsc` |
-| 9 | Quality | dropdown, collapsible | `ref_quality` |
-| 10 | Thickness | text | placeholder "mm" |
-| 11 | Width | text | placeholder "mm" |
-| 12 | Length | text | placeholder "mm" |
-| 13 | Pieces | text, numeric | totalType: "sum" |
-| 14 | Vol m³ | custom/numeric | Auto-calculated or manual, totalType: "sum" |
+| 1 | Pallet | dropdown | Shipment tables only (first position) |
+| 2 | Shipment | readonly | `shipment_code` |
+| 3 | Package | readonly | `package_number`, totalType: "count" |
+| 4 | Product | dropdown, collapsible | `ref_product_names` |
+| 5 | Species | dropdown, collapsible | `ref_wood_species` |
+| 6 | Humidity | dropdown, collapsible | `ref_humidity` |
+| 7 | Type | dropdown, collapsible | `ref_types` |
+| 8 | Processing | dropdown, collapsible | `ref_processing` |
+| 9 | FSC | dropdown, collapsible | `ref_fsc` |
+| 10 | Quality | dropdown, collapsible | `ref_quality` |
+| 11 | Thickness | text | placeholder "mm" |
+| 12 | Width | text | placeholder "mm" |
+| 13 | Length | text | placeholder "mm" |
+| 14 | Pieces | text, numeric | totalType: "sum" |
+| 15 | Vol m³ | custom/numeric | Auto-calculated or manual, totalType: "sum" |
+
+**Note:** Pallet column only appears in shipment detail views. For general inventory tables, start from Shipment column.
 
 ### Editable Table (DataEntryTable)
 
@@ -392,6 +395,94 @@ For printable views (inventory, production outputs), use React portals with prin
 - Print respects current table filters (pass `displayedPackages` not `allPackages`)
 - Resolve dropdown IDs to display values for print output
 - Include summary (total packages, pieces, volume) in header
+
+## Shipment Workflow Patterns
+
+### Status Labels
+
+The shipment status "pending" is displayed as **"On The Way"** throughout the UI (never "Pending"):
+
+| DB Status | UI Label | Description |
+|-----------|----------|-------------|
+| `draft` | Draft | Being prepared, editable |
+| `pending` | On The Way | Sent, in transit |
+| `accepted` | Accepted | Received by recipient |
+| `rejected` | Rejected | Returned/refused |
+| `completed` | Completed | Fully processed |
+
+### Submit Button
+
+The button to send a shipment shows "On The Way" with a truck icon (`<Truck />`), not "Submit".
+
+### Inventory Lifecycle
+
+**When shipment is marked "On The Way" (pending):**
+- Packages are removed from sender's inventory queries
+- Packages appear in admin inventory with amber background (`bg-amber-50`)
+- Truck icon shows in Org column with tooltip "From Org → To Org"
+
+**Query Pattern (exclude pending shipments from producer inventory):**
+```typescript
+// In getProducerPackages, getAvailablePackages:
+.eq("shipments.status", "draft")  // Only draft shipments stay in inventory
+// NOT: .in("shipments.status", ["draft", "pending"])
+```
+
+### Pallet Grouping
+
+Packages within a shipment can be grouped into pallets:
+
+**Database:**
+```sql
+shipment_pallets (id, shipment_id, pallet_number, notes)
+inventory_packages.pallet_id → shipment_pallets.id
+```
+
+**UI (ShipmentPalletTable):**
+- Pallet dropdown column in first position
+- Options: "-" (without pallet), "Pallet 1", "Pallet 2", ..., "+ New Pallet"
+- Packages grouped by pallet with per-pallet subtotals
+- Section labeled "Without Pallet" (not "Loose")
+
+### Bidirectional Draft Blocking (MANDATORY)
+
+Packages cannot be in both production drafts and shipment drafts simultaneously.
+
+**Production Draft → Shipment Selector:**
+```typescript
+// In getShipmentAvailablePackages:
+// Query packages in production drafts
+const { data: draftInputs } = await supabase
+  .from("portal_production_inputs")
+  .select(`package_id, portal_production_entries!inner(status)`)
+  .eq("portal_production_entries.status", "draft");
+
+// Mark packages with inProductionDraft: true
+// UI: Show FileText icon, disabled, bg-amber-50
+```
+
+**Shipment Draft → Production Selector:**
+```typescript
+// In getAvailablePackages:
+// Query packages in shipment drafts
+// Mark packages with shipment info
+// UI: Show Truck icon with tooltip, disabled, bg-blue-50
+```
+
+### Package Number Preservation
+
+When adding existing packages to a shipment:
+- Original package numbers are preserved (no renumbering)
+- Removing a package unlinks it (doesn't delete)
+- Use: `.update({ shipment_id: null, package_sequence: null })` to unlink
+
+### Shipment Entry Display Format
+
+In lists/tables, show shipment entries as:
+```
+{CODE}  {From Org Full Name} → {To Org Full Name}
+Example: TIM-TWG-001  Timber International → The Wooden Good
+```
 
 ## Architecture Reference
 
