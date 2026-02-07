@@ -55,8 +55,8 @@ interface SidebarLinkProps {
 export function SidebarLink({ href, label, iconName, isCollapsed, badge }: SidebarLinkProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  // Exact match only - don't highlight parent routes when on child pages
-  const isActive = pathname === href;
+  // Match exact path OR child routes (e.g., /shipments/[id] highlights /shipments)
+  const isActive = pathname === href || pathname.startsWith(href + "/");
   const Icon = ICON_MAP[iconName] || LayoutDashboard;
 
   // Preserve org filter when navigating between pages

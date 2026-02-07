@@ -9,6 +9,9 @@ import { isValidUUID } from "../types";
  * Get Organisation by ID
  *
  * Fetches a single organisation by its ID with user count.
+ * User count includes both legacy (portal_users.organisation_id) and
+ * multi-org (organization_memberships) users.
+ *
  * Admin only endpoint.
  *
  * @param id - The organisation UUID
@@ -45,15 +48,13 @@ export async function getOrganisationById(
   }
 
   const supabase = await createClient();
-
-  // 4. Fetch organisation with user count
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = supabase as any;
 
-  // Note: Must specify the FK explicitly due to multiple relationships (Epic 10 added user_roles, user_permission_overrides)
+  // 4. Fetch organisation
   const { data, error } = await client
     .from("organisations")
-    .select("id, code, name, is_active, created_at, updated_at, portal_users!portal_users_party_id_fkey(count)")
+    .select("id, code, name, is_active, created_at, updated_at")
     .eq("id", id)
     .single();
 
@@ -73,7 +74,29 @@ export async function getOrganisationById(
     };
   }
 
-  // 5. Transform snake_case to camelCase
+  // 5. Get legacy user IDs (users with organisation_id = this org)
+  const { data: legacyUsers } = await client
+    .from("portal_users")
+    .select("id")
+    .eq("organisation_id", id);
+
+  const legacyUserIds = new Set((legacyUsers || []).map((u: { id: string }) => u.id));
+
+  // 6. Get membership user IDs
+  const { data: memberships } = await client
+    .from("organization_memberships")
+    .select("user_id")
+    .eq("organization_id", id)
+    .eq("is_active", true);
+
+  // Count membership users that aren't already in legacy
+  const additionalMemberCount = (memberships || []).filter(
+    (m: { user_id: string }) => !legacyUserIds.has(m.user_id)
+  ).length;
+
+  const totalUserCount = legacyUserIds.size + additionalMemberCount;
+
+  // 7. Transform snake_case to camelCase
   const organisation: Organisation = {
     id: data.id as string,
     code: data.code as string,
@@ -81,7 +104,7 @@ export async function getOrganisationById(
     isActive: data.is_active as boolean,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
-    userCount: data.portal_users?.[0]?.count ?? 0,
+    userCount: totalUserCount,
   };
 
   return {

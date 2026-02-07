@@ -13,6 +13,10 @@ export { updateOrganisationUser } from "./updateOrganisationUser";
 export { toggleUserActive } from "./toggleUserActive";
 export { deleteOrganisationUser } from "./deleteOrganisationUser";
 
+// Add existing user to organisation
+export { searchUserByEmail, addExistingUserToOrganisation } from "./addExistingUserToOrganisation";
+export type { ExistingUserInfo } from "./addExistingUserToOrganisation";
+
 // User credential actions (Story 7.3)
 export { sendUserCredentials } from "./sendUserCredentials";
 

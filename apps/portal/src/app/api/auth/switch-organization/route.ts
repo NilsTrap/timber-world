@@ -34,11 +34,11 @@ export async function POST(request: NextRequest) {
     // Verify user has membership in this organization
     const supabase = await createClient();
 
-    // Get portal user ID
+    // Get portal user ID and legacy organisation_id
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: portalUser } = await (supabase as any)
       .from("portal_users")
-      .select("id, is_platform_admin")
+      .select("id, is_platform_admin, organisation_id")
       .eq("auth_user_id", session.id)
       .single();
 
@@ -51,21 +51,26 @@ export async function POST(request: NextRequest) {
 
     // Platform admins can switch to any org
     if (!portalUser.is_platform_admin) {
-      // Check membership
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: membership } = await (supabase as any)
-        .from("organization_memberships")
-        .select("id")
-        .eq("user_id", portalUser.id)
-        .eq("organization_id", organizationId)
-        .eq("is_active", true)
-        .single();
+      // Check if target org is the user's legacy primary org
+      const isLegacyOrg = portalUser.organisation_id === organizationId;
 
-      if (!membership) {
-        return NextResponse.json(
-          { error: "No membership in this organization" },
-          { status: 403 }
-        );
+      if (!isLegacyOrg) {
+        // Check organization_memberships
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: membership } = await (supabase as any)
+          .from("organization_memberships")
+          .select("id")
+          .eq("user_id", portalUser.id)
+          .eq("organization_id", organizationId)
+          .eq("is_active", true)
+          .single();
+
+        if (!membership) {
+          return NextResponse.json(
+            { error: "No membership in this organization" },
+            { status: 403 }
+          );
+        }
       }
     }
 

@@ -8,6 +8,9 @@ import type { Organisation, ActionResult } from "../types";
  * Get Organisations
  *
  * Fetches all organisations with user count, sorted by code.
+ * User count includes both legacy (portal_users.organisation_id) and
+ * multi-org (organization_memberships) users.
+ *
  * Admin only endpoint.
  *
  * @param options.includeInactive - If true, includes inactive organisations. Default: false
@@ -35,21 +38,15 @@ export async function getOrganisations(
   }
 
   const supabase = await createClient();
-
-  // 3. Fetch organisations with user count using LEFT JOIN
-  // We use a raw query to get aggregated user counts per organisation
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = supabase as any;
 
-  // Build the active filter for the RPC or query
   const includeInactive = options?.includeInactive ?? false;
 
-  // Use Supabase's ability to select with counts via foreign key relations
-  // portal_users has organisation_id that references organisations.id
-  // Note: Must specify the FK explicitly due to multiple relationships (Epic 10 added user_roles, user_permission_overrides)
+  // 3. Fetch organisations
   let query = client
     .from("organisations")
-    .select("id, code, name, is_active, created_at, updated_at, portal_users!portal_users_party_id_fkey(count)");
+    .select("id, code, name, is_active, created_at, updated_at");
 
   if (!includeInactive) {
     query = query.eq("is_active", true);
@@ -66,18 +63,58 @@ export async function getOrganisations(
     };
   }
 
-  // 4. Transform snake_case to camelCase and extract user count
+  // 4. Fetch all legacy users grouped by org
+  const { data: allLegacyUsers } = await client
+    .from("portal_users")
+    .select("id, organisation_id");
+
+  // Build map of org_id -> set of user IDs
+  const legacyUsersByOrg = new Map<string, Set<string>>();
+  for (const u of (allLegacyUsers || [])) {
+    if (!u.organisation_id) continue;
+    if (!legacyUsersByOrg.has(u.organisation_id)) {
+      legacyUsersByOrg.set(u.organisation_id, new Set());
+    }
+    legacyUsersByOrg.get(u.organisation_id)!.add(u.id);
+  }
+
+  // 5. Fetch all active memberships
+  const { data: allMemberships } = await client
+    .from("organization_memberships")
+    .select("organization_id, user_id")
+    .eq("is_active", true);
+
+  // Build map of org_id -> count of additional members (not in legacy)
+  const additionalCountsByOrg = new Map<string, number>();
+  for (const m of (allMemberships || [])) {
+    const orgId = m.organization_id;
+    const userId = m.user_id;
+
+    // Check if this user is already counted via legacy for this org
+    const legacyUsers = legacyUsersByOrg.get(orgId);
+    if (legacyUsers && legacyUsers.has(userId)) {
+      continue; // Already counted
+    }
+
+    additionalCountsByOrg.set(orgId, (additionalCountsByOrg.get(orgId) || 0) + 1);
+  }
+
+  // 6. Transform and merge counts
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const organisations: Organisation[] = (data || []).map((row: any) => ({
-    id: row.id as string,
-    code: row.code as string,
-    name: row.name as string,
-    isActive: row.is_active as boolean,
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
-    // Supabase returns count as [{ count: number }] for aggregated relations
-    userCount: row.portal_users?.[0]?.count ?? 0,
-  }));
+  const organisations: Organisation[] = (data || []).map((row: any) => {
+    const legacyCount = legacyUsersByOrg.get(row.id)?.size ?? 0;
+    const additionalCount = additionalCountsByOrg.get(row.id) ?? 0;
+
+    return {
+      id: row.id as string,
+      code: row.code as string,
+      name: row.name as string,
+      isActive: row.is_active as boolean,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+      userCount: legacyCount + additionalCount,
+    };
+  });
 
   return {
     success: true,

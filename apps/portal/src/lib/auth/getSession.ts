@@ -1,4 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+
+const CURRENT_ORG_COOKIE = "timber-current-org";
 
 /**
  * User Role Types (Legacy - kept for backward compatibility)
@@ -136,32 +139,59 @@ export async function getSession(): Promise<SessionUser | null> {
     })
   );
 
+  // Add legacy organisation_id to memberships if not already present
+  // This ensures the user can switch to their primary org even without a membership row
+  if (
+    portalUser.organisation_id &&
+    portalUser.organisations &&
+    !memberships.some((m) => m.organizationId === portalUser.organisation_id)
+  ) {
+    memberships.unshift({
+      organizationId: portalUser.organisation_id,
+      organizationCode: portalUser.organisations.code || "",
+      organizationName: portalUser.organisations.name || "",
+      isPrimary: true, // Legacy org is treated as primary
+    });
+  }
+
   // Determine current organization
-  // Priority: 1) viewAs (from cookie/URL), 2) primary membership, 3) first membership, 4) legacy org_id
+  // Priority: 1) cookie (from switcher), 2) primary membership, 3) first membership
   let currentOrganizationId: string | null = null;
   let currentOrganizationCode: string | null = null;
   let currentOrganizationName: string | null = null;
 
-  // TODO: Check for viewAs cookie/parameter (Story 10.14)
+  // Check for organization cookie (set by switch-organization API)
+  const cookieStore = await cookies();
+  const orgCookie = cookieStore.get(CURRENT_ORG_COOKIE);
+  const cookieOrgId = orgCookie?.value;
 
-  // Find primary membership or first membership
-  const primaryMembership = memberships.find((m) => m.isPrimary);
-  const firstMembership = memberships[0];
-  const activeMembership = primaryMembership || firstMembership;
-
-  if (activeMembership) {
-    currentOrganizationId = activeMembership.organizationId;
-    currentOrganizationCode = activeMembership.organizationCode;
-    currentOrganizationName = activeMembership.organizationName;
-  } else if (portalUser.organisation_id) {
-    // Fallback to legacy organisation_id
-    currentOrganizationId = portalUser.organisation_id;
-    currentOrganizationCode = portalUser.organisations?.code ?? null;
-    currentOrganizationName = portalUser.organisations?.name ?? null;
+  // If cookie is set, find that membership
+  if (cookieOrgId) {
+    const cookieMembership = memberships.find(
+      (m) => m.organizationId === cookieOrgId
+    );
+    if (cookieMembership) {
+      currentOrganizationId = cookieMembership.organizationId;
+      currentOrganizationCode = cookieMembership.organizationCode;
+      currentOrganizationName = cookieMembership.organizationName;
+    }
   }
 
-  // For platform admins, current org is null (platform view) unless explicitly set
-  if (isPlatformAdmin && !activeMembership) {
+  // If no cookie or cookie org not in memberships, use primary/first
+  if (!currentOrganizationId) {
+    const primaryMembership = memberships.find((m) => m.isPrimary);
+    const firstMembership = memberships[0];
+    const activeMembership = primaryMembership || firstMembership;
+
+    if (activeMembership) {
+      currentOrganizationId = activeMembership.organizationId;
+      currentOrganizationCode = activeMembership.organizationCode;
+      currentOrganizationName = activeMembership.organizationName;
+    }
+  }
+
+  // For platform admins with no memberships, current org is null (platform view)
+  if (isPlatformAdmin && memberships.length === 0) {
     currentOrganizationId = null;
     currentOrganizationCode = null;
     currentOrganizationName = null;
