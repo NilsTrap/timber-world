@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { usePathname } from "@/i18n/routing";
 import { Link } from "@/i18n/routing";
 import { cn, Button, useScrolledPastHero, useScrollDirection } from "@timber/ui";
-import { siteConfig } from "@timber/config/site";
+import { siteConfig, currentBrand } from "@timber/config";
 import { MobileMenu } from "./MobileMenu";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 
@@ -48,7 +48,7 @@ export function Header({ variant: propVariant }: HeaderProps) {
             className={cn(
               "flex items-center rounded-sm px-px py-px transition-all -ml-3",
               variant === "transparent"
-                ? "bg-white/90 shadow-md"
+                ? "bg-white/70 shadow-md"
                 : ""
             )}
             aria-label={`${siteConfig.name} - Home`}
@@ -56,9 +56,9 @@ export function Header({ variant: propVariant }: HeaderProps) {
             <Image
               src={siteConfig.logo.dark}
               alt={siteConfig.name}
-              width={300}
-              height={150}
-              className="h-14 w-auto"
+              width={600}
+              height={300}
+              className={currentBrand.key === "timber" ? "h-[80px] w-auto" : "h-[148px] w-auto"}
               priority
             />
           </Link>
@@ -71,7 +71,7 @@ export function Header({ variant: propVariant }: HeaderProps) {
               className={cn(
                 "font-medium border-0",
                 variant === "transparent"
-                  ? "bg-forest-green/90 text-white hover:bg-forest-green"
+                  ? "bg-forest-green/70 text-white hover:bg-forest-green"
                   : "bg-forest-green text-white hover:bg-forest-green/90"
               )}
             >
@@ -82,7 +82,7 @@ export function Header({ variant: propVariant }: HeaderProps) {
               className={cn(
                 "font-medium border-0",
                 variant === "transparent"
-                  ? "bg-white/90 text-forest-green hover:bg-white"
+                  ? "bg-white/70 text-forest-green hover:bg-white"
                   : "bg-white text-forest-green hover:bg-white/90 shadow-sm"
               )}
             >
