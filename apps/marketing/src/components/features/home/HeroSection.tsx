@@ -65,8 +65,8 @@ export function HeroSection() {
       />
 
       {/* Content */}
-      <div className="relative z-10 flex h-full flex-col items-center justify-center px-4">
-        <h1 className="font-heading text-5xl md:text-7xl lg:text-8xl text-white text-center max-w-4xl font-bold">
+      <div className="relative z-10 flex h-full flex-col items-center justify-center px-4 pt-32 md:pt-40">
+        <h1 className="font-heading text-4xl md:text-6xl lg:text-7xl text-white text-center max-w-4xl font-normal">
           {t("heroSlogan")}
         </h1>
         <p className="mt-4 text-xl md:text-2xl lg:text-3xl text-white/80 text-center">

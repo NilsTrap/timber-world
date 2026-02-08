@@ -2,6 +2,7 @@ import { setRequestLocale } from "next-intl/server";
 import {
   HeroSection,
   ProductionJourneyWithErrorBoundary,
+  JourneyStageNav,
 } from "@/components/features/home";
 
 type Props = {
@@ -14,11 +15,13 @@ export default async function HomePage({ params }: Props) {
 
   return (
     <div className="journey-scroll-container -mt-16 md:-mt-20">
+      {/* Stage navigation - fixed on left side */}
+      <JourneyStageNav />
       {/* Hero section - first snap point */}
-      <div className="journey-snap-page h-screen w-full">
+      <div className="journey-snap-page h-screen w-full" data-hero>
         <HeroSection />
       </div>
-      {/* Production Journey - 8 stages with stacking cards scroll effect */}
+      {/* Production Journey - 6 stages with stacking cards scroll effect */}
       <ProductionJourneyWithErrorBoundary />
     </div>
   );

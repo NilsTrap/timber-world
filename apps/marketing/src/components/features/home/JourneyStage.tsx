@@ -141,10 +141,10 @@ export function JourneyStage({
               : "opacity-0 translate-y-4"
           }`}
         >
-          <h2 className="font-heading text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-4 drop-shadow-lg">
+          <h2 className="font-heading text-4xl md:text-6xl lg:text-7xl font-normal text-white mb-4 drop-shadow-lg">
             {headline}
           </h2>
-          <p className="text-lg md:text-xl text-white/80 max-w-2xl drop-shadow-md">
+          <p className="text-lg md:text-xl lg:text-2xl text-white/80 max-w-2xl drop-shadow-md">
             {subtext}
           </p>
         </div>
@@ -156,7 +156,6 @@ export function JourneyStage({
           <HorizontalGallery
             images={allGalleryImages}
             galleryLabel={`${headline} gallery`}
-            showCounter={true}
           />
         </div>
       )}

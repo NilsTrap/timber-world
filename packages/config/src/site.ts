@@ -1,8 +1,12 @@
+import { currentBrand } from './brand';
+
 export const siteConfig = {
-  name: 'Timber International',
-  description:
-    'Premium oak panels and wood products - From forest to finished product',
-  url: process.env.NEXT_PUBLIC_APP_URL || 'https://timber-international.com',
+  name: currentBrand.name,
+  shortName: currentBrand.shortName,
+  description: currentBrand.description,
+  url: process.env.NEXT_PUBLIC_APP_URL || currentBrand.url,
+  logo: currentBrand.logo,
+  brand: currentBrand.key,
   defaultLocale: 'en',
   locales: ['en', 'fi', 'sv', 'no', 'da', 'nl', 'de', 'es'],
   navigation: [

@@ -80,7 +80,7 @@ export function JourneyCompletionCTA() {
           className={`relative z-20 flex flex-col items-center justify-center px-6 text-center max-w-3xl ${baseButtonClasses} ${animationClasses}`}
         >
           {/* Headline */}
-          <h2 className="font-heading text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 drop-shadow-lg">
+          <h2 className="font-heading text-4xl md:text-5xl lg:text-6xl font-normal text-white mb-4 drop-shadow-lg">
             {t("journey.ctaHeadline")}
           </h2>
 

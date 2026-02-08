@@ -1,11 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { usePathname } from "@/i18n/routing";
 import { Link } from "@/i18n/routing";
 import { cn, Button, useScrolledPastHero, useScrollDirection } from "@timber/ui";
 import { siteConfig } from "@timber/config/site";
-import { Navigation } from "./Navigation";
 import { MobileMenu } from "./MobileMenu";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 
@@ -40,28 +40,50 @@ export function Header({ variant: propVariant }: HeaderProps) {
         shouldHideNav && "opacity-0 pointer-events-none"
       )}
     >
-      <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between md:h-20">
+      <div className="container mx-auto px-1">
+        <div className="flex h-16 items-start justify-between md:h-20 pt-3">
           {/* Logo */}
           <Link
             href="/"
-            className="flex items-center gap-2 font-heading text-xl font-semibold"
+            className={cn(
+              "flex items-center rounded-sm px-px py-px transition-all -ml-3",
+              variant === "transparent"
+                ? "bg-white/90 shadow-md"
+                : ""
+            )}
             aria-label={`${siteConfig.name} - Home`}
           >
-            {siteConfig.name}
+            <Image
+              src={siteConfig.logo.dark}
+              alt={siteConfig.name}
+              width={300}
+              height={150}
+              className="h-14 w-auto"
+              priority
+            />
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden items-center gap-6 md:flex">
-            <Navigation variant={variant} />
+          <div className="hidden items-center gap-4 md:flex">
             <LanguageSwitcher variant={variant} />
             <Button
               asChild
               className={cn(
-                "font-medium",
+                "font-medium border-0",
                 variant === "transparent"
-                  ? "bg-white text-forest-green hover:bg-white/90"
+                  ? "bg-forest-green/90 text-white hover:bg-forest-green"
                   : "bg-forest-green text-white hover:bg-forest-green/90"
+              )}
+            >
+              <Link href="/products">{t("viewProducts")}</Link>
+            </Button>
+            <Button
+              asChild
+              className={cn(
+                "font-medium border-0",
+                variant === "transparent"
+                  ? "bg-white/90 text-forest-green hover:bg-white"
+                  : "bg-white text-forest-green hover:bg-white/90 shadow-sm"
               )}
             >
               <Link href="/quote">{t("requestQuote")}</Link>

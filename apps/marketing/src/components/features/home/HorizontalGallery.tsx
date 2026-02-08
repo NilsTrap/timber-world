@@ -25,8 +25,6 @@ export type GalleryImage = {
 type HorizontalGalleryProps = {
   /** Array of images to display in the gallery */
   images: GalleryImage[];
-  /** Show "2 of 6" counter (default: true) */
-  showCounter?: boolean;
   /** Additional CSS classes */
   className?: string;
   /** Gallery label for accessibility (stage name) */
@@ -39,7 +37,6 @@ type HorizontalGalleryProps = {
  */
 export function HorizontalGallery({
   images,
-  showCounter = true,
   className = "",
   galleryLabel = "Image gallery",
 }: HorizontalGalleryProps) {
@@ -47,6 +44,8 @@ export function HorizontalGallery({
   const reducedMotion = useReducedMotion();
   const [currentIndex, setCurrentIndex] = useState(0);
   const galleryRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const wasVisibleRef = useRef(true);
 
   // Track current slide via scroll position
   useEffect(() => {
@@ -62,6 +61,35 @@ export function HorizontalGallery({
 
     gallery.addEventListener("scroll", handleScroll, { passive: true });
     return () => gallery.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Reset to first slide when gallery goes fully out of view
+  useEffect(() => {
+    const container = containerRef.current;
+    const gallery = galleryRef.current;
+    if (!container || !gallery) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+
+        const isVisible = entry.isIntersecting;
+
+        // Only reset when transitioning from visible to not visible
+        if (wasVisibleRef.current && !isVisible) {
+          // Gallery just went out of view - reset instantly
+          gallery.scrollTo({ left: 0, behavior: "auto" });
+          setCurrentIndex(0);
+        }
+
+        wasVisibleRef.current = isVisible;
+      },
+      { threshold: 0.5 } // Must be at least 50% out of view
+    );
+
+    observer.observe(container);
+    return () => observer.disconnect();
   }, []);
 
   // Keyboard navigation
@@ -123,12 +151,12 @@ export function HorizontalGallery({
             />
             <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center justify-end pb-24 px-6 text-center pointer-events-none">
               {singleImage.title && (
-                <h3 className="font-heading text-2xl md:text-4xl lg:text-5xl font-bold text-white mb-3 drop-shadow-lg">
+                <h3 className="font-heading text-2xl md:text-4xl lg:text-5xl font-normal text-white mb-3 drop-shadow-lg">
                   {singleImage.title}
                 </h3>
               )}
               {singleImage.description && (
-                <p className="text-base md:text-lg text-white/80 max-w-2xl drop-shadow-md">
+                <p className="text-lg md:text-xl lg:text-2xl text-white/80 max-w-2xl drop-shadow-md">
                   {singleImage.description}
                 </p>
               )}
@@ -144,6 +172,7 @@ export function HorizontalGallery({
 
   return (
     <div
+      ref={containerRef}
       className={`relative w-full h-full ${className}`}
       role="region"
       aria-roledescription="carousel"
@@ -197,12 +226,12 @@ export function HorizontalGallery({
             {(image.title || image.description) && (
               <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center justify-end pb-24 px-6 text-center pointer-events-none">
                 {image.title && (
-                  <h3 className="font-heading text-2xl md:text-4xl lg:text-5xl font-bold text-white mb-3 drop-shadow-lg">
+                  <h3 className="font-heading text-2xl md:text-4xl lg:text-5xl font-normal text-white mb-3 drop-shadow-lg">
                     {image.title}
                   </h3>
                 )}
                 {image.description && (
-                  <p className="text-base md:text-lg text-white/80 max-w-2xl drop-shadow-md">
+                  <p className="text-lg md:text-xl lg:text-2xl text-white/80 max-w-2xl drop-shadow-md">
                     {image.description}
                   </p>
                 )}
@@ -273,12 +302,6 @@ export function HorizontalGallery({
         </button>
       )}
 
-      {/* Counter */}
-      {showCounter && (
-        <div className="absolute top-4 right-4 z-30 px-3 py-1 rounded-full bg-black/50 text-white text-sm font-medium pointer-events-none">
-          {t("journey.imageOf", { current: currentIndex + 1, total: images.length })}
-        </div>
-      )}
 
       {/* Dot indicators */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex gap-2">

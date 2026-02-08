@@ -1,19 +1,12 @@
 import type { Metadata } from "next";
-import { Playfair_Display, Inter } from "next/font/google";
+import { Poppins } from "next/font/google";
 import "./globals.css";
 import { siteConfig } from "@timber/config/site";
 
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
+const poppins = Poppins({
+  variable: "--font-poppins",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["300", "400", "500", "600", "700"],
   display: "swap",
 });
 
@@ -34,7 +27,7 @@ export default function RootLayout({
   return (
     <html>
       <body
-        className={`${playfair.variable} ${inter.variable} antialiased min-h-screen`}
+        className={`${poppins.variable} antialiased min-h-screen`}
       >
         {children}
       </body>
