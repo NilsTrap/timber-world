@@ -14,7 +14,7 @@ export default async function HomePage({ params }: Props) {
   setRequestLocale(locale);
 
   return (
-    <div className="journey-scroll-container -mt-16 md:-mt-20">
+    <div className="journey-scroll-container -mt-24 md:-mt-28">
       {/* Stage navigation - fixed on left side */}
       <JourneyStageNav />
       {/* Hero section - first snap point */}
