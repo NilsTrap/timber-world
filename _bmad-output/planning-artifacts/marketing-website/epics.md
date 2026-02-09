@@ -648,11 +648,20 @@ So that **I can quickly find products matching my specifications**.
 
 ---
 
-### Story 3.3: Build Products API and Data Fetching
+### Story 3.3: Build Products API and Data Fetching ✅ IMPLEMENTED
 
 As a **developer**,
 I want **an API endpoint for fetching filtered products**,
 So that **the catalog can display products based on user selections**.
+
+**Implementation Notes (2026-02-09):**
+- Implemented as Server Action in `apps/marketing/src/lib/actions/products.ts`
+- Data sourced from `inventory_packages` table (real stock data from INERCE/MAS organizations)
+- Extended `StockProduct` type includes display fields for dimension ranges
+- Supports filtering by species, type, and text search
+- Supports sorting by all columns with default alphabetical order
+- Price columns (unit_price_piece, unit_price_m3, unit_price_m2) added to inventory_packages
+- MAS prices imported from products table via migration
 
 **Acceptance Criteria:**
 
@@ -669,11 +678,21 @@ So that **the catalog can display products based on user selections**.
 
 ---
 
-### Story 3.4: Implement ProductTable with Pricing Display
+### Story 3.4: Implement ProductTable with Pricing Display ✅ IMPLEMENTED
 
 As a **visitor**,
 I want **to see products displayed with clear pricing and availability information**,
 So that **I can compare options and make informed decisions**.
+
+**Implementation Notes (2026-02-09):**
+- Implemented in `apps/marketing/src/components/features/catalog/ProductTable.tsx`
+- Columns: Product, Thickness, Width, Length, Pieces, m³, €/m³, €/Piece, €/m²
+- Numeric columns right-aligned for proper number comparison
+- Dimension ranges displayed (e.g., "100-350") using display fields
+- European number formatting with comma decimal separator
+- "On Request" displayed when prices are not available
+- "-" displayed for missing piece counts
+- Default alphabetical sorting by product name
 
 **Acceptance Criteria:**
 
@@ -735,11 +754,20 @@ So that **I can browse products from any device**.
 
 **Goal:** Visitors can submit quote requests for stock or custom products via structured form or AI chatbot and receive confirmation with specific response timelines.
 
-### Story 4.1: Create Quote Request Page Layout
+### Story 4.1: Create Quote Request Page Layout ✅ PARTIALLY IMPLEMENTED
 
 As a **visitor**,
 I want **to access a quote request page with clear options**,
 So that **I can choose how to request a quote**.
+
+**Implementation Notes (2026-02-09):**
+- Implemented in `apps/marketing/src/app/[locale]/quote/page.tsx`
+- Two-column layout: Quote form (left), Contact info card (right)
+- Contact info displays company address (Latvia), email, phone
+- Footer hidden on quote page via ConditionalFooter component
+- SEO metadata with proper hreflang tags
+- i18n support for all 8 languages
+- **Not yet implemented:** Chat mode, product selection from catalog
 
 **Acceptance Criteria:**
 
@@ -754,11 +782,21 @@ So that **I can choose how to request a quote**.
 
 ---
 
-### Story 4.2: Build Quote Request Form
+### Story 4.2: Build Quote Request Form ✅ IMPLEMENTED
 
 As a **visitor**,
 I want **to submit a quote request via a structured form**,
 So that **I can provide my requirements in a clear format** (FR17).
+
+**Implementation Notes (2026-02-09):**
+- Implemented in `apps/marketing/src/components/features/quote/QuoteForm.tsx`
+- Contact section: Name*, Company, Email*, Phone
+- Product specs: Product (full width), Species/Type/Quality/Humidity (row), Thickness/Width/Length/Pieces (row)
+- Additional notes textarea with preselected products support
+- Form submission via Server Action sends email to info@timber-international.com
+- Success state shows thank you message
+- Error handling with user-friendly error display
+- Full i18n support across all 8 languages
 
 **Acceptance Criteria:**
 
@@ -815,11 +853,19 @@ So that **I can describe my needs naturally** (FR18, FR19, FR20).
 
 ---
 
-### Story 4.5: Submit Quote and Send Notifications
+### Story 4.5: Submit Quote and Send Notifications ✅ PARTIALLY IMPLEMENTED
 
 As a **visitor**,
 I want **my quote request to be submitted and confirmed**,
 So that **I know Timber International received my request** (FR26).
+
+**Implementation Notes (2026-02-09):**
+- Implemented in `apps/marketing/src/lib/actions/quote.ts`
+- Uses Resend API for email delivery (requires RESEND_API_KEY env var)
+- Sends formatted HTML and plain text email to info@timber-international.com
+- Email includes all form fields with proper formatting
+- In-form success message displayed on submission
+- **Not yet implemented:** Database storage, visitor confirmation email, reference number
 
 **Acceptance Criteria:**
 
