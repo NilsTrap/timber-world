@@ -164,9 +164,9 @@ export function ProductCatalog({
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <main className="flex-1 min-w-0 flex flex-col">
           {/* Mobile Filter Button */}
-          <div className="flex-shrink-0 lg:hidden mb-4">
+          <div className="flex-shrink-0 lg:hidden mb-4 relative z-10">
             <ProductFilterDrawer
               filters={filters}
               filterOptions={filterOptions}
@@ -195,7 +195,7 @@ export function ProductCatalog({
               </div>
 
               {/* Mobile/Tablet Cards */}
-              <div className="lg:hidden overflow-y-auto">
+              <div className="lg:hidden overflow-y-auto flex-1">
                 <ProductGrid
                   products={products}
                   selectedProducts={selectedProducts}
