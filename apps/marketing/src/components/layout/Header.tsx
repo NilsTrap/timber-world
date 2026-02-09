@@ -46,7 +46,7 @@ export function Header({ variant: propVariant }: HeaderProps) {
           <Link
             href="/"
             className={cn(
-              "flex items-center rounded-sm px-px py-px transition-all -ml-3",
+              "flex items-center rounded-sm px-px py-px transition-all -ml-3 cursor-pointer",
               variant === "transparent"
                 ? "bg-white/70 shadow-md"
                 : ""
@@ -58,8 +58,12 @@ export function Header({ variant: propVariant }: HeaderProps) {
               alt={siteConfig.name}
               width={600}
               height={300}
-              className={currentBrand.key === "timber" ? "h-[80px] w-auto" : "h-[148px] w-auto"}
+              className={cn(
+                "pointer-events-none select-none",
+                currentBrand.key === "timber" ? "h-[80px] w-auto" : "h-[148px] w-auto"
+              )}
               priority
+              draggable={false}
             />
           </Link>
 

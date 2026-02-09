@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, useEffect } from "react";
 
 type ScrollDirection = "up" | "down" | "idle";
 
@@ -21,11 +21,24 @@ function handleScroll() {
   listeners.forEach((listener) => listener());
 }
 
+// Reset state when scroll position is at top (handles navigation)
+function resetIfAtTop() {
+  if (window.scrollY === 0) {
+    lastScrollY = 0;
+    direction = "idle";
+    listeners.forEach((listener) => listener());
+  }
+}
+
 function subscribe(callback: () => void): () => void {
   if (listeners.size === 0) {
     window.addEventListener("scroll", handleScroll, { passive: true });
   }
   listeners.add(callback);
+
+  // Check and reset on subscribe (handles navigation)
+  resetIfAtTop();
+
   return () => {
     listeners.delete(callback);
     if (listeners.size === 0) {
@@ -46,7 +59,15 @@ function getServerSnapshot(): ScrollDirection {
  * Hook to detect scroll direction using useSyncExternalStore.
  * Returns 'up', 'down', or 'idle' based on scroll direction.
  * Uses a shared listener to avoid multiple scroll event handlers.
+ * Automatically resets to 'idle' when scroll position is at top.
  */
 export function useScrollDirection(): ScrollDirection {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const scrollDirection = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+  // Reset state on mount to handle navigation
+  useEffect(() => {
+    resetIfAtTop();
+  }, []);
+
+  return scrollDirection;
 }
