@@ -48,11 +48,11 @@ export function ProductFilterDrawer({
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-[320px] overflow-y-auto p-0">
-        <SheetHeader className="p-4 border-b">
+      <SheetContent side="left" className="w-[320px] p-0 flex flex-col">
+        <SheetHeader className="p-4 border-b flex-shrink-0">
           <SheetTitle>{t("filters")}</SheetTitle>
         </SheetHeader>
-        <div className="p-4">
+        <div className="flex-1 overflow-y-auto p-4">
           <ProductFilter
             filters={filters}
             filterOptions={filterOptions}
