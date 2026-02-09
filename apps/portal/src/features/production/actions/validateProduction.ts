@@ -648,7 +648,6 @@ export async function validateProduction(
     organisation_id: organisationId,
     production_entry_id: productionEntryId,
     shipment_id: null,
-    package_number: output.package_number,
     package_sequence: index + 1,
     ...buildOutputFields(output),
   }));
