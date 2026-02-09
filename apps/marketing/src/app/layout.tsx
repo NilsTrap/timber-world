@@ -26,6 +26,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="bg-warm-cream">
+      <head>
+        {/* Preload hero video for faster initial display */}
+        <link
+          rel="preload"
+          href="/hero/hero.mp4"
+          as="video"
+          type="video/mp4"
+        />
+      </head>
       <body
         className={`${poppins.variable} antialiased min-h-screen bg-warm-cream`}
       >
