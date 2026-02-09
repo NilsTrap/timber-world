@@ -11,7 +11,10 @@ export type Database = {
         Row: {
           id: string
           sku: string
+          name: string
           species: string
+          humidity: string
+          processing: string
           width: number
           length: number
           thickness: number

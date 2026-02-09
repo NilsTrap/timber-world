@@ -86,6 +86,18 @@ export {
   EmptyState,
   ListCard,
 } from "./components/page-layout";
+export {
+  Sheet,
+  SheetPortal,
+  SheetOverlay,
+  SheetTrigger,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetFooter,
+  SheetTitle,
+  SheetDescription,
+} from "./components/sheet";
 
 // Utils
 export { cn } from "./utils";

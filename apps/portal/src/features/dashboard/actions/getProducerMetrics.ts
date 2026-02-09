@@ -28,7 +28,8 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
 
   // Query 1: Total available inventory volume
   // Uses same pattern as getProducerPackages: shipment packages + production packages
-  let totalInventoryM3 = 0;
+  // IMPORTANT: Must deduplicate by package ID to avoid double-counting
+  const allPackages: { id: string; volume_m3: number }[] = [];
 
   // 1a. Shipment-sourced packages (shipped to this producer's facility, not consumed)
   // Only include packages from shipments that have been accepted or completed
@@ -36,7 +37,7 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: shipmentPkgs, error: shipmentError } = await (supabase as any)
       .from("inventory_packages")
-      .select("volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(to_organisation_id, status)")
+      .select("id, volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(to_organisation_id, status)")
       .eq("shipments.to_organisation_id", orgId)
       .in("shipments.status", ["accepted", "completed"])
       .neq("status", "consumed");
@@ -44,8 +45,7 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
     if (shipmentError) {
       console.error("[getProducerMetrics] Failed to fetch shipment packages:", shipmentError.message);
     } else if (shipmentPkgs) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      totalInventoryM3 += shipmentPkgs.reduce((sum: number, pkg: any) => sum + (Number(pkg.volume_m3) || 0), 0);
+      allPackages.push(...shipmentPkgs);
     }
   }
 
@@ -54,15 +54,14 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: productionPkgs, error: productionError } = await (supabase as any)
       .from("inventory_packages")
-      .select("volume_m3, portal_production_entries!inner(organisation_id)")
+      .select("id, volume_m3, portal_production_entries!inner(organisation_id)")
       .eq("portal_production_entries.organisation_id", orgId)
       .eq("status", "produced");
 
     if (productionError) {
       console.error("[getProducerMetrics] Failed to fetch production packages:", productionError.message);
     } else if (productionPkgs) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      totalInventoryM3 += productionPkgs.reduce((sum: number, pkg: any) => sum + (Number(pkg.volume_m3) || 0), 0);
+      allPackages.push(...productionPkgs);
     }
   }
 
@@ -71,7 +70,7 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: directPkgs, error: directError } = await (supabase as any)
       .from("inventory_packages")
-      .select("volume_m3")
+      .select("id, volume_m3")
       .eq("organisation_id", orgId)
       .is("shipment_id", null)
       .is("production_entry_id", null)
@@ -80,8 +79,7 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
     if (directError) {
       console.error("[getProducerMetrics] Failed to fetch direct packages:", directError.message);
     } else if (directPkgs) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      totalInventoryM3 += directPkgs.reduce((sum: number, pkg: any) => sum + (Number(pkg.volume_m3) || 0), 0);
+      allPackages.push(...directPkgs);
     }
   }
 
@@ -91,7 +89,7 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: outgoingDraftPkgs, error: outgoingDraftError } = await (supabase as any)
       .from("inventory_packages")
-      .select("volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(from_organisation_id, status)")
+      .select("id, volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(from_organisation_id, status)")
       .eq("shipments.from_organisation_id", orgId)
       .eq("shipments.status", "draft")
       .neq("status", "consumed");
@@ -99,8 +97,17 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
     if (outgoingDraftError) {
       console.error("[getProducerMetrics] Failed to fetch outgoing draft packages:", outgoingDraftError.message);
     } else if (outgoingDraftPkgs) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      totalInventoryM3 += outgoingDraftPkgs.reduce((sum: number, pkg: any) => sum + (Number(pkg.volume_m3) || 0), 0);
+      allPackages.push(...outgoingDraftPkgs);
+    }
+  }
+
+  // Deduplicate by package ID and sum volumes
+  const seenIds = new Set<string>();
+  let totalInventoryM3 = 0;
+  for (const pkg of allPackages) {
+    if (!seenIds.has(pkg.id)) {
+      seenIds.add(pkg.id);
+      totalInventoryM3 += Number(pkg.volume_m3) || 0;
     }
   }
 

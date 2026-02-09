@@ -41,7 +41,7 @@ export function Header({ variant: propVariant }: HeaderProps) {
       )}
     >
       <div className="container mx-auto px-1">
-        <div className="flex h-16 items-start justify-between md:h-20 pt-3">
+        <div className="flex h-20 items-start justify-between md:h-24 pt-3">
           {/* Logo */}
           <Link
             href="/"
