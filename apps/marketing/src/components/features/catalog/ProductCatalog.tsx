@@ -144,18 +144,15 @@ export function ProductCatalog({
   return (
     <div className="container mx-auto pl-0 pr-4">
       {/* Header */}
-      <div className="py-1 flex items-baseline gap-6">
+      <div className="py-1">
         <h1 className="text-3xl font-semibold tracking-tight text-charcoal">
           {t("title")}
         </h1>
-        <p className="text-muted-foreground">
-          {t("subtitleShort")}
-        </p>
       </div>
 
       <div className="flex gap-8 mt-4" style={{ height: 'calc(100vh - 13rem)' }}>
         {/* Desktop Sidebar Filters */}
-        <aside className="hidden lg:block w-[220px] flex-shrink-0 overflow-y-auto pr-2">
+        <aside className="hidden lg:block w-[180px] flex-shrink-0">
           <ProductFilter
             filters={filters}
             filterOptions={filterOptions}
@@ -167,32 +164,24 @@ export function ProductCatalog({
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0 overflow-y-auto">
-          {/* Mobile Filter Button + Results Count */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="lg:hidden">
-              <ProductFilterDrawer
-                filters={filters}
-                filterOptions={filterOptions}
-                activeFilterCount={activeFilterCount}
-                onFilterChange={handleFilterChange}
-                onFscChange={handleFscChange}
-                onClearFilters={handleClearFilters}
-              />
-            </div>
-            <p className={cn(
-              "text-sm text-muted-foreground",
-              isPending && "opacity-50"
-            )}>
-              {t("productCount", { count: total })}
-            </p>
+        <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          {/* Mobile Filter Button */}
+          <div className="flex-shrink-0 lg:hidden mb-4">
+            <ProductFilterDrawer
+              filters={filters}
+              filterOptions={filterOptions}
+              activeFilterCount={activeFilterCount}
+              onFilterChange={handleFilterChange}
+              onFscChange={handleFscChange}
+              onClearFilters={handleClearFilters}
+            />
           </div>
 
           {/* Products Display */}
           {products.length > 0 ? (
-            <>
+            <div className="flex-1 min-h-0 flex flex-col">
               {/* Desktop Table */}
-              <div className="hidden lg:block">
+              <div className="hidden lg:flex lg:flex-col flex-1 min-h-0">
                 <ProductTable
                   products={products}
                   selectedProducts={selectedProducts}
@@ -206,7 +195,7 @@ export function ProductCatalog({
               </div>
 
               {/* Mobile/Tablet Cards */}
-              <div className="lg:hidden">
+              <div className="lg:hidden overflow-y-auto">
                 <ProductGrid
                   products={products}
                   selectedProducts={selectedProducts}
@@ -217,7 +206,7 @@ export function ProductCatalog({
 
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="mt-6 flex items-center justify-between">
+                <div className="flex-shrink-0 mt-6 flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
                     {t("pagination.showing", {
                       from: (page - 1) * pageSize + 1,
@@ -246,7 +235,7 @@ export function ProductCatalog({
                   </div>
                 </div>
               )}
-            </>
+            </div>
           ) : (
             <div className="text-center py-16 bg-background rounded-lg border">
               <p className="text-lg font-medium text-charcoal">{t("noResults")}</p>

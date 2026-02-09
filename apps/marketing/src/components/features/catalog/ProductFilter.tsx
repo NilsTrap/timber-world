@@ -103,8 +103,9 @@ export function ProductFilter({
   const [lengthOpen, setLengthOpen] = useState(false);
 
   return (
-    <div className="bg-background rounded-lg border">
-      <div className="sticky top-0 bg-background z-10 p-4 pb-2 border-b">
+    <div className="bg-background rounded-lg border flex flex-col h-full overflow-hidden">
+      {/* Fixed Header */}
+      <div className="flex-shrink-0 p-4 pb-2 border-b rounded-t-lg bg-background">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-charcoal flex items-center gap-2">
             {t("filters")}
@@ -126,7 +127,8 @@ export function ProductFilter({
         </div>
       </div>
 
-      <div className="divide-y divide-border p-4 pt-2">
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto divide-y divide-border p-4 pt-2">
         {/* 1. Product - no filter, just placeholder */}
         <div className="border-b border-border">
           <button
