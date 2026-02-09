@@ -39,6 +39,7 @@ export default async function ProductsPage({ params, searchParams }: Props) {
 
   // Parse search params for initial data fetch
   const filters = {
+    product: parseArrayParam(search.product),
     species: parseArrayParam(search.species),
     width: parseArrayParam(search.width),
     length: parseArrayParam(search.length),
@@ -69,6 +70,7 @@ export default async function ProductsPage({ params, searchParams }: Props) {
         initialSortBy={sortBy}
         initialSortOrder={sortOrder as "asc" | "desc"}
         filterOptions={filterOptionsResult.success ? filterOptionsResult.data : {
+          products: [],
           species: [],
           widths: [],
           lengths: [],

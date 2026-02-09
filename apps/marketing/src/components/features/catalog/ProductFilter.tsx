@@ -129,27 +129,16 @@ export function ProductFilter({
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto divide-y divide-border p-4 pt-2">
-        {/* 1. Product - no filter, just placeholder */}
-        <div className="border-b border-border">
-          <button
-            type="button"
-            onClick={() => setProductOpen(!productOpen)}
-            className="flex items-center justify-between w-full py-3 text-left"
-          >
-            <span className="text-sm font-medium text-charcoal">{t("product")}</span>
-            <ChevronDown className={cn(
-              "h-4 w-4 text-muted-foreground transition-transform",
-              productOpen && "rotate-180"
-            )} />
-          </button>
-          {productOpen && (
-            <div className="pb-3">
-              <p className="text-xs text-muted-foreground italic">Search not available</p>
-            </div>
-          )}
-        </div>
+        {/* Product */}
+        <FilterSection
+          title={t("product")}
+          options={filterOptions.products ?? []}
+          selected={filters.product ?? []}
+          onChange={(values) => onFilterChange("product", values)}
+          defaultOpen={productOpen}
+        />
 
-        {/* 2. Species */}
+        {/* Species */}
         <FilterSection
           title={t("species")}
           options={filterOptions.species}

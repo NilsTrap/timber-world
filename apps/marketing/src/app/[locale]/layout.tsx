@@ -7,7 +7,7 @@ import { siteConfig } from "@timber/config/site";
 import { generateAlternateLinks, generateCanonical } from "@timber/config/hreflang";
 import { SkipLink } from "@/components/layout/SkipLink";
 import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import { ConditionalFooter } from "@/components/layout/ConditionalFooter";
 
 type Props = {
   children: React.ReactNode;
@@ -66,7 +66,7 @@ export default async function LocaleLayout({ children, params }: Props) {
       <main id="main-content" className="pt-24 md:pt-28">
         {children}
       </main>
-      <Footer />
+      <ConditionalFooter />
     </NextIntlClientProvider>
   );
 }

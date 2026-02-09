@@ -37,7 +37,7 @@ export function SortableHeader({
       onClick={handleClick}
       className={cn(
         "flex items-center gap-1 hover:text-foreground transition-colors",
-        align === "right" && "flex-row-reverse ml-auto"
+        align === "right" && "ml-auto"
       )}
     >
       <span>{label}</span>

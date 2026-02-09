@@ -4,13 +4,12 @@ import { useState, useTransition, useCallback, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@timber/ui";
-import type { Product, ProductType } from "@timber/database";
 import { ProductFilter } from "./ProductFilter";
 import { ProductFilterDrawer } from "./ProductFilterDrawer";
 import { ProductTable } from "./ProductTable";
 import { ProductGrid } from "./ProductGrid";
 import { ProductSelectionBar } from "./ProductSelectionBar";
-import { getProducts, type ProductFilters, type ProductsResponse, type FilterOptions } from "@/lib/actions/products";
+import { getProducts, type ProductFilters, type ProductsResponse, type FilterOptions, type StockProduct } from "@/lib/actions/products";
 
 interface ProductCatalogProps {
   initialProducts: ProductsResponse;
@@ -36,7 +35,7 @@ export function ProductCatalog({
   const [isPending, startTransition] = useTransition();
 
   // State
-  const [products, setProducts] = useState<Product[]>(initialProducts.products);
+  const [products, setProducts] = useState<StockProduct[]>(initialProducts.products);
   const [total, setTotal] = useState(initialProducts.total);
   const [page, setPage] = useState(initialPage);
   const [filters, setFilters] = useState<ProductFilters>(initialFilters);
@@ -52,6 +51,7 @@ export function ProductCatalog({
     const params = new URLSearchParams();
 
     // Add filters to URL
+    if (newFilters.product?.length) newFilters.product.forEach(v => params.append("product", v));
     if (newFilters.species?.length) newFilters.species.forEach(v => params.append("species", v));
     if (newFilters.width?.length) newFilters.width.forEach(v => params.append("width", v));
     if (newFilters.length?.length) newFilters.length.forEach(v => params.append("length", v));
@@ -142,7 +142,7 @@ export function ProductCatalog({
   ).length;
 
   return (
-    <div className="container mx-auto pl-0 pr-4">
+    <div className="pl-8 pr-8">
       {/* Header */}
       <div className="py-1">
         <h1 className="text-3xl font-semibold tracking-tight text-charcoal">
@@ -204,37 +204,6 @@ export function ProductCatalog({
                 />
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex-shrink-0 mt-6 flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    {t("pagination.showing", {
-                      from: (page - 1) * pageSize + 1,
-                      to: Math.min(page * pageSize, total),
-                      total,
-                    })}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handlePageChange(page - 1)}
-                      disabled={page <= 1 || isPending}
-                      className="px-3 py-1.5 text-sm rounded-md border border-input bg-background hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {t("pagination.previous")}
-                    </button>
-                    <span className="text-sm">
-                      {t("pagination.page", { current: page, total: totalPages })}
-                    </span>
-                    <button
-                      onClick={() => handlePageChange(page + 1)}
-                      disabled={page >= totalPages || isPending}
-                      className="px-3 py-1.5 text-sm rounded-md border border-input bg-background hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {t("pagination.next")}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <div className="text-center py-16 bg-background rounded-lg border">
