@@ -99,9 +99,14 @@ export async function validateProduction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let deletedOutputPackages: any[] = [];
 
+  // Track output updates for rollback (re-validation update-in-place flow)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updatedOutputOriginals: Array<{ id: string; original: any }> = [];
+  const insertedOutputIds: string[] = [];
+
   // Helper to revert status and restore inventory on failure
   const revertChanges = async () => {
-    console.log(`[validateProduction] Rolling back - deducted: ${deductedPackages.length}, restored: ${restoredPackages.length}, deleted outputs: ${deletedOutputPackages.length}`);
+    console.log(`[validateProduction] Rolling back - deducted: ${deductedPackages.length}, restored: ${restoredPackages.length}, deleted outputs: ${deletedOutputPackages.length}, updated outputs: ${updatedOutputOriginals.length}, inserted outputs: ${insertedOutputIds.length}`);
 
     try {
       // 1. Batch-fetch all packages that need rollback
@@ -175,7 +180,29 @@ export async function validateProduction(
           .eq("id", packageId)
       );
 
-      // Recreate deleted output packages - for re-validation
+      // Restore updated output packages to their original field values
+      for (const { id, original } of updatedOutputOriginals) {
+        rollbackPromises.push(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (supabase as any)
+            .from("inventory_packages")
+            .update(original)
+            .eq("id", id)
+        );
+      }
+
+      // Delete any newly inserted output packages
+      if (insertedOutputIds.length > 0) {
+        rollbackPromises.push(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (supabase as any)
+            .from("inventory_packages")
+            .delete()
+            .in("id", insertedOutputIds)
+        );
+      }
+
+      // Recreate deleted orphan output packages - for re-validation
       if (deletedOutputPackages.length > 0) {
         rollbackPromises.push(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -333,9 +360,24 @@ export async function validateProduction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const packageNumbers = outputs.map((o: any) => o.package_number);
 
+  // Always fetch existing output packages for this entry (handles re-validation AND
+  // entries reverted to draft that still have inventory packages from a previous validation)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existingOutputPkgs, error: existingOutputError } = await (supabase as any)
+    .from("inventory_packages")
+    .select("*")
+    .eq("production_entry_id", productionEntryId);
+
+  if (existingOutputError) {
+    console.error("[validateProduction] Failed to fetch existing output packages:", existingOutputError);
+  }
+
+  const hasExistingOutputs = (existingOutputPkgs?.length ?? 0) > 0;
+  console.log(`[validateProduction] Existing output packages: ${existingOutputPkgs?.length ?? 0}, hasExistingOutputs: ${hasExistingOutputs}, isRevalidation: ${isRevalidation}`);
+
   // Pre-check: verify package numbers won't conflict with existing inventory within the same organization
   // Package numbers are unique per organization, not globally
-  // For re-validation, exclude packages from this entry (they'll be deleted)
+  // When existing outputs exist, exclude packages from this entry (they'll be updated in place)
   if (packageNumbers.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (supabase as any)
@@ -344,7 +386,7 @@ export async function validateProduction(
       .eq("organisation_id", organisationId)
       .in("package_number", packageNumbers);
 
-    if (isRevalidation) {
+    if (hasExistingOutputs) {
       query = query.neq("production_entry_id", productionEntryId);
     }
 
@@ -357,30 +399,20 @@ export async function validateProduction(
     }
   }
 
-  // For re-validation: NOW restore inventory and delete outputs (after all preconditions passed)
+  // For re-validation: restore inventory state (undo previous input deductions)
+  // Only when entry was "validated" — if reverted to "draft", inputs were already restored
   if (isRevalidation) {
-    // 1. Batch-fetch all input packages + existing outputs in parallel
     const inputPackageIds = [...new Set(inputs.map((i: { package_id: string }) => i.package_id))];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [inputPkgsResult, existingOutputsResult] = await Promise.all([
-      (supabase as any)
-        .from("inventory_packages")
-        .select("id, pieces, volume_m3, status")
-        .in("id", inputPackageIds),
-      (supabase as any)
-        .from("inventory_packages")
-        .select("*")
-        .eq("production_entry_id", productionEntryId),
-    ]);
+    const { data: inputPkgsData } = await (supabase as any)
+      .from("inventory_packages")
+      .select("id, pieces, volume_m3, status")
+      .in("id", inputPackageIds);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pkgMap = new Map<string, any>(
-      (inputPkgsResult.data || []).map((p: any) => [p.id, p])
+      (inputPkgsData || []).map((p: any) => [p.id, p])
     );
-
-    if (existingOutputsResult.data) {
-      deletedOutputPackages = existingOutputsResult.data;
-    }
 
     // Group inputs by package_id (handle duplicates safely by summing deductions)
     const deductionsByPkg = new Map<string, { piecesToRestore: number; volumeToRestore: number }>();
@@ -437,13 +469,6 @@ export async function validateProduction(
         restoredPackages.push({ packageId, piecesRestored, volumeRestored, wasConsumed });
       }
     }
-
-    // 3. Delete existing output inventory packages for this entry
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
-      .from("inventory_packages")
-      .delete()
-      .eq("production_entry_id", productionEntryId);
   }
 
   // 5. Compute totals
@@ -596,14 +621,9 @@ export async function validateProduction(
     }
   }
 
-  // 5. Create output inventory packages (using existing package numbers from draft)
+  // 5. Create/update output inventory packages (using existing package numbers from draft)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const outputPackages = outputs.map((output: any, index: number) => ({
-    organisation_id: organisationId,
-    production_entry_id: productionEntryId,
-    shipment_id: null,
-    package_number: output.package_number,
-    package_sequence: index + 1,
+  const buildOutputFields = (output: any) => ({
     product_name_id: output.product_name_id,
     wood_species_id: output.wood_species_id,
     humidity_id: output.humidity_id,
@@ -619,25 +639,131 @@ export async function validateProduction(
     volume_is_calculated: false,
     status: "produced",
     notes: output.notes || null,
+    package_number: output.package_number,
+  });
+
+  // Build all output packages with their fields
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const outputPackages = outputs.map((output: any, index: number) => ({
+    organisation_id: organisationId,
+    production_entry_id: productionEntryId,
+    shipment_id: null,
+    package_number: output.package_number,
+    package_sequence: index + 1,
+    ...buildOutputFields(output),
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: insertError } = await (supabase as any)
-    .from("inventory_packages")
-    .insert(outputPackages);
+  if (hasExistingOutputs) {
+    // Update-in-place flow: sort existing by sequence, update by ID, insert extras, delete orphans
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sortedExisting = [...(existingOutputPkgs || [])].sort(
+      (a: any, b: any) => (Number(a.package_sequence) || 0) - (Number(b.package_sequence) || 0)
+    );
+    const reusableCount = Math.min(outputs.length, sortedExisting.length);
 
-  if (insertError) {
-    console.error("[validateProduction] Failed to create output packages:", insertError);
-    await revertChanges();
-    // Provide user-friendly error message
-    if (insertError.message?.includes("package_number") && insertError.message?.includes("null")) {
-      return {
-        success: false,
-        error: "Please assign package numbers to all outputs first. Use the 'Assign Package Numbers' button before validating.",
-        code: "MISSING_PACKAGE_NUMBERS"
-      };
+    console.log(`[validateProduction] Update-in-place: ${sortedExisting.length} existing, ${outputs.length} new outputs, reusing ${reusableCount}, inserting ${Math.max(0, outputs.length - sortedExisting.length)}, orphaning ${Math.max(0, sortedExisting.length - outputs.length)}`);
+
+    // 1. UPDATE existing packages by ID (reuse first N)
+    if (reusableCount > 0) {
+      // Save originals for rollback
+      for (let i = 0; i < reusableCount; i++) {
+        const original = { ...sortedExisting[i] };
+        delete original.id;
+        delete original.created_at;
+        updatedOutputOriginals.push({ id: sortedExisting[i].id, original });
+      }
+
+      const updateResults = await Promise.all(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        outputPackages.slice(0, reusableCount).map((pkg: any, i: number) => {
+          const { organisation_id, production_entry_id, shipment_id, ...fields } = pkg;
+          return (supabase as any)
+            .from("inventory_packages")
+            .update(fields)
+            .eq("id", sortedExisting[i].id);
+        })
+      );
+
+      for (let i = 0; i < updateResults.length; i++) {
+        if (updateResults[i].error) {
+          console.error("[validateProduction] Failed to update output package:", updateResults[i].error);
+          await revertChanges();
+          return { success: false, error: `Failed to update output package: ${updateResults[i].error.message}`, code: "UPDATE_FAILED" };
+        }
+      }
     }
-    return { success: false, error: `Failed to create output packages: ${insertError.message}`, code: "INSERT_FAILED" };
+
+    // 2. INSERT truly new packages (output count grew)
+    if (outputs.length > sortedExisting.length) {
+      const newPackages = outputPackages.slice(sortedExisting.length);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: inserted, error: insertError } = await (supabase as any)
+        .from("inventory_packages")
+        .insert(newPackages)
+        .select("id");
+
+      if (insertError) {
+        console.error("[validateProduction] Failed to insert new output packages:", insertError);
+        await revertChanges();
+        return { success: false, error: `Failed to create output packages: ${insertError.message}`, code: "INSERT_FAILED" };
+      }
+      if (inserted) {
+        for (const row of inserted) {
+          insertedOutputIds.push(row.id);
+        }
+      }
+    }
+
+    // 3. DELETE orphaned packages (output count shrank)
+    if (sortedExisting.length > outputs.length) {
+      const orphans = sortedExisting.slice(outputs.length);
+      const orphanIds = orphans.map((p: { id: string }) => p.id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: deleteError, count } = await (supabase as any)
+        .from("inventory_packages")
+        .delete()
+        .in("id", orphanIds);
+
+      if (deleteError) {
+        console.error("[validateProduction] Failed to delete orphaned output packages:", deleteError);
+        await revertChanges();
+        return { success: false, error: `Failed to remove orphaned output packages: ${deleteError.message}`, code: "DELETE_FAILED" };
+      }
+
+      // PostgREST may silently skip deletes blocked by FK constraints
+      if (count !== null && count !== undefined && count < orphanIds.length) {
+        const blockedNumbers = orphans.map((p: { package_number: string }) => p.package_number).join(", ");
+        await revertChanges();
+        return {
+          success: false,
+          error: `Cannot remove output packages (${blockedNumbers}) because they are used as inputs in downstream production entries. Remove those references first.`,
+          code: "FK_CONSTRAINT",
+        };
+      }
+
+      deletedOutputPackages = orphans;
+    }
+  } else {
+    // First-time validation: bulk INSERT all output packages
+    console.log(`[validateProduction] Using first-time bulk INSERT flow. Output count: ${outputs.length}`);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: insertError } = await (supabase as any)
+      .from("inventory_packages")
+      .insert(outputPackages);
+
+    if (insertError) {
+      console.error("[validateProduction] Failed to create output packages:", insertError);
+      await revertChanges();
+      if (insertError.message?.includes("package_number") && insertError.message?.includes("null")) {
+        return {
+          success: false,
+          error: "Please assign package numbers to all outputs first. Use the 'Assign Package Numbers' button before validating.",
+          code: "MISSING_PACKAGE_NUMBERS"
+        };
+      }
+      return { success: false, error: `Failed to create output packages: ${insertError.message}`, code: "INSERT_FAILED" };
+    }
   }
 
   // 8. Finalize: transition validating → validated with totals
