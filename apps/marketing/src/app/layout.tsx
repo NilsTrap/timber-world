@@ -25,9 +25,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html>
+    <html lang="en" className="bg-warm-cream">
       <body
-        className={`${poppins.variable} antialiased min-h-screen`}
+        className={`${poppins.variable} antialiased min-h-screen bg-warm-cream`}
       >
         {children}
       </body>
