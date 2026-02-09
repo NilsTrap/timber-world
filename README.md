@@ -1,36 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Timber World Platform
+
+A B2B supply chain platform for the timber industry, built as a monorepo with multiple applications.
+
+## Applications
+
+| App | Description | URL |
+|-----|-------------|-----|
+| **Marketing** | Public website for Timber International | [timber-international.com](https://timber-international.com) |
+| **Portal** | B2B portal for producers, clients, and admin | (internal) |
+
+## Tech Stack
+
+- **Framework:** Next.js 16 (App Router)
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS v4
+- **Database:** Supabase (PostgreSQL)
+- **Authentication:** Supabase Auth
+- **Deployment:** Vercel
+- **Monorepo:** Turborepo + pnpm workspaces
+
+## Project Structure
+
+```
+├── apps/
+│   ├── marketing/          # Public marketing website
+│   └── portal/             # B2B portal application
+├── packages/
+│   ├── @timber/ui/         # Shared UI components
+│   ├── @timber/auth/       # Authentication utilities
+│   ├── @timber/database/   # Supabase clients & types
+│   ├── @timber/config/     # Configuration & i18n
+│   └── @timber/utils/      # Shared utilities
+└── supabase/               # Database migrations
+```
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+
+- pnpm 9+
+
+### Installation
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Copy the example env files and fill in your values:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+cp apps/marketing/.env.example apps/marketing/.env.local
+cp apps/portal/.env.example apps/portal/.env.local
+```
 
-## Learn More
+Required variables:
+- `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key
+- `RESEND_API_KEY` - (Marketing only) For quote form emails
 
-To learn more about Next.js, take a look at the following resources:
+### Development
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+# Run all apps
+pnpm dev
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Run specific app
+pnpm dev --filter=marketing
+pnpm dev --filter=portal
+```
 
-## Deploy on Vercel
+### Build
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+pnpm build
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deployment
+
+### Marketing Website
+
+Deployed to Vercel with:
+- **Domain:** timber-international.com
+- **Root Directory:** `apps/marketing`
+- **Build Command:** `pnpm build`
+
+### Portal
+
+Deployed to Vercel separately with:
+- **Root Directory:** `apps/portal`
+
+## Documentation
+
+See `_bmad-output/` for detailed planning and implementation artifacts:
+- `planning-artifacts/` - Product briefs, PRDs, architecture
+- `implementation-artifacts/` - Epic and story breakdowns

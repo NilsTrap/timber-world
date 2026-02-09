@@ -9,6 +9,34 @@ inputDocuments:
 
 # Timber-International - Epic Breakdown
 
+## Deployment Status
+
+**Live URL:** https://timber-international.com
+
+**Deployed:** 2026-02-09
+
+**Hosting:** Vercel
+- Project: `timber-marketing`
+- Root Directory: `apps/marketing`
+- Domain: `timber-international.com` (DNS via Wix)
+
+**Environment Variables Required:**
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_BRAND` (set to `timber`)
+- `RESEND_API_KEY` (for quote form emails)
+
+## Implementation Status Summary
+
+| Epic | Status | Notes |
+|------|--------|-------|
+| Epic 1: Foundation | ✅ Complete | Monorepo structure, shared packages |
+| Epic 2: Homepage & Journey | ✅ Complete | Hero, production journey, CTAs |
+| Epic 3: Product Catalog | ✅ Partial | Stock display, pricing, filters working |
+| Epic 4: Quote System | ✅ Partial | Form working, email via Resend, no chatbot |
+| Epic 5: Content & i18n | ✅ Partial | 8 languages, no resources/contact pages |
+| Epic 6-8: Admin | ❌ Not started | Admin in portal app instead |
+
 ## Overview
 
 This document provides the complete epic and story breakdown for Timber-International, decomposing the requirements from the PRD, UX Design, and Architecture into implementable stories.
