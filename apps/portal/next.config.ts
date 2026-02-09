@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Use .nosync suffix to prevent iCloud from syncing build folder
-  distDir: ".next.nosync",
+  // Use .nosync suffix locally to prevent iCloud sync, but use .next on Vercel
+  distDir: process.env.VERCEL ? ".next" : ".next.nosync",
   // Important for monorepo: transpile workspace packages
   transpilePackages: [
     "@timber/ui",
