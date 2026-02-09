@@ -31,11 +31,11 @@ export function ProductCard({ product, isSelected, onToggleSelect }: ProductCard
                 checked={isSelected}
                 onCheckedChange={onToggleSelect}
                 onClick={(e) => e.stopPropagation()}
-                aria-label={`Select ${product.sku}`}
+                aria-label={`Select ${product.name}`}
               />
-              <span className="font-semibold text-charcoal truncate">{product.sku}</span>
+              <span className="font-semibold text-charcoal truncate">{product.name}</span>
             </div>
-            <p className="text-sm text-muted-foreground mb-1">{product.species}</p>
+            <p className="text-sm text-muted-foreground mb-1">{product.species} · {product.type === "FJ" ? t("typeFJ") : t("typeFS")}</p>
             <p className="text-sm">
               {product.thickness} × {product.width} × {product.length} {t("mm")}
             </p>

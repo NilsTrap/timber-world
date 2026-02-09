@@ -10,6 +10,7 @@
   "nav": {
     "products": "Tuotteet",
     "viewProducts": "Varastossa",
+    "inStock": "Varastossa",
     "resources": "Resurssit",
     "contact": "Yhteystiedot",
     "requestQuote": "Pyydä tarjous",
