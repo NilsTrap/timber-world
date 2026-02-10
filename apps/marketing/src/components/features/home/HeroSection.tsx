@@ -6,7 +6,8 @@ import { useTranslations } from "next-intl";
 import { cn, useReducedMotion } from "@timber/ui";
 import { ScrollIndicator } from "./ScrollIndicator";
 
-const HERO_IMAGE_SRC = "/images/journey/forest.jpg";
+// First frame of hero video - used as fallback while video loads
+const HERO_IMAGE_SRC = "/hero/hero-poster.jpg";
 
 export function HeroSection() {
   const t = useTranslations("home");
