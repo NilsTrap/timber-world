@@ -80,7 +80,13 @@ export function Header({ variant: propVariant }: HeaderProps) {
             aria-label={`${siteConfig.name} - Home`}
             onClick={() => {
               // Scroll to top when clicking logo (especially useful on homepage during journey)
-              window.scrollTo({ top: 0, behavior: "smooth" });
+              // The journey page uses a custom scroll container, so we need to scroll it instead of window
+              const journeyContainer = document.querySelector('.journey-scroll-container');
+              if (journeyContainer) {
+                journeyContainer.scrollTo({ top: 0, behavior: 'smooth' });
+              } else {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
             }}
           >
             <Image
