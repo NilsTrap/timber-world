@@ -60,23 +60,23 @@ development_status:
   epic-2-retrospective: optional
 
   # Epic 3: Product Catalog & Discovery
-  epic-3: backlog
-  3-1-create-product-catalog-page-layout: backlog
-  3-2-implement-productfilter-component: backlog
-  3-3-build-products-api-and-data-fetching: backlog
-  3-4-implement-producttable-with-pricing-display: backlog
-  3-5-add-product-selection-for-quote: backlog
-  3-6-implement-responsive-catalog-layout: backlog
+  epic-3: done
+  3-1-create-product-catalog-page-layout: done
+  3-2-implement-productfilter-component: done
+  3-3-build-products-api-and-data-fetching: done
+  3-4-implement-producttable-with-pricing-display: done
+  3-5-add-product-selection-for-quote: done
+  3-6-implement-responsive-catalog-layout: done
   epic-3-retrospective: optional
 
   # Epic 4: Quote Request System
-  epic-4: backlog
-  4-1-create-quote-request-page-layout: backlog
-  4-2-build-quote-request-form: backlog
-  4-3-implement-dual-quote-path-stock-vs-custom: backlog
-  4-4-integrate-ai-chatbot-for-conversational-quotes: backlog
-  4-5-submit-quote-and-send-notifications: backlog
-  4-6-display-quote-confirmation-with-response-timeline: backlog
+  epic-4: done
+  4-1-create-quote-request-page-layout: done
+  4-2-build-quote-request-form: done
+  4-3-implement-dual-quote-path-stock-vs-custom: skipped  # Single quote path implemented
+  4-4-integrate-ai-chatbot-for-conversational-quotes: skipped  # Future enhancement
+  4-5-submit-quote-and-send-notifications: done
+  4-6-display-quote-confirmation-with-response-timeline: done
   epic-4-retrospective: optional
 
   # Epic 5: Content Pages & Multi-Language Support
@@ -107,10 +107,62 @@ development_status:
   epic-7-retrospective: optional
 
   # Epic 8: Internal Quote Management
-  epic-8: backlog
-  8-1-build-quote-request-queue: backlog
-  8-2-create-quote-detail-view: backlog
-  8-3-implement-quote-response-sending: backlog
-  8-4-add-acknowledgment-messages: backlog
-  8-5-implement-status-tracking-and-follow-ups: backlog
+  # NOTE: Implemented in portal app at /admin/quotes instead of marketing admin
+  epic-8: done
+  8-1-build-quote-request-queue: done  # QuoteRequestsTable with all requests
+  8-2-create-quote-detail-view: done  # Expandable rows show full details
+  8-3-implement-quote-response-sending: done  # Email/Call buttons, mailto: links
+  8-4-add-acknowledgment-messages: skipped  # Manual via email for now
+  8-5-implement-status-tracking-and-follow-ups: done  # Status dropdown (new/contacted/quoted/completed/declined)
   epic-8-retrospective: optional
+
+# ============================================================================
+# AD-HOC CHANGES LOG
+# ============================================================================
+# Changes made outside of formal story tracking, typically UX improvements,
+# bug fixes, or minor enhancements requested during development.
+
+ad_hoc_changes:
+  - date: 2026-02-10
+    description: "Quote system implementation and product catalog enhancements"
+    changes:
+      - "Quote requests saved to database (quote_requests table with RLS policies)"
+      - "Email notifications via Resend (currently to nils@nils.lv for testing)"
+      - "Quote requests dashboard in portal at /admin/quotes"
+      - "QuoteRequestsTable with expandable rows showing full request details"
+      - "Status tracking: new → contacted → quoted → completed/declined"
+      - "Email and Call quick action buttons"
+      - "Cascading/dynamic product filters (filter options update based on filtered products)"
+      - "Removed Processing and FSC filters from product catalog"
+      - "Changed default open filter from Species to Product"
+      - "Product selection shows readable descriptions instead of IDs in quote form"
+      - "Fixed mobile filter drawer using React Portal"
+      - "Fixed header transparency flash on navigation"
+      - "Fixed video flash on homepage with poster image"
+      - "Logo 20% smaller on mobile"
+      - "Multi-column default sorting for product table"
+      - "Show pieces count and m³ instead of stock badge on product cards"
+      - "Show 'On Request' for zero prices"
+      - "Fixed type filter (Full Stave) using original database values"
+    files_created:
+      - "apps/portal/src/app/(portal)/admin/quotes/page.tsx"
+      - "apps/portal/src/features/quotes/index.ts"
+      - "apps/portal/src/features/quotes/actions/getQuoteRequests.ts"
+      - "apps/portal/src/features/quotes/components/QuoteRequestsTable.tsx"
+      - "supabase/migrations/20260210000001_create_quote_requests.sql"
+      - "supabase/migrations/20260210100001_repair_quote_requests.sql"
+      - "supabase/migrations/20260210100002_recreate_quote_requests.sql"
+      - "apps/marketing/public/hero/hero-poster.jpg"
+    files_modified:
+      - "apps/marketing/src/lib/actions/quote.ts"
+      - "apps/marketing/src/lib/actions/products.ts"
+      - "apps/marketing/src/components/features/catalog/ProductCatalog.tsx"
+      - "apps/marketing/src/components/features/catalog/ProductFilter.tsx"
+      - "apps/marketing/src/components/features/catalog/ProductFilterDrawer.tsx"
+      - "apps/marketing/src/components/features/catalog/ProductSelectionBar.tsx"
+      - "apps/marketing/src/components/features/catalog/ProductCard.tsx"
+      - "apps/marketing/src/components/features/catalog/PriceDisplay.tsx"
+      - "apps/marketing/src/components/features/quote/QuoteForm.tsx"
+      - "apps/marketing/src/components/features/home/HeroSection.tsx"
+      - "apps/marketing/src/components/layout/Header.tsx"
+      - "apps/portal/src/components/layout/SidebarWrapper.tsx"

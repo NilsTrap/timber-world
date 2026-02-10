@@ -32,10 +32,12 @@ inputDocuments:
 |------|--------|-------|
 | Epic 1: Foundation | ✅ Complete | Monorepo structure, shared packages |
 | Epic 2: Homepage & Journey | ✅ Complete | Hero, production journey, CTAs |
-| Epic 3: Product Catalog | ✅ Partial | Stock display, pricing, filters working |
-| Epic 4: Quote System | ✅ Partial | Form working, email via Resend, no chatbot |
+| Epic 3: Product Catalog | ✅ Complete | Stock display, pricing, cascading filters, mobile responsive |
+| Epic 4: Quote System | ✅ Complete | Form, database storage, email via Resend, confirmation |
 | Epic 5: Content & i18n | ✅ Partial | 8 languages, no resources/contact pages |
-| Epic 6-8: Admin | ❌ Not started | Admin in portal app instead |
+| Epic 6: Admin Content | ❌ Skipped | Managed via portal app |
+| Epic 7: Analytics | ❌ Not started | Vercel Analytics available |
+| Epic 8: Quote Management | ✅ Complete | Dashboard in portal at /admin/quotes |
 
 ## Overview
 

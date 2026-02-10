@@ -542,3 +542,21 @@ ad_hoc_changes:
       - "New table: shipment_pallets (id, shipment_id, pallet_number, notes)"
       - "New column: inventory_packages.pallet_id (FK to shipment_pallets)"
       - "New index: idx_shipment_pallets_shipment, idx_inventory_packages_pallet"
+
+  - date: 2026-02-10
+    description: "Quote requests dashboard for marketing website integration"
+    changes:
+      - "Admin quote requests page at /admin/quotes"
+      - "QuoteRequestsTable component with expandable rows"
+      - "View all quote requests from marketing website form submissions"
+      - "Status tracking: new → contacted → quoted → completed/declined"
+      - "Quick action buttons: Send Email, Call"
+      - "Expandable details: phone, type, quality, humidity, notes, selected products"
+      - "Added Quote Requests link to admin sidebar navigation"
+    files_created:
+      - "apps/portal/src/app/(portal)/admin/quotes/page.tsx"
+      - "apps/portal/src/features/quotes/index.ts"
+      - "apps/portal/src/features/quotes/actions/getQuoteRequests.ts"
+      - "apps/portal/src/features/quotes/components/QuoteRequestsTable.tsx"
+    files_modified:
+      - "apps/portal/src/components/layout/SidebarWrapper.tsx"
