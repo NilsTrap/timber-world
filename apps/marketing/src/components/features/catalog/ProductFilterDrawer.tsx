@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { SlidersHorizontal, X } from "lucide-react";
-import { Button, Badge, cn } from "@timber/ui";
+import { Button, Badge } from "@timber/ui";
 import type { ProductFilters, FilterOptions } from "@/lib/actions/products";
 import { ProductFilter } from "./ProductFilter";
 
@@ -26,6 +27,92 @@ export function ProductFilterDrawer({
 }: ProductFilterDrawerProps) {
   const t = useTranslations("catalog");
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Ensure we only render portal on client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Lock body scroll when open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  const overlay = open ? (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        backgroundColor: "#FAF6F1",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "16px",
+          borderBottom: "1px solid #E5DFD7",
+          backgroundColor: "#FAF6F1",
+        }}
+      >
+        <h2 style={{ fontSize: "18px", fontWeight: 600, margin: 0 }}>{t("filters")}</h2>
+        <button
+          onClick={() => setOpen(false)}
+          style={{
+            padding: "8px",
+            borderRadius: "50%",
+            border: "none",
+            backgroundColor: "transparent",
+            cursor: "pointer",
+          }}
+          aria-label="Close filters"
+        >
+          <X style={{ width: "24px", height: "24px" }} />
+        </button>
+      </div>
+
+      {/* Filter Content */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
+        <ProductFilter
+          filters={filters}
+          filterOptions={filterOptions}
+          activeFilterCount={activeFilterCount}
+          onFilterChange={(key, values) => {
+            onFilterChange(key, values);
+          }}
+          onFscChange={onFscChange}
+          onClearFilters={onClearFilters}
+        />
+      </div>
+
+      {/* Apply Button */}
+      <div style={{ padding: "16px", borderTop: "1px solid #E5DFD7", backgroundColor: "#FAF6F1" }}>
+        <Button
+          variant="default"
+          className="w-full bg-forest-green text-white"
+          onClick={() => setOpen(false)}
+        >
+          Apply Filters
+        </Button>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <>
@@ -45,47 +132,8 @@ export function ProductFilterDrawer({
         )}
       </Button>
 
-      {/* Full-screen Filter Overlay */}
-      {open && (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-background">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b bg-background">
-            <h2 className="text-lg font-semibold">{t("filters")}</h2>
-            <button
-              onClick={() => setOpen(false)}
-              className="p-2 rounded-full hover:bg-muted"
-              aria-label="Close filters"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          {/* Filter Content */}
-          <div className="flex-1 overflow-y-auto p-4">
-            <ProductFilter
-              filters={filters}
-              filterOptions={filterOptions}
-              activeFilterCount={activeFilterCount}
-              onFilterChange={(key, values) => {
-                onFilterChange(key, values);
-              }}
-              onFscChange={onFscChange}
-              onClearFilters={onClearFilters}
-            />
-          </div>
-
-          {/* Apply Button */}
-          <div className="p-4 border-t bg-background">
-            <Button
-              variant="default"
-              className="w-full bg-forest-green text-white"
-              onClick={() => setOpen(false)}
-            >
-              {t("showFilters", { defaultValue: "Apply Filters" })}
-            </Button>
-          </div>
-        </div>
-      )}
+      {/* Render overlay via Portal to document.body */}
+      {mounted && overlay && createPortal(overlay, document.body)}
     </>
   );
 }
