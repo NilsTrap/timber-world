@@ -222,6 +222,7 @@ export function ProductCatalog({
       <ProductSelectionBar
         selectedCount={selectedProducts.size}
         selectedIds={Array.from(selectedProducts)}
+        products={products}
         onClearSelection={handleClearSelection}
       />
     </div>

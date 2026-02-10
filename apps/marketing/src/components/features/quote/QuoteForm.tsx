@@ -127,7 +127,7 @@ export function QuoteForm({ preselectedProducts }: QuoteFormProps) {
           name="notes"
           rows={4}
           placeholder={t("notesPlaceholder")}
-          defaultValue={preselectedProducts ? `Selected products: ${preselectedProducts}` : ""}
+          defaultValue={preselectedProducts ? `Selected products:\n${preselectedProducts}` : ""}
         />
       </div>
 
