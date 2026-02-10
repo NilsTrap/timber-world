@@ -13,7 +13,6 @@ interface ProductFilterDrawerProps {
   filterOptions: FilterOptions;
   activeFilterCount: number;
   onFilterChange: (key: keyof ProductFilters, values: string[]) => void;
-  onFscChange: (value: boolean | undefined) => void;
   onClearFilters: () => void;
 }
 
@@ -22,7 +21,6 @@ export function ProductFilterDrawer({
   filterOptions,
   activeFilterCount,
   onFilterChange,
-  onFscChange,
   onClearFilters,
 }: ProductFilterDrawerProps) {
   const t = useTranslations("catalog");
@@ -97,7 +95,6 @@ export function ProductFilterDrawer({
           onFilterChange={(key, values) => {
             onFilterChange(key, values);
           }}
-          onFscChange={onFscChange}
           onClearFilters={onClearFilters}
         />
       </div>

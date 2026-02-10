@@ -96,12 +96,6 @@ export function ProductCatalog({
     fetchProducts(newFilters, 1, sortBy, sortOrder);
   }, [filters, sortBy, sortOrder, fetchProducts]);
 
-  const handleFscChange = useCallback((value: boolean | undefined) => {
-    const newFilters = { ...filters, fscCertified: value };
-    setFilters(newFilters);
-    fetchProducts(newFilters, 1, sortBy, sortOrder);
-  }, [filters, sortBy, sortOrder, fetchProducts]);
-
   const handleClearFilters = useCallback(() => {
     const newFilters: ProductFilters = {};
     setFilters(newFilters);
@@ -160,7 +154,6 @@ export function ProductCatalog({
             filterOptions={currentFilterOptions}
             activeFilterCount={activeFilterCount}
             onFilterChange={handleFilterChange}
-            onFscChange={handleFscChange}
             onClearFilters={handleClearFilters}
           />
         </div>
@@ -174,7 +167,6 @@ export function ProductCatalog({
             filterOptions={currentFilterOptions}
             activeFilterCount={activeFilterCount}
             onFilterChange={handleFilterChange}
-            onFscChange={handleFscChange}
             onClearFilters={handleClearFilters}
           />
         </aside>

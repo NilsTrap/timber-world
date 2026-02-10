@@ -11,7 +11,6 @@ interface ProductFilterProps {
   filterOptions: FilterOptions;
   activeFilterCount: number;
   onFilterChange: (key: keyof ProductFilters, values: string[]) => void;
-  onFscChange: (value: boolean | undefined) => void;
   onClearFilters: () => void;
 }
 
@@ -85,7 +84,6 @@ export function ProductFilter({
   filterOptions,
   activeFilterCount,
   onFilterChange,
-  onFscChange,
   onClearFilters,
 }: ProductFilterProps) {
   const t = useTranslations("catalog");
@@ -95,8 +93,6 @@ export function ProductFilter({
   const [speciesOpen, setSpeciesOpen] = useState(true);
   const [humidityOpen, setHumidityOpen] = useState(false);
   const [typeOpen, setTypeOpen] = useState(false);
-  const [processingOpen, setProcessingOpen] = useState(false);
-  const [fscOpen, setFscOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
   const [thicknessOpen, setThicknessOpen] = useState(false);
   const [widthOpen, setWidthOpen] = useState(false);
@@ -241,96 +237,7 @@ export function ProductFilter({
           )}
         </div>
 
-        {/* 5. Processing */}
-        <div className="border-b border-border">
-          <button
-            type="button"
-            onClick={() => setProcessingOpen(!processingOpen)}
-            className="flex items-center justify-between w-full py-3 text-left"
-          >
-            <span className="text-sm font-medium text-charcoal flex items-center gap-2">
-              {t("processing")}
-              {(filters.processing?.length ?? 0) > 0 && (
-                <Badge variant="secondary" className="h-5 min-w-[20px] px-1.5 text-xs">
-                  {filters.processing?.length}
-                </Badge>
-              )}
-            </span>
-            <ChevronDown className={cn(
-              "h-4 w-4 text-muted-foreground transition-transform",
-              processingOpen && "rotate-180"
-            )} />
-          </button>
-          {processingOpen && (
-            <div className="pb-3 space-y-2 max-h-48 overflow-y-auto">
-              {filterOptions.processings.length > 0 ? (
-                filterOptions.processings.map(processing => (
-                  <label
-                    key={processing}
-                    className="flex items-center gap-2 text-sm cursor-pointer hover:text-charcoal text-muted-foreground"
-                  >
-                    <Checkbox
-                      checked={filters.processing?.includes(processing) ?? false}
-                      onCheckedChange={() => {
-                        const current = filters.processing ?? [];
-                        if (current.includes(processing)) {
-                          onFilterChange("processing", current.filter(p => p !== processing));
-                        } else {
-                          onFilterChange("processing", [...current, processing]);
-                        }
-                      }}
-                    />
-                    <span>{processing}</span>
-                  </label>
-                ))
-              ) : (
-                <p className="text-xs text-muted-foreground italic">No options available</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* 6. FSC Certified */}
-        <div className="border-b border-border">
-          <button
-            type="button"
-            onClick={() => setFscOpen(!fscOpen)}
-            className="flex items-center justify-between w-full py-3 text-left"
-          >
-            <span className="text-sm font-medium text-charcoal flex items-center gap-2">
-              {t("fsc")}
-              {filters.fscCertified !== undefined && (
-                <Badge variant="secondary" className="h-5 min-w-[20px] px-1.5 text-xs">
-                  1
-                </Badge>
-              )}
-            </span>
-            <ChevronDown className={cn(
-              "h-4 w-4 text-muted-foreground transition-transform",
-              fscOpen && "rotate-180"
-            )} />
-          </button>
-          {fscOpen && (
-            <div className="pb-3 space-y-2">
-              <label className="flex items-center gap-2 text-sm cursor-pointer hover:text-charcoal text-muted-foreground">
-                <Checkbox
-                  checked={filters.fscCertified === true}
-                  onCheckedChange={(checked) => onFscChange(checked ? true : undefined)}
-                />
-                <span>{t("fscYes")}</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer hover:text-charcoal text-muted-foreground">
-                <Checkbox
-                  checked={filters.fscCertified === false}
-                  onCheckedChange={(checked) => onFscChange(checked ? false : undefined)}
-                />
-                <span>{t("fscNo")}</span>
-              </label>
-            </div>
-          )}
-        </div>
-
-        {/* 7. Quality */}
+        {/* 5. Quality */}
         <div className="border-b border-border">
           <button
             type="button"
