@@ -48,7 +48,8 @@ export function Header({ variant: propVariant }: HeaderProps) {
       : "transparent"
     : propVariant || "solid";
 
-  // Hide navigation when scrolling down past the hero (for immersive journey experience)
+  // Hide navigation buttons when scrolling down past the hero (for immersive journey experience)
+  // But keep logo visible so users can always navigate home
   const shouldHideNav = isHomepage && scrolledPast && scrollDirection === "down";
 
   return (
@@ -60,7 +61,8 @@ export function Header({ variant: propVariant }: HeaderProps) {
         variant === "transparent"
           ? "bg-transparent text-white"
           : "bg-warm-cream text-charcoal border-b border-border",
-        shouldHideNav && "opacity-0 pointer-events-none"
+        // Remove background when nav is hidden but header is still visible
+        shouldHideNav && "bg-transparent border-transparent"
       )}
     >
       <div className="container mx-auto px-1">
@@ -70,7 +72,8 @@ export function Header({ variant: propVariant }: HeaderProps) {
             href="/"
             className={cn(
               "flex items-center rounded-sm px-px py-px transition-all -ml-3 cursor-pointer",
-              variant === "transparent"
+              // Show white background when on transparent header OR during journey (when nav is hidden)
+              (variant === "transparent" || shouldHideNav)
                 ? "bg-white/70 shadow-md"
                 : ""
             )}
@@ -93,7 +96,11 @@ export function Header({ variant: propVariant }: HeaderProps) {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden items-center gap-4 md:flex">
+          <div className={cn(
+            "hidden items-center gap-4 md:flex",
+            mounted ? "transition-opacity duration-300" : "transition-none",
+            shouldHideNav && "opacity-0 pointer-events-none"
+          )}>
             <LanguageSwitcher variant={variant} />
             <Button
               asChild
@@ -120,7 +127,11 @@ export function Header({ variant: propVariant }: HeaderProps) {
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="md:hidden">
+          <div className={cn(
+            "md:hidden",
+            mounted ? "transition-opacity duration-300" : "transition-none",
+            shouldHideNav && "opacity-0 pointer-events-none"
+          )}>
             <MobileMenu variant={variant} />
           </div>
         </div>
