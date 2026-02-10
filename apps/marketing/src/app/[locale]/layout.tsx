@@ -63,7 +63,7 @@ export default async function LocaleLayout({ children, params }: Props) {
     <NextIntlClientProvider messages={messages}>
       <SkipLink />
       <Header />
-      <main id="main-content" className="pt-24 md:pt-28">
+      <main id="main-content" className="pt-20 md:pt-28">
         {children}
       </main>
       <ConditionalFooter />

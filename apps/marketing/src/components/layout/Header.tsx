@@ -64,7 +64,7 @@ export function Header({ variant: propVariant }: HeaderProps) {
       )}
     >
       <div className="container mx-auto px-1">
-        <div className="flex h-20 items-start justify-between md:h-24 pt-3">
+        <div className="flex h-[72px] items-start justify-between md:h-24 pt-2 md:pt-3">
           {/* Logo */}
           <Link
             href="/"
@@ -83,7 +83,9 @@ export function Header({ variant: propVariant }: HeaderProps) {
               height={300}
               className={cn(
                 "pointer-events-none select-none",
-                currentBrand.key === "timber" ? "h-[80px] w-auto" : "h-[148px] w-auto"
+                currentBrand.key === "timber"
+                  ? "h-[64px] md:h-[80px] w-auto"  // 20% smaller on mobile
+                  : "h-[120px] md:h-[148px] w-auto"
               )}
               priority
               draggable={false}
