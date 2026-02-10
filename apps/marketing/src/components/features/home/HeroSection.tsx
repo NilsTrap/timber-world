@@ -1,8 +1,9 @@
 "use client";
 
+import { useRef, useEffect, useState } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { useReducedMotion } from "@timber/ui";
+import { cn, useReducedMotion } from "@timber/ui";
 import { ScrollIndicator } from "./ScrollIndicator";
 
 const HERO_IMAGE_SRC = "/images/journey/forest.jpg";
@@ -10,6 +11,40 @@ const HERO_IMAGE_SRC = "/images/journey/forest.jpg";
 export function HeroSection() {
   const t = useTranslations("home");
   const reducedMotion = useReducedMotion();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoReady, setVideoReady] = useState(false);
+
+  // Reset video to beginning on mount (handles navigation back to homepage)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      // Reset state for new mount
+      setVideoReady(false);
+
+      // Reset to start
+      video.currentTime = 0;
+
+      // When video can play, show it and start playback
+      const handleCanPlay = () => {
+        video.currentTime = 0; // Ensure we're at frame 0
+        setVideoReady(true);
+        video.play().catch(() => {
+          // Autoplay blocked - show fallback image
+        });
+      };
+
+      // If video is already loaded (cached), handle immediately
+      if (video.readyState >= 3) {
+        handleCanPlay();
+      } else {
+        video.addEventListener("canplay", handleCanPlay, { once: true });
+      }
+
+      return () => {
+        video.removeEventListener("canplay", handleCanPlay);
+      };
+    }
+  }, []);
 
   return (
     <section
@@ -28,33 +63,32 @@ export function HeroSection() {
         />
       ) : (
         <>
-          <video
-            autoPlay
-            loop
-            muted
-            playsInline
-            poster={HERO_IMAGE_SRC}
-            className="absolute inset-0 h-full w-full object-cover z-0"
-            aria-hidden="true"
-            onCanPlay={(e) => {
-              // Ensure video plays when ready
-              const video = e.target as HTMLVideoElement;
-              video.play().catch(() => {
-                // Autoplay blocked - video will show poster
-              });
-            }}
-          >
-            <source src="/hero/hero.mp4" type="video/mp4" />
-          </video>
-          {/* Fallback image shown behind video (visible if video fails to load) */}
+          {/* Fallback image - shown while video loads or if video fails */}
           <Image
             src={HERO_IMAGE_SRC}
             alt=""
             fill
             priority
-            className="object-cover -z-10"
+            className="object-cover"
             sizes="100vw"
           />
+          {/* Video - hidden until ready at frame 0 to prevent flash */}
+          <video
+            ref={videoRef}
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+            className={cn(
+              "absolute inset-0 h-full w-full object-cover",
+              // Hide video until it's ready at frame 0 to prevent flash
+              videoReady ? "opacity-100" : "opacity-0"
+            )}
+            aria-hidden="true"
+          >
+            <source src="/hero/hero.mp4" type="video/mp4" />
+          </video>
         </>
       )}
 
