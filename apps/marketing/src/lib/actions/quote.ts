@@ -142,7 +142,7 @@ ${data.notes ? `Additional Notes\n----------------\n${data.notes}` : ""}
     `.trim();
 
     await resend.emails.send({
-      from: "Timber International <noreply@timber-international.com>",
+      from: "Timber International <onboarding@resend.dev>",
       to: "info@timber-international.com",
       replyTo: data.email,
       subject: `Quote Request from ${data.name}${data.company ? ` (${data.company})` : ""}`,
