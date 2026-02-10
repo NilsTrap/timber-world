@@ -52,65 +52,32 @@ export function ProductFilterDrawer({
         position: "fixed",
         top: 0,
         left: 0,
-        right: 0,
-        bottom: 0,
+        width: "100vw",
+        height: "100vh",
         zIndex: 9999,
-        backgroundColor: "#FAF6F1",
+        backgroundColor: "red",
         display: "flex",
         flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
-      {/* Header */}
-      <div
+      <h1 style={{ color: "white", fontSize: "32px", marginBottom: "20px" }}>
+        FILTER OVERLAY IS OPEN
+      </h1>
+      <button
+        onClick={() => setOpen(false)}
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "16px",
-          borderBottom: "1px solid #E5DFD7",
-          backgroundColor: "#FAF6F1",
+          padding: "20px 40px",
+          fontSize: "20px",
+          backgroundColor: "white",
+          border: "none",
+          borderRadius: "8px",
+          cursor: "pointer",
         }}
       >
-        <h2 style={{ fontSize: "18px", fontWeight: 600, margin: 0 }}>{t("filters")}</h2>
-        <button
-          onClick={() => setOpen(false)}
-          style={{
-            padding: "8px",
-            borderRadius: "50%",
-            border: "none",
-            backgroundColor: "transparent",
-            cursor: "pointer",
-          }}
-          aria-label="Close filters"
-        >
-          <X style={{ width: "24px", height: "24px" }} />
-        </button>
-      </div>
-
-      {/* Filter Content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
-        <ProductFilter
-          filters={filters}
-          filterOptions={filterOptions}
-          activeFilterCount={activeFilterCount}
-          onFilterChange={(key, values) => {
-            onFilterChange(key, values);
-          }}
-          onFscChange={onFscChange}
-          onClearFilters={onClearFilters}
-        />
-      </div>
-
-      {/* Apply Button */}
-      <div style={{ padding: "16px", borderTop: "1px solid #E5DFD7", backgroundColor: "#FAF6F1" }}>
-        <Button
-          variant="default"
-          className="w-full bg-forest-green text-white"
-          onClick={() => setOpen(false)}
-        >
-          Apply Filters
-        </Button>
-      </div>
+        CLOSE THIS
+      </button>
     </div>
   ) : null;
 
