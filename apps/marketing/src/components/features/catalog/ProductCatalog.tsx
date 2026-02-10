@@ -165,18 +165,6 @@ export function ProductCatalog({
 
         {/* Main Content */}
         <main className="flex-1 min-w-0 flex flex-col">
-          {/* Mobile Filter Button */}
-          <div className="flex-shrink-0 lg:hidden mb-4 relative z-10">
-            <ProductFilterDrawer
-              filters={filters}
-              filterOptions={filterOptions}
-              activeFilterCount={activeFilterCount}
-              onFilterChange={handleFilterChange}
-              onFscChange={handleFscChange}
-              onClearFilters={handleClearFilters}
-            />
-          </div>
-
           {/* Products Display */}
           {products.length > 0 ? (
             <div className="flex-1 min-h-0 flex flex-col">
@@ -228,6 +216,18 @@ export function ProductCatalog({
         selectedIds={Array.from(selectedProducts)}
         onClearSelection={handleClearSelection}
       />
+
+      {/* Mobile Filter Button - Fixed at bottom */}
+      <div className="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
+        <ProductFilterDrawer
+          filters={filters}
+          filterOptions={filterOptions}
+          activeFilterCount={activeFilterCount}
+          onFilterChange={handleFilterChange}
+          onFscChange={handleFscChange}
+          onClearFilters={handleClearFilters}
+        />
+      </div>
     </div>
   );
 }

@@ -38,11 +38,15 @@ export function ProductFilterDrawer({
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <SlidersHorizontal className="h-4 w-4" />
+        <Button
+          variant="default"
+          size="lg"
+          className="gap-2 bg-forest-green text-white shadow-lg hover:bg-forest-green/90 px-6"
+        >
+          <SlidersHorizontal className="h-5 w-5" />
           {t("filters")}
           {activeFilterCount > 0 && (
-            <Badge variant="default" className="h-5 min-w-[20px] px-1.5 text-xs bg-forest-green">
+            <Badge variant="secondary" className="h-5 min-w-[20px] px-1.5 text-xs bg-white text-forest-green">
               {activeFilterCount}
             </Badge>
           )}
