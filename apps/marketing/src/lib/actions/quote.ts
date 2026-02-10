@@ -80,7 +80,7 @@ export async function submitQuoteRequest(formData: FormData): Promise<ActionResu
 
     if (dbError) {
       console.error("Failed to save quote request to database:", dbError);
-      // Continue to try sending email even if DB fails
+      return { success: false, error: `Database error: ${dbError.message}` };
     }
 
     // Try to send email notification
@@ -142,7 +142,7 @@ ${data.pieces ? `Pieces: ${data.pieces}` : ""}
 ${data.notes ? `Additional Notes\n----------------\n${data.notes}` : ""}
     `.trim();
 
-    await resend.emails.send({
+    const emailResult = await resend.emails.send({
       from: "Timber International <onboarding@resend.dev>",
       to: "info@timber-international.com",
       replyTo: data.email,
@@ -151,9 +151,15 @@ ${data.notes ? `Additional Notes\n----------------\n${data.notes}` : ""}
       text: emailText,
     });
 
+    if (emailResult.error) {
+      console.error("Failed to send email:", emailResult.error);
+      // Still return success since data was saved to database
+    }
+
     return { success: true };
   } catch (error) {
     console.error("Failed to submit quote request:", error);
-    return { success: false, error: "Failed to submit quote request. Please try again." };
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return { success: false, error: `Failed to submit quote request: ${errorMessage}` };
   }
 }
