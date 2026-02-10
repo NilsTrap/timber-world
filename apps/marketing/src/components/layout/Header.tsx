@@ -78,6 +78,10 @@ export function Header({ variant: propVariant }: HeaderProps) {
                 : ""
             )}
             aria-label={`${siteConfig.name} - Home`}
+            onClick={() => {
+              // Scroll to top when clicking logo (especially useful on homepage during journey)
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
           >
             <Image
               src={siteConfig.logo.dark}
