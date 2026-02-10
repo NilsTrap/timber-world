@@ -2,18 +2,23 @@
 
 import { useTranslations } from "next-intl";
 import { cn, Card, CardContent, Checkbox } from "@timber/ui";
-import type { Product } from "@timber/database";
-import { StockStatusBadge } from "./StockStatusBadge";
+import type { StockProduct } from "@/lib/actions/products";
 import { PriceDisplay } from "./PriceDisplay";
 
 interface ProductCardProps {
-  product: Product;
+  product: StockProduct;
   isSelected: boolean;
   onToggleSelect: () => void;
 }
 
 export function ProductCard({ product, isSelected, onToggleSelect }: ProductCardProps) {
   const t = useTranslations("catalog");
+
+  // Format volume with 3 decimal places
+  const formatVolume = (volume: number | null) => {
+    if (!volume) return "—";
+    return volume.toFixed(3);
+  };
 
   return (
     <Card
@@ -40,7 +45,11 @@ export function ProductCard({ product, isSelected, onToggleSelect }: ProductCard
               {product.thickness} × {product.width} × {product.length} {t("mm")}
             </p>
           </div>
-          <StockStatusBadge status={product.stock_status} />
+          {/* Stock info: pieces and volume */}
+          <div className="text-right text-sm">
+            <p className="font-semibold">{product.stock_quantity} {t("pieces")}</p>
+            <p className="text-muted-foreground">{formatVolume(product.volume_m3)} {t("cubicMeters")}</p>
+          </div>
         </div>
 
         <div className="mt-4 pt-4 border-t grid grid-cols-2 gap-3 text-sm">
