@@ -144,7 +144,7 @@ ${data.notes ? `Additional Notes\n----------------\n${data.notes}` : ""}
 
     const emailResult = await resend.emails.send({
       from: "Timber International <onboarding@resend.dev>",
-      to: "info@timber-international.com",
+      to: "nils@nils.lv", // TODO: Change to info@timber-international.com after domain verification
       replyTo: data.email,
       subject: `Quote Request from ${data.name}${data.company ? ` (${data.company})` : ""}`,
       html: emailHtml,
