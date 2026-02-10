@@ -55,29 +55,63 @@ export function ProductFilterDrawer({
         width: "100vw",
         height: "100vh",
         zIndex: 9999,
-        backgroundColor: "red",
+        backgroundColor: "#FAF6F1",
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
       }}
     >
-      <h1 style={{ color: "white", fontSize: "32px", marginBottom: "20px" }}>
-        FILTER OVERLAY IS OPEN
-      </h1>
-      <button
-        onClick={() => setOpen(false)}
+      {/* Header */}
+      <div
         style={{
-          padding: "20px 40px",
-          fontSize: "20px",
-          backgroundColor: "white",
-          border: "none",
-          borderRadius: "8px",
-          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "16px",
+          borderBottom: "1px solid #E5DFD7",
+          backgroundColor: "#FAF6F1",
+          flexShrink: 0,
         }}
       >
-        CLOSE THIS
-      </button>
+        <h2 style={{ fontSize: "18px", fontWeight: 600, margin: 0 }}>{t("filters")}</h2>
+        <button
+          onClick={() => setOpen(false)}
+          style={{
+            padding: "8px",
+            borderRadius: "50%",
+            border: "none",
+            backgroundColor: "transparent",
+            cursor: "pointer",
+          }}
+          aria-label="Close filters"
+        >
+          <X style={{ width: "24px", height: "24px" }} />
+        </button>
+      </div>
+
+      {/* Filter Content */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
+        <ProductFilter
+          filters={filters}
+          filterOptions={filterOptions}
+          activeFilterCount={activeFilterCount}
+          onFilterChange={(key, values) => {
+            onFilterChange(key, values);
+          }}
+          onFscChange={onFscChange}
+          onClearFilters={onClearFilters}
+        />
+      </div>
+
+      {/* Apply Button */}
+      <div style={{ padding: "16px", borderTop: "1px solid #E5DFD7", backgroundColor: "#FAF6F1", flexShrink: 0 }}>
+        <Button
+          variant="default"
+          className="w-full bg-forest-green text-white"
+          onClick={() => setOpen(false)}
+        >
+          Apply Filters
+        </Button>
+      </div>
     </div>
   ) : null;
 

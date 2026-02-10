@@ -144,10 +144,21 @@ export function ProductCatalog({
   return (
     <div className="pl-8 pr-8">
       {/* Header */}
-      <div className="py-1">
+      <div className="py-1 flex items-center justify-between">
         <h1 className="text-3xl font-semibold tracking-tight text-charcoal">
           {t("title")}
         </h1>
+        {/* Mobile Filter Button - next to title */}
+        <div className="lg:hidden">
+          <ProductFilterDrawer
+            filters={filters}
+            filterOptions={filterOptions}
+            activeFilterCount={activeFilterCount}
+            onFilterChange={handleFilterChange}
+            onFscChange={handleFscChange}
+            onClearFilters={handleClearFilters}
+          />
+        </div>
       </div>
 
       <div className="flex gap-8 mt-4" style={{ height: 'calc(100vh - 13rem)' }}>
@@ -216,18 +227,6 @@ export function ProductCatalog({
         selectedIds={Array.from(selectedProducts)}
         onClearSelection={handleClearSelection}
       />
-
-      {/* Mobile Filter Button - Fixed at bottom */}
-      <div className="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
-        <ProductFilterDrawer
-          filters={filters}
-          filterOptions={filterOptions}
-          activeFilterCount={activeFilterCount}
-          onFilterChange={handleFilterChange}
-          onFscChange={handleFscChange}
-          onClearFilters={handleClearFilters}
-        />
-      </div>
     </div>
   );
 }
