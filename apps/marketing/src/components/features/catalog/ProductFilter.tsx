@@ -89,8 +89,8 @@ export function ProductFilter({
   const t = useTranslations("catalog");
 
   // Collapsible state for all sections
-  const [productOpen, setProductOpen] = useState(false);
-  const [speciesOpen, setSpeciesOpen] = useState(true);
+  const [productOpen, setProductOpen] = useState(true);
+  const [speciesOpen, setSpeciesOpen] = useState(false);
   const [humidityOpen, setHumidityOpen] = useState(false);
   const [typeOpen, setTypeOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
