@@ -179,8 +179,9 @@ export async function getProducts(
       products = products.filter(p => filters.humidity!.includes(p.humidity || ""));
     }
 
-    // Apply sorting (default to alphabetical by name if no sort specified)
+    // Apply sorting
     if (sortBy) {
+      // User-specified single column sort
       products.sort((a, b) => {
         const aVal = (a as unknown as Record<string, unknown>)[sortBy];
         const bVal = (b as unknown as Record<string, unknown>)[sortBy];
@@ -192,8 +193,41 @@ export async function getProducts(
         return sortOrder === "asc" ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
       });
     } else {
-      // Default: sort alphabetically by product name
-      products.sort((a, b) => a.name.localeCompare(b.name));
+      // Default: multi-column sort in order:
+      // Product (A-Z), Species (A-Z), Humidity (A-Z), Type (A-Z),
+      // Quality (A-Z), Thickness (asc), Width (asc), Length (asc)
+      products.sort((a, b) => {
+        // 1. Product name (A-Z)
+        const nameCompare = a.name.localeCompare(b.name);
+        if (nameCompare !== 0) return nameCompare;
+
+        // 2. Species (A-Z)
+        const speciesCompare = a.species.localeCompare(b.species);
+        if (speciesCompare !== 0) return speciesCompare;
+
+        // 3. Humidity (A-Z)
+        const humidityCompare = (a.humidity || "").localeCompare(b.humidity || "");
+        if (humidityCompare !== 0) return humidityCompare;
+
+        // 4. Type (A-Z)
+        const typeCompare = a.type.localeCompare(b.type);
+        if (typeCompare !== 0) return typeCompare;
+
+        // 5. Quality (A-Z)
+        const qualityCompare = a.quality_grade.localeCompare(b.quality_grade);
+        if (qualityCompare !== 0) return qualityCompare;
+
+        // 6. Thickness (ascending)
+        const thicknessCompare = a.thickness - b.thickness;
+        if (thicknessCompare !== 0) return thicknessCompare;
+
+        // 7. Width (ascending)
+        const widthCompare = a.width - b.width;
+        if (widthCompare !== 0) return widthCompare;
+
+        // 8. Length (ascending)
+        return a.length - b.length;
+      });
     }
 
     return {
