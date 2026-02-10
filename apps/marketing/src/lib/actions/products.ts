@@ -10,6 +10,8 @@ export interface StockProduct extends Product {
   thickness_display: string;
   width_display: string;
   length_display: string;
+  // Original type value from database for filtering
+  type_original: string;
 }
 
 // Interface for inventory package with resolved references
@@ -122,7 +124,8 @@ export async function getProducts(
       const length = safeParseInt(pkg.length);
       const pieces = safeParseInt(pkg.pieces);
       const typeValue = pkg.ref_types?.value || "";
-      const type: ProductType = typeValue === "FJ" ? "FJ" : "FS";
+      // Convert database values to FJ/FS for display, but keep original for filtering
+      const type: ProductType = typeValue.toLowerCase().includes("finger") || typeValue === "FJ" ? "FJ" : "FS";
 
       return {
         id: pkg.id,
@@ -137,6 +140,8 @@ export async function getProducts(
         length_display: pkg.length || "",
         quality_grade: pkg.ref_quality?.value || "",
         type,
+        // Store original type value for filtering
+        type_original: typeValue,
         humidity: pkg.ref_humidity?.value || "",
         processing: pkg.ref_processing?.value || "",
         fsc_certified: pkg.ref_fsc?.value === "FSC 100%" || pkg.ref_fsc?.value === "FSC Credit Mix",
@@ -173,7 +178,8 @@ export async function getProducts(
       products = products.filter(p => filters.qualityGrade!.includes(p.quality_grade));
     }
     if (filters.type?.length) {
-      products = products.filter(p => filters.type!.includes(p.type));
+      // Filter using the original type value from database
+      products = products.filter(p => filters.type!.includes(p.type_original));
     }
     if (filters.humidity?.length) {
       products = products.filter(p => filters.humidity!.includes(p.humidity || ""));
