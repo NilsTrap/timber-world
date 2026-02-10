@@ -13,7 +13,7 @@ export function HeroSection() {
 
   return (
     <section
-      className="relative h-screen w-full overflow-hidden"
+      className="relative h-screen w-full overflow-hidden bg-charcoal"
       aria-label={t("heroSlogan")}
     >
       {/* Video/Image Background */}

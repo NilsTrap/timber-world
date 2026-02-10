@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { usePathname } from "@/i18n/routing";
@@ -19,6 +20,26 @@ export function Header({ variant: propVariant }: HeaderProps) {
   const scrolledPast = useScrolledPastHero();
   const scrollDirection = useScrollDirection();
 
+  // Track if we've completed initial render to enable transitions
+  const [mounted, setMounted] = useState(false);
+  const [prevPathname, setPrevPathname] = useState(pathname);
+
+  // Enable transitions only after mount and a brief delay
+  useEffect(() => {
+    const timer = setTimeout(() => setMounted(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Reset mounted state briefly on navigation to prevent flash
+  useEffect(() => {
+    if (pathname !== prevPathname) {
+      setMounted(false);
+      setPrevPathname(pathname);
+      const timer = setTimeout(() => setMounted(true), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [pathname, prevPathname]);
+
   // On homepage, start with transparent and switch to solid after scrolling
   const isHomepage = pathname === "/";
   const variant = isHomepage
@@ -33,7 +54,9 @@ export function Header({ variant: propVariant }: HeaderProps) {
   return (
     <header
       className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
+        "fixed top-0 left-0 right-0 z-50",
+        // Only enable transitions after mounted to prevent flash
+        mounted ? "transition-all duration-300" : "transition-none",
         variant === "transparent"
           ? "bg-transparent text-white"
           : "bg-warm-cream text-charcoal border-b border-border",
