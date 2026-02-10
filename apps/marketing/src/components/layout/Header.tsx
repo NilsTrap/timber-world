@@ -55,7 +55,7 @@ export function Header({ variant: propVariant }: HeaderProps) {
   return (
     <header
       className={cn(
-        "fixed top-0 left-0 right-0 z-50",
+        "fixed top-0 left-0 right-0 z-[100]",
         // Only enable transitions after mounted to prevent flash
         mounted ? "transition-all duration-300" : "transition-none",
         variant === "transparent"
