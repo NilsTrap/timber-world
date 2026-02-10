@@ -18,6 +18,7 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/admin/inventory", label: "Inventory", iconName: "Package" },
   { href: "/admin/shipments", label: "Shipments", iconName: "Truck" },
   { href: "/production", label: "Production", iconName: "Factory" },
+  { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText" },
   { href: "/admin/reference", label: "Reference Data", iconName: "Settings" },
   { href: "/admin/organisations", label: "Organisations", iconName: "Building2" },
   { href: "/admin/roles", label: "Roles", iconName: "Shield" },
