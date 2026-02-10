@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import {
   Table,
   TableBody,
@@ -92,9 +92,8 @@ export function QuoteRequestsTable() {
         </TableHeader>
         <TableBody>
           {requests.map((request) => (
-            <>
+            <Fragment key={request.id}>
               <TableRow
-                key={request.id}
                 className="cursor-pointer hover:bg-muted/50"
                 onClick={() =>
                   setExpandedId(expandedId === request.id ? null : request.id)
@@ -237,7 +236,7 @@ export function QuoteRequestsTable() {
                   </TableCell>
                 </TableRow>
               )}
-            </>
+            </Fragment>
           ))}
         </TableBody>
       </Table>
