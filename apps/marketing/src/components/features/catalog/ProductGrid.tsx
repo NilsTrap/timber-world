@@ -1,11 +1,11 @@
 "use client";
 
 import { cn } from "@timber/ui";
-import type { Product } from "@timber/database";
+import type { StockProduct } from "@/lib/actions/products";
 import { ProductCard } from "./ProductCard";
 
 interface ProductGridProps {
-  products: Product[];
+  products: StockProduct[];
   selectedProducts: Set<string>;
   onToggleSelect: (productId: string) => void;
   isPending: boolean;
