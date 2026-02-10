@@ -64,7 +64,23 @@ export default async function ProductsPage({ params, searchParams }: Props) {
   return (
     <div className="bg-warm-cream">
       <ProductCatalog
-        initialProducts={productsResult.success ? productsResult.data : { products: [], total: 0, page: 1, pageSize: 20 }}
+        initialProducts={productsResult.success ? productsResult.data : {
+          products: [],
+          total: 0,
+          page: 1,
+          pageSize: 20,
+          filterOptions: filterOptionsResult.success ? filterOptionsResult.data : {
+            products: [],
+            species: [],
+            widths: [],
+            lengths: [],
+            thicknesses: [],
+            qualityGrades: [],
+            types: [],
+            humidities: [],
+            processings: [],
+          }
+        }}
         initialFilters={filters}
         initialPage={page}
         initialSortBy={sortBy}

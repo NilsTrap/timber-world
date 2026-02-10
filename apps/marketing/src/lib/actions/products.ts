@@ -53,6 +53,7 @@ export interface ProductsResponse {
   total: number;
   page: number;
   pageSize: number;
+  filterOptions: FilterOptions;
 }
 
 export interface FilterOptions {
@@ -236,6 +237,19 @@ export async function getProducts(
       });
     }
 
+    // Calculate dynamic filter options from filtered products
+    const dynamicFilterOptions: FilterOptions = {
+      products: [...new Set(products.map(p => p.name))].sort(),
+      species: [...new Set(products.map(p => p.species))].sort(),
+      widths: [...new Set(products.map(p => p.width))].sort((a, b) => a - b),
+      lengths: [...new Set(products.map(p => p.length))].sort((a, b) => a - b),
+      thicknesses: [...new Set(products.map(p => p.thickness))].sort((a, b) => a - b),
+      qualityGrades: [...new Set(products.map(p => p.quality_grade).filter(Boolean))].sort(),
+      types: [...new Set(products.map(p => p.type_original).filter(Boolean))].sort() as ProductType[],
+      humidities: [...new Set(products.map(p => p.humidity).filter(Boolean))].sort() as string[],
+      processings: [...new Set(products.map(p => p.processing).filter(Boolean))].sort() as string[],
+    };
+
     return {
       success: true,
       data: {
@@ -243,6 +257,7 @@ export async function getProducts(
         total: products.length,
         page,
         pageSize: PAGE_SIZE,
+        filterOptions: dynamicFilterOptions,
       },
     };
   } catch (err) {

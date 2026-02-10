@@ -42,6 +42,9 @@ export function ProductCatalog({
   const [sortBy, setSortBy] = useState<string | undefined>(initialSortBy);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">(initialSortOrder);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [currentFilterOptions, setCurrentFilterOptions] = useState<FilterOptions>(
+    initialProducts.filterOptions || filterOptions
+  );
 
   const pageSize = initialProducts.pageSize;
   const totalPages = Math.ceil(total / pageSize);
@@ -79,6 +82,8 @@ export function ProductCatalog({
         setProducts(result.data.products);
         setTotal(result.data.total);
         setPage(result.data.page);
+        // Update filter options based on current filtered products
+        setCurrentFilterOptions(result.data.filterOptions);
       }
       updateUrl(newFilters, newPage, newSortBy, newSortOrder);
     });
@@ -152,7 +157,7 @@ export function ProductCatalog({
         <div className="lg:hidden">
           <ProductFilterDrawer
             filters={filters}
-            filterOptions={filterOptions}
+            filterOptions={currentFilterOptions}
             activeFilterCount={activeFilterCount}
             onFilterChange={handleFilterChange}
             onFscChange={handleFscChange}
@@ -166,7 +171,7 @@ export function ProductCatalog({
         <aside className="hidden lg:block w-[180px] flex-shrink-0">
           <ProductFilter
             filters={filters}
-            filterOptions={filterOptions}
+            filterOptions={currentFilterOptions}
             activeFilterCount={activeFilterCount}
             onFilterChange={handleFilterChange}
             onFscChange={handleFscChange}
