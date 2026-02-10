@@ -1,6 +1,7 @@
 "use server";
 
 import { Resend } from "resend";
+import { createClient } from "@timber/database/server";
 
 interface QuoteFormData {
   name: string;
@@ -17,12 +18,19 @@ interface QuoteFormData {
   length?: string;
   pieces?: string;
   notes?: string;
+  selectedProductIds?: string[];
 }
 
 type ActionResult = { success: true } | { success: false; error: string };
 
 export async function submitQuoteRequest(formData: FormData): Promise<ActionResult> {
   try {
+    // Parse selected product IDs if present
+    const selectedProductIdsRaw = formData.get("selectedProductIds") as string;
+    const selectedProductIds = selectedProductIdsRaw
+      ? selectedProductIdsRaw.split(",").filter(Boolean)
+      : undefined;
+
     const data: QuoteFormData = {
       name: formData.get("name") as string,
       company: formData.get("company") as string || undefined,
@@ -38,6 +46,7 @@ export async function submitQuoteRequest(formData: FormData): Promise<ActionResu
       length: formData.get("length") as string || undefined,
       pieces: formData.get("pieces") as string || undefined,
       notes: formData.get("notes") as string || undefined,
+      selectedProductIds,
     };
 
     // Validate required fields
@@ -45,12 +54,39 @@ export async function submitQuoteRequest(formData: FormData): Promise<ActionResu
       return { success: false, error: "Name and email are required" };
     }
 
+    // Save to database first
+    const supabase = await createClient();
+    const { error: dbError } = await supabase
+      .from("quote_requests")
+      .insert({
+        name: data.name,
+        company: data.company || null,
+        email: data.email,
+        phone: data.phone || null,
+        product: data.product || null,
+        species: data.species || null,
+        type: data.type || null,
+        quality: data.quality || null,
+        humidity: data.humidity || null,
+        thickness: data.thickness || null,
+        width: data.width || null,
+        length: data.length || null,
+        pieces: data.pieces || null,
+        notes: data.notes || null,
+        selected_product_ids: data.selectedProductIds || null,
+        status: "new",
+      });
+
+    if (dbError) {
+      console.error("Failed to save quote request to database:", dbError);
+      // Continue to try sending email even if DB fails
+    }
+
+    // Try to send email notification
     const resendApiKey = process.env.RESEND_API_KEY;
 
     if (!resendApiKey) {
-      console.error("RESEND_API_KEY is not configured");
-      // In development, log the form data instead of failing
-      console.log("Quote request received:", data);
+      console.log("RESEND_API_KEY not configured - quote saved to database only");
       return { success: true };
     }
 
