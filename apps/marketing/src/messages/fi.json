@@ -217,5 +217,31 @@
     "privacyLink": "Lue lisää",
     "accept": "Hyväksy",
     "reject": "Hylkää"
+  },
+  "privacy": {
+    "title": "Tietosuojakäytäntö",
+    "intro": "Timber Internationalilla kunnioitamme yksityisyyttäsi. Tämä käytäntö selittää, mitä tietoja keräämme vieraillessasi verkkosivustollamme ja miten käytämme niitä.",
+    "collectTitle": "Mitä keräämme",
+    "collectIntro": "Kun hyväksyt analytiikkaevästeet, keräämme anonyymia käyttötietoa, mukaan lukien:",
+    "collectItem1": "Vierailemasi sivut ja kullakin sivulla vietetty aika",
+    "collectItem2": "Yleinen sijainti (maa/alue) yhteydestäsi johdettuna",
+    "collectItem3": "Laitetyyppi, selain ja käyttöjärjestelmä",
+    "collectItem4": "Miten käytät tuoteluetteloamme ja tarjouspyyntölomakkeita",
+    "notCollectTitle": "Mitä emme kerää",
+    "notCollectItem1": "Nimeäsi, sähköpostiasi tai muita henkilötietoja (ellet lähetä tarjouspyyntöä)",
+    "notCollectItem2": "IP-osoitettasi ei tallenneta",
+    "notCollectItem3": "Emme seuraa sinua muilla verkkosivustoilla",
+    "notCollectItem4": "Emme myy tai jaa tietojasi kolmansille osapuolille mainontaa varten",
+    "useTitle": "Miten käytämme tietoja",
+    "useIntro": "Käytämme anonyymia analytiikkatietoa:",
+    "useItem1": "Ymmärtääksemme, mitkä tuotteet ovat suosituimpia",
+    "useItem2": "Parantaaksemme verkkosivuston navigointia ja käyttökokemusta",
+    "useItem3": "Tunnistaaksemme ja korjataksemme teknisiä ongelmia",
+    "cookiesTitle": "Evästeet",
+    "cookiesText": "Käytämme istuntopohjaisia evästeitä anonyymien vierailujen seuraamiseen. Nämä evästeet vanhenevat 30 minuutin käyttämättömyyden jälkeen. Jos hylkäät evästeet, emme kerää analytiikkatietoja vierailustasi.",
+    "choicesTitle": "Valintasi",
+    "choicesText": "Voit hyväksyä tai hylätä analytiikkaevästeet ensimmäisellä vierailullasi. Jos hylkäät evästeet, voit silti käyttää verkkosivustoamme normaalisti - emme vain kerää käyttötietoja. Voit tyhjentää selaimesi evästeet milloin tahansa nollataksesi asetuksesi.",
+    "contactTitle": "Yhteystiedot",
+    "contactText": "Jos sinulla on kysyttävää tästä tietosuojakäytännöstä, ota meihin yhteyttä verkkosivustomme kautta."
   }
 }

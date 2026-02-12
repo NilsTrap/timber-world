@@ -219,5 +219,31 @@
     "privacyLink": "Learn more",
     "accept": "Accept",
     "reject": "Reject"
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "intro": "At Timber International, we respect your privacy. This policy explains what information we collect when you visit our website and how we use it.",
+    "collectTitle": "What We Collect",
+    "collectIntro": "When you accept analytics cookies, we collect anonymous usage data including:",
+    "collectItem1": "Pages you visit and time spent on each page",
+    "collectItem2": "General location (country/region) derived from your connection",
+    "collectItem3": "Device type, browser, and operating system",
+    "collectItem4": "How you interact with our product catalog and quote forms",
+    "notCollectTitle": "What We Do NOT Collect",
+    "notCollectItem1": "Your name, email, or other personal information (unless you submit a quote request)",
+    "notCollectItem2": "Your IP address is not stored",
+    "notCollectItem3": "We do not track you across other websites",
+    "notCollectItem4": "We do not sell or share your data with third parties for advertising",
+    "useTitle": "How We Use This Data",
+    "useIntro": "We use anonymous analytics data to:",
+    "useItem1": "Understand which products are most popular",
+    "useItem2": "Improve website navigation and user experience",
+    "useItem3": "Identify and fix technical issues",
+    "cookiesTitle": "Cookies",
+    "cookiesText": "We use session-based cookies to track anonymous visits. These cookies expire after 30 minutes of inactivity. If you reject cookies, we will not collect any analytics data from your visit.",
+    "choicesTitle": "Your Choices",
+    "choicesText": "You can accept or reject analytics cookies when you first visit our site. If you reject cookies, you can still use our website normally - we simply won't collect usage data. You can clear your browser cookies at any time to reset your preference.",
+    "contactTitle": "Contact",
+    "contactText": "If you have questions about this privacy policy, please contact us through our website."
   }
 }

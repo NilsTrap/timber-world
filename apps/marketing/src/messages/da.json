@@ -217,5 +217,31 @@
     "privacyLink": "Læs mere",
     "accept": "Accepter",
     "reject": "Afvis"
+  },
+  "privacy": {
+    "title": "Privatlivspolitik",
+    "intro": "Hos Timber International respekterer vi dit privatliv. Denne politik forklarer, hvilke oplysninger vi indsamler, når du besøger vores hjemmeside, og hvordan vi bruger dem.",
+    "collectTitle": "Hvad vi indsamler",
+    "collectIntro": "Når du accepterer analysecookies, indsamler vi anonyme brugsdata, herunder:",
+    "collectItem1": "Sider du besøger og tid brugt på hver side",
+    "collectItem2": "Generel placering (land/region) udledt fra din forbindelse",
+    "collectItem3": "Enhedstype, browser og operativsystem",
+    "collectItem4": "Hvordan du interagerer med vores produktkatalog og tilbudsformularer",
+    "notCollectTitle": "Hvad vi IKKE indsamler",
+    "notCollectItem1": "Dit navn, e-mail eller andre personlige oplysninger (medmindre du indsender en tilbudsanmodning)",
+    "notCollectItem2": "Din IP-adresse gemmes ikke",
+    "notCollectItem3": "Vi sporer dig ikke på andre hjemmesider",
+    "notCollectItem4": "Vi sælger eller deler ikke dine data med tredjeparter til reklameformål",
+    "useTitle": "Hvordan vi bruger disse data",
+    "useIntro": "Vi bruger anonyme analysedata til at:",
+    "useItem1": "Forstå hvilke produkter der er mest populære",
+    "useItem2": "Forbedre hjemmesidens navigation og brugeroplevelse",
+    "useItem3": "Identificere og løse tekniske problemer",
+    "cookiesTitle": "Cookies",
+    "cookiesText": "Vi bruger sessionsbaserede cookies til at spore anonyme besøg. Disse cookies udløber efter 30 minutters inaktivitet. Hvis du afviser cookies, indsamler vi ikke analysedata fra dit besøg.",
+    "choicesTitle": "Dine valg",
+    "choicesText": "Du kan acceptere eller afvise analysecookies, når du første gang besøger vores side. Hvis du afviser cookies, kan du stadig bruge vores hjemmeside normalt - vi indsamler bare ikke brugsdata. Du kan rydde dine browsercookies når som helst for at nulstille dine præferencer.",
+    "contactTitle": "Kontakt",
+    "contactText": "Hvis du har spørgsmål om denne privatlivspolitik, bedes du kontakte os via vores hjemmeside."
   }
 }

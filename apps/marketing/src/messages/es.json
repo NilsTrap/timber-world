@@ -217,5 +217,31 @@
     "privacyLink": "Más información",
     "accept": "Aceptar",
     "reject": "Rechazar"
+  },
+  "privacy": {
+    "title": "Política de Privacidad",
+    "intro": "En Timber International, respetamos su privacidad. Esta política explica qué información recopilamos cuando visita nuestro sitio web y cómo la utilizamos.",
+    "collectTitle": "Qué recopilamos",
+    "collectIntro": "Cuando acepta las cookies de análisis, recopilamos datos de uso anónimos que incluyen:",
+    "collectItem1": "Páginas que visita y tiempo dedicado a cada página",
+    "collectItem2": "Ubicación general (país/región) derivada de su conexión",
+    "collectItem3": "Tipo de dispositivo, navegador y sistema operativo",
+    "collectItem4": "Cómo interactúa con nuestro catálogo de productos y formularios de cotización",
+    "notCollectTitle": "Qué NO recopilamos",
+    "notCollectItem1": "Su nombre, correo electrónico u otra información personal (a menos que envíe una solicitud de cotización)",
+    "notCollectItem2": "Su dirección IP no se almacena",
+    "notCollectItem3": "No lo rastreamos en otros sitios web",
+    "notCollectItem4": "No vendemos ni compartimos sus datos con terceros para publicidad",
+    "useTitle": "Cómo utilizamos estos datos",
+    "useIntro": "Utilizamos datos de análisis anónimos para:",
+    "useItem1": "Comprender qué productos son más populares",
+    "useItem2": "Mejorar la navegación del sitio web y la experiencia del usuario",
+    "useItem3": "Identificar y solucionar problemas técnicos",
+    "cookiesTitle": "Cookies",
+    "cookiesText": "Utilizamos cookies basadas en sesión para rastrear visitas anónimas. Estas cookies caducan después de 30 minutos de inactividad. Si rechaza las cookies, no recopilaremos ningún dato de análisis de su visita.",
+    "choicesTitle": "Sus opciones",
+    "choicesText": "Puede aceptar o rechazar las cookies de análisis cuando visite nuestro sitio por primera vez. Si rechaza las cookies, aún puede usar nuestro sitio web normalmente, simplemente no recopilaremos datos de uso. Puede borrar las cookies de su navegador en cualquier momento para restablecer sus preferencias.",
+    "contactTitle": "Contacto",
+    "contactText": "Si tiene preguntas sobre esta política de privacidad, contáctenos a través de nuestro sitio web."
   }
 }

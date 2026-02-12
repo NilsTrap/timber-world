@@ -217,5 +217,31 @@
     "privacyLink": "Läs mer",
     "accept": "Acceptera",
     "reject": "Avvisa"
+  },
+  "privacy": {
+    "title": "Integritetspolicy",
+    "intro": "På Timber International respekterar vi din integritet. Denna policy förklarar vilken information vi samlar in när du besöker vår webbplats och hur vi använder den.",
+    "collectTitle": "Vad vi samlar in",
+    "collectIntro": "När du accepterar analyticscookies samlar vi in anonym användningsdata inklusive:",
+    "collectItem1": "Sidor du besöker och tid spenderad på varje sida",
+    "collectItem2": "Allmän plats (land/region) härledd från din anslutning",
+    "collectItem3": "Enhetstyp, webbläsare och operativsystem",
+    "collectItem4": "Hur du interagerar med vår produktkatalog och offertformulär",
+    "notCollectTitle": "Vad vi INTE samlar in",
+    "notCollectItem1": "Ditt namn, e-post eller annan personlig information (om du inte skickar en offertförfrågan)",
+    "notCollectItem2": "Din IP-adress lagras inte",
+    "notCollectItem3": "Vi spårar dig inte på andra webbplatser",
+    "notCollectItem4": "Vi säljer eller delar inte din data med tredje part för reklam",
+    "useTitle": "Hur vi använder denna data",
+    "useIntro": "Vi använder anonym analyticsdata för att:",
+    "useItem1": "Förstå vilka produkter som är mest populära",
+    "useItem2": "Förbättra webbplatsnavigering och användarupplevelse",
+    "useItem3": "Identifiera och åtgärda tekniska problem",
+    "cookiesTitle": "Cookies",
+    "cookiesText": "Vi använder sessionsbaserade cookies för att spåra anonyma besök. Dessa cookies upphör efter 30 minuters inaktivitet. Om du avvisar cookies kommer vi inte att samla in någon analyticsdata från ditt besök.",
+    "choicesTitle": "Dina val",
+    "choicesText": "Du kan acceptera eller avvisa analyticscookies när du först besöker vår webbplats. Om du avvisar cookies kan du fortfarande använda vår webbplats normalt - vi samlar helt enkelt inte in användningsdata. Du kan rensa dina webbläsarcookies när som helst för att återställa dina inställningar.",
+    "contactTitle": "Kontakt",
+    "contactText": "Om du har frågor om denna integritetspolicy, vänligen kontakta oss via vår webbplats."
   }
 }

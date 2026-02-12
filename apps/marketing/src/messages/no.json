@@ -217,5 +217,31 @@
     "privacyLink": "Les mer",
     "accept": "Godta",
     "reject": "Avslå"
+  },
+  "privacy": {
+    "title": "Personvernerklæring",
+    "intro": "Hos Timber International respekterer vi personvernet ditt. Denne erklæringen forklarer hvilken informasjon vi samler inn når du besøker nettstedet vårt og hvordan vi bruker den.",
+    "collectTitle": "Hva vi samler inn",
+    "collectIntro": "Når du godtar analysecookies, samler vi inn anonyme bruksdata, inkludert:",
+    "collectItem1": "Sider du besøker og tid brukt på hver side",
+    "collectItem2": "Generell plassering (land/region) utledet fra tilkoblingen din",
+    "collectItem3": "Enhetstype, nettleser og operativsystem",
+    "collectItem4": "Hvordan du samhandler med produktkatalogen og tilbudsforespørselsskjemaer",
+    "notCollectTitle": "Hva vi IKKE samler inn",
+    "notCollectItem1": "Navnet ditt, e-post eller annen personlig informasjon (med mindre du sender en tilbudsforespørsel)",
+    "notCollectItem2": "IP-adressen din lagres ikke",
+    "notCollectItem3": "Vi sporer deg ikke på andre nettsteder",
+    "notCollectItem4": "Vi selger eller deler ikke dataene dine med tredjeparter for reklame",
+    "useTitle": "Hvordan vi bruker disse dataene",
+    "useIntro": "Vi bruker anonyme analysedata for å:",
+    "useItem1": "Forstå hvilke produkter som er mest populære",
+    "useItem2": "Forbedre nettstedets navigasjon og brukeropplevelse",
+    "useItem3": "Identifisere og løse tekniske problemer",
+    "cookiesTitle": "Informasjonskapsler",
+    "cookiesText": "Vi bruker sesjonsbaserte informasjonskapsler for å spore anonyme besøk. Disse informasjonskapslene utløper etter 30 minutters inaktivitet. Hvis du avslår informasjonskapsler, vil vi ikke samle inn analysedata fra besøket ditt.",
+    "choicesTitle": "Dine valg",
+    "choicesText": "Du kan godta eller avslå analysecookies når du først besøker nettstedet vårt. Hvis du avslår informasjonskapsler, kan du fortsatt bruke nettstedet normalt - vi samler bare ikke inn bruksdata. Du kan slette nettleserens informasjonskapsler når som helst for å tilbakestille innstillingene dine.",
+    "contactTitle": "Kontakt",
+    "contactText": "Hvis du har spørsmål om denne personvernerklæringen, vennligst kontakt oss via nettstedet vårt."
   }
 }

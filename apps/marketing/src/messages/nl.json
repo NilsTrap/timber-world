@@ -217,5 +217,31 @@
     "privacyLink": "Meer informatie",
     "accept": "Accepteren",
     "reject": "Weigeren"
+  },
+  "privacy": {
+    "title": "Privacybeleid",
+    "intro": "Bij Timber International respecteren wij uw privacy. Dit beleid legt uit welke informatie wij verzamelen wanneer u onze website bezoekt en hoe wij deze gebruiken.",
+    "collectTitle": "Wat wij verzamelen",
+    "collectIntro": "Wanneer u analytische cookies accepteert, verzamelen wij anonieme gebruiksgegevens, waaronder:",
+    "collectItem1": "Pagina's die u bezoekt en tijd besteed op elke pagina",
+    "collectItem2": "Algemene locatie (land/regio) afgeleid van uw verbinding",
+    "collectItem3": "Apparaattype, browser en besturingssysteem",
+    "collectItem4": "Hoe u interactie heeft met onze productcatalogus en offerteformulieren",
+    "notCollectTitle": "Wat wij NIET verzamelen",
+    "notCollectItem1": "Uw naam, e-mail of andere persoonlijke informatie (tenzij u een offerteaanvraag indient)",
+    "notCollectItem2": "Uw IP-adres wordt niet opgeslagen",
+    "notCollectItem3": "Wij volgen u niet op andere websites",
+    "notCollectItem4": "Wij verkopen of delen uw gegevens niet met derden voor reclame",
+    "useTitle": "Hoe wij deze gegevens gebruiken",
+    "useIntro": "Wij gebruiken anonieme analysegegevens om:",
+    "useItem1": "Te begrijpen welke producten het populairst zijn",
+    "useItem2": "Website-navigatie en gebruikerservaring te verbeteren",
+    "useItem3": "Technische problemen te identificeren en op te lossen",
+    "cookiesTitle": "Cookies",
+    "cookiesText": "Wij gebruiken sessiegebaseerde cookies om anonieme bezoeken te volgen. Deze cookies verlopen na 30 minuten inactiviteit. Als u cookies weigert, verzamelen wij geen analysegegevens van uw bezoek.",
+    "choicesTitle": "Uw keuzes",
+    "choicesText": "U kunt analytische cookies accepteren of weigeren wanneer u onze site voor het eerst bezoekt. Als u cookies weigert, kunt u onze website nog steeds normaal gebruiken - wij verzamelen simpelweg geen gebruiksgegevens. U kunt uw browsercookies op elk moment wissen om uw voorkeuren te resetten.",
+    "contactTitle": "Contact",
+    "contactText": "Als u vragen heeft over dit privacybeleid, neem dan contact met ons op via onze website."
   }
 }

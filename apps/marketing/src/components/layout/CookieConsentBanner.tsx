@@ -1,11 +1,12 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { Button } from "@timber/ui";
 import { useConsent } from "@/lib/analytics/useConsent";
 
 export function CookieConsentBanner() {
   const t = useTranslations("cookies");
+  const locale = useLocale();
   const { isPending, isLoaded, acceptConsent, rejectConsent } = useConsent();
 
   // Don't render anything until we've loaded the consent state
@@ -24,7 +25,7 @@ export function CookieConsentBanner() {
           <p className="text-sm text-muted-foreground">
             {t("description")}{" "}
             <a
-              href="/privacy"
+              href={`/${locale}/privacy`}
               className="text-forest-green hover:underline"
             >
               {t("privacyLink")}

@@ -217,5 +217,31 @@
     "privacyLink": "Mehr erfahren",
     "accept": "Akzeptieren",
     "reject": "Ablehnen"
+  },
+  "privacy": {
+    "title": "Datenschutzerklärung",
+    "intro": "Bei Timber International respektieren wir Ihre Privatsphäre. Diese Richtlinie erklärt, welche Informationen wir sammeln, wenn Sie unsere Website besuchen, und wie wir sie verwenden.",
+    "collectTitle": "Was wir sammeln",
+    "collectIntro": "Wenn Sie Analyse-Cookies akzeptieren, sammeln wir anonyme Nutzungsdaten, einschließlich:",
+    "collectItem1": "Seiten, die Sie besuchen, und Zeit auf jeder Seite",
+    "collectItem2": "Allgemeiner Standort (Land/Region) aus Ihrer Verbindung abgeleitet",
+    "collectItem3": "Gerätetyp, Browser und Betriebssystem",
+    "collectItem4": "Wie Sie mit unserem Produktkatalog und Angebotsformularen interagieren",
+    "notCollectTitle": "Was wir NICHT sammeln",
+    "notCollectItem1": "Ihren Namen, E-Mail oder andere persönliche Informationen (es sei denn, Sie senden eine Angebotsanfrage)",
+    "notCollectItem2": "Ihre IP-Adresse wird nicht gespeichert",
+    "notCollectItem3": "Wir verfolgen Sie nicht auf anderen Websites",
+    "notCollectItem4": "Wir verkaufen oder teilen Ihre Daten nicht mit Dritten für Werbung",
+    "useTitle": "Wie wir diese Daten verwenden",
+    "useIntro": "Wir verwenden anonyme Analysedaten, um:",
+    "useItem1": "Zu verstehen, welche Produkte am beliebtesten sind",
+    "useItem2": "Die Website-Navigation und Benutzererfahrung zu verbessern",
+    "useItem3": "Technische Probleme zu identifizieren und zu beheben",
+    "cookiesTitle": "Cookies",
+    "cookiesText": "Wir verwenden sitzungsbasierte Cookies, um anonyme Besuche zu verfolgen. Diese Cookies verfallen nach 30 Minuten Inaktivität. Wenn Sie Cookies ablehnen, sammeln wir keine Analysedaten von Ihrem Besuch.",
+    "choicesTitle": "Ihre Wahlmöglichkeiten",
+    "choicesText": "Sie können Analyse-Cookies akzeptieren oder ablehnen, wenn Sie unsere Website zum ersten Mal besuchen. Wenn Sie Cookies ablehnen, können Sie unsere Website weiterhin normal nutzen - wir sammeln einfach keine Nutzungsdaten. Sie können Ihre Browser-Cookies jederzeit löschen, um Ihre Einstellungen zurückzusetzen.",
+    "contactTitle": "Kontakt",
+    "contactText": "Wenn Sie Fragen zu dieser Datenschutzerklärung haben, kontaktieren Sie uns bitte über unsere Website."
   }
 }
