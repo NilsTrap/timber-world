@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import { useReducedMotion } from "@timber/ui";
 import { HorizontalGallery, type GalleryImage } from "./HorizontalGallery";
+import { useAnalyticsContext } from "@/lib/analytics";
 
 /**
  * Props for the JourneyStage component
@@ -49,6 +50,19 @@ export function JourneyStage({
   const [videoError, setVideoError] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const reducedMotion = useReducedMotion();
+  const analytics = useAnalyticsContext();
+  const stageEntryTimeRef = useRef<number | null>(null);
+  const maxSlideReachedRef = useRef<number>(0);
+  const isCurrentlyVisibleRef = useRef(false);
+
+  // Build gallery images first to get total count
+  const allGalleryImages: GalleryImage[] = galleryImages
+    ? [
+        { src: imageFallback, alt: altText, title: headline, description: subtext },
+        ...galleryImages,
+      ]
+    : [];
+  const totalSlides = allGalleryImages.length;
 
   useEffect(() => {
     if (!stageRef.current) return;
@@ -56,9 +70,24 @@ export function JourneyStage({
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
-        if (entry?.isIntersecting) {
+        if (entry?.isIntersecting && !isInView) {
           setIsInView(true);
-          observer.disconnect();
+          stageEntryTimeRef.current = Date.now();
+          isCurrentlyVisibleRef.current = true;
+          analytics.trackJourneyStageView(stageNumber, headline);
+        } else if (!entry?.isIntersecting && isCurrentlyVisibleRef.current) {
+          // Stage is leaving view - track exit with time spent
+          isCurrentlyVisibleRef.current = false;
+          if (stageEntryTimeRef.current) {
+            const timeSpent = Date.now() - stageEntryTimeRef.current;
+            analytics.trackJourneyStageExit(
+              stageNumber,
+              headline,
+              timeSpent,
+              maxSlideReachedRef.current,
+              totalSlides
+            );
+          }
         }
       },
       { threshold: 0.3 }
@@ -66,17 +95,28 @@ export function JourneyStage({
 
     observer.observe(stageRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [analytics, stageNumber, headline, isInView, totalSlides]);
+
+  // Gallery slide tracking callbacks
+  const handleSlideView = useCallback(
+    (slideIndex: number, slideTitle?: string) => {
+      // Track max slide reached
+      if (slideIndex > maxSlideReachedRef.current) {
+        maxSlideReachedRef.current = slideIndex;
+      }
+      analytics.trackGallerySlideView(stageNumber, headline, slideIndex, slideTitle);
+    },
+    [analytics, stageNumber, headline]
+  );
+
+  const handleSlideExit = useCallback(
+    (slideIndex: number, timeSpentMs: number, slideTitle?: string) => {
+      analytics.trackGallerySlideExit(stageNumber, headline, slideIndex, timeSpentMs, slideTitle);
+    },
+    [analytics, stageNumber, headline]
+  );
 
   const showVideo = videoSrc && !reducedMotion && !videoError && !galleryImages;
-
-  // Build gallery with main stage as first slide, then substages
-  const allGalleryImages: GalleryImage[] = galleryImages
-    ? [
-        { src: imageFallback, alt: altText, title: headline, description: subtext },
-        ...galleryImages,
-      ]
-    : [];
   const showGallery = allGalleryImages.length > 1;
 
   return (
@@ -156,6 +196,8 @@ export function JourneyStage({
           <HorizontalGallery
             images={allGalleryImages}
             galleryLabel={`${headline} gallery`}
+            onSlideView={handleSlideView}
+            onSlideExit={handleSlideExit}
           />
         </div>
       )}

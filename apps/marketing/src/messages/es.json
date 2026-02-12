@@ -210,5 +210,12 @@
       "page": "Página {current} de {total}",
       "showing": "Mostrando {from}-{to} de {total}"
     }
+  },
+  "cookies": {
+    "title": "Utilizamos cookies",
+    "description": "Utilizamos cookies y tecnologías similares para analizar el tráfico del sitio web y mejorar su experiencia. Al hacer clic en Aceptar, acepta nuestro uso de cookies de análisis.",
+    "privacyLink": "Más información",
+    "accept": "Aceptar",
+    "reject": "Rechazar"
   }
 }

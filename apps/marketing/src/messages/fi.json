@@ -210,5 +210,12 @@
       "page": "Sivu {current} / {total}",
       "showing": "Näytetään {from}-{to} / {total}"
     }
+  },
+  "cookies": {
+    "title": "Käytämme evästeitä",
+    "description": "Käytämme evästeitä ja vastaavia teknologioita analysoidaksemme verkkosivuston liikennettä ja parantaaksemme kokemustasi. Hyväksymällä suostut analytiikkaevästeiden käyttöön.",
+    "privacyLink": "Lue lisää",
+    "accept": "Hyväksy",
+    "reject": "Hylkää"
   }
 }

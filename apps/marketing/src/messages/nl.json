@@ -210,5 +210,12 @@
       "page": "Pagina {current} van {total}",
       "showing": "Toont {from}-{to} van {total}"
     }
+  },
+  "cookies": {
+    "title": "Wij gebruiken cookies",
+    "description": "Wij gebruiken cookies en vergelijkbare technologieën om websiteverkeer te analyseren en uw ervaring te verbeteren. Door op Accepteren te klikken, stemt u in met ons gebruik van analytische cookies.",
+    "privacyLink": "Meer informatie",
+    "accept": "Accepteren",
+    "reject": "Weigeren"
   }
 }

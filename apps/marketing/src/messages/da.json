@@ -210,5 +210,12 @@
       "page": "Side {current} af {total}",
       "showing": "Viser {from}-{to} af {total}"
     }
+  },
+  "cookies": {
+    "title": "Vi bruger cookies",
+    "description": "Vi bruger cookies og lignende teknologier til at analysere webstedstrafik og forbedre din oplevelse. Ved at klikke på Accepter accepterer du vores brug af analysecookies.",
+    "privacyLink": "Læs mere",
+    "accept": "Accepter",
+    "reject": "Afvis"
   }
 }

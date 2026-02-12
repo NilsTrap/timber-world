@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition, useCallback, useEffect } from "react";
+import { useState, useTransition, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@timber/ui";
+import { useAnalyticsContext } from "@/lib/analytics";
 import { ProductFilter } from "./ProductFilter";
 import { ProductFilterDrawer } from "./ProductFilterDrawer";
 import { ProductTable } from "./ProductTable";
@@ -33,6 +34,7 @@ export function ProductCatalog({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const analytics = useAnalyticsContext();
 
   // State
   const [products, setProducts] = useState<StockProduct[]>(initialProducts.products);
@@ -94,7 +96,19 @@ export function ProductCatalog({
     const newFilters = { ...filters, [key]: values.length > 0 ? values : undefined };
     setFilters(newFilters);
     fetchProducts(newFilters, 1, sortBy, sortOrder);
-  }, [filters, sortBy, sortOrder, fetchProducts]);
+
+    // Track filter changes (only for array filters)
+    const currentValues = filters[key];
+    if (Array.isArray(currentValues)) {
+      const added = values.filter(v => !currentValues.includes(v));
+      const removed = currentValues.filter(v => !values.includes(v));
+      added.forEach(v => analytics.trackFilterClick(key, v, "add"));
+      removed.forEach(v => analytics.trackFilterClick(key, v, "remove"));
+    } else {
+      // For new filter selections or non-array values
+      values.forEach(v => analytics.trackFilterClick(key, v, "add"));
+    }
+  }, [filters, sortBy, sortOrder, fetchProducts, analytics]);
 
   const handleClearFilters = useCallback(() => {
     const newFilters: ProductFilters = {};
@@ -118,14 +132,17 @@ export function ProductCatalog({
   const handleToggleSelect = useCallback((productId: string) => {
     setSelectedProducts(prev => {
       const next = new Set(prev);
+      const action = next.has(productId) ? "remove" : "add";
       if (next.has(productId)) {
         next.delete(productId);
       } else {
         next.add(productId);
       }
+      // Track product selection
+      analytics.trackProductSelect(productId, action, next.size);
       return next;
     });
-  }, []);
+  }, [analytics]);
 
   const handleSelectAll = useCallback(() => {
     setSelectedProducts(new Set(products.map(p => p.id)));

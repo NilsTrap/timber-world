@@ -212,5 +212,12 @@
       "page": "Page {current} of {total}",
       "showing": "Showing {from}-{to} of {total}"
     }
+  },
+  "cookies": {
+    "title": "We use cookies",
+    "description": "We use cookies and similar technologies to analyze website traffic and improve your experience. By clicking Accept, you consent to our use of analytics cookies.",
+    "privacyLink": "Learn more",
+    "accept": "Accept",
+    "reject": "Reject"
   }
 }

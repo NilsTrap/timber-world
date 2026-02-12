@@ -14,6 +14,8 @@ import {
   Truck,
   Shield,
   Eye,
+  FileText,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -33,6 +35,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Truck,
   Shield,
   Eye,
+  FileText,
+  BarChart3,
 };
 
 export type IconName = keyof typeof ICON_MAP;

@@ -8,6 +8,7 @@ import { generateAlternateLinks, generateCanonical } from "@timber/config/hrefla
 import { SkipLink } from "@/components/layout/SkipLink";
 import { Header } from "@/components/layout/Header";
 import { ConditionalFooter } from "@/components/layout/ConditionalFooter";
+import { Providers } from "@/components/providers/Providers";
 
 type Props = {
   children: React.ReactNode;
@@ -61,12 +62,14 @@ export default async function LocaleLayout({ children, params }: Props) {
 
   return (
     <NextIntlClientProvider messages={messages}>
-      <SkipLink />
-      <Header />
-      <main id="main-content" className="pt-20 md:pt-28">
-        {children}
-      </main>
-      <ConditionalFooter />
+      <Providers>
+        <SkipLink />
+        <Header />
+        <main id="main-content" className="pt-20 md:pt-28">
+          {children}
+        </main>
+        <ConditionalFooter />
+      </Providers>
     </NextIntlClientProvider>
   );
 }

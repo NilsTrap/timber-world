@@ -29,6 +29,10 @@ type HorizontalGalleryProps = {
   className?: string;
   /** Gallery label for accessibility (stage name) */
   galleryLabel?: string;
+  /** Callback when a slide is viewed */
+  onSlideView?: (slideIndex: number, slideTitle?: string) => void;
+  /** Callback when leaving a slide with time spent */
+  onSlideExit?: (slideIndex: number, timeSpentMs: number, slideTitle?: string) => void;
 };
 
 /**
@@ -39,6 +43,8 @@ export function HorizontalGallery({
   images,
   className = "",
   galleryLabel = "Image gallery",
+  onSlideView,
+  onSlideExit,
 }: HorizontalGalleryProps) {
   const t = useTranslations("home");
   const reducedMotion = useReducedMotion();
@@ -46,6 +52,8 @@ export function HorizontalGallery({
   const galleryRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const wasVisibleRef = useRef(true);
+  const slideStartTimeRef = useRef<number>(Date.now());
+  const trackedSlidesRef = useRef<Set<number>>(new Set());
 
   // Track current slide via scroll position
   useEffect(() => {
@@ -62,6 +70,43 @@ export function HorizontalGallery({
     gallery.addEventListener("scroll", handleScroll, { passive: true });
     return () => gallery.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Track slide changes - view and time spent
+  useEffect(() => {
+    const currentImage = images[currentIndex];
+
+    // Track time spent on previous slide when index changes
+    if (onSlideExit && slideStartTimeRef.current) {
+      // This runs when currentIndex changes, so we're exiting the previous slide
+      // We'll track the exit in the next render cycle
+    }
+
+    // Track slide view (deduplicated)
+    if (onSlideView && !trackedSlidesRef.current.has(currentIndex)) {
+      trackedSlidesRef.current.add(currentIndex);
+      onSlideView(currentIndex, currentImage?.title);
+    }
+
+    // Reset timer for current slide
+    slideStartTimeRef.current = Date.now();
+  }, [currentIndex, images, onSlideView]);
+
+  // Track time spent on slide when leaving (cleanup effect)
+  useEffect(() => {
+    const prevIndex = currentIndex;
+    const prevImage = images[prevIndex];
+    const startTime = slideStartTimeRef.current;
+
+    return () => {
+      if (onSlideExit && startTime) {
+        const timeSpent = Date.now() - startTime;
+        // Only track if spent more than 500ms (avoid tracking quick swipes)
+        if (timeSpent > 500) {
+          onSlideExit(prevIndex, timeSpent, prevImage?.title);
+        }
+      }
+    };
+  }, [currentIndex, images, onSlideExit]);
 
   // Reset to first slide when gallery goes fully out of view
   useEffect(() => {
