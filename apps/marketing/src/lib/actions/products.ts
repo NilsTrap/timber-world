@@ -1,7 +1,11 @@
 "use server";
 
+import { unstable_cache } from "next/cache";
 import { createClient } from "@timber/database/server";
 import type { Product, StockStatus, ProductType } from "@timber/database";
+
+// Cache duration in seconds (5 minutes)
+const CACHE_DURATION = 300;
 
 // Extended Product type with volume_m3 and display fields from inventory
 export interface StockProduct extends Product {
@@ -72,16 +76,12 @@ type ActionResult<T> = { success: true; data: T } | { success: false; error: str
 
 const PAGE_SIZE = 20;
 
-export async function getProducts(
-  filters: ProductFilters,
-  page: number = 1,
-  sortBy?: string,
-  sortOrder: "asc" | "desc" = "asc"
-): Promise<ActionResult<ProductsResponse>> {
-  try {
+// Cached function to fetch raw inventory data from database
+// This is the slow part - caching it dramatically improves performance
+const fetchInventoryPackages = unstable_cache(
+  async () => {
     const supabase = await createClient();
 
-    // Fetch inventory packages with resolved references
     const { data: packagesData, error: packagesError } = await supabase
       .from("inventory_packages")
       .select(`
@@ -108,7 +108,27 @@ export async function getProducts(
 
     if (packagesError) {
       console.error("Failed to fetch inventory packages:", packagesError);
-      return { success: false, error: packagesError.message };
+      return { error: packagesError.message, data: null };
+    }
+
+    return { error: null, data: packagesData };
+  },
+  ["inventory-packages-available"],
+  { revalidate: CACHE_DURATION, tags: ["inventory"] }
+);
+
+export async function getProducts(
+  filters: ProductFilters,
+  page: number = 1,
+  sortBy?: string,
+  sortOrder: "asc" | "desc" = "asc"
+): Promise<ActionResult<ProductsResponse>> {
+  try {
+    // Use cached function to fetch inventory packages
+    const { data: packagesData, error: packagesError } = await fetchInventoryPackages();
+
+    if (packagesError || !packagesData) {
+      return { success: false, error: packagesError || "Failed to fetch inventory" };
     }
 
     // Transform inventory packages to StockProduct format
@@ -268,27 +288,12 @@ export async function getProducts(
 
 export async function getFilterOptions(): Promise<ActionResult<FilterOptions>> {
   try {
-    const supabase = await createClient();
+    // Reuse the same cached inventory data
+    const { data: packagesData, error } = await fetchInventoryPackages();
 
-    // Get inventory packages with resolved references
-    const { data, error } = await supabase
-      .from("inventory_packages")
-      .select(`
-        thickness,
-        width,
-        length,
-        ref_product_names!inventory_packages_product_name_id_fkey(value),
-        ref_wood_species!inventory_packages_wood_species_id_fkey(value),
-        ref_humidity!inventory_packages_humidity_id_fkey(value),
-        ref_types!inventory_packages_type_id_fkey(value),
-        ref_processing!inventory_packages_processing_id_fkey(value),
-        ref_quality!inventory_packages_quality_id_fkey(value)
-      `)
-      .eq("status", "available");
-
-    if (error) {
+    if (error || !packagesData) {
       console.error("Failed to fetch filter options:", error);
-      return { success: false, error: error.message };
+      return { success: false, error: error || "Failed to fetch inventory" };
     }
 
     type FilterRow = {
@@ -303,7 +308,7 @@ export async function getFilterOptions(): Promise<ActionResult<FilterOptions>> {
       ref_quality: { value: string } | null;
     };
 
-    const rows = data as FilterRow[];
+    const rows = packagesData as FilterRow[];
 
     // Helper to safely parse dimension strings
     const parseDimension = (value: string | null): number | null => {
