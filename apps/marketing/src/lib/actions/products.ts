@@ -119,7 +119,7 @@ export async function getProducts(
       return isNaN(parsed) ? 0 : parsed;
     };
 
-    let products: StockProduct[] = (packagesData || []).map((pkg: InventoryPackageRow & { organisations: { code: string } | null }) => {
+    const allProducts: StockProduct[] = (packagesData || []).map((pkg: InventoryPackageRow & { organisations: { code: string } | null }) => {
       const thickness = safeParseInt(pkg.thickness);
       const width = safeParseInt(pkg.width);
       const length = safeParseInt(pkg.length);
@@ -159,32 +159,38 @@ export async function getProducts(
       };
     });
 
-    // Apply filters
-    if (filters.product?.length) {
-      products = products.filter(p => filters.product!.includes(p.name));
-    }
-    if (filters.species?.length) {
-      products = products.filter(p => filters.species!.includes(p.species));
-    }
-    if (filters.width?.length) {
-      products = products.filter(p => filters.width!.map(Number).includes(p.width));
-    }
-    if (filters.length?.length) {
-      products = products.filter(p => filters.length!.map(Number).includes(p.length));
-    }
-    if (filters.thickness?.length) {
-      products = products.filter(p => filters.thickness!.map(Number).includes(p.thickness));
-    }
-    if (filters.qualityGrade?.length) {
-      products = products.filter(p => filters.qualityGrade!.includes(p.quality_grade));
-    }
-    if (filters.type?.length) {
-      // Filter using the original type value from database
-      products = products.filter(p => filters.type!.includes(p.type_original));
-    }
-    if (filters.humidity?.length) {
-      products = products.filter(p => filters.humidity!.includes(p.humidity || ""));
-    }
+    // Helper function to apply filters, optionally excluding one filter group
+    const applyFilters = (items: StockProduct[], excludeFilter?: keyof ProductFilters): StockProduct[] => {
+      let result = items;
+      if (filters.product?.length && excludeFilter !== 'product') {
+        result = result.filter(p => filters.product!.includes(p.name));
+      }
+      if (filters.species?.length && excludeFilter !== 'species') {
+        result = result.filter(p => filters.species!.includes(p.species));
+      }
+      if (filters.width?.length && excludeFilter !== 'width') {
+        result = result.filter(p => filters.width!.map(Number).includes(p.width));
+      }
+      if (filters.length?.length && excludeFilter !== 'length') {
+        result = result.filter(p => filters.length!.map(Number).includes(p.length));
+      }
+      if (filters.thickness?.length && excludeFilter !== 'thickness') {
+        result = result.filter(p => filters.thickness!.map(Number).includes(p.thickness));
+      }
+      if (filters.qualityGrade?.length && excludeFilter !== 'qualityGrade') {
+        result = result.filter(p => filters.qualityGrade!.includes(p.quality_grade));
+      }
+      if (filters.type?.length && excludeFilter !== 'type') {
+        result = result.filter(p => filters.type!.includes(p.type_original));
+      }
+      if (filters.humidity?.length && excludeFilter !== 'humidity') {
+        result = result.filter(p => filters.humidity!.includes(p.humidity || ""));
+      }
+      return result;
+    };
+
+    // Apply all filters for the product results
+    let products = applyFilters(allProducts);
 
     // Apply sorting
     if (sortBy) {
@@ -237,16 +243,27 @@ export async function getProducts(
       });
     }
 
-    // Calculate dynamic filter options from filtered products
+    // Calculate dynamic filter options
+    // Each filter shows options from products filtered by ALL OTHER filters (not itself)
+    // This allows multi-select within a filter while cascading to other filters
+    const productsForProductFilter = applyFilters(allProducts, 'product');
+    const productsForSpeciesFilter = applyFilters(allProducts, 'species');
+    const productsForWidthFilter = applyFilters(allProducts, 'width');
+    const productsForLengthFilter = applyFilters(allProducts, 'length');
+    const productsForThicknessFilter = applyFilters(allProducts, 'thickness');
+    const productsForQualityFilter = applyFilters(allProducts, 'qualityGrade');
+    const productsForTypeFilter = applyFilters(allProducts, 'type');
+    const productsForHumidityFilter = applyFilters(allProducts, 'humidity');
+
     const dynamicFilterOptions: FilterOptions = {
-      products: [...new Set(products.map(p => p.name))].sort(),
-      species: [...new Set(products.map(p => p.species))].sort(),
-      widths: [...new Set(products.map(p => p.width))].sort((a, b) => a - b),
-      lengths: [...new Set(products.map(p => p.length))].sort((a, b) => a - b),
-      thicknesses: [...new Set(products.map(p => p.thickness))].sort((a, b) => a - b),
-      qualityGrades: [...new Set(products.map(p => p.quality_grade).filter(Boolean))].sort(),
-      types: [...new Set(products.map(p => p.type_original).filter(Boolean))].sort() as ProductType[],
-      humidities: [...new Set(products.map(p => p.humidity).filter(Boolean))].sort() as string[],
+      products: [...new Set(productsForProductFilter.map(p => p.name))].sort(),
+      species: [...new Set(productsForSpeciesFilter.map(p => p.species))].sort(),
+      widths: [...new Set(productsForWidthFilter.map(p => p.width))].sort((a, b) => a - b),
+      lengths: [...new Set(productsForLengthFilter.map(p => p.length))].sort((a, b) => a - b),
+      thicknesses: [...new Set(productsForThicknessFilter.map(p => p.thickness))].sort((a, b) => a - b),
+      qualityGrades: [...new Set(productsForQualityFilter.map(p => p.quality_grade).filter(Boolean))].sort(),
+      types: [...new Set(productsForTypeFilter.map(p => p.type_original).filter(Boolean))].sort() as ProductType[],
+      humidities: [...new Set(productsForHumidityFilter.map(p => p.humidity).filter(Boolean))].sort() as string[],
       processings: [...new Set(products.map(p => p.processing).filter(Boolean))].sort() as string[],
     };
 
