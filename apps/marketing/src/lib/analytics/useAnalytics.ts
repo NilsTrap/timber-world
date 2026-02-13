@@ -72,9 +72,15 @@ function sendBeacon(url: string, data: Record<string, unknown>): void {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
     keepalive: true,
-  }).catch(() => {
-    // Silently fail - analytics should never break the app
-  });
+  })
+    .then((res) => {
+      if (!res.ok) {
+        console.error("[Analytics] Tracking failed:", res.status, data.eventName);
+      }
+    })
+    .catch((err) => {
+      console.error("[Analytics] Tracking error:", err, data.eventName);
+    });
 }
 
 export function useAnalytics(options: UseAnalyticsOptions = {}) {

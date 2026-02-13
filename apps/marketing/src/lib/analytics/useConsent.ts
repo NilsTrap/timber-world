@@ -65,9 +65,15 @@ function trackConsentDecision(decision: "accepted" | "rejected"): void {
       referrer: document.referrer,
     }),
     keepalive: true,
-  }).catch(() => {
-    // Silently fail
-  });
+  })
+    .then((res) => {
+      if (!res.ok) {
+        console.error("[Analytics] Consent tracking failed:", res.status);
+      }
+    })
+    .catch((err) => {
+      console.error("[Analytics] Consent tracking error:", err);
+    });
 }
 
 export function useConsent() {
