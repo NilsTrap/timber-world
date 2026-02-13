@@ -153,11 +153,11 @@ export function useAnalytics(options: UseAnalyticsOptions = {}) {
   );
 
   const trackProductSelect = useCallback(
-    (productId: string, action: "add" | "remove", currentCount: number) => {
+    (productId: string, productName: string, species: string | null, action: "add" | "remove", currentCount: number) => {
       track({
         eventName: "product_select",
         eventCategory: "catalog",
-        properties: { productId, action, currentCount },
+        properties: { productId, productName, species, action, currentCount },
       });
     },
     [track]

@@ -138,11 +138,18 @@ export function ProductCatalog({
       } else {
         next.add(productId);
       }
-      // Track product selection
-      analytics.trackProductSelect(productId, action, next.size);
+      // Track product selection with product details
+      const product = products.find(p => p.id === productId);
+      analytics.trackProductSelect(
+        productId,
+        product?.name || product?.sku || productId,
+        product?.species || null,
+        action,
+        next.size
+      );
       return next;
     });
-  }, [analytics]);
+  }, [analytics, products]);
 
   const handleSelectAll = useCallback(() => {
     setSelectedProducts(new Set(products.map(p => p.id)));
