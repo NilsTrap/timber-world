@@ -19,12 +19,17 @@ interface SearchStats {
   totalFound: number;
   duplicatesFiltered: number;
   source: SearchSource;
+  enrichmentStats?: {
+    companiesEnriched: number;
+    estimatedCost: string;
+  };
 }
 
 export function DiscoverTab() {
   const [query, setQuery] = useState("");
   const [country, setCountry] = useState("UK");
   const [searchSource, setSearchSource] = useState<SearchSource>("web");
+  const [enrichWithAI, setEnrichWithAI] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [results, setResults] = useState<DiscoveryResult[]>([]);
@@ -48,15 +53,17 @@ export function DiscoverTab() {
       result = await searchCompaniesHouse({
         query: query.trim(),
         country,
+        enrich: enrichWithAI,
       });
     } else if (searchSource === "web") {
       result = await searchWeb({
         query: query.trim(),
         country,
+        enrich: enrichWithAI,
       });
     } else {
-      // Enrichment - not implemented yet
-      setError("Enrichment with Claude API coming soon");
+      // Pure enrichment mode - requires existing companies
+      setError("Select Web Search or Government and enable 'Enrich with AI'");
       setIsSearching(false);
       return;
     }
@@ -68,6 +75,7 @@ export function DiscoverTab() {
         totalFound: result.data.totalFound,
         duplicatesFiltered: result.data.duplicatesFiltered,
         source: result.data.source,
+        enrichmentStats: result.data.enrichmentStats,
       });
       // Select all by default
       setSelected(new Set(result.data.results.map((_, i) => i)));
@@ -121,7 +129,7 @@ export function DiscoverTab() {
     <div className="space-y-4">
       {/* Search Source Tabs */}
       <Tabs value={searchSource} onValueChange={(v) => setSearchSource(v as SearchSource)}>
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
+        <TabsList className="grid w-full grid-cols-2 max-w-xs">
           <TabsTrigger value="web" className="flex items-center gap-2">
             <Globe className="h-4 w-4" />
             Web Search
@@ -130,20 +138,32 @@ export function DiscoverTab() {
             <Landmark className="h-4 w-4" />
             Government
           </TabsTrigger>
-          <TabsTrigger value="enrichment" className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
-            Enrichment
-          </TabsTrigger>
         </TabsList>
       </Tabs>
+
+      {/* Enrich with AI toggle */}
+      <div className="flex items-center gap-3 p-3 rounded-lg border bg-card max-w-md">
+        <Checkbox
+          id="enrich-ai"
+          checked={enrichWithAI}
+          onCheckedChange={(checked) => setEnrichWithAI(checked === true)}
+        />
+        <div className="flex-1">
+          <Label htmlFor="enrich-ai" className="flex items-center gap-2 cursor-pointer">
+            <Sparkles className="h-4 w-4 text-amber-500" />
+            Enrich with AI
+          </Label>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Extract phone, email, contacts from company websites (~$0.02/company)
+          </p>
+        </div>
+      </div>
 
       {/* Source info */}
       <p className="text-sm text-muted-foreground">
         {searchSource === "web"
           ? "Searches the web (Brave API) for companies matching your keywords. $5/1000 queries, 2000 free/month."
-          : searchSource === "government"
-            ? "Searches official company registries (UK Companies House). Returns verified company data with directors."
-            : "Uses Claude AI to find and enrich company data from the web. $10/1000 searches + token costs."}
+          : "Searches official company registries (UK Companies House). Returns verified company data with directors."}
       </p>
 
       {/* Search Form */}
@@ -208,7 +228,7 @@ export function DiscoverTab() {
 
       {/* Search Statistics */}
       {searchStats && (
-        <div className="flex items-center gap-4 text-sm bg-muted/50 rounded-md px-4 py-3">
+        <div className="flex flex-wrap items-center gap-4 text-sm bg-muted/50 rounded-md px-4 py-3">
           <span>
             <strong>{searchStats.searchCount}</strong> API {searchStats.searchCount === 1 ? "query" : "queries"}
           </span>
@@ -228,6 +248,15 @@ export function DiscoverTab() {
           <span className="text-green-600">
             <strong>{results.length}</strong> new
           </span>
+          {searchStats.enrichmentStats && (
+            <>
+              <span className="text-muted-foreground">•</span>
+              <span className="text-amber-600 flex items-center gap-1">
+                <Sparkles className="h-3 w-3" />
+                <strong>{searchStats.enrichmentStats.companiesEnriched}</strong> enriched ({searchStats.enrichmentStats.estimatedCost})
+              </span>
+            </>
+          )}
         </div>
       )}
 
@@ -285,6 +314,12 @@ export function DiscoverTab() {
                           ({result.company.registration_number})
                         </span>
                       )}
+                      {result.enriched && (
+                        <span className="inline-flex items-center gap-1 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+                          <Sparkles className="h-3 w-3" />
+                          Enriched
+                        </span>
+                      )}
                     </div>
                     <div className="mt-1 text-sm text-muted-foreground">
                       {[result.company.city, result.company.country]
@@ -294,6 +329,13 @@ export function DiscoverTab() {
                         <span> · Founded {result.company.founded_year}</span>
                       )}
                     </div>
+                    {/* Contact info (from enrichment) */}
+                    {(result.company.phone || result.company.email) && (
+                      <div className="mt-1 text-sm text-muted-foreground flex flex-wrap gap-3">
+                        {result.company.phone && <span>📞 {result.company.phone}</span>}
+                        {result.company.email && <span>✉️ {result.company.email}</span>}
+                      </div>
+                    )}
                     {result.company.industry && (
                       <div className="mt-1 text-sm">{result.company.industry}</div>
                     )}

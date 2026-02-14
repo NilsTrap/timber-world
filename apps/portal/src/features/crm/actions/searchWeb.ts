@@ -2,6 +2,7 @@
 
 import type { DiscoverySearchParams, DiscoveryResult, DiscoveryResponse } from "../types";
 import { createCrmClient } from "../lib/supabase";
+import { enrichCompanies } from "./enrichCompanies";
 
 const COUNTRY_NAMES: Record<string, string> = {
   UK: "United Kingdom",
@@ -47,6 +48,27 @@ export async function searchWeb(
     console.log("BRAVE_API_KEY not set, returning demo web results");
     const demoResults = getDemoWebResults(params.query, params.country);
     const { results, duplicatesFiltered } = await filterDuplicates(demoResults);
+
+    // Optionally enrich with AI
+    if (params.enrich) {
+      const { enrichedResults, searchCount: enrichSearchCount, estimatedCost } =
+        await enrichCompanies(results, params.country);
+      return {
+        success: true,
+        data: {
+          results: enrichedResults,
+          searchCount: 1,
+          totalFound: demoResults.length,
+          duplicatesFiltered,
+          source: "web",
+          enrichmentStats: {
+            companiesEnriched: enrichedResults.filter(r => r.enriched).length,
+            estimatedCost,
+          },
+        },
+      };
+    }
+
     return {
       success: true,
       data: {
@@ -83,6 +105,26 @@ export async function searchWeb(
     const data = await response.json();
     const allResults = parseBraveResults(data, params.country);
     const { results, duplicatesFiltered } = await filterDuplicates(allResults);
+
+    // Optionally enrich with AI
+    if (params.enrich) {
+      const { enrichedResults, searchCount: enrichSearchCount, estimatedCost } =
+        await enrichCompanies(results, params.country);
+      return {
+        success: true,
+        data: {
+          results: enrichedResults,
+          searchCount: 1 + enrichSearchCount,
+          totalFound: allResults.length,
+          duplicatesFiltered,
+          source: "web",
+          enrichmentStats: {
+            companiesEnriched: enrichedResults.filter(r => r.enriched).length,
+            estimatedCost,
+          },
+        },
+      };
+    }
 
     return {
       success: true,

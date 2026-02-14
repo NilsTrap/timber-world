@@ -14,6 +14,7 @@
     "test:e2e:epic6": "playwright test epic6"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "@hookform/resolvers": "^5.2.2",
     "@supabase/ssr": "^0.8.0",
     "@timber/auth": "workspace:*",

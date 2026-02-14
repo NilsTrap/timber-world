@@ -92,19 +92,25 @@ export interface CompaniesHouseOfficer {
 export interface DiscoverySearchParams {
   query: string;
   country: string;
+  enrich?: boolean;  // Use Claude AI to enrich results
 }
 
 export interface DiscoveryResult {
   company: Partial<CrmCompany>;
   officers: Partial<CrmContact>[];
+  enriched?: boolean;  // Was this result enriched by AI
 }
 
 export type SearchSource = "government" | "web" | "enrichment";
 
 export interface DiscoveryResponse {
   results: DiscoveryResult[];
-  searchCount: number;           // API queries made
+  searchCount: number;           // Search API queries made
   totalFound: number;            // Total results from search
   duplicatesFiltered: number;    // Already exist in database
   source: SearchSource;
+  enrichmentStats?: {
+    companiesEnriched: number;
+    estimatedCost: string;       // e.g., "$0.15"
+  };
 }

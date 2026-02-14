@@ -13,3 +13,4 @@ export {
 } from "./manageCompanies";
 export { searchCompaniesHouse, importDiscoveredCompanies } from "./discoverCompanies";
 export { searchWeb } from "./searchWeb";
+export { enrichCompanies } from "./enrichCompanies";
