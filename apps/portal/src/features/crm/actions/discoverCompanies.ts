@@ -1,6 +1,7 @@
 "use server";
 
 import { createCrmClient } from "../lib/supabase";
+import { formatPhoneInternational } from "../lib/formatPhone";
 import { revalidatePath } from "next/cache";
 import type {
   DiscoverySearchParams,
@@ -273,18 +274,22 @@ export async function importDiscoveredCompanies(
     }
 
     // Insert company
+    const country = result.company.country || "UK";
     const { data: company, error: companyError } = await supabase
       .from("crm_companies")
       .insert({
         name: result.company.name,
         registration_number: result.company.registration_number,
         website: result.company.website,
-        country: result.company.country,
+        country: country,
         city: result.company.city,
         address: result.company.address,
         postal_code: result.company.postal_code,
         founded_year: result.company.founded_year,
+        industry: result.company.industry,
         industry_codes: result.company.industry_codes,
+        email: result.company.email,
+        phone: formatPhoneInternational(result.company.phone, country),
         source: result.company.source,
         source_url: result.company.source_url,
         status: "new",
@@ -307,6 +312,9 @@ export async function importDiscoveredCompanies(
           first_name: officer.first_name,
           last_name: officer.last_name,
           position: officer.position,
+          email: officer.email,
+          phone: formatPhoneInternational(officer.phone, country),
+          linkedin_url: officer.linkedin_url,
           source: officer.source,
           consent_status: "pending",
           do_not_contact: false,

@@ -1,6 +1,7 @@
 "use server";
 
 import { createCrmClient } from "../lib/supabase";
+import { formatPhoneInternational } from "../lib/formatPhone";
 import { revalidatePath } from "next/cache";
 import type { CrmCompany, CrmContact, CompanyStatus } from "../types";
 
@@ -11,6 +12,7 @@ export async function createCompany(
   company: Partial<CrmCompany>
 ): Promise<{ success: true; data: CrmCompany } | { success: false; error: string }> {
   const supabase = await createCrmClient();
+  const country = company.country || "UK";
 
   const { data, error } = await supabase
     .from("crm_companies")
@@ -18,7 +20,7 @@ export async function createCompany(
       name: company.name,
       registration_number: company.registration_number,
       website: company.website,
-      country: company.country,
+      country: country,
       city: company.city,
       address: company.address,
       postal_code: company.postal_code,
@@ -28,7 +30,7 @@ export async function createCompany(
       industry: company.industry,
       industry_codes: company.industry_codes,
       email: company.email,
-      phone: company.phone,
+      phone: formatPhoneInternational(company.phone, country),
       source: company.source,
       source_url: company.source_url,
       notes: company.notes,
@@ -55,6 +57,11 @@ export async function updateCompany(
 ): Promise<{ success: true; data: CrmCompany } | { success: false; error: string }> {
   const supabase = await createCrmClient();
 
+  // If phone is being updated and country is provided, format the phone
+  const phone = updates.phone !== undefined && updates.country
+    ? formatPhoneInternational(updates.phone, updates.country)
+    : updates.phone;
+
   const { data, error } = await supabase
     .from("crm_companies")
     .update({
@@ -71,7 +78,7 @@ export async function updateCompany(
       industry: updates.industry,
       industry_codes: updates.industry_codes,
       email: updates.email,
-      phone: updates.phone,
+      phone: phone,
       source: updates.source,
       source_url: updates.source_url,
       notes: updates.notes,
@@ -144,6 +151,19 @@ export async function createContact(
 ): Promise<{ success: true; data: CrmContact } | { success: false; error: string }> {
   const supabase = await createCrmClient();
 
+  // Get company's country for phone formatting
+  let country = "UK"; // Default
+  if (contact.company_id) {
+    const { data: company } = await supabase
+      .from("crm_companies")
+      .select("country")
+      .eq("id", contact.company_id)
+      .single();
+    if (company?.country) {
+      country = company.country;
+    }
+  }
+
   const { data, error } = await supabase
     .from("crm_contacts")
     .insert({
@@ -152,7 +172,7 @@ export async function createContact(
       last_name: contact.last_name,
       position: contact.position,
       email: contact.email,
-      phone: contact.phone,
+      phone: formatPhoneInternational(contact.phone, country),
       linkedin_url: contact.linkedin_url,
       source: contact.source,
       consent_status: contact.consent_status || "pending",
