@@ -1,6 +1,7 @@
 "use server";
 
-import type { DiscoverySearchParams, DiscoveryResult } from "../types";
+import type { DiscoverySearchParams, DiscoveryResult, DiscoveryResponse } from "../types";
+import { createCrmClient } from "../lib/supabase";
 
 const COUNTRY_NAMES: Record<string, string> = {
   UK: "United Kingdom",
@@ -34,7 +35,7 @@ const BRAVE_COUNTRY_CODES: Record<string, string> = {
  */
 export async function searchWeb(
   params: DiscoverySearchParams
-): Promise<{ success: true; data: DiscoveryResult[] } | { success: false; error: string }> {
+): Promise<{ success: true; data: DiscoveryResponse } | { success: false; error: string }> {
   const apiKey = process.env.BRAVE_API_KEY;
   const countryName = COUNTRY_NAMES[params.country] || params.country;
 
@@ -44,9 +45,17 @@ export async function searchWeb(
   if (!apiKey) {
     // For development/demo, use mock data based on search terms
     console.log("BRAVE_API_KEY not set, returning demo web results");
+    const demoResults = getDemoWebResults(params.query, params.country);
+    const { results, duplicatesFiltered } = await filterDuplicates(demoResults);
     return {
       success: true,
-      data: getDemoWebResults(params.query, params.country),
+      data: {
+        results,
+        searchCount: 1,
+        totalFound: demoResults.length,
+        duplicatesFiltered,
+        source: "web",
+      },
     };
   }
 
@@ -72,13 +81,84 @@ export async function searchWeb(
     }
 
     const data = await response.json();
-    const results = parseBraveResults(data, params.country);
+    const allResults = parseBraveResults(data, params.country);
+    const { results, duplicatesFiltered } = await filterDuplicates(allResults);
 
-    return { success: true, data: results };
+    return {
+      success: true,
+      data: {
+        results,
+        searchCount: 1,
+        totalFound: allResults.length,
+        duplicatesFiltered,
+        source: "web",
+      },
+    };
   } catch (error) {
     console.error("Error searching web:", error);
     return { success: false, error: "Failed to search the web" };
   }
+}
+
+/**
+ * Filter out companies that already exist in the database
+ * Matches by website URL or company name + country
+ */
+async function filterDuplicates(
+  results: DiscoveryResult[]
+): Promise<{ results: DiscoveryResult[]; duplicatesFiltered: number }> {
+  if (results.length === 0) {
+    return { results: [], duplicatesFiltered: 0 };
+  }
+
+  const supabase = await createCrmClient();
+
+  // Get all websites and names to check
+  const websites = results
+    .map((r) => r.company.website)
+    .filter((w): w is string => !!w)
+    .map((w) => w.toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, ""));
+
+  const names = results
+    .map((r) => r.company.name?.toLowerCase())
+    .filter((n): n is string => !!n);
+
+  // Query existing companies
+  const { data: existingCompanies } = await supabase
+    .from("crm_companies")
+    .select("website, name, country")
+    .or(`website.ilike.%${websites.join("%,website.ilike.%")}%`);
+
+  const existingWebsites = new Set(
+    (existingCompanies || [])
+      .map((c: { website: string | null }) => c.website?.toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, ""))
+      .filter(Boolean)
+  );
+
+  const existingNames = new Set(
+    (existingCompanies || [])
+      .map((c: { name: string; country: string | null }) => `${c.name?.toLowerCase()}|${c.country?.toLowerCase()}`)
+      .filter(Boolean)
+  );
+
+  // Filter results
+  const filteredResults = results.filter((r) => {
+    const website = r.company.website?.toLowerCase().replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const nameKey = `${r.company.name?.toLowerCase()}|${r.company.country?.toLowerCase()}`;
+
+    if (website && existingWebsites.has(website)) {
+      return false;
+    }
+    if (existingNames.has(nameKey)) {
+      return false;
+    }
+    return true;
+  });
+
+  return {
+    results: filteredResults,
+    duplicatesFiltered: results.length - filteredResults.length,
+  };
 }
 
 /**

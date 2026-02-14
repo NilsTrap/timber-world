@@ -16,11 +16,16 @@ import {
   TabsList,
   TabsTrigger,
 } from "@timber/ui";
-import { Search, Building2, Users, Loader2, Download, Globe, Landmark } from "lucide-react";
-import type { DiscoveryResult } from "../types";
+import { Search, Building2, Users, Loader2, Download, Globe, Landmark, Sparkles } from "lucide-react";
+import type { DiscoveryResult, SearchSource } from "../types";
 import { searchCompaniesHouse, searchWeb, importDiscoveredCompanies } from "../actions";
 
-type SearchSource = "government" | "web";
+interface SearchStats {
+  searchCount: number;
+  totalFound: number;
+  duplicatesFiltered: number;
+  source: SearchSource;
+}
 
 export function DiscoverCompaniesModal() {
   const [open, setOpen] = useState(false);
@@ -30,6 +35,7 @@ export function DiscoverCompaniesModal() {
   const [isSearching, setIsSearching] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [results, setResults] = useState<DiscoveryResult[]>([]);
+  const [searchStats, setSearchStats] = useState<SearchStats | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
@@ -39,6 +45,7 @@ export function DiscoverCompaniesModal() {
     setIsSearching(true);
     setError(null);
     setResults([]);
+    setSearchStats(null);
     setSelected(new Set());
 
     let result;
@@ -47,17 +54,28 @@ export function DiscoverCompaniesModal() {
         query: query.trim(),
         country,
       });
-    } else {
+    } else if (searchSource === "web") {
       result = await searchWeb({
         query: query.trim(),
         country,
       });
+    } else {
+      // Enrichment - not implemented yet
+      setError("Enrichment with Claude API coming soon");
+      setIsSearching(false);
+      return;
     }
 
     if (result.success) {
-      setResults(result.data);
+      setResults(result.data.results);
+      setSearchStats({
+        searchCount: result.data.searchCount,
+        totalFound: result.data.totalFound,
+        duplicatesFiltered: result.data.duplicatesFiltered,
+        source: result.data.source,
+      });
       // Select all by default
-      setSelected(new Set(result.data.map((_, i) => i)));
+      setSelected(new Set(result.data.results.map((_, i) => i)));
     } else {
       setError(result.error);
     }
@@ -115,27 +133,23 @@ export function DiscoverCompaniesModal() {
           <DialogTitle>Discover Companies</DialogTitle>
         </DialogHeader>
 
-        {/* Search Source Selection */}
-        <div className="flex gap-2 mb-4">
-          <Button
-            variant={searchSource === "web" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSearchSource("web")}
-            className="flex-1"
-          >
-            <Globe className="h-4 w-4 mr-2" />
-            Web Search
-          </Button>
-          <Button
-            variant={searchSource === "government" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSearchSource("government")}
-            className="flex-1"
-          >
-            <Landmark className="h-4 w-4 mr-2" />
-            Government Registry
-          </Button>
-        </div>
+        {/* Search Source Tabs */}
+        <Tabs value={searchSource} onValueChange={(v) => setSearchSource(v as SearchSource)}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="web" className="flex items-center gap-2">
+              <Globe className="h-4 w-4" />
+              Web Search
+            </TabsTrigger>
+            <TabsTrigger value="government" className="flex items-center gap-2">
+              <Landmark className="h-4 w-4" />
+              Government
+            </TabsTrigger>
+            <TabsTrigger value="enrichment" className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              Enrichment
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Search Form */}
         <div className="flex gap-2">
@@ -147,8 +161,10 @@ export function DiscoverCompaniesModal() {
               id="search-query"
               placeholder={
                 searchSource === "web"
-                  ? "Search keywords (e.g., 'oak staircase manufacturer UK')"
-                  : "Company name or industry (e.g., 'stairs', 'timber')"
+                  ? "Search keywords (e.g., 'oak staircase manufacturer')"
+                  : searchSource === "government"
+                    ? "Company name or industry (e.g., 'stairs', 'timber')"
+                    : "Company name to enrich"
               }
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -182,14 +198,41 @@ export function DiscoverCompaniesModal() {
         {/* Source info */}
         <p className="text-xs text-muted-foreground">
           {searchSource === "web"
-            ? "Searches the web for companies matching your keywords. Results may include websites, directories, and business listings."
-            : "Searches official company registries (UK Companies House). Requires API key for real data."}
+            ? "Searches the web (Brave API) for companies matching your keywords. $5/1000 queries, 2000 free/month."
+            : searchSource === "government"
+              ? "Searches official company registries (UK Companies House). Returns verified company data with directors."
+              : "Uses Claude AI to find and enrich company data from the web. $10/1000 searches + token costs."}
         </p>
 
         {/* Error */}
         {error && (
           <div className="bg-destructive/10 text-destructive px-4 py-2 rounded-md text-sm">
             {error}
+          </div>
+        )}
+
+        {/* Search Statistics */}
+        {searchStats && (
+          <div className="flex items-center gap-4 text-xs bg-muted/50 rounded-md px-3 py-2">
+            <span>
+              <strong>{searchStats.searchCount}</strong> API {searchStats.searchCount === 1 ? "query" : "queries"}
+            </span>
+            <span className="text-muted-foreground">•</span>
+            <span>
+              <strong>{searchStats.totalFound}</strong> found
+            </span>
+            {searchStats.duplicatesFiltered > 0 && (
+              <>
+                <span className="text-muted-foreground">•</span>
+                <span className="text-orange-600">
+                  <strong>{searchStats.duplicatesFiltered}</strong> already in database
+                </span>
+              </>
+            )}
+            <span className="text-muted-foreground">•</span>
+            <span className="text-green-600">
+              <strong>{results.length}</strong> new
+            </span>
           </div>
         )}
 
@@ -204,7 +247,7 @@ export function DiscoverCompaniesModal() {
                   id="select-all"
                 />
                 <Label htmlFor="select-all" className="text-sm">
-                  Select all ({results.length} companies)
+                  Select all ({results.length} new companies)
                 </Label>
               </div>
               <span className="text-sm text-muted-foreground">

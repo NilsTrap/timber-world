@@ -98,3 +98,13 @@ export interface DiscoveryResult {
   company: Partial<CrmCompany>;
   officers: Partial<CrmContact>[];
 }
+
+export type SearchSource = "government" | "web" | "enrichment";
+
+export interface DiscoveryResponse {
+  results: DiscoveryResult[];
+  searchCount: number;           // API queries made
+  totalFound: number;            // Total results from search
+  duplicatesFiltered: number;    // Already exist in database
+  source: SearchSource;
+}

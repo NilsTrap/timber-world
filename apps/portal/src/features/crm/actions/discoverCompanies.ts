@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import type {
   DiscoverySearchParams,
   DiscoveryResult,
+  DiscoveryResponse,
   CompaniesHouseSearchResult,
   CompaniesHouseOfficer,
   CrmCompany,
@@ -19,20 +20,29 @@ const COMPANIES_HOUSE_API = "https://api.company-information.service.gov.uk";
  */
 export async function searchCompaniesHouse(
   params: DiscoverySearchParams
-): Promise<{ success: true; data: DiscoveryResult[] } | { success: false; error: string }> {
+): Promise<{ success: true; data: DiscoveryResponse } | { success: false; error: string }> {
   const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
 
   if (!apiKey) {
     // Return mock data for development when API key is not set
     console.log("COMPANIES_HOUSE_API_KEY not set, returning mock data");
+    const mockResults = getMockCompanies(params.query);
+    const { results, duplicatesFiltered } = await filterDuplicates(mockResults);
     return {
       success: true,
-      data: getMockCompanies(params.query),
+      data: {
+        results,
+        searchCount: 1,
+        totalFound: mockResults.length,
+        duplicatesFiltered,
+        source: "government",
+      },
     };
   }
 
   try {
-    // Search for companies
+    // Search for companies - 1 API call
+    let searchCount = 1;
     const searchUrl = `${COMPANIES_HOUSE_API}/search/companies?q=${encodeURIComponent(params.query)}&items_per_page=10`;
     const searchResponse = await fetch(searchUrl, {
       headers: {
@@ -49,10 +59,11 @@ export async function searchCompaniesHouse(
     const searchData = await searchResponse.json();
     const companies: CompaniesHouseSearchResult[] = searchData.items || [];
 
-    // For each company, get officers (directors)
-    const results: DiscoveryResult[] = await Promise.all(
+    // For each company, get officers (directors) - 1 API call per company
+    const allResults: DiscoveryResult[] = await Promise.all(
       companies.map(async (company) => {
         const officers = await getCompanyOfficers(company.company_number, apiKey);
+        searchCount++; // Each officer lookup is an API call
         return {
           company: transformCompanyData(company),
           officers: officers.map(transformOfficerData),
@@ -60,11 +71,80 @@ export async function searchCompaniesHouse(
       })
     );
 
-    return { success: true, data: results };
+    const { results, duplicatesFiltered } = await filterDuplicates(allResults);
+
+    return {
+      success: true,
+      data: {
+        results,
+        searchCount,
+        totalFound: allResults.length,
+        duplicatesFiltered,
+        source: "government",
+      },
+    };
   } catch (error) {
     console.error("Error searching Companies House:", error);
     return { success: false, error: "Failed to search Companies House" };
   }
+}
+
+/**
+ * Filter out companies that already exist in the database
+ * Matches by registration number, website URL, or company name + country
+ */
+async function filterDuplicates(
+  results: DiscoveryResult[]
+): Promise<{ results: DiscoveryResult[]; duplicatesFiltered: number }> {
+  if (results.length === 0) {
+    return { results: [], duplicatesFiltered: 0 };
+  }
+
+  const supabase = await createCrmClient();
+
+  // Get registration numbers to check
+  const regNumbers = results
+    .map((r) => r.company.registration_number)
+    .filter((n): n is string => !!n);
+
+  const names = results
+    .map((r) => r.company.name?.toLowerCase())
+    .filter((n): n is string => !!n);
+
+  // Query existing companies by registration number (most reliable for government data)
+  const { data: existingCompanies } = await supabase
+    .from("crm_companies")
+    .select("registration_number, name, country")
+    .or(`registration_number.in.(${regNumbers.join(",")})`);
+
+  const existingRegNumbers = new Set(
+    (existingCompanies || [])
+      .map((c: { registration_number: string | null }) => c.registration_number)
+      .filter(Boolean)
+  );
+
+  const existingNames = new Set(
+    (existingCompanies || [])
+      .map((c: { name: string; country: string | null }) => `${c.name?.toLowerCase()}|${c.country?.toLowerCase()}`)
+      .filter(Boolean)
+  );
+
+  // Filter results
+  const filteredResults = results.filter((r) => {
+    if (r.company.registration_number && existingRegNumbers.has(r.company.registration_number)) {
+      return false;
+    }
+    const nameKey = `${r.company.name?.toLowerCase()}|${r.company.country?.toLowerCase()}`;
+    if (existingNames.has(nameKey)) {
+      return false;
+    }
+    return true;
+  });
+
+  return {
+    results: filteredResults,
+    duplicatesFiltered: results.length - filteredResults.length,
+  };
 }
 
 /**
