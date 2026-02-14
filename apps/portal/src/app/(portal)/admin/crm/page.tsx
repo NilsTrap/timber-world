@@ -7,7 +7,7 @@ import {
   getAllContacts,
   CompaniesTable,
   AllContactsTable,
-  DiscoverCompaniesModal,
+  DiscoverTab,
 } from "@/features/crm";
 
 export const metadata: Metadata = {
@@ -40,18 +40,18 @@ export default async function CrmPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">CRM</h1>
-          <p className="text-muted-foreground">
-            Discover and manage company leads and contacts
-          </p>
-        </div>
-        <DiscoverCompaniesModal />
+      <div>
+        <h1 className="text-3xl font-semibold tracking-tight">CRM</h1>
+        <p className="text-muted-foreground">
+          Discover and manage company leads and contacts
+        </p>
       </div>
 
-      <Tabs defaultValue="companies">
+      <Tabs defaultValue="discover">
         <TabsList>
+          <TabsTrigger value="discover">
+            Discover
+          </TabsTrigger>
           <TabsTrigger value="companies">
             Companies ({companies.length})
           </TabsTrigger>
@@ -59,6 +59,10 @@ export default async function CrmPage() {
             Contacts ({contacts.length})
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="discover" className="mt-4">
+          <DiscoverTab />
+        </TabsContent>
 
         <TabsContent value="companies" className="mt-4">
           <CompaniesTable companies={companies} />
