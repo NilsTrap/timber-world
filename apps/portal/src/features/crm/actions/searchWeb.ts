@@ -14,14 +14,28 @@ const COUNTRY_NAMES: Record<string, string> = {
   DE: "Germany",
 };
 
+// Map our country codes to Brave's 2-letter country codes
+const BRAVE_COUNTRY_CODES: Record<string, string> = {
+  UK: "GB",
+  SE: "SE",
+  NO: "NO",
+  DK: "DK",
+  FI: "FI",
+  NL: "NL",
+  BE: "BE",
+  IE: "IE",
+  DE: "DE",
+};
+
 /**
  * Search the web for companies matching the query
- * Uses SerpAPI or similar service for real web search results
+ * Uses Brave Search API for web search results
+ * Free tier: 2,000 queries/month, then $5/1000
  */
 export async function searchWeb(
   params: DiscoverySearchParams
 ): Promise<{ success: true; data: DiscoveryResult[] } | { success: false; error: string }> {
-  const apiKey = process.env.SERP_API_KEY;
+  const apiKey = process.env.BRAVE_API_KEY;
   const countryName = COUNTRY_NAMES[params.country] || params.country;
 
   // Build search query with country context
@@ -29,7 +43,7 @@ export async function searchWeb(
 
   if (!apiKey) {
     // For development/demo, use mock data based on search terms
-    console.log("SERP_API_KEY not set, returning demo web results");
+    console.log("BRAVE_API_KEY not set, returning demo web results");
     return {
       success: true,
       data: getDemoWebResults(params.query, params.country),
@@ -37,23 +51,28 @@ export async function searchWeb(
   }
 
   try {
-    // Using SerpAPI for Google search results
-    const url = new URL("https://serpapi.com/search.json");
+    // Using Brave Search API
+    const url = new URL("https://api.search.brave.com/res/v1/web/search");
     url.searchParams.set("q", searchQuery);
-    url.searchParams.set("api_key", apiKey);
-    url.searchParams.set("engine", "google");
-    url.searchParams.set("num", "10");
+    url.searchParams.set("count", "10");
+    url.searchParams.set("country", BRAVE_COUNTRY_CODES[params.country] || "GB");
+    url.searchParams.set("safesearch", "moderate");
 
-    const response = await fetch(url.toString());
+    const response = await fetch(url.toString(), {
+      headers: {
+        "X-Subscription-Token": apiKey,
+        "Accept": "application/json",
+      },
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("SerpAPI error:", errorText);
+      console.error("Brave Search API error:", errorText);
       return { success: false, error: `Search API error: ${response.status}` };
     }
 
     const data = await response.json();
-    const results = parseSearchResults(data, params.country);
+    const results = parseBraveResults(data, params.country);
 
     return { success: true, data: results };
   } catch (error) {
@@ -63,19 +82,19 @@ export async function searchWeb(
 }
 
 /**
- * Parse SerpAPI results into our discovery format
+ * Parse Brave Search API results into our discovery format
  */
-function parseSearchResults(data: Record<string, unknown>, country: string): DiscoveryResult[] {
-  const organicResults = (data.organic_results || []) as Array<{
+function parseBraveResults(data: Record<string, unknown>, country: string): DiscoveryResult[] {
+  const webResults = ((data.web as Record<string, unknown>)?.results || []) as Array<{
     title: string;
-    link: string;
-    snippet?: string;
+    url: string;
+    description?: string;
   }>;
 
-  return organicResults
+  return webResults
     .filter((result) => {
       // Filter out non-company results (social media, directories, etc.)
-      const url = result.link.toLowerCase();
+      const url = result.url.toLowerCase();
       return (
         !url.includes("linkedin.com") &&
         !url.includes("facebook.com") &&
@@ -88,11 +107,11 @@ function parseSearchResults(data: Record<string, unknown>, country: string): Dis
     .map((result) => ({
       company: {
         name: extractCompanyName(result.title),
-        website: result.link,
+        website: result.url,
         country: country,
-        industry: result.snippet || null,
+        industry: result.description || null,
         source: "web_search",
-        source_url: result.link,
+        source_url: result.url,
         status: "new" as const,
       },
       officers: [],
