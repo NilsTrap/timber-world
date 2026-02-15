@@ -3,14 +3,8 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
 import { AccessDeniedHandler } from "@/components/AccessDeniedHandler";
-import {
-  getProducerMetrics,
-  getProcessBreakdown,
-  getAdminMetrics,
-  getAdminProcessBreakdown,
-} from "@/features/dashboard/actions";
+import { getProducerMetrics, getAdminMetrics } from "@/features/dashboard/actions";
 import { ProducerDashboardMetrics } from "@/features/dashboard/components/ProducerDashboardMetrics";
-import { ProcessBreakdownTable } from "@/features/dashboard/components/ProcessBreakdownTable";
 import { AdminDashboardContent } from "@/features/dashboard/components/AdminDashboardContent";
 
 export const metadata: Metadata = {
@@ -25,26 +19,18 @@ export const metadata: Metadata = {
  */
 async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
   try {
-    const [metricsResult, breakdownResult] = await Promise.all([
-      getAdminMetrics(undefined, orgIds),
-      getAdminProcessBreakdown(undefined, orgIds),
-    ]);
+    const metricsResult = await getAdminMetrics(undefined, orgIds);
 
-    const hasError = !metricsResult.success || !breakdownResult.success;
+    const hasError = !metricsResult.success;
     if (hasError) {
-      console.error("[AdminDashboard] Failed to load metrics:", {
-        metricsError: !metricsResult.success ? metricsResult.error : null,
-        breakdownError: !breakdownResult.success ? breakdownResult.error : null,
-      });
+      console.error("[AdminDashboard] Failed to load metrics:", metricsResult.error);
     }
 
     const metrics = metricsResult.success ? metricsResult.data : null;
-    const breakdown = breakdownResult.success ? breakdownResult.data : [];
 
     return (
       <AdminDashboardContent
         initialMetrics={metrics}
-        initialBreakdown={breakdown}
         hasError={hasError}
       />
     );
@@ -53,7 +39,6 @@ async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
     return (
       <AdminDashboardContent
         initialMetrics={null}
-        initialBreakdown={[]}
         hasError={true}
       />
     );
@@ -63,31 +48,16 @@ async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
 /**
  * Producer Dashboard Content
  *
- * Fetches real metrics and process breakdown.
- * Shows metric cards and per-process table.
+ * Fetches real metrics.
+ * Shows metric cards only - process breakdown moved to Production > Consolidated tab.
  * TODO [i18n]: Replace hardcoded text with useTranslations()
  */
 async function ProducerDashboardContent() {
-  const [metricsResult, breakdownResult] = await Promise.all([
-    getProducerMetrics(),
-    getProcessBreakdown(),
-  ]);
+  const metricsResult = await getProducerMetrics();
 
   // Handle errors - show user-friendly message instead of silently failing
-  const hasError = !metricsResult.success || !breakdownResult.success;
-  if (hasError) {
-    console.error("[Dashboard] Failed to load metrics:", {
-      metricsError: !metricsResult.success ? metricsResult.error : null,
-      breakdownError: !breakdownResult.success ? breakdownResult.error : null,
-    });
-  }
-
-  const metrics = metricsResult.success ? metricsResult.data : null;
-  const breakdown = breakdownResult.success ? breakdownResult.data : [];
-  const hasProduction = metrics && metrics.totalProductionVolumeM3 > 0;
-
-  // Show error state if data failed to load
-  if (hasError) {
+  if (!metricsResult.success) {
+    console.error("[Dashboard] Failed to load metrics:", metricsResult.error);
     return (
       <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 shadow-sm text-center">
         <p className="text-destructive font-medium">
@@ -97,21 +67,7 @@ async function ProducerDashboardContent() {
     );
   }
 
-  return (
-    <>
-      <ProducerDashboardMetrics metrics={metrics} />
-
-      {hasProduction ? (
-        <ProcessBreakdownTable breakdown={breakdown} />
-      ) : (
-        <div className="rounded-lg border bg-card p-6 shadow-sm text-center">
-          <p className="text-muted-foreground">
-            Start tracking production to see metrics
-          </p>
-        </div>
-      )}
-    </>
-  );
+  return <ProducerDashboardMetrics metrics={metricsResult.data} />;
 }
 
 /**

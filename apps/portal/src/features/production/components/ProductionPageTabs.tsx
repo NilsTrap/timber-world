@@ -2,16 +2,20 @@
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@timber/ui";
 import type { Process, ProcessWithNotes, ProductionListItem, ProductionHistoryItem } from "../types";
+import type { ProcessBreakdownItem, AdminProcessBreakdownItem } from "@/features/dashboard/types";
 import { NewProductionForm } from "./NewProductionForm";
 import { DraftProductionList } from "./DraftProductionList";
 import { ProductionHistoryTable } from "./ProductionHistoryTable";
 import { ProcessesTab } from "./ProcessesTab";
+import { ProcessBreakdownTable } from "@/features/dashboard/components/ProcessBreakdownTable";
+import { AdminProcessBreakdownTable } from "@/features/dashboard/components/AdminProcessBreakdownTable";
 
 interface ProductionPageTabsProps {
   processes: Process[];
   processesWithNotes: ProcessWithNotes[];
   drafts: ProductionListItem[];
   history: ProductionHistoryItem[];
+  breakdown: ProcessBreakdownItem[] | AdminProcessBreakdownItem[];
   defaultTab?: string;
   defaultProcess?: string;
   showOrganisation?: boolean;
@@ -21,6 +25,8 @@ interface ProductionPageTabsProps {
   organizationName?: string;
   /** Organization ID for saving process notes */
   organizationId?: string;
+  /** If true, use admin breakdown table with trend indicators */
+  isAdmin?: boolean;
 }
 
 /**
@@ -36,18 +42,28 @@ export function ProductionPageTabs({
   processesWithNotes,
   drafts,
   history,
+  breakdown,
   defaultTab,
   defaultProcess,
   showOrganisation = false,
   canDeleteHistory = false,
   organizationName,
   organizationId,
+  isAdmin = false,
 }: ProductionPageTabsProps) {
+  const getDefaultTab = () => {
+    if (defaultTab === "history") return "history";
+    if (defaultTab === "processes") return "processes";
+    if (defaultTab === "consolidated") return "consolidated";
+    return "active";
+  };
+
   return (
-    <Tabs defaultValue={defaultTab === "history" ? "history" : defaultTab === "processes" ? "processes" : "active"}>
+    <Tabs defaultValue={getDefaultTab()}>
       <TabsList>
         <TabsTrigger value="active">Drafts</TabsTrigger>
         <TabsTrigger value="history">Completed</TabsTrigger>
+        <TabsTrigger value="consolidated">Consolidated</TabsTrigger>
         <TabsTrigger value="processes">Process List</TabsTrigger>
       </TabsList>
 
@@ -63,6 +79,17 @@ export function ProductionPageTabs({
 
       <TabsContent value="history">
         <ProductionHistoryTable entries={history} defaultProcess={defaultProcess} showOrganisation={showOrganisation} canDelete={canDeleteHistory} />
+      </TabsContent>
+
+      <TabsContent value="consolidated">
+        {isAdmin ? (
+          <AdminProcessBreakdownTable
+            breakdown={breakdown as AdminProcessBreakdownItem[]}
+            onProcessClick={() => {}}
+          />
+        ) : (
+          <ProcessBreakdownTable breakdown={breakdown as ProcessBreakdownItem[]} />
+        )}
       </TabsContent>
 
       <TabsContent value="processes">
