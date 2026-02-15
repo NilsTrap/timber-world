@@ -58,8 +58,9 @@ export function Sidebar({
   const [isMounted, setIsMounted] = useState(false);
   const searchParams = useSearchParams();
 
-  // Get current org from URL for OrganizationSelector
-  const currentOrgId = searchParams.get("org");
+  // Get current orgs from URL for OrganizationSelector (comma-separated)
+  const orgParam = searchParams.get("org");
+  const currentOrgIds = orgParam ? orgParam.split(",").filter(Boolean) : [];
 
   // Load collapsed state from localStorage on mount
   useEffect(() => {
@@ -125,12 +126,12 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Organization Selector (Super Admin only - legacy) */}
+      {/* Organization Selector (Super Admin only) */}
       {organizations && organizations.length > 0 && !hasMultipleOrgs && (
-        <div className="border-b">
+        <div className="border-b relative">
           <OrganizationSelector
             organizations={organizations}
-            currentOrgId={currentOrgId}
+            currentOrgIds={currentOrgIds}
             isCollapsed={isCollapsed}
           />
         </div>

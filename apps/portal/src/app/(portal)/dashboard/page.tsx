@@ -22,13 +22,13 @@ export const metadata: Metadata = {
  * Admin Dashboard Loader (Server Component)
  *
  * Fetches admin metrics server-side and passes to client component.
- * @param orgId - Optional org ID for Super Admin to filter by specific organisation
+ * @param orgIds - Optional org IDs for Super Admin to filter by specific organisations (multi-select)
  */
-async function AdminDashboardLoader({ orgId }: { orgId?: string }) {
+async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
   try {
     const [metricsResult, breakdownResult] = await Promise.all([
-      getAdminMetrics(undefined, orgId),
-      getAdminProcessBreakdown(undefined, orgId),
+      getAdminMetrics(undefined, orgIds),
+      getAdminProcessBreakdown(undefined, orgIds),
     ]);
 
     const hasError = !metricsResult.success || !breakdownResult.success;
@@ -151,7 +151,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ org?: string }>;
 }) {
-  const { org: selectedOrgId } = await searchParams;
+  const { org: orgParam } = await searchParams;
   const session = await getSession();
 
   if (!session) {
@@ -159,8 +159,10 @@ export default async function DashboardPage({
   }
 
   const userIsAdmin = isAdmin(session);
-  // Pass org filter to admin dashboard for Super Admin
-  const orgFilter = isSuperAdmin(session) ? selectedOrgId : undefined;
+  // Parse comma-separated org IDs for multi-select filter (Super Admin only)
+  const orgIds = isSuperAdmin(session) && orgParam
+    ? orgParam.split(",").filter(Boolean)
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -180,7 +182,7 @@ export default async function DashboardPage({
         </p>
       </div>
 
-      {userIsAdmin ? <AdminDashboardLoader orgId={orgFilter} /> : <ProducerDashboardContent />}
+      {userIsAdmin ? <AdminDashboardLoader orgIds={orgIds} /> : <ProducerDashboardContent />}
     </div>
   );
 }

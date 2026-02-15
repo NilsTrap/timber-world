@@ -11,9 +11,9 @@ import type { ActionResult, EditablePackageItem } from "@/features/shipments/typ
  * Includes reference IDs needed for dropdown editing.
  * Super Admin only.
  *
- * @param orgId - Optional org ID to filter by specific organisation
+ * @param orgIds - Optional org IDs to filter by specific organisations (multi-select)
  */
-export async function getEditablePackages(orgId?: string): Promise<ActionResult<EditablePackageItem[]>> {
+export async function getEditablePackages(orgIds?: string[]): Promise<ActionResult<EditablePackageItem[]>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
@@ -162,10 +162,11 @@ export async function getEditablePackages(orgId?: string): Promise<ActionResult<
     };
   });
 
-  // Filter by orgId if specified
+  // Filter by orgIds if specified (multi-select support)
   let packages: EditablePackageItem[];
-  if (orgId) {
-    packages = allPackages.filter((pkg) => pkg.organisationId === orgId);
+  if (orgIds && orgIds.length > 0) {
+    const orgIdSet = new Set(orgIds);
+    packages = allPackages.filter((pkg) => pkg.organisationId && orgIdSet.has(pkg.organisationId));
   } else {
     packages = allPackages;
   }

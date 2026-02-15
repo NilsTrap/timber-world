@@ -19,11 +19,13 @@ export default async function InventoryPage({
 }: {
   searchParams: Promise<{ org?: string }>;
 }) {
-  const { org: selectedOrgId } = await searchParams;
+  const { org: orgParam } = await searchParams;
   const session = await getSession();
 
-  // Pass org filter to queries for Super Admin (from sidebar selector)
-  const orgFilter = isSuperAdmin(session) ? selectedOrgId : undefined;
+  // Parse comma-separated org IDs for multi-select filter (Super Admin only)
+  const orgFilter = isSuperAdmin(session) && orgParam
+    ? orgParam.split(",").filter(Boolean)
+    : undefined;
 
   const packagesResult = await getEditablePackages(orgFilter);
   const packages = packagesResult.success ? packagesResult.data : [];

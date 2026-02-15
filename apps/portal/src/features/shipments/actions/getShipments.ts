@@ -11,12 +11,12 @@ import type { ActionResult, ShipmentListItem } from "../types";
  * Ordered by shipment_date DESC (newest first).
  * Admin only.
  *
- * @param orgId - Optional org ID for Super Admin to filter by specific organisation
+ * @param orgIds - Optional org IDs for Super Admin to filter by specific organisations (multi-select)
  *
  * TODO: Generate proper Supabase types from schema to remove `as any` casts
  * across all shipment actions (getShipments, getShipmentDetail, getPackages, updateShipmentPackages)
  */
-export async function getShipments(orgId?: string): Promise<ActionResult<ShipmentListItem[]>> {
+export async function getShipments(orgIds?: string[]): Promise<ActionResult<ShipmentListItem[]>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
@@ -56,8 +56,8 @@ export async function getShipments(orgId?: string): Promise<ActionResult<Shipmen
     .order("shipment_date", { ascending: false });
 
   // Apply org filter for Super Admin when specified (filter by destination org)
-  if (isSuperAdmin(session) && orgId) {
-    query = query.eq("to_organisation_id", orgId);
+  if (isSuperAdmin(session) && orgIds && orgIds.length > 0) {
+    query = query.in("to_organisation_id", orgIds);
   }
 
   const { data, error } = await query;

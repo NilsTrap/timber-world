@@ -13,11 +13,11 @@ import type { ActionResult, AdminMetrics, DateRange } from "../types";
  * 3. Entry count for the period
  *
  * @param dateRange - Optional date range filter (ISO strings)
- * @param orgId - Optional org ID for Super Admin to filter by specific organisation
+ * @param orgIds - Optional org IDs for Super Admin to filter by specific organisations (multi-select)
  */
 export async function getAdminMetrics(
   dateRange?: DateRange,
-  orgId?: string
+  orgIds?: string[]
 ): Promise<ActionResult<AdminMetrics>> {
   const session = await getSession();
   if (!session) {
@@ -44,7 +44,8 @@ export async function getAdminMetrics(
 
   // For org filtering, we need production entry org info too
   let productionOrgMap = new Map<string, string>();
-  if (orgId && packagesData) {
+  const hasOrgFilter = orgIds && orgIds.length > 0;
+  if (hasOrgFilter && packagesData) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const productionIds = (packagesData as any[])
       .filter((pkg) => pkg.production_entry_id && !pkg.shipment_id)
@@ -69,6 +70,7 @@ export async function getAdminMetrics(
   // Calculate inventory totals (with optional org filter)
   let totalInventoryM3 = 0;
   let packageCount = 0;
+  const orgIdSet = hasOrgFilter ? new Set(orgIds) : null;
 
   if (packagesData) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -81,8 +83,8 @@ export async function getAdminMetrics(
         pkgOrgId = productionOrgMap.get(pkg.production_entry_id) ?? null;
       }
 
-      // Apply org filter if specified
-      if (orgId && pkgOrgId !== orgId) {
+      // Apply org filter if specified (multi-select)
+      if (orgIdSet && (!pkgOrgId || !orgIdSet.has(pkgOrgId))) {
         continue;
       }
 
@@ -98,9 +100,9 @@ export async function getAdminMetrics(
     .select("total_input_m3, total_output_m3, validated_at")
     .eq("status", "validated");
 
-  // Apply org filter for Super Admin when specified
-  if (isSuperAdmin(session) && orgId) {
-    query = query.eq("organisation_id", orgId);
+  // Apply org filter for Super Admin when specified (multi-select)
+  if (isSuperAdmin(session) && orgIds && orgIds.length > 0) {
+    query = query.in("organisation_id", orgIds);
   }
 
   // Apply date range filter if provided

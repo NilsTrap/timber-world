@@ -10,11 +10,11 @@ import type { ProductionListItem, ActionResult } from "../types";
  *
  * Multi-tenancy:
  * - Organisation users see only their organisation's drafts
- * - Super Admin sees all drafts across all organisations (or filtered by orgId if provided)
+ * - Super Admin sees all drafts across all organisations (or filtered by orgIds if provided)
  *
- * @param orgId - Optional org ID for Super Admin to filter by specific organisation
+ * @param orgIds - Optional org IDs for Super Admin to filter by specific organisations (multi-select)
  */
-export async function getDraftProductions(orgId?: string): Promise<
+export async function getDraftProductions(orgIds?: string[]): Promise<
   ActionResult<ProductionListItem[]>
 > {
   const session = await getSession();
@@ -34,9 +34,9 @@ export async function getDraftProductions(orgId?: string): Promise<
   // Organisation users: always filter by their own organisation
   if (isOrganisationUser(session)) {
     query = query.eq("organisation_id", session.organisationId);
-  } else if (isSuperAdmin(session) && orgId) {
-    // Super Admin with org filter: filter by selected organisation
-    query = query.eq("organisation_id", orgId);
+  } else if (isSuperAdmin(session) && orgIds && orgIds.length > 0) {
+    // Super Admin with org filter: filter by selected organisations (multi-select)
+    query = query.in("organisation_id", orgIds);
   }
   // Super Admin without org filter: no filter, sees all drafts
 

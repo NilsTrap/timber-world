@@ -19,11 +19,13 @@ export default async function ShipmentsPage({
 }: {
   searchParams: Promise<{ tab?: string; org?: string }>;
 }) {
-  const { tab, org: selectedOrgId } = await searchParams;
+  const { tab, org: orgParam } = await searchParams;
   const session = await getSession();
 
-  // Pass org filter to queries for Super Admin
-  const orgFilter = isSuperAdmin(session) ? selectedOrgId : undefined;
+  // Parse comma-separated org IDs for multi-select filter (Super Admin only)
+  const orgFilter = isSuperAdmin(session) && orgParam
+    ? orgParam.split(",").filter(Boolean)
+    : undefined;
 
   const shipmentsResult = await getShipments(orgFilter);
   const shipments = shipmentsResult.success ? shipmentsResult.data : [];

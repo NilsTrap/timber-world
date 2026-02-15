@@ -26,24 +26,26 @@ export default async function ProductionPage({
 }: {
   searchParams: Promise<{ tab?: string; process?: string; org?: string }>;
 }) {
-  const { tab, process, org: selectedOrgId } = await searchParams;
+  const { tab, process, org: orgParam } = await searchParams;
   const session = await getSession();
 
   if (!session) {
     redirect("/login");
   }
 
-  // Pass org filter to queries for Super Admin
-  const orgFilter = isSuperAdmin(session) ? selectedOrgId : undefined;
+  // Parse comma-separated org IDs for multi-select filter (Super Admin only)
+  const orgIds = isSuperAdmin(session) && orgParam
+    ? orgParam.split(",").filter(Boolean)
+    : undefined;
 
-  // Determine which org to use for processes with notes
-  const processNotesOrgId = orgFilter || session.organisationId || undefined;
+  // Determine which org to use for processes with notes (single org - use first selected or user's org)
+  const processNotesOrgId = orgIds?.[0] || session.organisationId || undefined;
 
   const [processesResult, processesWithNotesResult, draftsResult, historyResult] = await Promise.all([
     getProcesses(),
     getProcessesWithNotes(processNotesOrgId),
-    getDraftProductions(orgFilter),
-    getValidatedProductions(orgFilter),
+    getDraftProductions(orgIds),
+    getValidatedProductions(orgIds),
   ]);
 
   const processes = processesResult.success ? processesResult.data : [];
@@ -70,7 +72,7 @@ export default async function ProductionPage({
         showOrganisation={isSuperAdmin(session)}
         canDeleteHistory={isSuperAdmin(session)}
         organizationName={session.organisationName || undefined}
-        organizationId={processNotesOrgId}
+        organizationId={orgIds?.[0] || session.organisationId || undefined}
       />
     </div>
   );
