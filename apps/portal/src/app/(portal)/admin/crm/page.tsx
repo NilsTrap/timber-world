@@ -47,22 +47,18 @@ export default async function CrmPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="discover">
+      <Tabs defaultValue="companies">
         <TabsList>
-          <TabsTrigger value="discover">
-            Discover
-          </TabsTrigger>
           <TabsTrigger value="companies">
             Companies ({companies.length})
           </TabsTrigger>
           <TabsTrigger value="contacts">
             Contacts ({contacts.length})
           </TabsTrigger>
+          <TabsTrigger value="discover">
+            Discover
+          </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="discover" className="mt-4">
-          <DiscoverTab />
-        </TabsContent>
 
         <TabsContent value="companies" className="mt-4">
           <CompaniesTable companies={companies} />
@@ -70,6 +66,10 @@ export default async function CrmPage() {
 
         <TabsContent value="contacts" className="mt-4">
           <AllContactsTable contacts={contacts} />
+        </TabsContent>
+
+        <TabsContent value="discover" className="mt-4">
+          <DiscoverTab />
         </TabsContent>
       </Tabs>
     </div>
