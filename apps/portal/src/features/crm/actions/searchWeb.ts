@@ -83,9 +83,10 @@ export async function searchWeb(
 
   try {
     // Using Brave Search API
+    const limit = Math.min(params.limit || 10, 20); // Brave max is 20
     const url = new URL("https://api.search.brave.com/res/v1/web/search");
     url.searchParams.set("q", searchQuery);
-    url.searchParams.set("count", "10");
+    url.searchParams.set("count", String(limit));
     url.searchParams.set("country", BRAVE_COUNTRY_CODES[params.country] || "GB");
     url.searchParams.set("safesearch", "moderate");
 

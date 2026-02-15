@@ -44,7 +44,8 @@ export async function searchCompaniesHouse(
   try {
     // Search for companies - 1 API call
     let searchCount = 1;
-    const searchUrl = `${COMPANIES_HOUSE_API}/search/companies?q=${encodeURIComponent(params.query)}&items_per_page=10`;
+    const limit = params.limit || 10;
+    const searchUrl = `${COMPANIES_HOUSE_API}/search/companies?q=${encodeURIComponent(params.query)}&items_per_page=${limit}`;
     const searchResponse = await fetch(searchUrl, {
       headers: {
         Authorization: `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`,

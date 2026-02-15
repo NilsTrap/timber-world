@@ -30,6 +30,7 @@ export function DiscoverTab() {
   const [country, setCountry] = useState("UK");
   const [searchSource, setSearchSource] = useState<SearchSource>("web");
   const [enrichWithAI, setEnrichWithAI] = useState(false);
+  const [resultsLimit, setResultsLimit] = useState("10");
   const [isSearching, setIsSearching] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [results, setResults] = useState<DiscoveryResult[]>([]);
@@ -48,18 +49,21 @@ export function DiscoverTab() {
     setSelected(new Set());
     setImportSuccess(null);
 
+    const limit = parseInt(resultsLimit) || 10;
     let result;
     if (searchSource === "government") {
       result = await searchCompaniesHouse({
         query: query.trim(),
         country,
         enrich: enrichWithAI,
+        limit,
       });
     } else if (searchSource === "web") {
       result = await searchWeb({
         query: query.trim(),
         country,
         enrich: enrichWithAI,
+        limit,
       });
     } else {
       // Pure enrichment mode - requires existing companies
@@ -201,6 +205,19 @@ export function DiscoverTab() {
           <option value="IE">Ireland</option>
           <option value="DE">Germany</option>
         </select>
+        <Input
+          type="number"
+          min={1}
+          max={100}
+          value={resultsLimit}
+          onChange={(e) => setResultsLimit(e.target.value)}
+          onBlur={() => {
+            const num = parseInt(resultsLimit) || 10;
+            setResultsLimit(String(Math.max(1, Math.min(100, num))));
+          }}
+          className="w-20"
+          title="Max results"
+        />
         <Button onClick={handleSearch} disabled={isSearching || !query.trim()}>
           {isSearching ? (
             <Loader2 className="h-4 w-4 animate-spin mr-2" />

@@ -93,6 +93,7 @@ export interface DiscoverySearchParams {
   query: string;
   country: string;
   enrich?: boolean;  // Use Claude AI to enrich results
+  limit?: number;    // Max number of results to fetch (default: 10)
 }
 
 export interface DiscoveryResult {
