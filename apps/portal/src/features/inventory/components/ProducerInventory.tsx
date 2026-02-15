@@ -13,11 +13,15 @@ interface ProducerInventoryProps {
   packages: PackageListItem[];
   packagesInDrafts?: DraftPackageInfo[];
   packagesInShipmentDrafts?: ShipmentDraftPackageInfo[];
+  /** Initial filter values from URL params */
+  initialFilters?: Record<string, string[]>;
 }
 
-export function ProducerInventory({ packages, packagesInDrafts = [], packagesInShipmentDrafts = [] }: ProducerInventoryProps) {
+export function ProducerInventory({ packages, packagesInDrafts = [], packagesInShipmentDrafts = [], initialFilters }: ProducerInventoryProps) {
   const tableRef = useRef<DataEntryTableHandle>(null);
-  const [hasActiveFilters, setHasActiveFilters] = useState(false);
+  const [hasActiveFilters, setHasActiveFilters] = useState(
+    () => initialFilters !== undefined && Object.keys(initialFilters).length > 0
+  );
 
   // Create a map for quick lookup of production draft info by package ID
   const draftsMap = useMemo(() => {
@@ -274,6 +278,7 @@ export function ProducerInventory({ packages, packagesInDrafts = [], packagesInS
         collapseStorageKey="producer-inventory-collapsed"
         onDisplayRowsChange={handleDisplayRowsChange}
         onFilterActiveChange={setHasActiveFilters}
+        initialFilters={initialFilters}
         getRowClassName={(row) => {
           if (row.isOnTheWay) return "bg-amber-50";
           if (draftsMap.has(row.id)) return "bg-amber-50";

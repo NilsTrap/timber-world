@@ -95,6 +95,10 @@ export interface DataEntryTableProps<TRow> {
   /** Get unique key for a row (for React keys) */
   getRowKey: (row: TRow) => string;
 
+  // ─── Initial Filters ──────────────────────────────────────────────────
+  /** Initial filter values to apply on mount. Keys are column keys, values are arrays of allowed values. */
+  initialFilters?: Record<string, string[]>;
+
   // ─── Row Operations ───────────────────────────────────────────────────
   /** Create a new empty row at given index (not used in readOnly mode) */
   createRow?: (index: number) => TRow;
@@ -162,6 +166,7 @@ function DataEntryTableInner<TRow>(
     onDisplayRowsChange,
     onFilterActiveChange,
     getRowClassName,
+    initialFilters,
   }: DataEntryTableProps<TRow>,
   ref: React.ForwardedRef<DataEntryTableHandle>
 ) {
@@ -229,7 +234,19 @@ function DataEntryTableInner<TRow>(
 
   // ─── Sort & Filter ──────────────────────────────────────────────────────
   const [sortState, setSortState] = useState<ColumnSortState | null>(null);
-  const [filterState, setFilterState] = useState<Record<string, Set<string>>>({});
+  const [filterState, setFilterState] = useState<Record<string, Set<string>>>(() => {
+    // Initialize with initialFilters if provided
+    if (initialFilters) {
+      const state: Record<string, Set<string>> = {};
+      for (const [key, values] of Object.entries(initialFilters)) {
+        if (values.length > 0) {
+          state[key] = new Set(values);
+        }
+      }
+      return state;
+    }
+    return {};
+  });
 
   /** Get display value for a column, resolving dropdowns */
   const getColDisplayValue = useCallback(

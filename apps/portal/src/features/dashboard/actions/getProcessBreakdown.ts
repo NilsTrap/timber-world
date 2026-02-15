@@ -23,14 +23,20 @@ export async function getProcessBreakdown(): Promise<ActionResult<ProcessBreakdo
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
+  // Use currentOrganizationId (Epic 10) with fallback to organisationId (legacy)
+  const orgId = session.currentOrganizationId || session.organisationId;
+  if (!orgId) {
+    return { success: false, error: "No organisation linked", code: "NO_ORGANISATION_LINK" };
+  }
+
   const supabase = await createClient();
 
-  // Fetch all validated entries with process names
+  // Fetch all validated entries for this organisation with process names
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("portal_production_entries")
     .select("process_id, total_input_m3, total_output_m3, ref_processes(value)")
-    .eq("created_by", session.id)
+    .eq("organisation_id", orgId)
     .eq("status", "validated");
 
   if (error) {

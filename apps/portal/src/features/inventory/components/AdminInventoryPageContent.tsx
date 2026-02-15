@@ -8,6 +8,8 @@ import type { EditablePackageItem } from "@/features/shipments/types";
 
 interface AdminInventoryPageContentProps {
   packages: EditablePackageItem[];
+  /** Initial filter values from URL params */
+  initialFilters?: Record<string, string[]>;
 }
 
 /**
@@ -17,7 +19,7 @@ interface AdminInventoryPageContentProps {
  * - View: Read-only view of all packages (same as producer view but with org column)
  * - Edit: Full editing capabilities (add, edit, delete, import)
  */
-export function AdminInventoryPageContent({ packages }: AdminInventoryPageContentProps) {
+export function AdminInventoryPageContent({ packages, initialFilters }: AdminInventoryPageContentProps) {
   return (
     <Tabs defaultValue="view">
       <TabsList>
@@ -27,7 +29,7 @@ export function AdminInventoryPageContent({ packages }: AdminInventoryPageConten
 
       <TabsContent value="view">
         <Suspense fallback={<div className="animate-pulse h-64 bg-muted rounded-lg" />}>
-          <AdminInventoryViewTab packages={packages} />
+          <AdminInventoryViewTab packages={packages} initialFilters={initialFilters} />
         </Suspense>
       </TabsContent>
 

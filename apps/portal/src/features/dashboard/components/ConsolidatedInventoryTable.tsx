@@ -1,17 +1,23 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { ConsolidatedInventoryItem } from "../types";
 
 interface ConsolidatedInventoryTableProps {
   data: ConsolidatedInventoryItem[];
+  /** Base URL for inventory page (e.g., "/inventory" or "/admin/inventory") */
+  inventoryUrl?: string;
 }
 
 /**
  * Consolidated Inventory Table
  *
  * Displays inventory grouped by 6 attributes with totals.
+ * Rows are clickable to navigate to inventory with filters applied.
  */
-export function ConsolidatedInventoryTable({ data }: ConsolidatedInventoryTableProps) {
+export function ConsolidatedInventoryTable({ data, inventoryUrl = "/inventory" }: ConsolidatedInventoryTableProps) {
+  const router = useRouter();
+
   // Calculate grand totals
   const grandTotals = data.reduce(
     (acc, row) => ({
@@ -21,6 +27,23 @@ export function ConsolidatedInventoryTable({ data }: ConsolidatedInventoryTableP
     }),
     { packageCount: 0, totalPieces: 0, totalVolumeM3: 0 }
   );
+
+  // Build filter URL for a row
+  const buildFilterUrl = (row: ConsolidatedInventoryItem) => {
+    const params = new URLSearchParams();
+    if (row.productName) params.set("product", row.productName);
+    if (row.woodSpecies) params.set("species", row.woodSpecies);
+    if (row.humidity) params.set("humidity", row.humidity);
+    if (row.typeName) params.set("type", row.typeName);
+    if (row.processing) params.set("processing", row.processing);
+    if (row.quality) params.set("quality", row.quality);
+    const query = params.toString();
+    return query ? `${inventoryUrl}?${query}` : inventoryUrl;
+  };
+
+  const handleRowClick = (row: ConsolidatedInventoryItem) => {
+    router.push(buildFilterUrl(row));
+  };
 
   if (data.length === 0) {
     return (
@@ -51,7 +74,9 @@ export function ConsolidatedInventoryTable({ data }: ConsolidatedInventoryTableP
             {data.map((row, index) => (
               <tr
                 key={index}
-                className="border-b last:border-b-0 hover:bg-muted/30 transition-colors"
+                className="border-b last:border-b-0 hover:bg-muted/50 transition-colors cursor-pointer"
+                onClick={() => handleRowClick(row)}
+                title="Click to view packages in inventory"
               >
                 <td className="p-3">{row.productName || "—"}</td>
                 <td className="p-3">{row.woodSpecies || "—"}</td>

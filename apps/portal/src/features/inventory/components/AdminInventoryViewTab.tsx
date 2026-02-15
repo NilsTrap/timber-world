@@ -9,6 +9,8 @@ import type { EditablePackageItem } from "@/features/shipments/types";
 
 interface AdminInventoryViewTabProps {
   packages: EditablePackageItem[];
+  /** Initial filter values from URL params */
+  initialFilters?: Record<string, string[]>;
 }
 
 /**
@@ -17,9 +19,11 @@ interface AdminInventoryViewTabProps {
  * Read-only view of all inventory packages with organisation info.
  * Similar to ProducerInventory but shows organisation column for admin.
  */
-export function AdminInventoryViewTab({ packages }: AdminInventoryViewTabProps) {
+export function AdminInventoryViewTab({ packages, initialFilters }: AdminInventoryViewTabProps) {
   const tableRef = useRef<DataEntryTableHandle>(null);
-  const [hasActiveFilters, setHasActiveFilters] = useState(false);
+  const [hasActiveFilters, setHasActiveFilters] = useState(
+    () => initialFilters !== undefined && Object.keys(initialFilters).length > 0
+  );
 
   const columns: ColumnDef<EditablePackageItem>[] = useMemo(
     () => [
@@ -240,6 +244,7 @@ export function AdminInventoryViewTab({ packages }: AdminInventoryViewTabProps) 
         collapseStorageKey="admin-inventory-view-collapsed"
         onDisplayRowsChange={handleDisplayRowsChange}
         onFilterActiveChange={setHasActiveFilters}
+        initialFilters={initialFilters}
       />
     </div>
   );

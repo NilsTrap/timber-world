@@ -20,7 +20,19 @@ export const metadata: Metadata = {
  *
  * TODO [i18n]: Replace hardcoded text with useTranslations()
  */
-export default async function InventoryPage() {
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    product?: string;
+    species?: string;
+    humidity?: string;
+    type?: string;
+    processing?: string;
+    quality?: string;
+  }>;
+}) {
+  const params = await searchParams;
   const session = await getSession();
 
   if (!session) {
@@ -90,6 +102,15 @@ export default async function InventoryPage() {
     );
   }
 
+  // Build initial filters from URL params
+  const initialFilters: Record<string, string[]> = {};
+  if (params.product) initialFilters.productName = [params.product];
+  if (params.species) initialFilters.woodSpecies = [params.species];
+  if (params.humidity) initialFilters.humidity = [params.humidity];
+  if (params.type) initialFilters.typeName = [params.type];
+  if (params.processing) initialFilters.processing = [params.processing];
+  if (params.quality) initialFilters.quality = [params.quality];
+
   return (
     <div className="space-y-6">
       <div>
@@ -103,6 +124,7 @@ export default async function InventoryPage() {
         packages={packages}
         packagesInDrafts={draftsResult.success ? draftsResult.data : []}
         packagesInShipmentDrafts={shipmentDraftsResult.success ? shipmentDraftsResult.data : []}
+        initialFilters={Object.keys(initialFilters).length > 0 ? initialFilters : undefined}
       />
     </div>
   );

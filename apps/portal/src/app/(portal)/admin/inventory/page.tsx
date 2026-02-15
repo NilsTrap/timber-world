@@ -17,9 +17,18 @@ export const metadata: Metadata = {
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ org?: string }>;
+  searchParams: Promise<{
+    org?: string;
+    product?: string;
+    species?: string;
+    humidity?: string;
+    type?: string;
+    processing?: string;
+    quality?: string;
+  }>;
 }) {
-  const { org: orgParam } = await searchParams;
+  const params = await searchParams;
+  const { org: orgParam } = params;
   const session = await getSession();
 
   // Parse comma-separated org IDs for multi-select filter (Super Admin only)
@@ -30,6 +39,15 @@ export default async function InventoryPage({
   const packagesResult = await getEditablePackages(orgFilter);
   const packages = packagesResult.success ? packagesResult.data : [];
 
+  // Build initial filters from URL params
+  const initialFilters: Record<string, string[]> = {};
+  if (params.product) initialFilters.productName = [params.product];
+  if (params.species) initialFilters.woodSpecies = [params.species];
+  if (params.humidity) initialFilters.humidity = [params.humidity];
+  if (params.type) initialFilters.typeName = [params.type];
+  if (params.processing) initialFilters.processing = [params.processing];
+  if (params.quality) initialFilters.quality = [params.quality];
+
   return (
     <div className="space-y-6">
       <div>
@@ -39,7 +57,10 @@ export default async function InventoryPage({
         </p>
       </div>
 
-      <AdminInventoryPageContent packages={packages} />
+      <AdminInventoryPageContent
+        packages={packages}
+        initialFilters={Object.keys(initialFilters).length > 0 ? initialFilters : undefined}
+      />
     </div>
   );
 }

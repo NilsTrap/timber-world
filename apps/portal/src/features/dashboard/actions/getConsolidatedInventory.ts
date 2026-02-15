@@ -110,10 +110,25 @@ export async function getConsolidatedInventory(
     }
   }
 
-  // Convert map to array and sort by volume descending
-  const result = Array.from(groupMap.values()).sort(
-    (a, b) => b.totalVolumeM3 - a.totalVolumeM3
-  );
+  // Convert map to array and sort by Product → Species → Humidity → Type → Processing → Quality
+  const result = Array.from(groupMap.values()).sort((a, b) => {
+    // Compare each field in order, using empty string for nulls to sort them last
+    const fields: (keyof ConsolidatedInventoryItem)[] = [
+      "productName",
+      "woodSpecies",
+      "humidity",
+      "typeName",
+      "processing",
+      "quality",
+    ];
+    for (const field of fields) {
+      const aVal = (a[field] as string | null) ?? "";
+      const bVal = (b[field] as string | null) ?? "";
+      const cmp = aVal.localeCompare(bVal);
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
+  });
 
   return { success: true, data: result };
 }

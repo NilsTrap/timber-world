@@ -68,7 +68,7 @@ export function AdminDashboardContent({
       {/* Consolidated Inventory */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Consolidated Inventory</h2>
-        <ConsolidatedInventoryTable data={initialConsolidatedInventory} />
+        <ConsolidatedInventoryTable data={initialConsolidatedInventory} inventoryUrl="/admin/inventory" />
       </div>
 
       {hasProduction ? (
