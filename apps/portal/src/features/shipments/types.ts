@@ -200,6 +200,12 @@ export interface PackageListItem {
   organisationName: string | null;
   organisationCode: string | null;
   notes: string | null;
+  /** True if this package is in a pending outgoing shipment (on the way) */
+  isOnTheWay?: boolean;
+  /** Destination organisation name if on the way */
+  onTheWayTo?: string | null;
+  /** Shipment code if on the way */
+  onTheWayShipmentCode?: string | null;
 }
 
 /** Editable package item with both IDs and display values for admin editing */

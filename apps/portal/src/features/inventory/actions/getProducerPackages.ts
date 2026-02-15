@@ -138,7 +138,6 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
   }
 
   // Query 4: Packages in outgoing draft shipments FROM this organisation
-  // Only drafts stay in inventory - once "on the way" (pending), they leave inventory
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: outgoingDraftData, error: outgoingDraftError } = await (supabase as any)
     .from("inventory_packages")
@@ -172,8 +171,63 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     // Non-fatal: continue with other results
   }
 
+  // Query 5: Packages in outgoing PENDING shipments FROM this organisation ("on the way")
+  // These are packages that have been sent but not yet received - show with special styling
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: onTheWayData, error: onTheWayError } = await (supabase as any)
+    .from("inventory_packages")
+    .select(`
+      id,
+      package_number,
+      shipment_id,
+      thickness,
+      width,
+      length,
+      pieces,
+      volume_m3,
+      status,
+      notes,
+      shipments!inner!inventory_packages_shipment_id_fkey(
+        shipment_code,
+        from_organisation_id,
+        to_organisation_id,
+        status,
+        to_organisation:organisations!shipments_to_party_id_fkey(name)
+      ),
+      ref_product_names!inventory_packages_product_name_id_fkey(value),
+      ref_wood_species!inventory_packages_wood_species_id_fkey(value),
+      ref_humidity!inventory_packages_humidity_id_fkey(value),
+      ref_types!inventory_packages_type_id_fkey(value),
+      ref_processing!inventory_packages_processing_id_fkey(value),
+      ref_fsc!inventory_packages_fsc_id_fkey(value),
+      ref_quality!inventory_packages_quality_id_fkey(value)
+    `)
+    .eq("shipments.from_organisation_id", orgId)
+    .eq("shipments.status", "pending")
+    .neq("status", "consumed")
+    .order("package_number", { ascending: true });
+
+  if (onTheWayError) {
+    console.error("Failed to fetch on-the-way packages:", onTheWayError);
+    // Non-fatal: continue with other results
+  }
+
+  // Build a set of "on the way" package IDs for marking
+  const onTheWayIds = new Set<string>();
+  const onTheWayInfo = new Map<string, { shipmentCode: string; toOrgName: string }>();
+  if (onTheWayData) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const pkg of onTheWayData as any[]) {
+      onTheWayIds.add(pkg.id);
+      onTheWayInfo.set(pkg.id, {
+        shipmentCode: pkg.shipments?.shipment_code ?? "",
+        toOrgName: pkg.shipments?.to_organisation?.name ?? "",
+      });
+    }
+  }
+
   // Merge all result sets and deduplicate by id
-  const allData = [...(shipmentData ?? []), ...(productionData ?? []), ...(directData ?? []), ...(outgoingDraftData ?? [])];
+  const allData = [...(shipmentData ?? []), ...(productionData ?? []), ...(directData ?? []), ...(outgoingDraftData ?? []), ...(onTheWayData ?? [])];
   const seenIds = new Set<string>();
   const uniqueData = allData.filter((pkg: { id: string }) => {
     if (seenIds.has(pkg.id)) return false;
@@ -182,7 +236,11 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const packages: PackageListItem[] = uniqueData.map((pkg: any) => ({
+  const packages: PackageListItem[] = uniqueData.map((pkg: any) => {
+    const isOnTheWay = onTheWayIds.has(pkg.id);
+    const onTheWayDetails = isOnTheWay ? onTheWayInfo.get(pkg.id) : null;
+
+    return {
       id: pkg.id,
       packageNumber: pkg.package_number,
       shipmentCode: pkg.shipments?.shipment_code ?? "",
@@ -203,7 +261,12 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       organisationName: session.currentOrganizationName || session.organisationName,
       organisationCode: session.currentOrganizationCode || session.organisationCode,
       notes: pkg.notes ?? null,
-    }));
+      // "On the way" status for pending outgoing shipments
+      isOnTheWay,
+      onTheWayTo: onTheWayDetails?.toOrgName ?? null,
+      onTheWayShipmentCode: onTheWayDetails?.shipmentCode ?? null,
+    };
+  });
 
   // Sort by package number after merging
   packages.sort((a, b) => (a.packageNumber ?? "").localeCompare(b.packageNumber ?? ""));

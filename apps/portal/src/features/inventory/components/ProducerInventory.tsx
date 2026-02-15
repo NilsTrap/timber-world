@@ -99,6 +99,21 @@ export function ProducerInventory({ packages, packagesInDrafts = [], packagesInS
                   </Tooltip>
                 </TooltipProvider>
               )}
+              {row.isOnTheWay && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Truck className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-medium">On The Way</p>
+                      <p className="text-xs text-muted-foreground">
+                        {row.onTheWayShipmentCode} → {row.onTheWayTo}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           );
         },
@@ -260,6 +275,7 @@ export function ProducerInventory({ packages, packagesInDrafts = [], packagesInS
         onDisplayRowsChange={handleDisplayRowsChange}
         onFilterActiveChange={setHasActiveFilters}
         getRowClassName={(row) => {
+          if (row.isOnTheWay) return "bg-amber-50";
           if (draftsMap.has(row.id)) return "bg-amber-50";
           if (shipmentDraftsMap.has(row.id)) return "bg-blue-50";
           return undefined;
