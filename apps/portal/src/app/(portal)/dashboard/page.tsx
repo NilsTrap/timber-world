@@ -8,6 +8,7 @@ import {
   getProcessBreakdown,
   getAdminMetrics,
   getAdminProcessBreakdown,
+  getConsolidatedInventory,
 } from "@/features/dashboard/actions";
 import { ProducerDashboardMetrics } from "@/features/dashboard/components/ProducerDashboardMetrics";
 import { ProcessBreakdownTable } from "@/features/dashboard/components/ProcessBreakdownTable";
@@ -25,9 +26,10 @@ export const metadata: Metadata = {
  */
 async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
   try {
-    const [metricsResult, breakdownResult] = await Promise.all([
+    const [metricsResult, breakdownResult, consolidatedResult] = await Promise.all([
       getAdminMetrics(undefined, orgIds),
       getAdminProcessBreakdown(undefined, orgIds),
+      getConsolidatedInventory(orgIds),
     ]);
 
     const hasError = !metricsResult.success || !breakdownResult.success;
@@ -40,11 +42,13 @@ async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
 
     const metrics = metricsResult.success ? metricsResult.data : null;
     const breakdown = breakdownResult.success ? breakdownResult.data : [];
+    const consolidated = consolidatedResult.success ? consolidatedResult.data : [];
 
     return (
       <AdminDashboardContent
         initialMetrics={metrics}
         initialBreakdown={breakdown}
+        initialConsolidatedInventory={consolidated}
         hasError={hasError}
       />
     );
@@ -54,6 +58,7 @@ async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
       <AdminDashboardContent
         initialMetrics={null}
         initialBreakdown={[]}
+        initialConsolidatedInventory={[]}
         hasError={true}
       />
     );

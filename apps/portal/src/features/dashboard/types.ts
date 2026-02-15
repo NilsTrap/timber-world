@@ -91,3 +91,20 @@ export interface ProcessDetailData {
   bestEntry: ProcessHistoryItem | null;
   worstEntry: ProcessHistoryItem | null;
 }
+
+// ============================================
+// Consolidated Inventory Types
+// ============================================
+
+/** Consolidated inventory row grouped by 6 attributes */
+export interface ConsolidatedInventoryItem {
+  productName: string | null;
+  woodSpecies: string | null;
+  humidity: string | null;
+  typeName: string | null;
+  processing: string | null;
+  quality: string | null;
+  packageCount: number;
+  totalPieces: number;
+  totalVolumeM3: number;
+}

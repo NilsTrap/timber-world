@@ -4,15 +4,18 @@ import { useState } from "react";
 import { AdminDashboardMetrics } from "./AdminDashboardMetrics";
 import { AdminProcessBreakdownTable } from "./AdminProcessBreakdownTable";
 import { ProcessDetailView } from "./ProcessDetailView";
+import { ConsolidatedInventoryTable } from "./ConsolidatedInventoryTable";
 import { ExportButton } from "./ExportButton";
 import type {
   AdminMetrics,
   AdminProcessBreakdownItem,
+  ConsolidatedInventoryItem,
 } from "../types";
 
 interface AdminDashboardContentProps {
   initialMetrics: AdminMetrics | null;
   initialBreakdown: AdminProcessBreakdownItem[];
+  initialConsolidatedInventory: ConsolidatedInventoryItem[];
   hasError: boolean;
 }
 
@@ -29,6 +32,7 @@ interface AdminDashboardContentProps {
 export function AdminDashboardContent({
   initialMetrics,
   initialBreakdown,
+  initialConsolidatedInventory,
   hasError,
 }: AdminDashboardContentProps) {
   const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
@@ -60,6 +64,12 @@ export function AdminDashboardContent({
   return (
     <>
       <AdminDashboardMetrics metrics={initialMetrics} />
+
+      {/* Consolidated Inventory */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Consolidated Inventory</h2>
+        <ConsolidatedInventoryTable data={initialConsolidatedInventory} />
+      </div>
 
       {hasProduction ? (
         <div className="space-y-4">
