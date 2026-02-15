@@ -11,9 +11,10 @@ import {
   TableRow,
   Button,
   Textarea,
+  Input,
 } from "@timber/ui";
 import { Pencil, Check, X } from "lucide-react";
-import { saveProcessNote } from "../actions";
+import { saveProcessNote, saveProcessWorkUnit } from "../actions";
 import { PrintProcessesButton } from "./PrintProcessesButton";
 import type { ProcessWithNotes } from "../types";
 
@@ -33,16 +34,27 @@ export function ProcessesTab({ processes: initialProcesses, organizationName, or
   const [processes, setProcesses] = useState(initialProcesses);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [editingWorkUnitId, setEditingWorkUnitId] = useState<string | null>(null);
+  const [editWorkUnitValue, setEditWorkUnitValue] = useState("");
   const [isPending, startTransition] = useTransition();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const workUnitInputRef = useRef<HTMLInputElement>(null);
 
-  // Focus textarea when editing starts
+  // Focus textarea when editing notes
   useEffect(() => {
     if (editingId && textareaRef.current) {
       textareaRef.current.focus();
       textareaRef.current.setSelectionRange(editValue.length, editValue.length);
     }
   }, [editingId]);
+
+  // Focus input when editing work unit
+  useEffect(() => {
+    if (editingWorkUnitId && workUnitInputRef.current) {
+      workUnitInputRef.current.focus();
+      workUnitInputRef.current.select();
+    }
+  }, [editingWorkUnitId]);
 
   const handleStartEdit = useCallback((process: ProcessWithNotes) => {
     setEditingId(process.id);
@@ -80,6 +92,41 @@ export function ProcessesTab({ processes: initialProcesses, organizationName, or
     });
   }, [editValue, organizationId]);
 
+  // Work Unit editing
+  const handleStartEditWorkUnit = useCallback((process: ProcessWithNotes) => {
+    setEditingWorkUnitId(process.id);
+    setEditWorkUnitValue(process.workUnit || "");
+  }, []);
+
+  const handleCancelEditWorkUnit = useCallback(() => {
+    setEditingWorkUnitId(null);
+    setEditWorkUnitValue("");
+  }, []);
+
+  const handleSaveWorkUnit = useCallback((processId: string) => {
+    startTransition(async () => {
+      const result = await saveProcessWorkUnit({
+        processId,
+        workUnit: editWorkUnitValue,
+      });
+
+      if (result.success) {
+        setProcesses((prev) =>
+          prev.map((p) =>
+            p.id === processId
+              ? { ...p, workUnit: editWorkUnitValue || null }
+              : p
+          )
+        );
+        setEditingWorkUnitId(null);
+        setEditWorkUnitValue("");
+        toast.success("Work unit saved");
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [editWorkUnitValue]);
+
   // Handle keyboard shortcuts in textarea
   const handleKeyDown = useCallback((e: React.KeyboardEvent, processId: string) => {
     if (e.key === "Escape") {
@@ -89,6 +136,16 @@ export function ProcessesTab({ processes: initialProcesses, organizationName, or
       handleSave(processId);
     }
   }, [handleCancelEdit, handleSave]);
+
+  // Handle keyboard shortcuts for work unit
+  const handleWorkUnitKeyDown = useCallback((e: React.KeyboardEvent, processId: string) => {
+    if (e.key === "Escape") {
+      handleCancelEditWorkUnit();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      handleSaveWorkUnit(processId);
+    }
+  }, [handleCancelEditWorkUnit, handleSaveWorkUnit]);
 
   if (processes.length === 0) {
     return (
@@ -115,6 +172,7 @@ export function ProcessesTab({ processes: initialProcesses, organizationName, or
             <TableRow>
               <TableHead className="w-20">Code</TableHead>
               <TableHead className="w-40">Process Name</TableHead>
+              <TableHead className="w-24">Work Unit</TableHead>
               <TableHead>Description / Notes</TableHead>
               <TableHead className="w-20"></TableHead>
             </TableRow>
@@ -126,6 +184,49 @@ export function ProcessesTab({ processes: initialProcesses, organizationName, or
                   {process.code}
                 </TableCell>
                 <TableCell className="align-top">{process.value}</TableCell>
+                <TableCell className="align-top">
+                  {editingWorkUnitId === process.id ? (
+                    <div className="flex gap-1 items-center">
+                      <Input
+                        ref={workUnitInputRef}
+                        value={editWorkUnitValue}
+                        onChange={(e) => setEditWorkUnitValue(e.target.value)}
+                        onKeyDown={(e) => handleWorkUnitKeyDown(e, process.id)}
+                        placeholder="m, m², m³..."
+                        className="h-7 w-16 text-sm"
+                        disabled={isPending}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSaveWorkUnit(process.id)}
+                        disabled={isPending}
+                        className="h-7 w-7 p-0"
+                      >
+                        <Check className="h-3 w-3 text-green-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCancelEditWorkUnit}
+                        disabled={isPending}
+                        className="h-7 w-7 p-0"
+                      >
+                        <X className="h-3 w-3 text-red-600" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div
+                      className="text-sm cursor-pointer hover:text-primary"
+                      onClick={() => handleStartEditWorkUnit(process)}
+                      title="Click to edit"
+                    >
+                      {process.workUnit || (
+                        <span className="text-muted-foreground italic">—</span>
+                      )}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell className="align-top">
                   {editingId === process.id ? (
                     <Textarea

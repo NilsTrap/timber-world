@@ -7,6 +7,7 @@ export interface Process {
   code: string;
   value: string;
   sortOrder: number;
+  workUnit: string | null;
 }
 
 export interface ProcessWithNotes extends Process {
