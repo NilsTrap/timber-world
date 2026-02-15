@@ -69,7 +69,8 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
   }
 
   // Query 2: Production-sourced packages (from this producer's organisation)
-  // Filter by organisation_id on production entries for proper multi-tenant isolation
+  // Filter by organisation_id on production entries AND verify package still belongs to this org
+  // (packages shipped to another org have their organisation_id updated)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: productionData, error: productionError } = await (supabase as any)
     .from("inventory_packages")
@@ -94,6 +95,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
     .eq("portal_production_entries.organisation_id", orgId)
+    .eq("organisation_id", orgId)
     .eq("status", "produced")
     .order("package_number", { ascending: true });
 

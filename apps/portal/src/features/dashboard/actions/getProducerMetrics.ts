@@ -50,12 +50,14 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
   }
 
   // 1b. Production-sourced packages (from this producer's organisation, status = produced)
+  // Also verify package still belongs to this org (shipped packages have org_id updated)
   if (orgId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: productionPkgs, error: productionError } = await (supabase as any)
       .from("inventory_packages")
       .select("id, volume_m3, portal_production_entries!inner(organisation_id)")
       .eq("portal_production_entries.organisation_id", orgId)
+      .eq("organisation_id", orgId)
       .eq("status", "produced");
 
     if (productionError) {
