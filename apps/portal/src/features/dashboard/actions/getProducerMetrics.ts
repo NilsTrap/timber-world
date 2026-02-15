@@ -84,7 +84,6 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
   }
 
   // 1d. Packages in outgoing draft shipments (still in this org's inventory)
-  // Only drafts stay in inventory - once "on the way" (pending), they leave inventory
   if (orgId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: outgoingDraftPkgs, error: outgoingDraftError } = await (supabase as any)
@@ -98,6 +97,23 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
       console.error("[getProducerMetrics] Failed to fetch outgoing draft packages:", outgoingDraftError.message);
     } else if (outgoingDraftPkgs) {
       allPackages.push(...outgoingDraftPkgs);
+    }
+  }
+
+  // 1e. Packages in outgoing pending shipments ("on the way" - still belongs to sender until accepted)
+  if (orgId) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: onTheWayPkgs, error: onTheWayError } = await (supabase as any)
+      .from("inventory_packages")
+      .select("id, volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(from_organisation_id, status)")
+      .eq("shipments.from_organisation_id", orgId)
+      .eq("shipments.status", "pending")
+      .neq("status", "consumed");
+
+    if (onTheWayError) {
+      console.error("[getProducerMetrics] Failed to fetch on-the-way packages:", onTheWayError.message);
+    } else if (onTheWayPkgs) {
+      allPackages.push(...onTheWayPkgs);
     }
   }
 
