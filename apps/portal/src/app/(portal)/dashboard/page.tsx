@@ -8,12 +8,9 @@ import {
   getProcessBreakdown,
   getAdminMetrics,
   getAdminProcessBreakdown,
-  getConsolidatedInventory,
-  getProducerConsolidatedInventory,
 } from "@/features/dashboard/actions";
 import { ProducerDashboardMetrics } from "@/features/dashboard/components/ProducerDashboardMetrics";
 import { ProcessBreakdownTable } from "@/features/dashboard/components/ProcessBreakdownTable";
-import { ConsolidatedInventoryTable } from "@/features/dashboard/components/ConsolidatedInventoryTable";
 import { AdminDashboardContent } from "@/features/dashboard/components/AdminDashboardContent";
 
 export const metadata: Metadata = {
@@ -28,10 +25,9 @@ export const metadata: Metadata = {
  */
 async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
   try {
-    const [metricsResult, breakdownResult, consolidatedResult] = await Promise.all([
+    const [metricsResult, breakdownResult] = await Promise.all([
       getAdminMetrics(undefined, orgIds),
       getAdminProcessBreakdown(undefined, orgIds),
-      getConsolidatedInventory(orgIds),
     ]);
 
     const hasError = !metricsResult.success || !breakdownResult.success;
@@ -44,13 +40,11 @@ async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
 
     const metrics = metricsResult.success ? metricsResult.data : null;
     const breakdown = breakdownResult.success ? breakdownResult.data : [];
-    const consolidated = consolidatedResult.success ? consolidatedResult.data : [];
 
     return (
       <AdminDashboardContent
         initialMetrics={metrics}
         initialBreakdown={breakdown}
-        initialConsolidatedInventory={consolidated}
         hasError={hasError}
       />
     );
@@ -60,7 +54,6 @@ async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
       <AdminDashboardContent
         initialMetrics={null}
         initialBreakdown={[]}
-        initialConsolidatedInventory={[]}
         hasError={true}
       />
     );
@@ -70,15 +63,14 @@ async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
 /**
  * Producer Dashboard Content
  *
- * Fetches real metrics, process breakdown, and consolidated inventory.
- * Shows metric cards, consolidated inventory table, and per-process table.
+ * Fetches real metrics and process breakdown.
+ * Shows metric cards and per-process table.
  * TODO [i18n]: Replace hardcoded text with useTranslations()
  */
 async function ProducerDashboardContent() {
-  const [metricsResult, breakdownResult, consolidatedResult] = await Promise.all([
+  const [metricsResult, breakdownResult] = await Promise.all([
     getProducerMetrics(),
     getProcessBreakdown(),
-    getProducerConsolidatedInventory(),
   ]);
 
   // Handle errors - show user-friendly message instead of silently failing
@@ -92,7 +84,6 @@ async function ProducerDashboardContent() {
 
   const metrics = metricsResult.success ? metricsResult.data : null;
   const breakdown = breakdownResult.success ? breakdownResult.data : [];
-  const consolidated = consolidatedResult.success ? consolidatedResult.data : [];
   const hasProduction = metrics && metrics.totalProductionVolumeM3 > 0;
 
   // Show error state if data failed to load
@@ -109,12 +100,6 @@ async function ProducerDashboardContent() {
   return (
     <>
       <ProducerDashboardMetrics metrics={metrics} />
-
-      {/* Consolidated Inventory */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Consolidated Inventory</h2>
-        <ConsolidatedInventoryTable data={consolidated} />
-      </div>
 
       {hasProduction ? (
         <ProcessBreakdownTable breakdown={breakdown} />

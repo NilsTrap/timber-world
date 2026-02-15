@@ -5,7 +5,8 @@ import { getSession, isAdmin } from "@/lib/auth";
 import { getProducerPackages } from "@/features/inventory/actions";
 import { getPackagesInDrafts } from "@/features/production/actions";
 import { getPackagesInShipmentDrafts } from "@/features/shipments/actions";
-import { ProducerInventory } from "@/features/inventory/components/ProducerInventory";
+import { getProducerConsolidatedInventory } from "@/features/dashboard/actions";
+import { ProducerInventoryPageContent } from "@/features/inventory/components/ProducerInventoryPageContent";
 
 export const metadata: Metadata = {
   title: "Inventory",
@@ -44,10 +45,11 @@ export default async function InventoryPage({
   }
 
   // Producer flow
-  const [result, draftsResult, shipmentDraftsResult] = await Promise.all([
+  const [result, draftsResult, shipmentDraftsResult, consolidatedResult] = await Promise.all([
     getProducerPackages(),
     getPackagesInDrafts(),
     getPackagesInShipmentDrafts(),
+    getProducerConsolidatedInventory(),
   ]);
 
   if (!result.success) {
@@ -111,6 +113,8 @@ export default async function InventoryPage({
   if (params.processing) initialFilters.processing = [params.processing];
   if (params.quality) initialFilters.quality = [params.quality];
 
+  const consolidated = consolidatedResult.success ? consolidatedResult.data : [];
+
   return (
     <div className="space-y-6">
       <div>
@@ -120,10 +124,11 @@ export default async function InventoryPage({
         </p>
       </div>
 
-      <ProducerInventory
+      <ProducerInventoryPageContent
         packages={packages}
         packagesInDrafts={draftsResult.success ? draftsResult.data : []}
         packagesInShipmentDrafts={shipmentDraftsResult.success ? shipmentDraftsResult.data : []}
+        consolidated={consolidated}
         initialFilters={Object.keys(initialFilters).length > 0 ? initialFilters : undefined}
       />
     </div>
