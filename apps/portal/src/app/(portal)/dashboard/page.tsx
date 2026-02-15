@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
 import { AccessDeniedHandler } from "@/components/AccessDeniedHandler";
 import {
@@ -111,30 +110,6 @@ async function ProducerDashboardContent() {
           </p>
         </div>
       )}
-
-      <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <Link
-            href="/production"
-            className="rounded-md border p-4 text-center hover:bg-accent/50 transition-colors"
-          >
-            New Production
-          </Link>
-          <Link
-            href="/inventory"
-            className="rounded-md border p-4 text-center hover:bg-accent/50 transition-colors"
-          >
-            View Inventory
-          </Link>
-          <Link
-            href="/production?tab=history"
-            className="rounded-md border p-4 text-center hover:bg-accent/50 transition-colors"
-          >
-            Production History
-          </Link>
-        </div>
-      </div>
     </>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { AdminDashboardMetrics } from "./AdminDashboardMetrics";
 import { AdminProcessBreakdownTable } from "./AdminProcessBreakdownTable";
 import { ProcessDetailView } from "./ProcessDetailView";
@@ -83,30 +82,6 @@ export function AdminDashboardContent({
           </p>
         </div>
       )}
-
-      <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <Link
-            href="/admin/reference"
-            className="rounded-md border p-4 text-center hover:bg-accent/50 transition-colors"
-          >
-            Reference Data
-          </Link>
-          <Link
-            href="/admin/organisations"
-            className="rounded-md border p-4 text-center hover:bg-accent/50 transition-colors"
-          >
-            Organisations
-          </Link>
-          <Link
-            href="/inventory"
-            className="rounded-md border p-4 text-center hover:bg-accent/50 transition-colors"
-          >
-            View Inventory
-          </Link>
-        </div>
-      </div>
 
       {/* Process Detail Modal */}
       <ProcessDetailView
