@@ -31,9 +31,6 @@ export function ProcessBreakdownTable({ breakdown, onProcessClick }: ProcessBrea
 
   return (
     <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
-      <div className="p-4 border-b">
-        <h3 className="text-sm font-medium">Per-Process Breakdown</h3>
-      </div>
       <table className="w-full text-sm whitespace-nowrap">
         <thead>
           <tr className="border-b bg-muted/50">
