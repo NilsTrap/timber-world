@@ -12,6 +12,9 @@ export const metadata: Metadata = {
   title: "Inventory",
 };
 
+// Disable caching to always show fresh inventory when navigating back
+export const dynamic = "force-dynamic";
+
 /**
  * Inventory Page
  *

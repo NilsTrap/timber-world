@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "@/features/shipments/types";
@@ -80,6 +81,10 @@ export async function updateInventoryPackage(
     console.error("Failed to update package:", error);
     return { success: false, error: `Failed to update package: ${error.message}`, code: "UPDATE_FAILED" };
   }
+
+  revalidatePath("/inventory");
+  revalidatePath("/admin/inventory");
+  revalidatePath("/dashboard");
 
   return { success: true, data: { id } };
 }

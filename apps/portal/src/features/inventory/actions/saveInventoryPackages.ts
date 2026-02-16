@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "@/features/shipments/types";
@@ -215,6 +216,10 @@ export async function saveInventoryPackages(
   if (errors.length > 0 && updated === 0 && created === 0) {
     return { success: false, error: errors.join("; "), code: "SAVE_FAILED" };
   }
+
+  revalidatePath("/inventory");
+  revalidatePath("/admin/inventory");
+  revalidatePath("/dashboard");
 
   return { success: true, data: { updated, created, errors } };
 }

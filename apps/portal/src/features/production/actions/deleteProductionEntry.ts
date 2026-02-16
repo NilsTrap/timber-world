@@ -1,7 +1,8 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isOrganisationUser, isSuperAdmin } from "@/lib/auth";
+import { getSession, isOrganisationUser, isProducer, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 const UUID_REGEX =
@@ -9,6 +10,11 @@ const UUID_REGEX =
 
 /**
  * Delete a production entry and all its related inputs/outputs.
+ *
+ * For validated entries, this reverses all inventory changes:
+ * - Input packages are restored (pieces and volume added back)
+ * - Consumed packages are restored to "produced" status
+ * - Output packages are deleted from inventory
  *
  * Multi-tenancy:
  * - Organisation users can only delete their own organisation's draft entries
@@ -28,7 +34,7 @@ export async function deleteProductionEntry(
 
   const supabase = await createClient();
 
-  // Fetch entry — verify it exists, is draft, and owned by user's organisation
+  // Fetch entry — verify it exists and ownership
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: entry, error: fetchError } = await (supabase as any)
     .from("portal_production_entries")
@@ -44,11 +50,16 @@ export async function deleteProductionEntry(
   if (isOrganisationUser(session) && entry.organisation_id !== session.organisationId) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
-  // Super Admin can delete any entry
 
-  // Organisation users can only delete drafts; Super Admin can delete any status
-  if (!isSuperAdmin(session) && entry.status !== "draft") {
-    return { success: false, error: "Only draft entries can be deleted", code: "VALIDATION_FAILED" };
+  // Only allow deleting draft or validated entries (not other statuses like "failed")
+  if (entry.status !== "draft" && entry.status !== "validated") {
+    return { success: false, error: "Cannot delete entry in this status", code: "VALIDATION_FAILED" };
+  }
+
+  // Deleting validated entries requires producer role (or super admin)
+  const isAdmin = isSuperAdmin(session);
+  if (entry.status === "validated" && !isAdmin && !isProducer(session)) {
+    return { success: false, error: "Only producers can delete validated entries", code: "FORBIDDEN" };
   }
 
   // Check if any correction entries reference this entry
@@ -78,7 +89,10 @@ export async function deleteProductionEntry(
     .map((o: { package_number: string | null }) => o.package_number)
     .filter((pn: string | null): pn is string => !!pn);
 
-  // For validated entries, check if any output packages are used as inputs elsewhere
+  // For validated entries, we need to:
+  // 1. Check if any output packages are used as inputs elsewhere
+  // 2. Restore input packages to their original state
+  // 3. Delete output packages from inventory
   if (entry.status === "validated") {
     // Get packages created by this production entry (by production_entry_id link)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -101,15 +115,15 @@ export async function deleteProductionEntry(
     const allPackageIds = new Set<string>();
     for (const p of linkedPackages || []) allPackageIds.add(p.id);
     for (const p of packagesByNumber || []) allPackageIds.add(p.id);
-    const packageIds = Array.from(allPackageIds);
+    const outputPackageIds = Array.from(allPackageIds);
 
-    if (packageIds.length > 0) {
+    if (outputPackageIds.length > 0) {
       // Check if any of these packages are used as inputs in OTHER production entries
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: usedInputs } = await (supabase as any)
         .from("portal_production_inputs")
         .select("id, production_entry_id")
-        .in("package_id", packageIds)
+        .in("package_id", outputPackageIds)
         .neq("production_entry_id", entryId);
 
       if (usedInputs && usedInputs.length > 0) {
@@ -119,13 +133,68 @@ export async function deleteProductionEntry(
           code: "VALIDATION_FAILED",
         };
       }
+    }
 
-      // Delete inventory packages by ID (covers both linked and orphaned)
+    // STEP 1: Restore input packages to their original state
+    // Fetch all inputs with their package info
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: inputs } = await (supabase as any)
+      .from("portal_production_inputs")
+      .select(`
+        id,
+        package_id,
+        pieces_used,
+        volume_m3,
+        inventory_packages(id, pieces, volume_m3, status, shipment_id)
+      `)
+      .eq("production_entry_id", entryId);
+
+    // Restore each input package
+    for (const input of inputs || []) {
+      const pkg = input.inventory_packages;
+      if (!pkg) continue;
+
+      const currentVolume = parseFloat(pkg.volume_m3) || 0;
+      const volumeToRestore = parseFloat(input.volume_m3) || 0;
+      const newVolume = currentVolume + volumeToRestore;
+
+      // Build update object
+      const updateData: { pieces?: string | null; volume_m3: number; status?: string } = {
+        volume_m3: newVolume,
+      };
+
+      // Handle pieces restoration:
+      // - If pieces_used is null, this was a volume-only input, restore pieces to null
+      // - Otherwise, calculate and restore the pieces count
+      if (input.pieces_used === null) {
+        // Volume-only package - restore pieces to null so it shows up in queries
+        updateData.pieces = null;
+      } else {
+        const currentPieces = pkg.pieces ? parseInt(pkg.pieces, 10) : 0;
+        const newPieces = currentPieces + input.pieces_used;
+        updateData.pieces = String(newPieces);
+      }
+
+      // Restore status if package was consumed
+      if (pkg.status === "consumed") {
+        // Restore to appropriate status based on package origin
+        updateData.status = pkg.shipment_id ? "produced" : "produced";
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from("inventory_packages")
+        .update(updateData)
+        .eq("id", input.package_id);
+    }
+
+    // STEP 2: Delete output packages from inventory
+    if (outputPackageIds.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: packagesDeleteError } = await (supabase as any)
         .from("inventory_packages")
         .delete()
-        .in("id", packageIds);
+        .in("id", outputPackageIds);
 
       if (packagesDeleteError) {
         return { success: false, error: `Failed to delete inventory packages: ${packagesDeleteError.message}`, code: "DELETE_FAILED" };
@@ -165,6 +234,10 @@ export async function deleteProductionEntry(
   if (deleteError) {
     return { success: false, error: deleteError.message, code: "DELETE_FAILED" };
   }
+
+  // Invalidate caches so changes show immediately
+  revalidatePath("/production");
+  revalidatePath("/inventory");
 
   return { success: true, data: null };
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import type { ActionResult, ShipmentPallet } from "../types";
@@ -72,6 +73,8 @@ export async function createPallet(
     return { success: false, error: "Failed to create pallet", code: "INSERT_FAILED" };
   }
 
+  revalidatePath("/shipments");
+
   return {
     success: true,
     data: {
@@ -141,6 +144,8 @@ export async function deletePallet(
     console.error("Failed to delete pallet:", deleteError);
     return { success: false, error: "Failed to delete pallet", code: "DELETE_FAILED" };
   }
+
+  revalidatePath("/shipments");
 
   return { success: true, data: { deleted: true } };
 }
@@ -224,6 +229,8 @@ export async function assignPackageToPallet(
     console.error("Failed to assign package to pallet:", updateError);
     return { success: false, error: "Failed to assign package", code: "UPDATE_FAILED" };
   }
+
+  revalidatePath("/shipments");
 
   return { success: true, data: { assigned: true } };
 }

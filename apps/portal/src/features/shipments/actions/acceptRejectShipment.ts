@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import type { ActionResult, ShipmentStatus } from "../types";
@@ -111,6 +112,10 @@ export async function acceptShipment(
     return { success: false, error: "Failed to complete shipment acceptance", code: "UPDATE_FAILED" };
   }
 
+  revalidatePath("/shipments");
+  revalidatePath("/inventory");
+  revalidatePath("/dashboard");
+
   return {
     success: true,
     data: {
@@ -189,6 +194,10 @@ export async function rejectShipment(
   }
 
   // Packages remain with the sender - no transfer needed
+
+  revalidatePath("/shipments");
+  revalidatePath("/inventory");
+  revalidatePath("/dashboard");
 
   return {
     success: true,

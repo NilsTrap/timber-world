@@ -18,8 +18,9 @@ import {
 } from "@timber/ui";
 import { ColumnHeaderMenu, type ColumnSortState } from "@timber/ui";
 import { formatDate } from "@/lib/utils";
-import { deleteProductionEntry, cancelProductionEntry } from "../actions";
+import { deleteProductionEntry, cancelProductionEntry, saveInvoiceNumber } from "../actions";
 import type { ProductionHistoryItem } from "../types";
+import { Input } from "@timber/ui";
 
 interface ProductionHistoryTableProps {
   entries: ProductionHistoryItem[];
@@ -33,6 +34,9 @@ interface ProductionHistoryTableProps {
 function fmt3(n: number): string {
   return n.toFixed(3).replace(".", ",");
 }
+function fmt2(n: number): string {
+  return n.toFixed(2).replace(".", ",");
+}
 function fmt1(n: number): string {
   return n.toFixed(1).replace(".", ",");
 }
@@ -45,7 +49,12 @@ type ColumnKey =
   | "totalInputM3"
   | "totalOutputM3"
   | "outcomePercentage"
-  | "wastePercentage";
+  | "wastePercentage"
+  | "plannedWork"
+  | "actualWork"
+  | "price"
+  | "sum"
+  | "invoiceNumber";
 
 /**
  * Production History Table
@@ -71,6 +80,9 @@ export function ProductionHistoryTable({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [localEntries, setLocalEntries] = useState(entries);
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  const [invoiceValue, setInvoiceValue] = useState("");
+  const [savingInvoice, setSavingInvoice] = useState(false);
 
   const handleDelete = async (entryId: string) => {
     setDeletingId(entryId);
@@ -95,9 +107,47 @@ export function ProductionHistoryTable({
     }
     setCancellingId(null);
   };
+
+  const handleInvoiceEdit = (entry: ProductionHistoryItem) => {
+    setEditingInvoiceId(entry.id);
+    setInvoiceValue(entry.invoiceNumber ?? "");
+  };
+
+  const handleInvoiceSave = async (entryId: string) => {
+    setSavingInvoice(true);
+    const result = await saveInvoiceNumber(entryId, invoiceValue || null);
+    if (result.success) {
+      setLocalEntries((prev) =>
+        prev.map((e) =>
+          e.id === entryId ? { ...e, invoiceNumber: result.data.invoiceNumber } : e
+        )
+      );
+      setEditingInvoiceId(null);
+      toast.success("Invoice number saved");
+    } else {
+      toast.error(result.error);
+    }
+    setSavingInvoice(false);
+  };
+
+  const handleInvoiceCancel = () => {
+    setEditingInvoiceId(null);
+    setInvoiceValue("");
+  };
+
+  const handleInvoiceKeyDown = (e: React.KeyboardEvent, entryId: string) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleInvoiceSave(entryId);
+    } else if (e.key === "Escape") {
+      handleInvoiceCancel();
+    }
+  };
+
   const [filterState, setFilterState] = useState<Record<string, Set<string>>>(
     defaultProcess ? { processName: new Set([defaultProcess]) } : {}
   );
+
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const dateFromRef = useRef<HTMLInputElement>(null);
@@ -108,6 +158,14 @@ export function ProductionHistoryTable({
     if (!isoValue) return;
     const [y, m, d] = isoValue.split("-");
     setter(`${d}.${m}.${y}`);
+  };
+
+  // Calculate sum for an entry
+  const getSum = (entry: ProductionHistoryItem): number | null => {
+    if (entry.price != null && entry.actualWork != null) {
+      return entry.actualWork * entry.price;
+    }
+    return null;
   };
 
   // Compute display value for each column (used for filtering)
@@ -129,6 +187,17 @@ export function ProductionHistoryTable({
         return fmt1(entry.outcomePercentage) + "%";
       case "wastePercentage":
         return fmt1(entry.wastePercentage) + "%";
+      case "plannedWork":
+        return entry.plannedWork !== null ? fmt2(entry.plannedWork) : "—";
+      case "actualWork":
+        return entry.actualWork !== null ? fmt2(entry.actualWork) : "—";
+      case "price":
+        return entry.price !== null ? fmt2(entry.price) : "—";
+      case "sum":
+        const sum = getSum(entry);
+        return sum !== null ? fmt2(sum) : "—";
+      case "invoiceNumber":
+        return entry.invoiceNumber ?? "";
     }
   };
 
@@ -143,6 +212,11 @@ export function ProductionHistoryTable({
       "totalOutputM3",
       "outcomePercentage",
       "wastePercentage",
+      "plannedWork",
+      "actualWork",
+      "price",
+      "sum",
+      "invoiceNumber",
     ];
     const result: Record<string, string[]> = {};
     for (const col of cols) {
@@ -164,6 +238,8 @@ export function ProductionHistoryTable({
     setSortState(null);
     setDateFrom("");
     setDateTo("");
+    // Clear the process filter from URL to prevent it coming back on refresh
+    router.replace("/production?tab=history");
   };
 
   // Filter and sort entries
@@ -190,6 +266,11 @@ export function ProductionHistoryTable({
       "totalOutputM3",
       "outcomePercentage",
       "wastePercentage",
+      "plannedWork",
+      "actualWork",
+      "price",
+      "sum",
+      "invoiceNumber",
     ];
     for (const col of cols) {
       const filter = filterState[col];
@@ -203,13 +284,20 @@ export function ProductionHistoryTable({
       const col = sortState.column as ColumnKey;
       const asc = sortState.direction === "asc";
       result.sort((a, b) => {
-        const aVal = a[col];
-        const bVal = b[col];
+        // Handle computed 'sum' column specially
+        if (col === "sum") {
+          const aSum = getSum(a) ?? 0;
+          const bSum = getSum(b) ?? 0;
+          return asc ? aSum - bSum : bSum - aSum;
+        }
+        // Handle other columns
+        const aVal = col === "price" ? a.price : col === "invoiceNumber" ? a.invoiceNumber : a[col as keyof Omit<ProductionHistoryItem, 'price' | 'invoiceNumber'>];
+        const bVal = col === "price" ? b.price : col === "invoiceNumber" ? b.invoiceNumber : b[col as keyof Omit<ProductionHistoryItem, 'price' | 'invoiceNumber'>];
         if (typeof aVal === "string" && typeof bVal === "string") {
           return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
         }
-        const aNum = Number(aVal);
-        const bNum = Number(bVal);
+        const aNum = Number(aVal ?? 0);
+        const bNum = Number(bVal ?? 0);
         return asc ? aNum - bNum : bNum - aNum;
       });
     } else {
@@ -238,6 +326,11 @@ export function ProductionHistoryTable({
     { key: "totalOutputM3", label: "Output m³", numeric: true, align: "text-right" },
     { key: "outcomePercentage", label: "Outcome %", numeric: true, align: "text-right" },
     { key: "wastePercentage", label: "Waste %", numeric: true, align: "text-right" },
+    { key: "plannedWork", label: "Planned", numeric: true, align: "text-right" },
+    { key: "actualWork", label: "Actual", numeric: true, align: "text-right" },
+    { key: "price", label: "Price", numeric: true, align: "text-right" },
+    { key: "sum", label: "Sum", numeric: true, align: "text-right" },
+    { key: "invoiceNumber", label: "Invoice", numeric: false, align: "text-left" },
   ];
 
   // Filter out organisation column if not needed
@@ -317,15 +410,15 @@ export function ProductionHistoryTable({
       </div>
 
       <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm whitespace-nowrap">
           <thead>
             <tr className="border-b bg-muted/50">
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-4 py-3 font-medium select-none ${col.align}`}
+                  className={`px-2 py-2 font-medium select-none ${col.align}`}
                 >
-                  <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1">
                     {col.label}
                     <ColumnHeaderMenu
                       columnKey={col.key}
@@ -340,7 +433,7 @@ export function ProductionHistoryTable({
                 </th>
               ))}
               {canDelete && (
-                <th className="px-4 py-3 font-medium select-none text-center w-20">
+                <th className="px-2 py-2 font-medium select-none text-center w-20">
                   Actions
                 </th>
               )}
@@ -359,15 +452,15 @@ export function ProductionHistoryTable({
             ) : (
               filteredEntries.map((entry) => (
                 <tr key={entry.id} className="border-b last:border-0 hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => router.push(`/production/${entry.id}`)}>
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-2">
                     {formatDate(entry.productionDate)}
                   </td>
                   {showOrganisation && (
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-2">
                       {entry.organisationCode ?? ""}
                     </td>
                   )}
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-2">
                     {entry.processName}
                     {entry.entryType === "correction" && (
                       <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
@@ -375,23 +468,67 @@ export function ProductionHistoryTable({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
+                  <td className="px-2 py-2 text-muted-foreground">
                     {entry.createdByName ?? "-"}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td className="px-2 py-2 text-right tabular-nums">
                     {fmt3(entry.totalInputM3)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td className="px-2 py-2 text-right tabular-nums">
                     {fmt3(entry.totalOutputM3)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td className="px-2 py-2 text-right tabular-nums">
                     {fmt1(entry.outcomePercentage)}%
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  <td className="px-2 py-2 text-right tabular-nums">
                     {fmt1(entry.wastePercentage)}%
                   </td>
+                  <td className="px-2 py-2 text-right tabular-nums">
+                    {entry.plannedWork !== null
+                      ? `${fmt2(entry.plannedWork)} ${entry.workUnit || ""}`
+                      : "—"}
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums">
+                    {entry.actualWork !== null
+                      ? `${fmt2(entry.actualWork)} ${entry.workUnit || ""}`
+                      : "—"}
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums">
+                    {entry.price !== null
+                      ? `${fmt2(entry.price)} / ${entry.workUnit || ""}`
+                      : "—"}
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums font-medium">
+                    {(() => {
+                      const sum = getSum(entry);
+                      return sum !== null ? fmt2(sum) : "—";
+                    })()}
+                  </td>
+                  <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                    {editingInvoiceId === entry.id ? (
+                      <Input
+                        value={invoiceValue}
+                        onChange={(e) => setInvoiceValue(e.target.value)}
+                        onKeyDown={(e) => handleInvoiceKeyDown(e, entry.id)}
+                        onBlur={() => handleInvoiceSave(entry.id)}
+                        placeholder="Invoice #"
+                        className="h-6 w-24 text-xs px-1"
+                        disabled={savingInvoice}
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleInvoiceEdit(entry)}
+                        className="text-left w-full min-w-[70px] px-1 py-0.5 -mx-1 -my-0.5 rounded hover:bg-accent/50"
+                        title="Click to edit invoice number"
+                      >
+                        {entry.invoiceNumber || <span className="text-muted-foreground italic">—</span>}
+                      </button>
+                    )}
+                  </td>
                   {canDelete && (
-                    <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
                         {/* Cancel button - restores inventory */}
                         <AlertDialog>
@@ -467,31 +604,44 @@ export function ProductionHistoryTable({
           {filteredEntries.length > 0 && (
             <tfoot>
               <tr className="border-t bg-muted/30 font-bold">
-                <td className="px-4 py-3" />
-                {showOrganisation && <td className="px-4 py-3" />}
-                <td className="px-4 py-3" />
-                <td className="px-4 py-3" />
-                <td className="px-4 py-3 text-right tabular-nums">
+                <td className="px-2 py-2" />
+                {showOrganisation && <td className="px-2 py-2" />}
+                <td className="px-2 py-2" />
+                <td className="px-2 py-2" />
+                <td className="px-2 py-2 text-right tabular-nums">
                   {fmt3(filteredEntries.reduce((sum, e) => sum + e.totalInputM3, 0))}
                 </td>
-                <td className="px-4 py-3 text-right tabular-nums">
+                <td className="px-2 py-2 text-right tabular-nums">
                   {fmt3(filteredEntries.reduce((sum, e) => sum + e.totalOutputM3, 0))}
                 </td>
-                <td className="px-4 py-3 text-right tabular-nums">
+                <td className="px-2 py-2 text-right tabular-nums">
                   {(() => {
                     const totalInput = filteredEntries.reduce((sum, e) => sum + e.totalInputM3, 0);
                     if (totalInput === 0) return "-";
                     return fmt1(filteredEntries.reduce((sum, e) => sum + e.outcomePercentage * e.totalInputM3, 0) / totalInput) + "%";
                   })()}
                 </td>
-                <td className="px-4 py-3 text-right tabular-nums">
+                <td className="px-2 py-2 text-right tabular-nums">
                   {(() => {
                     const totalInput = filteredEntries.reduce((sum, e) => sum + e.totalInputM3, 0);
                     if (totalInput === 0) return "-";
                     return fmt1(filteredEntries.reduce((sum, e) => sum + e.wastePercentage * e.totalInputM3, 0) / totalInput) + "%";
                   })()}
                 </td>
-                {canDelete && <td className="px-4 py-3" />}
+                <td className="px-2 py-2" />
+                <td className="px-2 py-2" />
+                <td className="px-2 py-2" />
+                <td className="px-2 py-2 text-right tabular-nums">
+                  {(() => {
+                    const totalSum = filteredEntries.reduce((sum, e) => {
+                      const entrySum = getSum(e);
+                      return entrySum !== null ? sum + entrySum : sum;
+                    }, 0);
+                    return totalSum > 0 ? fmt2(totalSum) : "—";
+                  })()}
+                </td>
+                <td className="px-2 py-2" />
+                {canDelete && <td className="px-2 py-2" />}
               </tr>
             </tfoot>
           )}

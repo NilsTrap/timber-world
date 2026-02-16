@@ -17,6 +17,11 @@ export interface ProcessBreakdownItem {
   totalOutputM3: number;
   avgOutcomePercent: number;
   avgWastePercent: number;
+  totalPlannedWork: number;
+  totalActualWork: number;
+  workUnit: string | null;
+  price: number | null;
+  totalSum: number | null;
 }
 
 export type ActionResult<T> =
@@ -64,6 +69,9 @@ export interface AdminProcessBreakdownItem {
   avgWastePercent: number;
   trend: TrendDirection;
   trendValue: number; // percentage point change
+  totalPlannedWork: number;
+  totalActualWork: number;
+  workUnit: string | null;
 }
 
 /** Single production entry for process history view */

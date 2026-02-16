@@ -61,6 +61,7 @@ export function DraftProductionList({ drafts }: DraftProductionListProps) {
           >
             <Link
               href={`/production/${entry.id}`}
+              prefetch={false}
               className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-70 transition-opacity"
             >
               <FileText className="h-5 w-5 text-muted-foreground shrink-0" />

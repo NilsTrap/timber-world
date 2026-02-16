@@ -10,6 +10,7 @@ import { DeviceBreakdownChart } from "./DeviceBreakdownChart";
 import { VisitorEngagementCard } from "./VisitorEngagementCard";
 import { DetailedFilterUsageCard } from "./DetailedFilterUsageCard";
 import { JourneyOverviewCard } from "./JourneyOverviewCard";
+import { VisitorsOverTimeChart } from "./VisitorsOverTimeChart";
 import {
   getAnalyticsOverview,
   getVisitorsByCountry,
@@ -23,6 +24,7 @@ import {
   getDetailedFilterUsage,
   getJourneyEngagement,
   getConsentMetrics,
+  getVisitorsByDay,
 } from "../actions";
 import type { VisitorEngagement } from "../actions/getVisitorEngagement";
 import type { DetailedFilterUsage } from "../actions/getDetailedFilterUsage";
@@ -38,6 +40,7 @@ import type {
   JourneyStageView,
   DeviceBreakdown,
   BrowserBreakdown,
+  VisitorsByDay,
 } from "../types";
 
 interface AnalyticsData {
@@ -53,6 +56,7 @@ interface AnalyticsData {
   detailedFilters: DetailedFilterUsage[];
   journeyEngagement: JourneyEngagement | null;
   consentMetrics: ConsentMetrics | null;
+  visitorsByDay: VisitorsByDay[];
 }
 
 const DATE_RANGE_LABELS: Record<DateRange, string> = {
@@ -80,6 +84,7 @@ export function AnalyticsDashboard() {
     detailedFilters: [],
     journeyEngagement: null,
     consentMetrics: null,
+    visitorsByDay: [],
   });
 
   async function loadData() {
@@ -100,6 +105,7 @@ export function AnalyticsDashboard() {
         detailedFiltersResult,
         journeyEngagementResult,
         consentMetricsResult,
+        visitorsByDayResult,
       ] = await Promise.all([
         getAnalyticsOverview(dateRange, true),
         getVisitorsByCountry(dateRange, true, 10),
@@ -113,6 +119,7 @@ export function AnalyticsDashboard() {
         getDetailedFilterUsage(dateRange),
         getJourneyEngagement(dateRange),
         getConsentMetrics(dateRange),
+        getVisitorsByDay(dateRange, true),
       ]);
 
       setData({
@@ -128,6 +135,7 @@ export function AnalyticsDashboard() {
         detailedFilters: detailedFiltersResult.success ? detailedFiltersResult.data : [],
         journeyEngagement: journeyEngagementResult.success ? journeyEngagementResult.data : null,
         consentMetrics: consentMetricsResult.success ? consentMetricsResult.data : null,
+        visitorsByDay: visitorsByDayResult.success ? visitorsByDayResult.data : [],
       });
 
       // Check if any critical data failed
@@ -177,6 +185,9 @@ export function AnalyticsDashboard() {
 
       {/* Overview Metrics */}
       {data.overview && <OverviewMetrics data={data.overview} consentMetrics={data.consentMetrics} />}
+
+      {/* Visitors Over Time */}
+      <VisitorsOverTimeChart data={data.visitorsByDay} />
 
       {/* Visitor Engagement & Countries */}
       <div className="grid gap-6 lg:grid-cols-2">

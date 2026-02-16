@@ -104,6 +104,7 @@ export async function deleteShipment(
   }
 
   revalidatePath("/shipments");
+  revalidatePath("/inventory");
 
   return { success: true, data: null };
 }

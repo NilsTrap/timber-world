@@ -2,17 +2,23 @@
  * Production Feature Types
  */
 
+export type WorkFormula = 'length_x_pieces' | 'area' | 'volume' | 'pieces' | 'hours' | 'output_packages' | null;
+
 export interface Process {
   id: string;
   code: string;
   value: string;
   sortOrder: number;
   workUnit: string | null;
+  workFormula: WorkFormula;
+  price: number | null;
 }
 
 export interface ProcessWithNotes extends Process {
   notes: string;
   noteId: string | null;
+  workFormula: WorkFormula;
+  price: number | null;
 }
 
 export type EntryType = "standard" | "correction";
@@ -29,6 +35,8 @@ export interface ProductionEntry {
   totalOutputM3: number | null;
   outcomePercentage: number | null;
   wastePercentage: number | null;
+  plannedWork: number | null;
+  actualWork: number | null;
   createdAt: string;
   updatedAt: string;
   validatedAt: string | null;
@@ -41,6 +49,14 @@ export interface ProductionListItem {
   status: "draft" | "validated";
   createdAt: string;
   createdByName: string | null;
+  totalInputM3: number;
+  totalOutputM3: number;
+  outcomePercentage: number;
+  wastePercentage: number;
+  plannedWork: number | null;
+  actualWork: number | null;
+  workUnit: string | null;
+  organisationCode: string | null;
 }
 
 export interface ProductionHistoryItem {
@@ -56,6 +72,11 @@ export interface ProductionHistoryItem {
   organisationCode: string | null;
   organisationName: string | null;
   createdByName: string | null;
+  plannedWork: number | null;
+  actualWork: number | null;
+  workUnit: string | null;
+  price: number | null;
+  invoiceNumber: string | null;
 }
 
 export interface ProductionInput {

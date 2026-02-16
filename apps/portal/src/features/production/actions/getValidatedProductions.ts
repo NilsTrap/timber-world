@@ -28,7 +28,7 @@ export async function getValidatedProductions(orgIds?: string[]): Promise<
   let query = (supabase as any)
     .from("portal_production_entries")
     .select(
-      "id, production_date, total_input_m3, total_output_m3, outcome_percentage, waste_percentage, validated_at, entry_type, organisation_id, created_by, ref_processes(value), organisations(code, name)"
+      "id, production_date, total_input_m3, total_output_m3, outcome_percentage, waste_percentage, validated_at, entry_type, organisation_id, created_by, planned_work, actual_work, invoice_number, ref_processes(value, work_unit, price), organisations(code, name)"
     )
     .eq("status", "validated")
     .order("validated_at", { ascending: false });
@@ -78,6 +78,11 @@ export async function getValidatedProductions(orgIds?: string[]): Promise<
     organisationCode: row.organisations?.code ?? null,
     organisationName: row.organisations?.name ?? null,
     createdByName: row.created_by ? userMap.get(row.created_by) ?? null : null,
+    plannedWork: row.planned_work ?? null,
+    actualWork: row.actual_work ?? null,
+    workUnit: row.ref_processes?.work_unit ?? null,
+    price: row.ref_processes?.price != null ? Number(row.ref_processes.price) : null,
+    invoiceNumber: row.invoice_number ?? null,
   }));
 
   return { success: true, data: items };

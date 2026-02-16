@@ -32,6 +32,8 @@ interface ProductionOutputsSectionProps {
   processName?: string;
   /** Production date for print header */
   productionDate?: string;
+  /** Package numbers that are used in other processes (read-only even in edit mode) */
+  usedPackageNumbers?: string[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -81,6 +83,7 @@ export function ProductionOutputsSection({
   isAdminEdit,
   processName,
   productionDate,
+  usedPackageNumbers = [],
 }: ProductionOutputsSectionProps) {
   const [rows, setRows] = useState<OutputRow[]>(() =>
     initialOutputs.map((o, i) => dbOutputToRow(o, i, processCode))
@@ -324,6 +327,7 @@ export function ProductionOutputsSection({
     },
     [performSave]
   );
+
 
   // ─── Auto-assign package numbers to existing rows ─────────────────────────
   // Rows created before auto-assignment was implemented may be missing numbers.
@@ -726,6 +730,7 @@ export function ProductionOutputsSection({
         availablePackageNumbers={availablePackageNumbers}
         onPackageNumberChange={handlePackageNumberChange}
         createRow={createRowWithPackageNumber}
+        usedPackageNumbers={usedPackageNumbers}
       />
 
       {!readOnly && (

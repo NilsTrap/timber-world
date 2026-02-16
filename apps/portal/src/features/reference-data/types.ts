@@ -63,12 +63,20 @@ export const REFERENCE_TABLE_DISPLAY_NAMES: Record<ReferenceTableName, string> =
   };
 
 /**
+ * Work formula types for auto-calculating planned work
+ */
+export type WorkFormula = 'length_x_pieces' | 'area' | 'volume' | 'pieces' | 'hours' | null;
+
+/**
  * Reference option as stored in the database
  */
 export interface ReferenceOption {
   id: string;
   value: string;
   code?: string;
+  workUnit?: string;
+  workFormula?: WorkFormula;
+  price?: number | null;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;

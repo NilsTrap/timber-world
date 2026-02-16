@@ -6,6 +6,9 @@ import { getUserOrganisation, getAllOrgShipments, getActiveOrganisations } from 
 import { getAllPendingShipmentCount } from "@/features/shipments/actions/getAllShipments";
 import { ProducerShipmentsPageContent, AllShipmentsTab } from "@/features/shipments/components";
 
+// Disable caching to always show fresh shipments list when navigating back
+export const dynamic = "force-dynamic";
+
 export default async function ShipmentsPage({
   searchParams,
 }: {

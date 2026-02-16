@@ -19,6 +19,9 @@ interface ValidateProductionDialogProps {
   outputTotalM3: number;
   inputCount: number;
   outputCount: number;
+  plannedWork: number | null;
+  actualWork: number | null;
+  workUnit: string | null;
   onConfirm: () => void;
   isPending: boolean;
 }
@@ -42,6 +45,9 @@ export function ValidateProductionDialog({
   outputTotalM3,
   inputCount,
   outputCount,
+  plannedWork,
+  actualWork,
+  workUnit,
   onConfirm,
   isPending,
 }: ValidateProductionDialogProps) {
@@ -81,6 +87,22 @@ export function ValidateProductionDialog({
               <p className="text-xs text-muted-foreground">Waste</p>
               <p className="text-sm font-semibold">{formatPercent(wastePercent)}%</p>
             </div>
+            {(plannedWork !== null || actualWork !== null) && (
+              <>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Planned Work</p>
+                  <p className="text-sm font-semibold">
+                    {plannedWork !== null ? plannedWork : "—"} {workUnit || ""}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Actual Work</p>
+                  <p className="text-sm font-semibold">
+                    {actualWork !== null ? actualWork : "—"} {workUnit || ""}
+                  </p>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Warning for unusual outcome */}

@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@timber/ui";
 import type { PackageListItem } from "@/features/shipments/types";
-import type { ProductionInput, ProductionOutput, ReferenceDropdowns } from "../types";
-import { validateProduction } from "../actions";
+import type { ProductionInput, ProductionOutput, ReferenceDropdowns, WorkFormula } from "../types";
+import { validateProduction, restoreProductionSnapshot } from "../actions";
 import { ProductionInputsSection } from "./ProductionInputsSection";
 import { ProductionOutputsSection } from "./ProductionOutputsSection";
 import { ProductionSummary } from "./ProductionSummary";
 import { ValidateProductionDialog } from "./ValidateProductionDialog";
+import { WorkAmountsSection } from "./WorkAmountsSection";
 
 interface ProductionEntryClientProps {
   productionEntryId: string;
@@ -30,6 +31,16 @@ interface ProductionEntryClientProps {
   processName?: string;
   /** Production date (formatted) for print header */
   productionDate?: string;
+  /** Work unit for the process (m, m², m³, pkg, h) */
+  workUnit?: string | null;
+  /** Work formula for auto-calculating planned work */
+  workFormula?: WorkFormula;
+  /** Initial planned work amount */
+  initialPlannedWork?: number | null;
+  /** Initial actual work amount */
+  initialActualWork?: number | null;
+  /** Package numbers that are used in other processes (read-only in edit mode) */
+  usedPackageNumbers?: string[];
 }
 
 /**
@@ -38,6 +49,9 @@ interface ProductionEntryClientProps {
  * Coordinates volume totals between InputsSection, OutputsSection,
  * and ProductionSummary for live calculation updates.
  * Also handles the Validate & Commit flow.
+ *
+ * In edit mode (isAdminEdit), changes are saved immediately (like drafts),
+ * but Cancel restores the original state.
  */
 export function ProductionEntryClient({
   productionEntryId,
@@ -53,6 +67,11 @@ export function ProductionEntryClient({
   hideMetrics,
   processName,
   productionDate,
+  workUnit,
+  workFormula,
+  initialPlannedWork,
+  initialActualWork,
+  usedPackageNumbers = [],
 }: ProductionEntryClientProps) {
   const router = useRouter();
   const [inputTotalM3, setInputTotalM3] = useState(initialInputTotal);
@@ -62,6 +81,89 @@ export function ProductionEntryClient({
   const [outputCount, setOutputCount] = useState(initialOutputs.length);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [currentPlannedWork, setCurrentPlannedWork] = useState<number | null>(initialPlannedWork ?? null);
+  const [currentActualWork, setCurrentActualWork] = useState<number | null>(initialActualWork ?? null);
+
+  // Track if validation was successful (to avoid restore on unmount after successful validation)
+  const validationSucceededRef = useRef(false);
+
+  // Mark that we're on a draft page (for refreshing list when navigating back)
+  useEffect(() => {
+    sessionStorage.setItem("production-was-on-draft", "true");
+  }, []);
+
+  // Store snapshot of original state for restore on cancel (edit mode only)
+  const snapshotRef = useRef<{
+    inputs: { id: string; packageId: string; piecesUsed: number | null; volumeM3: number }[];
+    outputs: {
+      id: string;
+      packageNumber: string | null;
+      productNameId: string | null;
+      woodSpeciesId: string | null;
+      humidityId: string | null;
+      typeId: string | null;
+      processingId: string | null;
+      fscId: string | null;
+      qualityId: string | null;
+      thickness: string | null;
+      width: string | null;
+      length: string | null;
+      pieces: string | null;
+      volumeM3: number;
+      notes: string | null;
+      sortOrder: number;
+    }[];
+  } | null>(null);
+
+  // Create snapshot on mount (edit mode only)
+  useEffect(() => {
+    if (isAdminEdit && !snapshotRef.current) {
+      snapshotRef.current = {
+        inputs: initialInputs.map((i) => ({
+          id: i.id,
+          packageId: i.packageId,
+          piecesUsed: i.piecesUsed,
+          volumeM3: i.volumeM3,
+        })),
+        outputs: initialOutputs.map((o, idx) => ({
+          id: o.id,
+          packageNumber: o.packageNumber,
+          productNameId: o.productNameId,
+          woodSpeciesId: o.woodSpeciesId,
+          humidityId: o.humidityId,
+          typeId: o.typeId,
+          processingId: o.processingId,
+          fscId: o.fscId,
+          qualityId: o.qualityId,
+          thickness: o.thickness,
+          width: o.width,
+          length: o.length,
+          pieces: o.pieces,
+          volumeM3: o.volumeM3 ?? 0,
+          notes: o.notes,
+          sortOrder: idx,
+        })),
+      };
+    }
+  }, [isAdminEdit, initialInputs, initialOutputs]);
+
+  // Restore snapshot on unmount if in edit mode and validation didn't succeed
+  useEffect(() => {
+    if (!isAdminEdit) return;
+
+    return () => {
+      if (!validationSucceededRef.current && snapshotRef.current) {
+        // Fire-and-forget restore - we can't await in cleanup
+        restoreProductionSnapshot({
+          productionEntryId,
+          originalInputs: snapshotRef.current.inputs,
+          originalOutputs: snapshotRef.current.outputs,
+        }).catch((err) => {
+          console.error("Failed to restore snapshot on unmount:", err);
+        });
+      }
+    };
+  }, [isAdminEdit, productionEntryId]);
 
   const canValidate = !readOnly && inputTotalM3 > 0 && outputTotalM3 > 0;
 
@@ -82,6 +184,7 @@ export function ProductionEntryClient({
     startTransition(async () => {
       const result = await validateProduction(productionEntryId);
       if (result.success) {
+        validationSucceededRef.current = true;
         toast.success("Production validated successfully");
         router.push(result.data.redirectUrl);
       } else {
@@ -91,11 +194,39 @@ export function ProductionEntryClient({
     });
   };
 
+  const handleCancelEdit = useCallback(() => {
+    if (!snapshotRef.current) {
+      router.push(`/production/${productionEntryId}`);
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await restoreProductionSnapshot({
+        productionEntryId,
+        originalInputs: snapshotRef.current!.inputs,
+        originalOutputs: snapshotRef.current!.outputs,
+      });
+
+      if (result.success) {
+        validationSucceededRef.current = true; // Prevent unmount restore
+        toast.success("Changes discarded");
+        router.push(`/production/${productionEntryId}`);
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }, [productionEntryId, router]);
+
+  const handleWorkAmountsChange = useCallback((plannedWork: number | null, actualWork: number | null) => {
+    setCurrentPlannedWork(plannedWork);
+    setCurrentActualWork(actualWork);
+  }, []);
+
   return (
     <div className="space-y-6">
       {isAdminEdit && (
         <div className="rounded-lg border border-amber-500/50 bg-amber-50 dark:bg-amber-950/20 p-3 text-sm text-amber-800 dark:text-amber-200">
-          <strong>Admin Edit Mode:</strong> You are editing a validated production entry. Click &quot;Validate&quot; to apply your changes to inventory.
+          <strong>Edit Mode:</strong> Changes are saved as you make them. Click &quot;Validate&quot; to commit, or &quot;Cancel&quot; to discard all changes.
         </div>
       )}
 
@@ -131,19 +262,44 @@ export function ProductionEntryClient({
         isAdminEdit={isAdminEdit}
         processName={processName}
         productionDate={productionDate}
+        usedPackageNumbers={usedPackageNumbers}
       />
 
-      {/* Validate Button — for draft entries and admin edit mode */}
+      <WorkAmountsSection
+        productionEntryId={productionEntryId}
+        workUnit={workUnit ?? null}
+        workFormula={workFormula ?? null}
+        inputs={currentInputs}
+        outputCount={outputCount}
+        initialPlannedWork={initialPlannedWork ?? null}
+        initialActualWork={initialActualWork ?? null}
+        readOnly={readOnly}
+        onWorkAmountsChange={handleWorkAmountsChange}
+      />
+
+      {/* Validate/Cancel Buttons — for draft entries and admin edit mode */}
       {!readOnly && (
         <>
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-3">
+            {isAdminEdit && (
+              <Button
+                variant="outline"
+                onClick={handleCancelEdit}
+                disabled={isPending}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+            )}
             <Button
               onClick={() => setDialogOpen(true)}
-              disabled={!canValidate}
+              disabled={!canValidate || isPending}
             >
               <CheckCircle className="h-4 w-4 mr-2" />
               Validate
-              <kbd className="ml-2 text-[10px] text-primary-foreground/70 bg-primary-foreground/20 px-1 py-0.5 rounded border border-primary-foreground/30">Ctrl+Enter</kbd>
+              {!isAdminEdit && (
+                <kbd className="ml-2 text-[10px] text-primary-foreground/70 bg-primary-foreground/20 px-1 py-0.5 rounded border border-primary-foreground/30">Ctrl+Enter</kbd>
+              )}
             </Button>
           </div>
 
@@ -154,6 +310,9 @@ export function ProductionEntryClient({
             outputTotalM3={outputTotalM3}
             inputCount={inputCount}
             outputCount={outputCount}
+            plannedWork={currentPlannedWork}
+            actualWork={currentActualWork}
+            workUnit={workUnit ?? null}
             onConfirm={handleConfirmValidation}
             isPending={isPending}
           />

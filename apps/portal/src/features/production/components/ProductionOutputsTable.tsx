@@ -37,6 +37,8 @@ interface ProductionOutputsTableProps {
   availablePackageNumbers?: NextPackageNumber[];
   onPackageNumberChange?: (clientId: string, packageNumber: string) => void;
   createRow?: (index: number) => OutputRow;
+  /** Package numbers that are used in other processes (read-only even in edit mode) */
+  usedPackageNumbers?: string[];
 }
 
 /** Dropdown column configuration */
@@ -170,7 +172,19 @@ export function ProductionOutputsTable({
   availablePackageNumbers,
   onPackageNumberChange,
   createRow: createRowProp,
+  usedPackageNumbers = [],
 }: ProductionOutputsTableProps) {
+  // Create a Set for fast lookup of used package numbers
+  const usedPackageNumbersSet = useMemo(
+    () => new Set(usedPackageNumbers),
+    [usedPackageNumbers]
+  );
+
+  // Helper to check if a row is read-only because it's used elsewhere
+  const isRowUsedElsewhere = useCallback(
+    (row: OutputRow): boolean => Boolean(row.packageNumber && usedPackageNumbersSet.has(row.packageNumber)),
+    [usedPackageNumbersSet]
+  );
   const columns: ColumnDef<OutputRow>[] = useMemo(() => {
     const cols: ColumnDef<OutputRow>[] = [
       // Shipment code (readonly, only populated for validated outputs that have been shipped)
@@ -194,12 +208,29 @@ export function ProductionOutputsTable({
         totalType: "count",
         renderCell: (row, renderIndex, _originalIndex, onChange, onKeyDown) => {
           const hasNote = !!row.notes;
+          const isUsedElsewhere = isRowUsedElsewhere(row);
 
-          // Read-only mode: just show the value and note icon
-          if (readOnly) {
+          // Read-only mode OR package is used elsewhere: show the value and note icon
+          if (readOnly || isUsedElsewhere) {
             return (
               <div className="flex items-center gap-1 whitespace-nowrap">
-                <span className="text-xs md:text-sm">{row.packageNumber || "-"}</span>
+                {isUsedElsewhere ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-xs md:text-sm text-amber-600 cursor-help">
+                          {row.packageNumber || "-"}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-xs bg-amber-50 text-amber-800 border-amber-200">
+                        <p className="text-sm font-medium">Used in another process</p>
+                        <p className="text-xs">This package is used as input in another production entry and cannot be modified.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : (
+                  <span className="text-xs md:text-sm">{row.packageNumber || "-"}</span>
+                )}
                 {hasNote && (
                   <TooltipProvider>
                     <Tooltip>
@@ -428,6 +459,8 @@ export function ProductionOutputsTable({
       collapseStorageKey="production-outputs-collapsed"
       idPrefix="out"
       readOnly={readOnly}
+      isRowDisabled={isRowUsedElsewhere}
+      getDisabledTooltip={() => "This package is used as input in another production entry and cannot be modified"}
     />
   );
 }

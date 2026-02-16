@@ -14,6 +14,9 @@ export const metadata: Metadata = {
   title: "Production",
 };
 
+// Disable caching to always show fresh drafts list when navigating back
+export const dynamic = "force-dynamic";
+
 /**
  * Production Page
  *

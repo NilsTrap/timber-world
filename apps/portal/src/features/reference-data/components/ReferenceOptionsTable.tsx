@@ -330,6 +330,15 @@ export function ReferenceOptionsTable({
                 {isProcesses && (
                   <TableHead className="w-24">Code</TableHead>
                 )}
+                {isProcesses && (
+                  <TableHead className="w-24">Work Unit</TableHead>
+                )}
+                {isProcesses && (
+                  <TableHead className="w-36">Formula</TableHead>
+                )}
+                {isProcesses && (
+                  <TableHead className="w-24">Price</TableHead>
+                )}
                 <TableHead className="w-28">
                   <button
                     onClick={() => handleSort("isActive")}
@@ -355,6 +364,24 @@ export function ReferenceOptionsTable({
                   <TableCell className="font-medium">{option.value}</TableCell>
                   {isProcesses && (
                     <TableCell className="font-mono text-sm">{option.code || "-"}</TableCell>
+                  )}
+                  {isProcesses && (
+                    <TableCell className="text-sm">{option.workUnit || "-"}</TableCell>
+                  )}
+                  {isProcesses && (
+                    <TableCell className="text-xs text-muted-foreground">
+                      {option.workFormula ? option.workFormula.replace(/_/g, " ") : "-"}
+                    </TableCell>
+                  )}
+                  {isProcesses && (
+                    <TableCell className="text-sm">
+                      {option.price != null ? (
+                        <span>
+                          {option.price.toFixed(2).replace('.', ',')}
+                          {option.workUnit && <span className="text-muted-foreground text-xs ml-1">/ {option.workUnit}</span>}
+                        </span>
+                      ) : "-"}
+                    </TableCell>
                   )}
                   <TableCell>
                     <Badge variant={option.isActive ? "success" : "secondary"}>

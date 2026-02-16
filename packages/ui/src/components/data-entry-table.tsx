@@ -135,6 +135,13 @@ export interface DataEntryTableProps<TRow> {
   // ─── Row Styling ─────────────────────────────────────────────────────
   /** Returns additional CSS classes for a row. Useful for highlighting specific rows. */
   getRowClassName?: (row: TRow) => string | undefined;
+
+  // ─── Row Disabled ─────────────────────────────────────────────────────
+  /** Returns true if a row should be disabled (read-only even when table is editable).
+   *  Useful for showing some rows as non-editable while others remain editable. */
+  isRowDisabled?: (row: TRow) => boolean;
+  /** Tooltip text to show for disabled rows. Receives row for customization. */
+  getDisabledTooltip?: (row: TRow) => string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -167,6 +174,8 @@ function DataEntryTableInner<TRow>(
     onFilterActiveChange,
     getRowClassName,
     initialFilters,
+    isRowDisabled,
+    getDisabledTooltip,
   }: DataEntryTableProps<TRow>,
   ref: React.ForwardedRef<DataEntryTableHandle>
 ) {
@@ -857,8 +866,17 @@ function DataEntryTableInner<TRow>(
           </TableHeader>
 
           <TableBody>
-            {displayRows.map(({ row, originalIndex }, renderIndex) => (
-              <TableRow key={getRowKey(row)} className={getRowClassName?.(row)}>
+            {displayRows.map(({ row, originalIndex }, renderIndex) => {
+              const rowDisabled = isRowDisabled?.(row) ?? false;
+              const effectiveReadOnly = readOnly || rowDisabled;
+              const disabledTooltip = rowDisabled ? getDisabledTooltip?.(row) : undefined;
+
+              return (
+              <TableRow
+                key={getRowKey(row)}
+                className={`${getRowClassName?.(row) ?? ""} ${rowDisabled ? "bg-muted/30" : ""}`}
+                title={disabledTooltip}
+              >
                 {columns.map((col) => {
                   const isCollapsed = col.collapsible && collapsedColumns.has(col.key);
                   const currentValue = col.getValue(row);
@@ -870,20 +888,20 @@ function DataEntryTableInner<TRow>(
                           row,
                           renderIndex,
                           originalIndex,
-                          readOnly ? () => {} : (value) => updateCell(originalIndex, col.key, value),
-                          readOnly ? () => {} : (e) => handleFieldKeyDown(e, renderIndex, col.key, displayRows.length)
+                          effectiveReadOnly ? () => {} : (value) => updateCell(originalIndex, col.key, value),
+                          effectiveReadOnly ? () => {} : (e) => handleFieldKeyDown(e, renderIndex, col.key, displayRows.length)
                         )}
                       </TableCell>
                     );
                   }
 
-                  if (col.type === "readonly" || readOnly) {
+                  if (col.type === "readonly" || effectiveReadOnly) {
                     // In readOnly mode, all cells render as text
-                    const displayValue = readOnly
+                    const displayValue = effectiveReadOnly
                       ? getColDisplayValue(row, col)
                       : currentValue;
 
-                    if (readOnly && col.collapsible && isCollapsed) {
+                    if (effectiveReadOnly && col.collapsible && isCollapsed) {
                       const label = getColDisplayValue(row, col);
                       const abbrev = label ? label.slice(0, 3) : "-";
                       const tooltip = label ? `${col.label}: ${label}` : `${col.label}: (empty)`;
@@ -956,7 +974,8 @@ function DataEntryTableInner<TRow>(
                   </TableCell>
                 )}
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
 
           {/* Totals Footer */}

@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@timber/ui";
-import { referenceOptionSchema, type ReferenceOptionInput } from "../schemas";
+import { referenceOptionSchema } from "../schemas";
 import { createReferenceOption, updateReferenceOption } from "../actions";
 import type { ReferenceTableName, ReferenceOption } from "../types";
 
@@ -42,16 +42,31 @@ export function ReferenceOptionForm({
   const isEditing = !!option;
   const isProcesses = tableName === "ref_processes";
 
+  // Form values before schema transformation
+  type FormValues = {
+    value: string;
+    code?: string;
+    workUnit?: string;
+    workFormula?: string;
+    price?: string;
+  };
+
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<ReferenceOptionInput>({
-    resolver: zodResolver(referenceOptionSchema),
+  } = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(referenceOptionSchema) as any,
     defaultValues: {
       value: option?.value ?? "",
-      ...(isProcesses ? { code: option?.code ?? "" } : {}),
+      ...(isProcesses ? {
+        code: option?.code ?? "",
+        workUnit: option?.workUnit ?? "",
+        workFormula: option?.workFormula ?? "",
+        price: option?.price != null ? String(option.price).replace('.', ',') : "",
+      } : {}),
     },
   });
 
@@ -60,18 +75,39 @@ export function ReferenceOptionForm({
     if (open) {
       reset({
         value: option?.value ?? "",
-        ...(isProcesses ? { code: option?.code ?? "" } : {}),
+        ...(isProcesses ? {
+          code: option?.code ?? "",
+          workUnit: option?.workUnit ?? "",
+          workFormula: option?.workFormula ?? "",
+          price: option?.price != null ? String(option.price).replace('.', ',') : "",
+        } : {}),
       });
     }
   }, [open, option, reset, isProcesses]);
 
-  const onSubmit = async (data: ReferenceOptionInput) => {
+  const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
+
+    // Convert price from string (with comma) to number | null for server action
+    // Note: zod might have already transformed price to number, so handle both cases
+    let priceValue: number | null = null;
+    if (data.price != null && data.price !== "") {
+      if (typeof data.price === "number") {
+        priceValue = data.price;
+      } else {
+        priceValue = parseFloat(String(data.price).replace(',', '.'));
+      }
+      if (isNaN(priceValue)) priceValue = null;
+    }
+    const payload = {
+      ...data,
+      price: priceValue,
+    };
 
     try {
       const result = isEditing
-        ? await updateReferenceOption(tableName, option.id, data)
-        : await createReferenceOption(tableName, data);
+        ? await updateReferenceOption(tableName, option.id, payload)
+        : await createReferenceOption(tableName, payload);
 
       if (result.success) {
         toast.success(isEditing ? "Option updated" : "Option added");
@@ -134,6 +170,67 @@ export function ReferenceOptionForm({
               </p>
               {errors.code && (
                 <p className="text-sm text-destructive">{errors.code.message}</p>
+              )}
+            </div>
+          )}
+
+          {isProcesses && (
+            <div className="space-y-2">
+              <Label htmlFor="workUnit">Work Unit</Label>
+              <Input
+                id="workUnit"
+                placeholder="e.g. m, m², m³, pkg, h"
+                maxLength={10}
+                {...register("workUnit")}
+                aria-invalid={!!errors.workUnit}
+              />
+              <p className="text-xs text-muted-foreground">
+                Unit of measurement for work done (m = meters, m² = square meters, m³ = cubic meters, pkg = packages, h = hours)
+              </p>
+              {errors.workUnit && (
+                <p className="text-sm text-destructive">{errors.workUnit.message}</p>
+              )}
+            </div>
+          )}
+
+          {isProcesses && (
+            <div className="space-y-2">
+              <Label htmlFor="workFormula">Work Formula</Label>
+              <select
+                id="workFormula"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                {...register("workFormula")}
+              >
+                <option value="">No formula (manual entry)</option>
+                <option value="length_x_pieces">Length × Pieces (meters)</option>
+                <option value="area">Length × Width × Pieces (m²)</option>
+                <option value="volume">Total Volume (m³)</option>
+                <option value="pieces">Total Pieces (input)</option>
+                <option value="output_packages">Output Packages (count)</option>
+                <option value="hours">Manual Hours</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Formula used to auto-calculate planned work from inputs/outputs
+              </p>
+            </div>
+          )}
+
+          {isProcesses && (
+            <div className="space-y-2">
+              <Label htmlFor="price">Price per Unit</Label>
+              <Input
+                id="price"
+                type="text"
+                inputMode="decimal"
+                placeholder="e.g. 15,00"
+                {...register("price")}
+                aria-invalid={!!errors.price}
+              />
+              <p className="text-xs text-muted-foreground">
+                Price per work unit (shown as read-only in production view)
+              </p>
+              {errors.price && (
+                <p className="text-sm text-destructive">{errors.price.message}</p>
               )}
             </div>
           )}

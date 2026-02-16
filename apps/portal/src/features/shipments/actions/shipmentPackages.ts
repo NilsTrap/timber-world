@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import type { ActionResult } from "../types";
@@ -102,6 +103,9 @@ export async function addPackagesToShipment(
     nextSequence++;
   }
 
+  revalidatePath("/shipments");
+  revalidatePath("/inventory");
+
   return { success: true, data: { added: validPackageIds.length } };
 }
 
@@ -176,6 +180,9 @@ export async function removePackageFromShipment(
     console.error("Failed to unlink package:", unlinkError);
     return { success: false, error: "Failed to remove package", code: "UPDATE_FAILED" };
   }
+
+  revalidatePath("/shipments");
+  revalidatePath("/inventory");
 
   return { success: true, data: { removed: true } };
 }

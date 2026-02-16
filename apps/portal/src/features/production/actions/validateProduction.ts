@@ -1,7 +1,8 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer, isSuperAdmin } from "@/lib/auth";
+import { getSession, isProducer, isSuperAdmin, isOrganisationUser } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -50,14 +51,20 @@ export async function validateProduction(
     return { success: false, error: "Production entry not found", code: "NOT_FOUND" };
   }
 
-  // Admins can validate any entry; regular users only their own
-  if (!isAdmin && entry.created_by !== session.id) {
+  // Permission check:
+  // - Admins can validate any entry
+  // - Producers can validate entries from their organization
+  const isOwnEntry = entry.created_by === session.id;
+  const isOrgEntry = isOrganisationUser(session) && entry.organisation_id === session.organisationId;
+  if (!isAdmin && !isOwnEntry && !isOrgEntry) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
-  // Regular users can only validate drafts; admins can re-validate already validated entries
+  // Drafts: anyone with access can validate
+  // Validated: admins or producers from same org can re-validate (edit mode)
   const isRevalidation = entry.status === "validated";
-  if (entry.status !== "draft" && !(isAdmin && isRevalidation)) {
+  const canRevalidate = isAdmin || (isProducer(session) && isOrgEntry);
+  if (entry.status !== "draft" && !(canRevalidate && isRevalidation)) {
     return { success: false, error: "Entry is already validated", code: "VALIDATION_FAILED" };
   }
 
@@ -784,6 +791,10 @@ export async function validateProduction(
     await revertChanges();
     return { success: false, error: `Failed to update entry: ${updateEntryError.message}`, code: "UPDATE_FAILED" };
   }
+
+  revalidatePath("/production");
+  revalidatePath("/inventory");
+  revalidatePath("/dashboard");
 
   return { success: true, data: { redirectUrl: "/production" } };
 }

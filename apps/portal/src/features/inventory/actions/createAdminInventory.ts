@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin } from "@/lib/auth";
 import type { ActionResult, PackageInput } from "@/features/shipments/types";
@@ -73,6 +74,10 @@ export async function createAdminInventory(
     console.error("Failed to create admin inventory:", error);
     return { success: false, error: `Failed to create inventory: ${error.message}`, code: "INSERT_FAILED" };
   }
+
+  revalidatePath("/inventory");
+  revalidatePath("/admin/inventory");
+  revalidatePath("/dashboard");
 
   return {
     success: true,

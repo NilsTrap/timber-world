@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   title: "Dashboard",
 };
 
+// Disable caching to always show fresh dashboard data when navigating back
+export const dynamic = "force-dynamic";
+
 /**
  * Admin Dashboard Loader (Server Component)
  *

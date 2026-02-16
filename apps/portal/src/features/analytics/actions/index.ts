@@ -9,3 +9,4 @@ export { getVisitorEngagement } from "./getVisitorEngagement";
 export { getDetailedFilterUsage } from "./getDetailedFilterUsage";
 export { getJourneyEngagement } from "./getJourneyEngagement";
 export { getConsentMetrics } from "./getConsentMetrics";
+export { getVisitorsByDay } from "./getVisitorsByDay";

@@ -1,10 +1,12 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@timber/ui";
 import type { Process, ProcessWithNotes, ProductionListItem, ProductionHistoryItem } from "../types";
 import type { ProcessBreakdownItem, AdminProcessBreakdownItem } from "@/features/dashboard/types";
 import { NewProductionForm } from "./NewProductionForm";
-import { DraftProductionList } from "./DraftProductionList";
+import { DraftProductionTable } from "./DraftProductionTable";
 import { ProductionHistoryTable } from "./ProductionHistoryTable";
 import { ProcessesTab } from "./ProcessesTab";
 import { ProcessBreakdownTable } from "@/features/dashboard/components/ProcessBreakdownTable";
@@ -51,6 +53,23 @@ export function ProductionPageTabs({
   organizationId,
   isAdmin = false,
 }: ProductionPageTabsProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const lastPathRef = useRef<string | null>(null);
+
+  // Refresh data when returning to /production from a draft page
+  useEffect(() => {
+    const wasOnDraft = sessionStorage.getItem("production-was-on-draft");
+
+    // If we have the flag and we're on /production, refresh
+    if (wasOnDraft && pathname === "/production") {
+      sessionStorage.removeItem("production-was-on-draft");
+      router.refresh();
+    }
+
+    lastPathRef.current = pathname;
+  }, [pathname, router]);
+
   const getDefaultTab = () => {
     if (defaultTab === "history") return "history";
     if (defaultTab === "processes") return "processes";
@@ -58,8 +77,26 @@ export function ProductionPageTabs({
     return "active";
   };
 
+  const [activeTab, setActiveTab] = useState(getDefaultTab());
+  const [activeProcessFilter, setActiveProcessFilter] = useState<string | undefined>(defaultProcess);
+
+  const handleProcessClick = (processName: string) => {
+    // Set the filter immediately (before tab switch renders)
+    setActiveProcessFilter(processName);
+    // Switch to the history tab
+    setActiveTab("history");
+    // Update the URL with the filter
+    router.push(`/production?tab=history&process=${encodeURIComponent(processName)}`);
+  };
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    // Update URL when tab changes manually
+    router.push(`/production?tab=${value}`);
+  };
+
   return (
-    <Tabs defaultValue={getDefaultTab()}>
+    <Tabs value={activeTab} onValueChange={handleTabChange}>
       <TabsList>
         <TabsTrigger value="active">Drafts</TabsTrigger>
         <TabsTrigger value="history">Completed</TabsTrigger>
@@ -73,22 +110,31 @@ export function ProductionPageTabs({
             <h2 className="text-lg font-semibold mb-4">New Production</h2>
             <NewProductionForm processes={processes} />
           </div>
-          <DraftProductionList drafts={drafts} />
+          <DraftProductionTable entries={drafts} showOrganisation={showOrganisation} />
         </div>
       </TabsContent>
 
       <TabsContent value="history">
-        <ProductionHistoryTable entries={history} defaultProcess={defaultProcess} showOrganisation={showOrganisation} canDelete={canDeleteHistory} />
+        <ProductionHistoryTable
+          key={activeProcessFilter || "all"}
+          entries={history}
+          defaultProcess={activeProcessFilter}
+          showOrganisation={showOrganisation}
+          canDelete={canDeleteHistory}
+        />
       </TabsContent>
 
       <TabsContent value="consolidated">
         {isAdmin ? (
           <AdminProcessBreakdownTable
             breakdown={breakdown as AdminProcessBreakdownItem[]}
-            onProcessClick={() => {}}
+            onProcessClick={handleProcessClick}
           />
         ) : (
-          <ProcessBreakdownTable breakdown={breakdown as ProcessBreakdownItem[]} />
+          <ProcessBreakdownTable
+            breakdown={breakdown as ProcessBreakdownItem[]}
+            onProcessClick={handleProcessClick}
+          />
         )}
       </TabsContent>
 

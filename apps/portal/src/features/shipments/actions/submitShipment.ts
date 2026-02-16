@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import type { ActionResult, ShipmentStatus } from "../types";
@@ -82,6 +83,9 @@ export async function submitShipmentForAcceptance(
     return { success: false, error: "Failed to submit shipment", code: "UPDATE_FAILED" };
   }
 
+  revalidatePath("/shipments");
+  revalidatePath("/inventory");
+
   return {
     success: true,
     data: {
@@ -147,6 +151,9 @@ export async function cancelShipmentSubmission(
     console.error("Failed to cancel submission:", updateError);
     return { success: false, error: "Failed to cancel submission", code: "UPDATE_FAILED" };
   }
+
+  revalidatePath("/shipments");
+  revalidatePath("/inventory");
 
   return {
     success: true,

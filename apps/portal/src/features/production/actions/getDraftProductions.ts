@@ -27,7 +27,7 @@ export async function getDraftProductions(orgIds?: string[]): Promise<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("portal_production_entries")
-    .select("id, production_date, status, created_at, organisation_id, created_by, ref_processes(value)")
+    .select("id, production_date, status, created_at, organisation_id, created_by, total_input_m3, total_output_m3, outcome_percentage, waste_percentage, planned_work, actual_work, ref_processes(value, work_unit), organisations(code)")
     .eq("status", "draft")
     .order("created_at", { ascending: false });
 
@@ -69,6 +69,14 @@ export async function getDraftProductions(orgIds?: string[]): Promise<
     status: row.status,
     createdAt: row.created_at,
     createdByName: row.created_by ? userMap.get(row.created_by) ?? null : null,
+    totalInputM3: row.total_input_m3 ?? 0,
+    totalOutputM3: row.total_output_m3 ?? 0,
+    outcomePercentage: row.outcome_percentage ?? 0,
+    wastePercentage: row.waste_percentage ?? 0,
+    plannedWork: row.planned_work ?? null,
+    actualWork: row.actual_work ?? null,
+    workUnit: row.ref_processes?.work_unit ?? null,
+    organisationCode: row.organisations?.code ?? null,
   }));
 
   return { success: true, data: items };

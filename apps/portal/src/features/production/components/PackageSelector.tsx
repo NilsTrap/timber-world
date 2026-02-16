@@ -79,6 +79,14 @@ function isSingleNumber(dim: string | null): boolean {
   return /^\d+([.,]\d+)?$/.test(dim.trim());
 }
 
+/** Check if pieces value is valid (exists, not empty, not "-", not "NaN") */
+function isValidPiecesValue(pieces: string | null | undefined): boolean {
+  if (!pieces) return false;
+  if (pieces === "-" || pieces === "" || pieces.toLowerCase() === "nan") return false;
+  const num = parseInt(pieces, 10);
+  return !isNaN(num) && num > 0;
+}
+
 /** Calculate volume from dimensions × pieces (returns formatted string with comma, or null if not calculable) */
 function calculateVolume(pkg: PackageListItem, piecesUsed: number): string | null {
   if (!isSingleNumber(pkg.thickness) || !isSingleNumber(pkg.width) || !isSingleNumber(pkg.length)) {
@@ -222,7 +230,8 @@ export function PackageSelector({
       if (next.has(pkg.id)) {
         next.delete(pkg.id);
       } else {
-        const pieces = pkg.pieces ? pkg.pieces : "";
+        // Use pieces value only if it's valid (not NaN, not empty, not "-")
+        const pieces = isValidPiecesValue(pkg.pieces) ? pkg.pieces! : "";
         const volume = pkg.volumeM3 != null ? pkg.volumeM3.toFixed(3).replace(".", ",") : "";
         next.set(pkg.id, {
           packageId: pkg.id,
@@ -296,7 +305,7 @@ export function PackageSelector({
           const targetRow = indices[myPos - 1]!;
           const targetPkg = displayRows[targetRow];
           if (!targetPkg) return;
-          const targetHasPieces = targetPkg.pieces && targetPkg.pieces !== "-" && targetPkg.pieces !== "";
+          const targetHasPieces = isValidPiecesValue(targetPkg.pieces);
           const targetVolCalc = !!targetHasPieces && isSingleNumber(targetPkg.thickness) && isSingleNumber(targetPkg.width) && isSingleNumber(targetPkg.length);
           if (field === "volumeM3" && targetVolCalc) {
             focusInput(targetRow, "piecesUsed");
@@ -317,7 +326,7 @@ export function PackageSelector({
           const targetRow = indices[myPos + 1]!;
           const targetPkg = displayRows[targetRow];
           if (!targetPkg) return;
-          const targetHasPieces = targetPkg.pieces && targetPkg.pieces !== "-" && targetPkg.pieces !== "";
+          const targetHasPieces = isValidPiecesValue(targetPkg.pieces);
           const targetVolCalc = !!targetHasPieces && isSingleNumber(targetPkg.thickness) && isSingleNumber(targetPkg.width) && isSingleNumber(targetPkg.length);
           if (field === "volumeM3" && targetVolCalc) {
             focusInput(targetRow, "piecesUsed");
@@ -416,7 +425,7 @@ export function PackageSelector({
         return;
       }
 
-      const hasPieces = pkg.pieces && pkg.pieces !== "-" && pkg.pieces !== "";
+      const hasPieces = isValidPiecesValue(pkg.pieces);
       if (hasPieces) {
         const piecesNum = parseInt(entry.piecesUsed, 10);
         if (isNaN(piecesNum) || piecesNum <= 0) {
@@ -439,7 +448,7 @@ export function PackageSelector({
         const pkg = packages.find((p) => p.id === pkgId);
         if (!pkg) continue;
 
-        const hasPieces = pkg.pieces && pkg.pieces !== "-" && pkg.pieces !== "";
+        const hasPieces = isValidPiecesValue(pkg.pieces);
         const piecesUsed = hasPieces ? parseInt(entry.piecesUsed, 10) : null;
         const volumeM3 = parseFloat(entry.volumeM3.replace(",", "."));
 
@@ -574,7 +583,7 @@ export function PackageSelector({
                   {displayRows.map((pkg, rowIndex) => {
                     const isSelected = selected.has(pkg.id);
                     const entry = selected.get(pkg.id);
-                    const hasPieces = pkg.pieces && pkg.pieces !== "-" && pkg.pieces !== "";
+                    const hasPieces = isValidPiecesValue(pkg.pieces);
                     const volumeIsCalculated = !!hasPieces && isSingleNumber(pkg.thickness) && isSingleNumber(pkg.width) && isSingleNumber(pkg.length);
 
                     const draftInfo = draftsMap.get(pkg.id);

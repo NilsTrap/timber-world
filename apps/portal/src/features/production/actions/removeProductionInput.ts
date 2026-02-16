@@ -1,8 +1,10 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer, isSuperAdmin } from "@/lib/auth";
+import { getSession, isProducer, isSuperAdmin, isOrganisationUser } from "@/lib/auth";
 import type { ActionResult } from "../types";
+import { recalculateEntryMetrics } from "./recalculateEntryMetrics";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -46,7 +48,7 @@ export async function removeProductionInput(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: entry, error: entryError } = await (supabase as any)
     .from("portal_production_entries")
-    .select("created_by, status")
+    .select("created_by, status, organisation_id")
     .eq("id", input.production_entry_id)
     .single();
 
@@ -54,16 +56,23 @@ export async function removeProductionInput(
     return { success: false, error: "Production entry not found", code: "NOT_FOUND" };
   }
 
-  // Admins can edit any entry; regular users only their own
-  if (!isAdmin && entry.created_by !== session.id) {
+  // Permission check:
+  // - Admins can edit any entry
+  // - Producers can edit entries from their organization (drafts they created, or any validated)
+  const isOwnEntry = entry.created_by === session.id;
+  const isOrgEntry = isOrganisationUser(session) && entry.organisation_id === session.organisationId;
+  if (!isAdmin && !isOwnEntry && !isOrgEntry) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
-  // Regular users can only modify drafts; admins can modify validated entries too
-  if (!isAdmin && entry.status !== "draft") {
+  // Check if user can modify this entry:
+  // - Drafts: entry owner or admin
+  // - Validated: admin OR producer from same organization (for edit mode)
+  const canModifyValidated = isAdmin || (isProducer(session) && entry.status === "validated");
+  if (!canModifyValidated && entry.status !== "draft") {
     return { success: false, error: "Cannot modify a validated production entry", code: "VALIDATION_FAILED" };
   }
-  if (isAdmin && entry.status !== "draft" && entry.status !== "validated") {
+  if (entry.status !== "draft" && entry.status !== "validated") {
     return { success: false, error: "Cannot modify entry in this status", code: "VALIDATION_FAILED" };
   }
 
@@ -78,6 +87,13 @@ export async function removeProductionInput(
     console.error("Failed to remove production input:", error);
     return { success: false, error: `Failed to remove input: ${error.message}`, code: "DELETE_FAILED" };
   }
+
+  // Recalculate totals and planned work
+  await recalculateEntryMetrics(supabase, input.production_entry_id);
+
+  // Invalidate caches so changes show when navigating back
+  revalidatePath("/production");
+  revalidatePath("/inventory");
 
   return { success: true, data: null };
 }

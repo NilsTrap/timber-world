@@ -56,6 +56,11 @@ export interface BrowserBreakdown {
 
 export type DateRange = "today" | "7d" | "30d" | "90d" | "all";
 
+export interface VisitorsByDay {
+  date: string; // ISO date string (YYYY-MM-DD)
+  visitorCount: number;
+}
+
 export interface AnalyticsFilters {
   dateRange: DateRange;
   excludeBots: boolean;

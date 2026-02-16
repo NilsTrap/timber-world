@@ -72,14 +72,14 @@ export async function getAvailablePackages(
     .eq("shipments.to_organisation_id", session.organisationId)
     .in("shipments.status", ["accepted", "completed"])
     .neq("status", "consumed")
-    .or("pieces.neq.0,pieces.is.null")
+    .or("pieces.neq.0,pieces.is.null,volume_m3.gt.0")
     .order("package_number", { ascending: true });
 
   if (usedPackageIds.length > 0) {
     shipmentQuery = shipmentQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
   }
 
-  // Query 2: Production-sourced packages owned by this producer's organisation (status: produced, non-zero pieces, allow null)
+  // Query 2: Production-sourced packages owned by this producer's organisation (status: produced, non-zero pieces, allow null, or has volume)
   // Filter by organisation_id for proper multi-tenant isolation (not created_by)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let productionQuery = (supabase as any)
@@ -91,11 +91,31 @@ export async function getAvailablePackages(
     `)
     .eq("portal_production_entries.organisation_id", session.organisationId)
     .eq("status", "produced")
-    .or("pieces.neq.0,pieces.is.null")
+    .or("pieces.neq.0,pieces.is.null,volume_m3.gt.0")
     .order("package_number", { ascending: true });
 
   if (usedPackageIds.length > 0) {
     productionQuery = productionQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
+  }
+
+  // Query 2b: Production-sourced packages where the production entry was deleted (orphaned)
+  // These have production_entry_id set but the entry no longer exists or org matches directly
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let orphanedProductionQuery = (supabase as any)
+    .from("inventory_packages")
+    .select(`
+      id, package_number, shipment_id, thickness, width, length, pieces, volume_m3, notes,
+      ${refSelect}
+    `)
+    .eq("organisation_id", session.organisationId)
+    .not("production_entry_id", "is", null)
+    .is("shipment_id", null)
+    .neq("status", "consumed")
+    .or("pieces.neq.0,pieces.is.null,volume_m3.gt.0")
+    .order("package_number", { ascending: true });
+
+  if (usedPackageIds.length > 0) {
+    orphanedProductionQuery = orphanedProductionQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
   }
 
   // Query 3: Direct inventory packages (admin-added, no shipment or production source)
@@ -111,7 +131,7 @@ export async function getAvailablePackages(
     .is("shipment_id", null)
     .is("production_entry_id", null)
     .neq("status", "consumed")
-    .or("pieces.neq.0,pieces.is.null")
+    .or("pieces.neq.0,pieces.is.null,volume_m3.gt.0")
     .order("package_number", { ascending: true });
 
   if (usedPackageIds.length > 0) {
@@ -131,16 +151,17 @@ export async function getAvailablePackages(
     .eq("shipments.from_organisation_id", session.organisationId)
     .eq("shipments.status", "draft")
     .neq("status", "consumed")
-    .or("pieces.neq.0,pieces.is.null")
+    .or("pieces.neq.0,pieces.is.null,volume_m3.gt.0")
     .order("package_number", { ascending: true });
 
   if (usedPackageIds.length > 0) {
     outgoingDraftQuery = outgoingDraftQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
   }
 
-  const [shipmentResult, productionResult, directResult, outgoingDraftResult] = await Promise.all([
+  const [shipmentResult, productionResult, orphanedResult, directResult, outgoingDraftResult] = await Promise.all([
     shipmentQuery,
     productionQuery,
+    orphanedProductionQuery,
     directQuery,
     outgoingDraftQuery,
   ]);
@@ -152,6 +173,11 @@ export async function getAvailablePackages(
 
   if (productionResult.error) {
     console.error("Failed to fetch production packages:", productionResult.error);
+    // Non-fatal: continue with other packages
+  }
+
+  if (orphanedResult.error) {
+    console.error("Failed to fetch orphaned production packages:", orphanedResult.error);
     // Non-fatal: continue with other packages
   }
 
@@ -169,6 +195,7 @@ export async function getAvailablePackages(
   const allData = [
     ...(shipmentResult.data ?? []),
     ...(productionResult.data ?? []),
+    ...(orphanedResult.data ?? []),
     ...(directResult.data ?? []),
     ...(outgoingDraftResult.data ?? []),
   ];

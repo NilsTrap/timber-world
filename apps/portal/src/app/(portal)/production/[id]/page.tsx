@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { formatDate } from "@/lib/utils";
-import { getSession, isSuperAdmin } from "@/lib/auth";
+import { getSession, isSuperAdmin, isProducer } from "@/lib/auth";
 import {
   getProductionEntry,
   getAvailablePackages,
   getProductionInputs,
   getReferenceDropdownsForProducer,
   getProductionOutputs,
+  checkOutputPackageUsage,
 } from "@/features/production/actions";
 import { ProductionEntryClient } from "@/features/production/components/ProductionEntryClient";
-import { CreateCorrectionButton } from "@/features/production/components/CreateCorrectionButton";
+import { ValidatedEntryActions } from "@/features/production/components/ValidatedEntryActions";
 import { DeleteDraftButton } from "@/features/production/components/DeleteDraftButton";
 import type { PackageListItem } from "@/features/shipments/types";
 import type { ProductionInput, ProductionOutput, ReferenceDropdowns } from "@/features/production/types";
@@ -21,8 +22,12 @@ export const metadata: Metadata = {
   title: "Production Entry",
 };
 
+// Disable caching to always fetch fresh entry data
+export const dynamic = "force-dynamic";
+
 interface ProductionEntryPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ edit?: string }>;
 }
 
 /**
@@ -36,10 +41,13 @@ interface ProductionEntryPageProps {
  */
 export default async function ProductionEntryPage({
   params,
+  searchParams,
 }: ProductionEntryPageProps) {
   const { id } = await params;
+  const { edit } = await searchParams;
   const session = await getSession();
   const isUserSuperAdmin = isSuperAdmin(session);
+  const isUserProducer = isProducer(session);
 
   const result = await getProductionEntry(id);
 
@@ -47,10 +55,21 @@ export default async function ProductionEntryPage({
     notFound();
   }
 
-  const { processName, processCode, productionDate: rawDate, status, entryType, correctsEntryId } = result.data;
+  const { processName, processCode, productionDate: rawDate, status, entryType, correctsEntryId, workUnit, workFormula, plannedWork, actualWork } = result.data;
   const productionDate = formatDate(rawDate);
   const isDraft = status === "draft";
   const isCorrection = entryType === "correction";
+  const isValidated = status === "validated";
+
+  // Edit mode: only for validated entries when ?edit=true and user has permission
+  const wantsEdit = edit === "true";
+  const canEdit = isValidated && !isCorrection && (isUserSuperAdmin || isUserProducer);
+  const isEditMode = wantsEdit && canEdit;
+
+  // Redirect away from edit mode if not allowed
+  if (wantsEdit && !canEdit) {
+    redirect(`/production/${id}`);
+  }
 
   // Fetch inputs + outputs data for all entries
   let initialPackages: PackageListItem[] = [];
@@ -61,18 +80,25 @@ export default async function ProductionEntryPage({
     types: [], processing: [], fsc: [], quality: [],
   };
 
+  // Fetch package usage info for validated entries (needed for edit mode)
+  let usedPackageNumbers: string[] = [];
+
   // Always fetch inputs, outputs, and dropdowns (dropdowns needed to display values in read-only too)
-  const [inputResult, outputResult, dropdownResult] = await Promise.all([
+  const [inputResult, outputResult, dropdownResult, packageUsageResult] = await Promise.all([
     getProductionInputs(id),
     getProductionOutputs(id),
     getReferenceDropdownsForProducer(),
+    isValidated ? checkOutputPackageUsage(id) : Promise.resolve({ success: true, data: { hasUsedPackages: false, usedPackages: [], freePackages: [], totalCount: 0 } }),
   ]);
   if (inputResult.success) initialInputs = inputResult.data;
   if (outputResult.success) initialOutputs = outputResult.data;
   if (dropdownResult.success) dropdowns = dropdownResult.data;
+  if (packageUsageResult.success) {
+    usedPackageNumbers = packageUsageResult.data.usedPackages.map((p) => p.packageNumber);
+  }
 
-  // Fetch packages for draft entries OR for admin editing validated entries
-  if (isDraft || isUserSuperAdmin) {
+  // Fetch packages for draft entries OR for edit mode
+  if (isDraft || isEditMode || isUserSuperAdmin) {
     const pkgResult = await getAvailablePackages(id);
     if (pkgResult.success) initialPackages = pkgResult.data;
   }
@@ -127,22 +153,32 @@ export default async function ProductionEntryPage({
           {isDraft && (
             <DeleteDraftButton entryId={id} />
           )}
-          {!isDraft && isUserSuperAdmin && (
-            <DeleteDraftButton entryId={id} isValidated />
+          {isValidated && !isCorrection && !isEditMode && (
+            <ValidatedEntryActions
+              entryId={id}
+              usedPackages={packageUsageResult.success ? packageUsageResult.data.usedPackages : []}
+            />
           )}
-          {!isDraft && !isCorrection && (
-            <CreateCorrectionButton originalEntryId={id} />
+          {isEditMode && (
+            <Link
+              href={`/production/${id}`}
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Cancel editing
+            </Link>
           )}
           <span
             className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-              isDraft
-                ? isCorrection
-                  ? "bg-amber-100 text-amber-800"
-                  : "bg-yellow-100 text-yellow-800"
-                : "bg-green-100 text-green-800"
+              isEditMode
+                ? "bg-amber-100 text-amber-800"
+                : isDraft
+                  ? isCorrection
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-yellow-100 text-yellow-800"
+                  : "bg-green-100 text-green-800"
             }`}
           >
-            {isDraft ? (isCorrection ? "Correction (Draft)" : "Draft") : isCorrection ? "Correction" : "Validated"}
+            {isEditMode ? "Editing" : isDraft ? (isCorrection ? "Correction (Draft)" : "Draft") : isCorrection ? "Correction" : "Validated"}
           </span>
         </div>
       </div>
@@ -156,11 +192,16 @@ export default async function ProductionEntryPage({
         processCode={isCorrection ? "CR" : processCode}
         initialInputTotal={initialInputTotal}
         initialOutputTotal={initialOutputTotal}
-        readOnly={!isDraft && !isUserSuperAdmin}
-        isAdminEdit={!isDraft && isUserSuperAdmin}
+        readOnly={!isDraft && !isEditMode && !isUserSuperAdmin}
+        isAdminEdit={isEditMode || (!isDraft && isUserSuperAdmin)}
         hideMetrics={isCorrection}
         processName={processName}
         productionDate={productionDate}
+        workUnit={workUnit}
+        workFormula={workFormula}
+        initialPlannedWork={plannedWork}
+        initialActualWork={actualWork}
+        usedPackageNumbers={usedPackageNumbers}
       />
     </div>
   );

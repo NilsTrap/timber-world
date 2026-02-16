@@ -1,13 +1,17 @@
 "use client";
 
-import { useState } from "react";
 import { ArrowUp, ArrowDown, Minus } from "lucide-react";
 import type { AdminProcessBreakdownItem, TrendDirection } from "../types";
 import { formatVolume, formatPercent, getOutcomeColor } from "../utils/formatting";
 
+/** Format number with comma decimal separator, 2 decimals */
+function fmt2(n: number): string {
+  return n.toFixed(2).replace(".", ",");
+}
+
 interface AdminProcessBreakdownTableProps {
   breakdown: AdminProcessBreakdownItem[];
-  onProcessClick: (processId: string) => void;
+  onProcessClick: (processName: string) => void;
 }
 
 /** Get trend indicator icon and color */
@@ -66,6 +70,8 @@ export function AdminProcessBreakdownTable({
             <th className="px-4 py-3 text-right font-medium">Output m³</th>
             <th className="px-4 py-3 text-right font-medium">Outcome %</th>
             <th className="px-4 py-3 text-right font-medium">Waste %</th>
+            <th className="px-4 py-3 text-right font-medium">Planned</th>
+            <th className="px-4 py-3 text-right font-medium">Actual</th>
             <th className="px-4 py-3 text-center font-medium">Trend</th>
           </tr>
         </thead>
@@ -74,11 +80,11 @@ export function AdminProcessBreakdownTable({
             <tr
               key={item.processId}
               className="border-b last:border-0 hover:bg-accent/50 transition-colors cursor-pointer focus:outline-none focus:bg-accent/50"
-              onClick={() => onProcessClick(item.processId)}
+              onClick={() => onProcessClick(item.processName)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  onProcessClick(item.processId);
+                  onProcessClick(item.processName);
                 }
               }}
               tabIndex={0}
@@ -102,6 +108,16 @@ export function AdminProcessBreakdownTable({
               </td>
               <td className="px-4 py-3 text-right tabular-nums">
                 {formatPercent(item.avgWastePercent)}%
+              </td>
+              <td className="px-4 py-3 text-right tabular-nums">
+                {item.totalPlannedWork > 0
+                  ? `${fmt2(item.totalPlannedWork)} ${item.workUnit || ""}`
+                  : "—"}
+              </td>
+              <td className="px-4 py-3 text-right tabular-nums">
+                {item.totalActualWork > 0
+                  ? `${fmt2(item.totalActualWork)} ${item.workUnit || ""}`
+                  : "—"}
               </td>
               <td className="px-4 py-3 text-center">
                 <TrendIndicator trend={item.trend} value={item.trendValue} />

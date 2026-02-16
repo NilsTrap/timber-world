@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isOrganisationUser } from "@/lib/auth";
-import type { ActionResult, EntryType } from "../types";
+import type { ActionResult, EntryType, WorkFormula } from "../types";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -17,6 +17,10 @@ export interface ProductionEntryDetail {
   createdAt: string;
   processName: string;
   processCode: string;
+  workUnit: string | null;
+  workFormula: WorkFormula;
+  plannedWork: number | null;
+  actualWork: number | null;
 }
 
 /**
@@ -42,7 +46,7 @@ export async function getProductionEntry(
 
   const { data, error } = await (supabase as any)
     .from("portal_production_entries")
-    .select("id, production_date, status, entry_type, corrects_entry_id, notes, created_at, organisation_id, ref_processes(value, code)")
+    .select("id, production_date, status, entry_type, corrects_entry_id, notes, created_at, organisation_id, planned_work, actual_work, ref_processes(value, code, work_unit, work_formula)")
     .eq("id", id)
     .single();
 
@@ -68,6 +72,10 @@ export async function getProductionEntry(
       createdAt: data.created_at,
       processName: data.ref_processes?.value ?? "Unknown",
       processCode: data.ref_processes?.code ?? "OUT",
+      workUnit: data.ref_processes?.work_unit ?? null,
+      workFormula: data.ref_processes?.work_formula ?? null,
+      plannedWork: data.planned_work ?? null,
+      actualWork: data.actual_work ?? null,
     },
   };
 }

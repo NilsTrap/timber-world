@@ -14,6 +14,9 @@ interface ProcessStats {
   totalEntries: number;
   totalInputM3: number;
   totalOutputM3: number;
+  totalPlannedWork: number;
+  totalActualWork: number;
+  workUnit: string | null;
 }
 
 /**
@@ -66,7 +69,7 @@ async function fetchProcessStats(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("portal_production_entries")
-    .select("process_id, total_input_m3, total_output_m3, ref_processes(value)")
+    .select("process_id, total_input_m3, total_output_m3, planned_work, actual_work, ref_processes(value, work_unit)")
     .eq("status", "validated");
 
   // Apply org filter when specified (multi-select)
@@ -94,20 +97,28 @@ async function fetchProcessStats(
   for (const row of (data ?? []) as any[]) {
     const processId = row.process_id as string;
     const processName = row.ref_processes?.value ?? "Unknown";
+    const workUnit = row.ref_processes?.work_unit ?? null;
     const inputM3 = Number(row.total_input_m3) || 0;
     const outputM3 = Number(row.total_output_m3) || 0;
+    const plannedWork = Number(row.planned_work) || 0;
+    const actualWork = Number(row.actual_work) || 0;
 
     const existing = processMap.get(processId);
     if (existing) {
       existing.totalEntries += 1;
       existing.totalInputM3 += inputM3;
       existing.totalOutputM3 += outputM3;
+      existing.totalPlannedWork += plannedWork;
+      existing.totalActualWork += actualWork;
     } else {
       processMap.set(processId, {
         processName,
         totalEntries: 1,
         totalInputM3: inputM3,
         totalOutputM3: outputM3,
+        totalPlannedWork: plannedWork,
+        totalActualWork: actualWork,
+        workUnit,
       });
     }
   }
@@ -188,6 +199,9 @@ export async function getAdminProcessBreakdown(
         avgWastePercent,
         trend,
         trendValue,
+        totalPlannedWork: stats.totalPlannedWork,
+        totalActualWork: stats.totalActualWork,
+        workUnit: stats.workUnit,
       });
     }
 

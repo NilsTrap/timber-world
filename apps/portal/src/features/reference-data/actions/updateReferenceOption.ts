@@ -20,7 +20,7 @@ import {
 export async function updateReferenceOption(
   tableName: ReferenceTableName,
   id: string,
-  input: { value: string; code?: string }
+  input: { value: string; code?: string; workUnit?: string; workFormula?: string; price?: number | null }
 ): Promise<ActionResult<ReferenceOption>> {
   // 1. Check authentication
   const session = await getSession();
@@ -70,7 +70,7 @@ export async function updateReferenceOption(
     };
   }
 
-  const { value, code: processCode } = parsed.data;
+  const { value, code: processCode, workUnit, workFormula, price } = parsed.data;
 
   // For processes, code is required
   if (isProcesses && !processCode) {
@@ -128,9 +128,14 @@ export async function updateReferenceOption(
   if (isProcesses && processCode) {
     updatePayload.code = processCode;
   }
+  if (isProcesses) {
+    updatePayload.work_unit = workUnit || null;
+    updatePayload.work_formula = workFormula || null;
+    updatePayload.price = price ?? null;
+  }
 
   const selectColumns = isProcesses
-    ? "id, value, code, sort_order, is_active, created_at, updated_at"
+    ? "id, value, code, work_unit, work_formula, price, sort_order, is_active, created_at, updated_at"
     : "id, value, sort_order, is_active, created_at, updated_at";
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -163,6 +168,9 @@ export async function updateReferenceOption(
     id: data.id as string,
     value: data.value as string,
     ...(isProcesses && data.code ? { code: data.code as string } : {}),
+    ...(isProcesses && data.work_unit ? { workUnit: data.work_unit as string } : {}),
+    ...(isProcesses && data.work_formula ? { workFormula: data.work_formula } : {}),
+    ...(isProcesses ? { price: data.price != null ? Number(data.price) : null } : {}),
     sortOrder: data.sort_order as number,
     isActive: data.is_active as boolean,
     createdAt: data.created_at as string,

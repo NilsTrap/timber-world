@@ -11,3 +11,4 @@ export { DetailedFilterUsageCard } from "./DetailedFilterUsageCard";
 export { JourneyEngagementCard } from "./JourneyEngagementCard";
 export { JourneyOverviewCard } from "./JourneyOverviewCard";
 export { ConsentMetricsCard } from "./ConsentMetricsCard";
+export { VisitorsOverTimeChart } from "./VisitorsOverTimeChart";

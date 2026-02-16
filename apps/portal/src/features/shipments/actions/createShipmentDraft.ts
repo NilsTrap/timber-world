@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import type { ActionResult } from "../types";
@@ -119,6 +120,8 @@ export async function createShipmentDraft(
     }
     return { success: false, error: "Failed to create shipment", code: "INSERT_FAILED" };
   }
+
+  revalidatePath("/shipments");
 
   return {
     success: true,

@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import type { ActionResult } from "../types";
@@ -40,6 +41,9 @@ export async function createProductionEntry(
   if (error) {
     return { success: false, error: error.message, code: "INSERT_FAILED" };
   }
+
+  // Invalidate the production page cache so the new draft shows when navigating back
+  revalidatePath("/production");
 
   return { success: true, data: { id: data.id } };
 }

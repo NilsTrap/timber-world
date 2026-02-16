@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
@@ -95,6 +96,10 @@ export async function deleteInventoryPackage(
       // The package is already deleted, which was the primary goal
     }
   }
+
+  revalidatePath("/inventory");
+  revalidatePath("/admin/inventory");
+  revalidatePath("/dashboard");
 
   return { success: true, data: null };
 }

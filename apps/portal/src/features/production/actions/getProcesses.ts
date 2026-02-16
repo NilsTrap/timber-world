@@ -18,7 +18,7 @@ export async function getProcesses(): Promise<ActionResult<Process[]>> {
 
   const { data, error } = await (supabase as any)
     .from("ref_processes")
-    .select("id, code, value, sort_order, work_unit")
+    .select("id, code, value, sort_order, work_unit, work_formula, price")
     .eq("is_active", true)
     .order("value", { ascending: true });
 
@@ -32,6 +32,8 @@ export async function getProcesses(): Promise<ActionResult<Process[]>> {
     value: row.value,
     sortOrder: row.sort_order,
     workUnit: row.work_unit,
+    workFormula: row.work_formula ?? null,
+    price: row.price != null ? Number(row.price) : null,
   }));
 
   return { success: true, data: processes };
@@ -60,7 +62,7 @@ export async function getProcessesWithNotes(
   // Fetch all active processes
   const { data: processesData, error: processesError } = await (supabase as any)
     .from("ref_processes")
-    .select("id, code, value, sort_order, work_unit")
+    .select("id, code, value, sort_order, work_unit, work_formula, price")
     .eq("is_active", true)
     .order("value", { ascending: true });
 
@@ -95,6 +97,8 @@ export async function getProcessesWithNotes(
       value: row.value,
       sortOrder: row.sort_order,
       workUnit: row.work_unit,
+      workFormula: row.work_formula ?? null,
+      price: row.price != null ? Number(row.price) : null,
       notes: noteData?.notes ?? "",
       noteId: noteData?.id ?? null,
     };
