@@ -380,53 +380,63 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
         }
       }
 
-      // 3. Save all packages (new and modified)
-      const packagesToSave = localPackages.map(pkg => ({
-        id: pkg.id,
-        isNew: pkg.isNew,
-        packageNumber: pkg.packageNumber,
-        shipmentCode: pkg.shipmentCode, // Include shipment code for new packages
-        organisationId: pkg.organisationId,
-        productNameId: pkg.productNameId,
-        woodSpeciesId: pkg.woodSpeciesId,
-        humidityId: pkg.humidityId,
-        typeId: pkg.typeId,
-        processingId: pkg.processingId,
-        fscId: pkg.fscId,
-        qualityId: pkg.qualityId,
-        thickness: pkg.thickness,
-        width: pkg.width,
-        length: pkg.length,
-        pieces: pkg.pieces,
-        volumeM3: pkg.volumeM3,
-        volumeIsCalculated: pkg.volumeIsCalculated,
-      }));
-
-      const result = await saveInventoryPackages(packagesToSave);
-
-      if (result.success) {
-        const { updated, created, errors } = result.data;
-        if (errors.length > 0) {
-          toast.warning(`Saved with warnings: ${errors.join("; ")}`);
-        } else {
-          toast.success(`Saved: ${updated} updated, ${created} created`);
-        }
-
-        // Reset dirty state
+      // 3. Save all packages (new and modified) - skip if no packages left
+      if (localPackages.length === 0) {
+        // All packages were deleted, nothing to save
+        const deletedCount = deletedIds.size;
+        toast.success(`Deleted ${deletedCount} package${deletedCount !== 1 ? "s" : ""}`);
         setDeletedIds(new Set());
         setPendingShipmentCodeUpdates(new Map());
-
-        // If new packages were created, refresh to get real database IDs
-        if (created > 0) {
-          router.refresh();
-        } else {
-          // Just update local state for updates only
-          const savedPackages = localPackages.map(pkg => ({ ...pkg, isNew: false }));
-          setLocalPackages(savedPackages);
-          setOriginalPackages(savedPackages);
-        }
+        setOriginalPackages([]);
+        router.refresh();
       } else {
-        toast.error(result.error);
+        const packagesToSave = localPackages.map(pkg => ({
+          id: pkg.id,
+          isNew: pkg.isNew,
+          packageNumber: pkg.packageNumber,
+          shipmentCode: pkg.shipmentCode, // Include shipment code for new packages
+          organisationId: pkg.organisationId,
+          productNameId: pkg.productNameId,
+          woodSpeciesId: pkg.woodSpeciesId,
+          humidityId: pkg.humidityId,
+          typeId: pkg.typeId,
+          processingId: pkg.processingId,
+          fscId: pkg.fscId,
+          qualityId: pkg.qualityId,
+          thickness: pkg.thickness,
+          width: pkg.width,
+          length: pkg.length,
+          pieces: pkg.pieces,
+          volumeM3: pkg.volumeM3,
+          volumeIsCalculated: pkg.volumeIsCalculated,
+        }));
+
+        const result = await saveInventoryPackages(packagesToSave);
+
+        if (result.success) {
+          const { updated, created, errors } = result.data;
+          if (errors.length > 0) {
+            toast.warning(`Saved with warnings: ${errors.join("; ")}`);
+          } else {
+            toast.success(`Saved: ${updated} updated, ${created} created`);
+          }
+
+          // Reset dirty state
+          setDeletedIds(new Set());
+          setPendingShipmentCodeUpdates(new Map());
+
+          // If new packages were created, refresh to get real database IDs
+          if (created > 0) {
+            router.refresh();
+          } else {
+            // Just update local state for updates only
+            const savedPackages = localPackages.map(pkg => ({ ...pkg, isNew: false }));
+            setLocalPackages(savedPackages);
+            setOriginalPackages(savedPackages);
+          }
+        } else {
+          toast.error(result.error);
+        }
       }
     } catch (error) {
       toast.error("Failed to save changes");
@@ -740,6 +750,7 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
         copyRow={copyRow}
         collapseStorageKey="editable-inventory-collapsed"
         onDisplayRowsChange={handleDisplayRowsChange}
+        allowEmpty
       />
 
       <PasteImportModal

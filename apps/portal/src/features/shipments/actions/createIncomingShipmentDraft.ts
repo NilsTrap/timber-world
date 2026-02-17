@@ -5,8 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
-interface CreateDraftInput {
-  toOrganisationId: string;
+interface CreateIncomingDraftInput {
+  fromOrganisationId: string;
   notes?: string;
 }
 
@@ -16,15 +16,19 @@ interface DraftShipmentResult {
 }
 
 /**
- * Create Shipment Draft
+ * Create Incoming Shipment Draft
  *
- * Creates a new draft shipment from the current user's organization
- * to the specified destination organization.
+ * Creates a new draft shipment from an external organization
+ * to the current user's organization.
+ *
+ * The source organization must be:
+ * 1. A trading partner of the user's organization
+ * 2. Marked as external (is_external = true)
  *
  * The shipment code is auto-generated: [FROM_CODE]-[TO_CODE]-[NUMBER]
  */
-export async function createShipmentDraft(
-  input: CreateDraftInput
+export async function createIncomingShipmentDraft(
+  input: CreateIncomingDraftInput
 ): Promise<ActionResult<DraftShipmentResult>> {
   const session = await getSession();
   if (!session) {
@@ -35,32 +39,54 @@ export async function createShipmentDraft(
     return { success: false, error: "No organization assigned", code: "NO_ORGANISATION" };
   }
 
-  const { toOrganisationId, notes } = input;
+  const { fromOrganisationId, notes } = input;
 
-  // Validate destination org is different from source
-  if (toOrganisationId === session.organisationId) {
-    return { success: false, error: "Cannot create shipment to your own organization", code: "SAME_ORG" };
+  // Validate source org is different from destination
+  if (fromOrganisationId === session.organisationId) {
+    return { success: false, error: "Cannot create shipment from your own organization", code: "SAME_ORG" };
   }
 
   const supabase = await createClient();
 
-  // Get organisation codes for shipment code generation
+  // Verify the source org is external and a trading partner
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: fromOrg, error: fromOrgError } = await (supabase as any)
     .from("organisations")
-    .select("code")
-    .eq("id", session.organisationId)
+    .select("id, code, is_external, is_active")
+    .eq("id", fromOrganisationId)
     .single();
 
   if (fromOrgError || !fromOrg) {
     return { success: false, error: "Source organization not found", code: "ORG_NOT_FOUND" };
   }
 
+  if (!fromOrg.is_external) {
+    return { success: false, error: "Incoming shipments can only be from external organizations", code: "NOT_EXTERNAL" };
+  }
+
+  if (!fromOrg.is_active) {
+    return { success: false, error: "Source organization is not active", code: "ORG_INACTIVE" };
+  }
+
+  // Verify trading partner relationship
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: partnerCheck, error: partnerError } = await (supabase as any)
+    .from("organisation_trading_partners")
+    .select("id")
+    .eq("organisation_id", session.organisationId)
+    .eq("partner_organisation_id", fromOrganisationId)
+    .single();
+
+  if (partnerError || !partnerCheck) {
+    return { success: false, error: "Source organization is not a trading partner", code: "NOT_PARTNER" };
+  }
+
+  // Get destination org code
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: toOrg, error: toOrgError } = await (supabase as any)
     .from("organisations")
     .select("code")
-    .eq("id", toOrganisationId)
+    .eq("id", session.organisationId)
     .single();
 
   if (toOrgError || !toOrg) {
@@ -72,8 +98,8 @@ export async function createShipmentDraft(
   const { count, error: countError } = await (supabase as any)
     .from("shipments")
     .select("id", { count: "exact", head: true })
-    .eq("from_organisation_id", session.organisationId)
-    .eq("to_organisation_id", toOrganisationId);
+    .eq("from_organisation_id", fromOrganisationId)
+    .eq("to_organisation_id", session.organisationId);
 
   if (countError) {
     console.error("Failed to count shipments:", countError);
@@ -103,8 +129,8 @@ export async function createShipmentDraft(
     .insert({
       shipment_code: shipmentCode,
       shipment_number: shipmentNumber,
-      from_organisation_id: session.organisationId,
-      to_organisation_id: toOrganisationId,
+      from_organisation_id: fromOrganisationId,
+      to_organisation_id: session.organisationId,
       shipment_date: new Date().toISOString().split("T")[0],
       notes: notes || null,
       status: "draft",
@@ -114,7 +140,6 @@ export async function createShipmentDraft(
 
   if (insertError) {
     console.error("Failed to create shipment:", insertError);
-    // Handle unique constraint violation (code already exists)
     if (insertError.code === "23505") {
       return { success: false, error: "Shipment code already exists", code: "DUPLICATE_CODE" };
     }
@@ -130,61 +155,4 @@ export async function createShipmentDraft(
       shipmentCode: shipment.shipment_code,
     },
   };
-}
-
-/**
- * Get Organizations for Shipment
- *
- * Returns the trading partners of the current user's organization.
- * If no trading partners are configured, returns an empty list.
- * Used for the destination organization dropdown.
- */
-export async function getShipmentDestinations(): Promise<
-  ActionResult<Array<{ id: string; code: string; name: string }>>
-> {
-  const session = await getSession();
-  if (!session) {
-    return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  }
-
-  if (!session.organisationId) {
-    return { success: false, error: "No organization assigned", code: "NO_ORGANISATION" };
-  }
-
-  const supabase = await createClient();
-
-  // Get trading partners for the user's organisation
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: partners, error: partnersError } = await (supabase as any)
-    .from("organisation_trading_partners")
-    .select("partner_organisation_id")
-    .eq("organisation_id", session.organisationId);
-
-  if (partnersError) {
-    console.error("Failed to fetch trading partners:", partnersError);
-    return { success: false, error: "Failed to fetch trading partners", code: "QUERY_FAILED" };
-  }
-
-  // If no trading partners configured, return empty list
-  if (!partners || partners.length === 0) {
-    return { success: true, data: [] };
-  }
-
-  // Get only the trading partner organisations
-  const partnerIds = partners.map((p: { partner_organisation_id: string }) => p.partner_organisation_id);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from("organisations")
-    .select("id, code, name")
-    .eq("is_active", true)
-    .in("id", partnerIds)
-    .order("name");
-
-  if (error) {
-    console.error("Failed to fetch organizations:", error);
-    return { success: false, error: "Failed to fetch organizations", code: "QUERY_FAILED" };
-  }
-
-  return { success: true, data: data ?? [] };
 }

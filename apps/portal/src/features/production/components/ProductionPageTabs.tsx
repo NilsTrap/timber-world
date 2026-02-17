@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@timber/ui";
 import type { Process, ProcessWithNotes, ProductionListItem, ProductionHistoryItem } from "../types";
 import type { ProcessBreakdownItem, AdminProcessBreakdownItem } from "@/features/dashboard/types";
@@ -55,7 +55,18 @@ export function ProductionPageTabs({
 }: ProductionPageTabsProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const lastPathRef = useRef<string | null>(null);
+
+  // Helper to build URL preserving org filter
+  const buildUrl = (params: Record<string, string>) => {
+    const orgParam = searchParams.get("org");
+    const urlParams = new URLSearchParams(params);
+    if (orgParam) {
+      urlParams.set("org", orgParam);
+    }
+    return `/production?${urlParams.toString()}`;
+  };
 
   // Refresh data when returning to /production from a draft page
   useEffect(() => {
@@ -85,14 +96,14 @@ export function ProductionPageTabs({
     setActiveProcessFilter(processName);
     // Switch to the history tab
     setActiveTab("history");
-    // Update the URL with the filter
-    router.push(`/production?tab=history&process=${encodeURIComponent(processName)}`);
+    // Update the URL with the filter (preserving org)
+    router.push(buildUrl({ tab: "history", process: processName }));
   };
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
-    // Update URL when tab changes manually
-    router.push(`/production?tab=${value}`);
+    // Update URL when tab changes manually (preserving org)
+    router.push(buildUrl({ tab: value }));
   };
 
   return (

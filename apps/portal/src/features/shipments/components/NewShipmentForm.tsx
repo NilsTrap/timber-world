@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@timber/ui";
 import { ShipmentHeader } from "./ShipmentHeader";
 import { PackageEntryTable } from "./PackageEntryTable";
-import { getActiveOrganisations, getReferenceDropdowns, getShipmentCodePreview, createShipment } from "../actions";
+import { getActiveOrganisations, getTradingPartnersForShipment, getReferenceDropdowns, getShipmentCodePreview, createShipment } from "../actions";
 import type { OrganisationOption, ReferenceDropdowns, PackageRow, PackageInput } from "../types";
 
 /** Create an empty package row */
@@ -84,6 +84,7 @@ export function NewShipmentForm() {
 
   // Data loaded from server
   const [organisations, setOrganisations] = useState<OrganisationOption[]>([]);
+  const [toOrganisations, setToOrganisations] = useState<OrganisationOption[]>([]);
   const [dropdowns, setDropdowns] = useState<ReferenceDropdowns | null>(null);
 
   // Form state (restored from sessionStorage draft if available)
@@ -101,6 +102,27 @@ export function NewShipmentForm() {
   useEffect(() => {
     saveDraft({ fromOrganisationId, toOrganisationId, shipmentDate, transportCostEur, packageRows });
   }, [fromOrganisationId, toOrganisationId, shipmentDate, transportCostEur, packageRows]);
+
+  // Fetch trading partners when "from" organisation changes
+  useEffect(() => {
+    if (!fromOrganisationId) {
+      setToOrganisations([]);
+      return;
+    }
+
+    async function fetchPartners() {
+      const result = await getTradingPartnersForShipment(fromOrganisationId);
+      if (result.success) {
+        setToOrganisations(result.data);
+        // Clear "to" selection if it's no longer in the list
+        if (toOrganisationId && !result.data.some((o) => o.id === toOrganisationId)) {
+          setToOrganisationId("");
+        }
+      }
+    }
+
+    fetchPartners();
+  }, [fromOrganisationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch shipment code preview when both organisations are selected
   useEffect(() => {
@@ -228,6 +250,7 @@ export function NewShipmentForm() {
 
       <ShipmentHeader
         organisations={organisations}
+        toOrganisations={toOrganisations}
         fromOrganisationId={fromOrganisationId}
         toOrganisationId={toOrganisationId}
         shipmentDate={shipmentDate}

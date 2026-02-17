@@ -36,6 +36,7 @@ import {
 import {
   getOrganisations,
   toggleOrganisation,
+  toggleOrganisationExternal,
   deleteOrganisation,
   getOrgShipmentCount,
 } from "../actions";
@@ -96,6 +97,9 @@ export function OrganisationsTable() {
   const [deleteShipmentCount, setDeleteShipmentCount] = useState<number>(0);
   const [isCheckingDeleteShipments, setIsCheckingDeleteShipments] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // External toggle state
+  const [togglingExternalId, setTogglingExternalId] = useState<string | null>(null);
 
   const loadOrganisations = useCallback(async () => {
     setIsLoading(true);
@@ -228,6 +232,19 @@ export function OrganisationsTable() {
     }
   };
 
+  // Handle toggle external
+  const handleToggleExternal = async (org: Organisation) => {
+    setTogglingExternalId(org.id);
+    const result = await toggleOrganisationExternal(org.id, !org.isExternal);
+    if (result.success) {
+      toast.success(result.data.isExternal ? "Marked as external" : "Marked as internal");
+      loadOrganisations();
+    } else {
+      toast.error(result.error);
+    }
+    setTogglingExternalId(null);
+  };
+
   const handleEdit = (org: Organisation) => {
     setEditingOrg(org);
     setIsFormOpen(true);
@@ -313,6 +330,7 @@ export function OrganisationsTable() {
                     <SortIndicator column="isActive" sortColumn={sortColumn} sortDirection={sortDirection} />
                   </button>
                 </TableHead>
+                <TableHead className="w-28">Type</TableHead>
                 <TableHead className="w-40 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -334,6 +352,20 @@ export function OrganisationsTable() {
                     <Badge variant={org.isActive ? "success" : "secondary"}>
                       {org.isActive ? "Active" : "Inactive"}
                     </Badge>
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => handleToggleExternal(org)}
+                      disabled={togglingExternalId === org.id}
+                      className="focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded"
+                    >
+                      <Badge
+                        variant={org.isExternal ? "warning" : "default"}
+                        className={`cursor-pointer hover:opacity-80 transition-opacity ${togglingExternalId === org.id ? "opacity-50" : ""}`}
+                      >
+                        {togglingExternalId === org.id ? "..." : org.isExternal ? "External" : "Internal"}
+                      </Badge>
+                    </button>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>

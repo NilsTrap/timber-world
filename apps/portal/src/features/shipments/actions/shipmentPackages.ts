@@ -113,7 +113,9 @@ export async function addPackagesToShipment(
  * Remove Package from Shipment
  *
  * Removes a package from a draft shipment.
- * Only the shipment owner can remove packages.
+ * Allowed for:
+ * - Shipment owner (sender) for outgoing shipments
+ * - Shipment receiver for incoming shipments from external suppliers
  */
 export async function removePackageFromShipment(
   shipmentId: string,
@@ -130,11 +132,17 @@ export async function removePackageFromShipment(
 
   const supabase = await createClient();
 
-  // Verify shipment exists, is a draft, and belongs to user's org
+  // Verify shipment exists, is a draft, and user has access
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: shipment, error: shipmentError } = await (supabase as any)
     .from("shipments")
-    .select("id, from_organisation_id, status")
+    .select(`
+      id,
+      from_organisation_id,
+      to_organisation_id,
+      status,
+      from_organisation:organisations!shipments_from_party_id_fkey(is_external)
+    `)
     .eq("id", shipmentId)
     .single();
 
@@ -142,7 +150,13 @@ export async function removePackageFromShipment(
     return { success: false, error: "Shipment not found", code: "NOT_FOUND" };
   }
 
-  if (shipment.from_organisation_id !== session.organisationId) {
+  // Check access: owner can always edit, receiver can edit if from external org
+  const isOwner = shipment.from_organisation_id === session.organisationId;
+  const isReceiver = shipment.to_organisation_id === session.organisationId;
+  const isFromExternal = shipment.from_organisation?.is_external ?? false;
+  const canEdit = isOwner || (isReceiver && isFromExternal);
+
+  if (!canEdit) {
     return { success: false, error: "Access denied", code: "FORBIDDEN" };
   }
 

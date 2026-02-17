@@ -1,4 +1,7 @@
 export { getActiveOrganisations } from "./getActiveOrganisations";
+export { getTradingPartnersForShipment } from "./getTradingPartnersForShipment";
+export { getExternalTradingPartners } from "./getExternalTradingPartners";
+export { createIncomingShipmentDraft } from "./createIncomingShipmentDraft";
 export { getShipmentCodePreview } from "./getShipmentCodePreview";
 export { getReferenceDropdowns } from "./getReferenceDropdowns";
 export { createShipment } from "./createShipment";
@@ -17,3 +20,4 @@ export { getShipmentAvailablePackages } from "./getShipmentAvailablePackages";
 export type { ShipmentAvailablePackage } from "./getShipmentAvailablePackages";
 export { getPackagesInShipmentDrafts } from "./getPackagesInShipmentDrafts";
 export type { ShipmentDraftPackageInfo } from "./getPackagesInShipmentDrafts";
+export { saveIncomingShipmentPackages } from "./saveIncomingShipmentPackages";

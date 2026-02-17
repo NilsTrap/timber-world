@@ -70,8 +70,9 @@ export async function createOrganisation(
       code,
       name,
       is_active: true,
+      is_external: false,
     })
-    .select("id, code, name, is_active, created_at, updated_at")
+    .select("id, code, name, is_active, is_external, created_at, updated_at")
     .single();
 
   if (error) {
@@ -89,6 +90,7 @@ export async function createOrganisation(
     code: data.code as string,
     name: data.name as string,
     isActive: data.is_active as boolean,
+    isExternal: data.is_external as boolean,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
   };

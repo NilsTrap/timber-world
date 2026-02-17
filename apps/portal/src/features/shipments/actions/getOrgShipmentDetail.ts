@@ -8,6 +8,7 @@ interface OrgShipmentDetailResult {
   shipment: ShipmentDetail;
   isOwner: boolean;
   isReceiver: boolean;
+  isFromExternal: boolean;
 }
 
 /**
@@ -45,7 +46,7 @@ export async function getOrgShipmentDetail(
       reviewed_by,
       rejection_reason,
       completed_at,
-      from_organisation:organisations!shipments_from_party_id_fkey(code, name),
+      from_organisation:organisations!shipments_from_party_id_fkey(code, name, is_external),
       to_organisation:organisations!shipments_to_party_id_fkey(code, name),
       reviewer:portal_users!shipments_reviewed_by_fkey(name)
     `)
@@ -177,12 +178,15 @@ export async function getOrgShipmentDetail(
     pallets: palletDetails,
   };
 
+  const isFromExternal = shipment.from_organisation?.is_external ?? false;
+
   return {
     success: true,
     data: {
       shipment: result,
       isOwner,
       isReceiver,
+      isFromExternal,
     },
   };
 }

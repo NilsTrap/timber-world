@@ -10,9 +10,8 @@ import {
   TableRow,
   TableCell,
   Badge,
-  Button,
 } from "@timber/ui";
-import { ArrowUpDown, ArrowUp, ArrowDown, ArrowRight, ArrowLeft } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { OrgShipmentListItem } from "../actions";
 
@@ -61,38 +60,15 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function DirectionBadge({ direction }: { direction: "outgoing" | "incoming" }) {
-  if (direction === "outgoing") {
-    return (
-      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-        <ArrowRight className="h-3 w-3 mr-1" />
-        Out
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-      <ArrowLeft className="h-3 w-3 mr-1" />
-      In
-    </Badge>
-  );
-}
-
 export function ProducerShipmentsCompletedTable({ shipments }: ProducerShipmentsCompletedTableProps) {
   const router = useRouter();
-  const [directionFilter, setDirectionFilter] = useState<"all" | "outgoing" | "incoming">("all");
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;
     direction: "asc" | "desc";
   }>({ key: "shipmentDate", direction: "desc" });
 
-  const filteredShipments = useMemo(() => {
-    if (directionFilter === "all") return shipments;
-    return shipments.filter((s) => s.direction === directionFilter);
-  }, [shipments, directionFilter]);
-
   const sortedShipments = useMemo(() => {
-    return [...filteredShipments].sort((a, b) => {
+    return [...shipments].sort((a, b) => {
       const aVal = a[sortConfig.key];
       const bVal = b[sortConfig.key];
       if (aVal == null && bVal == null) return 0;
@@ -101,7 +77,7 @@ export function ProducerShipmentsCompletedTable({ shipments }: ProducerShipments
       const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
       return sortConfig.direction === "asc" ? cmp : -cmp;
     });
-  }, [filteredShipments, sortConfig]);
+  }, [shipments, sortConfig]);
 
   const toggleSort = (key: SortKey) => {
     setSortConfig((prev) => ({
@@ -124,123 +100,83 @@ export function ProducerShipmentsCompletedTable({ shipments }: ProducerShipments
   }
 
   return (
-    <div className="space-y-4">
-      {/* Direction Filter */}
-      <div className="flex gap-2">
-        <Button
-          variant={directionFilter === "all" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setDirectionFilter("all")}
-        >
-          All ({shipments.length})
-        </Button>
-        <Button
-          variant={directionFilter === "outgoing" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setDirectionFilter("outgoing")}
-        >
-          <ArrowRight className="h-3 w-3 mr-1" />
-          Outgoing ({shipments.filter((s) => s.direction === "outgoing").length})
-        </Button>
-        <Button
-          variant={directionFilter === "incoming" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setDirectionFilter("incoming")}
-        >
-          <ArrowLeft className="h-3 w-3 mr-1" />
-          Incoming ({shipments.filter((s) => s.direction === "incoming").length})
-        </Button>
-      </div>
-
-      {/* Shipments Table */}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[80px]">Direction</TableHead>
-              <TableHead
-                className="cursor-pointer select-none"
-                onClick={() => toggleSort("shipmentCode")}
-              >
-                Shipment Code
-                <SortIcon columnKey="shipmentCode" sortConfig={sortConfig} />
-              </TableHead>
-              <TableHead
-                className="cursor-pointer select-none"
-                onClick={() => toggleSort("fromOrganisationCode")}
-              >
-                From
-                <SortIcon columnKey="fromOrganisationCode" sortConfig={sortConfig} />
-              </TableHead>
-              <TableHead
-                className="cursor-pointer select-none"
-                onClick={() => toggleSort("toOrganisationCode")}
-              >
-                To
-                <SortIcon columnKey="toOrganisationCode" sortConfig={sortConfig} />
-              </TableHead>
-              <TableHead
-                className="cursor-pointer select-none"
-                onClick={() => toggleSort("shipmentDate")}
-              >
-                Date
-                <SortIcon columnKey="shipmentDate" sortConfig={sortConfig} />
-              </TableHead>
-              <TableHead
-                className="cursor-pointer select-none text-right"
-                onClick={() => toggleSort("packageCount")}
-              >
-                Packages
-                <SortIcon columnKey="packageCount" sortConfig={sortConfig} />
-              </TableHead>
-              <TableHead
-                className="cursor-pointer select-none text-right"
-                onClick={() => toggleSort("totalVolumeM3")}
-              >
-                Total m³
-                <SortIcon columnKey="totalVolumeM3" sortConfig={sortConfig} />
-              </TableHead>
-              <TableHead>Status</TableHead>
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead
+              className="cursor-pointer select-none"
+              onClick={() => toggleSort("shipmentCode")}
+            >
+              Shipment Code
+              <SortIcon columnKey="shipmentCode" sortConfig={sortConfig} />
+            </TableHead>
+            <TableHead
+              className="cursor-pointer select-none"
+              onClick={() => toggleSort("fromOrganisationCode")}
+            >
+              From
+              <SortIcon columnKey="fromOrganisationCode" sortConfig={sortConfig} />
+            </TableHead>
+            <TableHead
+              className="cursor-pointer select-none"
+              onClick={() => toggleSort("toOrganisationCode")}
+            >
+              To
+              <SortIcon columnKey="toOrganisationCode" sortConfig={sortConfig} />
+            </TableHead>
+            <TableHead
+              className="cursor-pointer select-none"
+              onClick={() => toggleSort("shipmentDate")}
+            >
+              Date
+              <SortIcon columnKey="shipmentDate" sortConfig={sortConfig} />
+            </TableHead>
+            <TableHead
+              className="cursor-pointer select-none text-right"
+              onClick={() => toggleSort("packageCount")}
+            >
+              Packages
+              <SortIcon columnKey="packageCount" sortConfig={sortConfig} />
+            </TableHead>
+            <TableHead
+              className="cursor-pointer select-none text-right"
+              onClick={() => toggleSort("totalVolumeM3")}
+            >
+              Total m³
+              <SortIcon columnKey="totalVolumeM3" sortConfig={sortConfig} />
+            </TableHead>
+            <TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sortedShipments.map((shipment) => (
+            <TableRow
+              key={shipment.id}
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => handleRowClick(shipment)}
+            >
+              <TableCell className="font-mono font-medium">
+                {shipment.shipmentCode}
+              </TableCell>
+              <TableCell>
+                {shipment.fromOrganisationCode} - {shipment.fromOrganisationName}
+              </TableCell>
+              <TableCell>
+                {shipment.toOrganisationCode} - {shipment.toOrganisationName}
+              </TableCell>
+              <TableCell>{formatDate(shipment.shipmentDate)}</TableCell>
+              <TableCell className="text-right">{shipment.packageCount}</TableCell>
+              <TableCell className="text-right">
+                {shipment.totalVolumeM3.toFixed(3).replace(".", ",")}
+              </TableCell>
+              <TableCell>
+                <StatusBadge status={shipment.status} />
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortedShipments.map((shipment) => (
-              <TableRow
-                key={shipment.id}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => handleRowClick(shipment)}
-              >
-                <TableCell>
-                  <DirectionBadge direction={shipment.direction} />
-                </TableCell>
-                <TableCell className="font-mono font-medium">
-                  {shipment.shipmentCode}
-                </TableCell>
-                <TableCell>
-                  {shipment.fromOrganisationCode} - {shipment.fromOrganisationName}
-                </TableCell>
-                <TableCell>
-                  {shipment.toOrganisationCode} - {shipment.toOrganisationName}
-                </TableCell>
-                <TableCell>{formatDate(shipment.shipmentDate)}</TableCell>
-                <TableCell className="text-right">{shipment.packageCount}</TableCell>
-                <TableCell className="text-right">
-                  {shipment.totalVolumeM3.toFixed(3).replace(".", ",")}
-                </TableCell>
-                <TableCell>
-                  <StatusBadge status={shipment.status} />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      {filteredShipments.length === 0 && shipments.length > 0 && (
-        <div className="text-center py-8 text-muted-foreground">
-          No {directionFilter} shipments found
-        </div>
-      )}
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

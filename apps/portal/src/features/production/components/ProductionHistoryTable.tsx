@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { X, Calendar, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -76,6 +76,7 @@ export function ProductionHistoryTable({
   canDelete = false,
 }: ProductionHistoryTableProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [sortState, setSortState] = useState<ColumnSortState | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -239,7 +240,10 @@ export function ProductionHistoryTable({
     setDateFrom("");
     setDateTo("");
     // Clear the process filter from URL to prevent it coming back on refresh
-    router.replace("/production?tab=history");
+    // But preserve the org filter
+    const orgParam = searchParams.get("org");
+    const url = orgParam ? `/production?tab=history&org=${orgParam}` : "/production?tab=history";
+    router.replace(url);
   };
 
   // Filter and sort entries

@@ -60,7 +60,8 @@ export async function getAllOrgShipments(): Promise<ActionResult<OrgShipmentList
     return { success: false, error: `Failed to fetch shipments: ${outgoingError.message}`, code: "QUERY_FAILED" };
   }
 
-  // Fetch incoming shipments (to this org), excluding drafts
+  // Fetch incoming shipments (to this org)
+  // Include drafts - these are incoming shipments from external suppliers that the receiver creates
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: incomingData, error: incomingError } = await (supabase as any)
     .from("shipments")
@@ -70,7 +71,7 @@ export async function getAllOrgShipments(): Promise<ActionResult<OrgShipmentList
       shipment_date,
       transport_cost_eur,
       from_organisation_id,
-      from_organisation:organisations!shipments_from_party_id_fkey(code, name),
+      from_organisation:organisations!shipments_from_party_id_fkey(code, name, is_external),
       to_organisation_id,
       to_organisation:organisations!shipments_to_party_id_fkey(code, name),
       status,
@@ -83,8 +84,7 @@ export async function getAllOrgShipments(): Promise<ActionResult<OrgShipmentList
       inventory_packages(volume_m3)
     `)
     .eq("to_organisation_id", orgId)
-    .neq("status", "draft")
-    .order("submitted_at", { ascending: false, nullsFirst: false });
+    .order("created_at", { ascending: false });
 
   if (incomingError) {
     console.error("Failed to fetch incoming shipments:", incomingError);

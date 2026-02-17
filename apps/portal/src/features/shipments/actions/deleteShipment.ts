@@ -9,15 +9,18 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Delete a shipment and unlink its packages (return them to available inventory).
+ * Delete a shipment and unlink/delete its packages.
  *
  * Multi-tenancy:
  * - Super Admin can delete any shipment
- * - Org users can delete their own draft shipments
+ * - Org users can delete their own draft shipments (as sender)
+ * - Org users can delete incoming draft shipments from external suppliers (as receiver)
  * - Validates that no packages from this shipment are used as production inputs
  *
- * Note: Packages are NOT deleted - they are unlinked (shipment_id set to null)
+ * Note: For outgoing shipments, packages are UNLINKED (shipment_id set to null)
  * so they return to available inventory.
+ * For incoming shipments from external suppliers, packages are DELETED since they
+ * were created specifically for this shipment.
  */
 export async function deleteShipment(
   shipmentId: string
@@ -37,7 +40,13 @@ export async function deleteShipment(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: shipment, error: fetchError } = await (supabase as any)
     .from("shipments")
-    .select("id, status, from_organisation_id")
+    .select(`
+      id,
+      status,
+      from_organisation_id,
+      to_organisation_id,
+      from_organisation:organisations!shipments_from_party_id_fkey(is_external)
+    `)
     .eq("id", shipmentId)
     .single();
 
@@ -47,13 +56,19 @@ export async function deleteShipment(
 
   // Authorization check:
   // - Super Admin can delete any shipment
-  // - Org users can only delete their own draft shipments
+  // - Org users can delete their own draft shipments (as sender)
+  // - Org users can delete incoming draft shipments from external suppliers (as receiver)
   const isAdmin = isSuperAdmin(session);
   const isOwnDraft =
     shipment.status === "draft" &&
     shipment.from_organisation_id === session.organisationId;
+  const isFromExternal = shipment.from_organisation?.is_external ?? false;
+  const isIncomingExternalDraft =
+    shipment.status === "draft" &&
+    shipment.to_organisation_id === session.organisationId &&
+    isFromExternal;
 
-  if (!isAdmin && !isOwnDraft) {
+  if (!isAdmin && !isOwnDraft && !isIncomingExternalDraft) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -83,19 +98,32 @@ export async function deleteShipment(
       };
     }
 
-    // Unlink packages from this shipment (return to available inventory)
-    // Previously this was incorrectly DELETING packages - now it just unlinks them
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: unlinkError } = await (supabase as any)
-      .from("inventory_packages")
-      .update({
-        shipment_id: null,
-        package_sequence: null,
-      })
-      .eq("shipment_id", shipmentId);
+    // For incoming shipments from external suppliers, DELETE packages (they were created for this shipment)
+    // For outgoing shipments, UNLINK packages (return to available inventory)
+    if (isIncomingExternalDraft) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: deletePackagesError } = await (supabase as any)
+        .from("inventory_packages")
+        .delete()
+        .eq("shipment_id", shipmentId);
 
-    if (unlinkError) {
-      return { success: false, error: `Failed to unlink packages: ${unlinkError.message}`, code: "UPDATE_FAILED" };
+      if (deletePackagesError) {
+        return { success: false, error: `Failed to delete packages: ${deletePackagesError.message}`, code: "DELETE_FAILED" };
+      }
+    } else {
+      // Unlink packages from this shipment (return to available inventory)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: unlinkError } = await (supabase as any)
+        .from("inventory_packages")
+        .update({
+          shipment_id: null,
+          package_sequence: null,
+        })
+        .eq("shipment_id", shipmentId);
+
+      if (unlinkError) {
+        return { success: false, error: `Failed to unlink packages: ${unlinkError.message}`, code: "UPDATE_FAILED" };
+      }
     }
   }
 

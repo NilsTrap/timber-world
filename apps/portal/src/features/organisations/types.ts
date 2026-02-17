@@ -12,6 +12,8 @@ export interface Organisation {
   code: string;
   name: string;
   isActive: boolean;
+  /** External organisations don't use the platform - they're suppliers/customers */
+  isExternal: boolean;
   createdAt: string;
   updatedAt: string;
   /** Number of portal users in this organisation */
@@ -77,4 +79,15 @@ const ORG_CODE_REGEX = /^[A-Z][A-Z0-9]{2}$/;
  */
 export function isValidOrgCode(code: string): boolean {
   return ORG_CODE_REGEX.test(code);
+}
+
+/**
+ * Trading Partner - an organisation that appears in shipment dropdowns
+ */
+export interface TradingPartner {
+  id: string;
+  partnerId: string;
+  partnerCode: string;
+  partnerName: string;
+  createdAt: string;
 }

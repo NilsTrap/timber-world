@@ -8,6 +8,8 @@ import type { OrganisationOption } from "../types";
 
 interface ShipmentHeaderProps {
   organisations: OrganisationOption[];
+  /** Optional separate list for "to" dropdown (trading partners). If not provided, uses organisations. */
+  toOrganisations?: OrganisationOption[];
   fromOrganisationId: string;
   toOrganisationId: string;
   shipmentDate: string;
@@ -28,6 +30,7 @@ interface ShipmentHeaderProps {
  */
 export function ShipmentHeader({
   organisations,
+  toOrganisations,
   fromOrganisationId,
   toOrganisationId,
   shipmentDate,
@@ -39,6 +42,8 @@ export function ShipmentHeader({
   lockedFromOrganisation,
 }: ShipmentHeaderProps) {
   const isFromLocked = !!lockedFromOrganisation;
+  // Use toOrganisations if provided, otherwise filter from organisations
+  const toOrgList = toOrganisations ?? organisations.filter((org) => org.id !== fromOrganisationId);
   const [shipmentCode, setShipmentCode] = useState<string>("");
   const [isLoadingCode, setIsLoadingCode] = useState(false);
 
@@ -100,15 +105,16 @@ export function ShipmentHeader({
             value={toOrganisationId}
             onChange={(e) => onToOrganisationChange(e.target.value)}
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            disabled={!fromOrganisationId}
           >
-            <option value="">Select...</option>
-            {organisations
-              .filter((org) => org.id !== fromOrganisationId)
-              .map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.code} - {org.name}
-                </option>
-              ))}
+            <option value="">
+              {!fromOrganisationId ? "Select From first..." : "Select..."}
+            </option>
+            {toOrgList.map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.code} - {org.name}
+              </option>
+            ))}
           </select>
           {fromOrganisationId && toOrganisationId && fromOrganisationId === toOrganisationId && (
             <p className="text-sm text-destructive">From and To must be different</p>

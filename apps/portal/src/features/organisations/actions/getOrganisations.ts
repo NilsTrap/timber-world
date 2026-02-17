@@ -46,7 +46,7 @@ export async function getOrganisations(
   // 3. Fetch organisations
   let query = client
     .from("organisations")
-    .select("id, code, name, is_active, created_at, updated_at");
+    .select("id, code, name, is_active, is_external, created_at, updated_at");
 
   if (!includeInactive) {
     query = query.eq("is_active", true);
@@ -110,6 +110,7 @@ export async function getOrganisations(
       code: row.code as string,
       name: row.name as string,
       isActive: row.is_active as boolean,
+      isExternal: row.is_external as boolean,
       createdAt: row.created_at as string,
       updatedAt: row.updated_at as string,
       userCount: legacyCount + additionalCount,

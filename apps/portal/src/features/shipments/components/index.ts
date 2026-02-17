@@ -23,4 +23,5 @@ export { ProducerShipmentsCompletedTable } from "./ProducerShipmentsCompletedTab
 export { NewShipmentPackageSelector } from "./NewShipmentPackageSelector";
 export { NewShipmentDialog } from "./NewShipmentDialog";
 export { StartShipmentForm } from "./StartShipmentForm";
+export { StartIncomingShipmentForm } from "./StartIncomingShipmentForm";
 export { DeleteShipmentDraftButton } from "./DeleteShipmentDraftButton";

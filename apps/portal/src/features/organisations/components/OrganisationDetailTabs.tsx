@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Tabs,
   TabsList,
@@ -10,12 +11,17 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Checkbox,
+  Label,
 } from "@timber/ui";
-import { Building2, Users, Settings2 } from "lucide-react";
+import { toast } from "sonner";
+import { Building2, Users, Settings2, Handshake } from "lucide-react";
 import type { Organisation } from "../types";
 import { OrganisationUsersTable } from "./OrganisationUsersTable";
 import { OrganisationFeaturesTab } from "./OrganisationFeaturesTab";
 import { OrganisationTypesSection } from "./OrganisationTypesSection";
+import { TradingPartnersTab } from "./TradingPartnersTab";
+import { toggleOrganisationExternal } from "../actions";
 
 interface OrganisationDetailTabsProps {
   organisation: Organisation;
@@ -33,9 +39,25 @@ export function OrganisationDetailTabs({
   organisation,
   defaultTab,
 }: OrganisationDetailTabsProps) {
+  const [isExternal, setIsExternal] = useState(organisation.isExternal);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleExternalToggle = async (checked: boolean) => {
+    setIsUpdating(true);
+    const result = await toggleOrganisationExternal(organisation.id, checked);
+    if (result.success) {
+      setIsExternal(result.data.isExternal);
+      toast.success(checked ? "Marked as external organisation" : "Marked as internal organisation");
+    } else {
+      toast.error(result.error);
+    }
+    setIsUpdating(false);
+  };
+
   const getDefaultTab = () => {
     if (defaultTab === "users") return "users";
     if (defaultTab === "features") return "features";
+    if (defaultTab === "partners") return "partners";
     return "details";
   };
 
@@ -54,6 +76,10 @@ export function OrganisationDetailTabs({
           <Settings2 className="h-4 w-4 mr-2" />
           Features
         </TabsTrigger>
+        <TabsTrigger value="partners">
+          <Handshake className="h-4 w-4 mr-2" />
+          Trading Partners
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="details">
@@ -62,7 +88,7 @@ export function OrganisationDetailTabs({
             <CardTitle>Organisation Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="text-sm font-medium text-muted-foreground">
                   Code
@@ -82,6 +108,33 @@ export function OrganisationDetailTabs({
                     {organisation.isActive ? "Active" : "Inactive"}
                   </Badge>
                 </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Type
+                </label>
+                <div className="mt-1 flex items-center gap-2">
+                  <Badge variant={isExternal ? "warning" : "default"}>
+                    {isExternal ? "External" : "Internal"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 rounded-lg border p-4">
+              <Checkbox
+                id="external-toggle"
+                checked={isExternal}
+                onCheckedChange={handleExternalToggle}
+                disabled={isUpdating}
+              />
+              <div className="space-y-0.5">
+                <Label htmlFor="external-toggle" className="text-base cursor-pointer">
+                  External Organisation
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  External organisations are suppliers or customers that don&apos;t use the platform.
+                  They can only be sources for incoming shipments.
+                </p>
               </div>
             </div>
             <div>
@@ -145,6 +198,17 @@ export function OrganisationDetailTabs({
           </CardHeader>
           <CardContent>
             <OrganisationFeaturesTab organisationId={organisation.id} />
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="partners">
+        <Card>
+          <CardHeader>
+            <CardTitle>Trading Partners</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TradingPartnersTab organisationId={organisation.id} />
           </CardContent>
         </Card>
       </TabsContent>

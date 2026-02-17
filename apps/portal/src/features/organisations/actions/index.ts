@@ -3,6 +3,7 @@ export { getOrganisationById } from "./getOrganisationById";
 export { createOrganisation } from "./createOrganisation";
 export { updateOrganisation } from "./updateOrganisation";
 export { toggleOrganisation } from "./toggleOrganisation";
+export { toggleOrganisationExternal } from "./toggleOrganisationExternal";
 export { deleteOrganisation } from "./deleteOrganisation";
 export { getOrgShipmentCount } from "./getOrgShipmentCount";
 
@@ -43,3 +44,9 @@ export {
   updateOrganisationTypes,
 } from "./getOrganisationTypes";
 export type { OrganizationType } from "./getOrganisationTypes";
+
+// Trading partners
+export { getTradingPartners } from "./getTradingPartners";
+export { addTradingPartner } from "./addTradingPartner";
+export { removeTradingPartner } from "./removeTradingPartner";
+export { getAvailablePartners } from "./getAvailablePartners";

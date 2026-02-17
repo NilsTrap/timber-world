@@ -15,6 +15,7 @@ import { SubmitShipmentDialog } from "@/features/shipments/components/SubmitShip
 import { AcceptRejectButtons } from "@/features/shipments/components/AcceptRejectButtons";
 import { DeleteShipmentDraftButton } from "@/features/shipments/components/DeleteShipmentDraftButton";
 import { ShipmentPalletTable } from "@/features/shipments/components/ShipmentPalletTable";
+import { IncomingShipmentPackageEditor } from "@/features/shipments/components/IncomingShipmentPackageEditor";
 
 const statusColors: Record<ShipmentStatus, string> = {
   draft: "bg-yellow-100 text-yellow-800",
@@ -58,6 +59,7 @@ export default function ShipmentDetailPage() {
   const [canceling, setCanceling] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [isReceiver, setIsReceiver] = useState(false);
+  const [isFromExternal, setIsFromExternal] = useState(false);
 
   const fetchShipment = useCallback(async () => {
     const result = await getOrgShipmentDetail(shipmentId);
@@ -65,6 +67,7 @@ export default function ShipmentDetailPage() {
       setShipment(result.data.shipment);
       setIsOwner(result.data.isOwner);
       setIsReceiver(result.data.isReceiver);
+      setIsFromExternal(result.data.isFromExternal);
     } else {
       toast.error(result.error);
       router.push("/shipments");
@@ -118,8 +121,10 @@ export default function ShipmentDetailPage() {
 
   const isDraft = shipment.status === "draft";
   const isPending = shipment.status === "pending";
-  const canEdit = isDraft && isOwner;
-  const canSubmit = isDraft && isOwner && shipment.packages.length > 0;
+  // For incoming shipments from external orgs, the receiver can edit the draft
+  const isIncomingFromExternal = isFromExternal && isReceiver;
+  const canEdit = isDraft && (isOwner || isIncomingFromExternal);
+  const canSubmit = isDraft && (isOwner || isIncomingFromExternal) && shipment.packages.length > 0;
   const canReview = isPending && isReceiver;
   const canCancel = isPending && isOwner;
 
@@ -140,7 +145,7 @@ export default function ShipmentDetailPage() {
           {shipment.shipmentCode}
         </h1>
         <div className="flex items-center gap-3">
-          {isDraft && isOwner && (
+          {isDraft && (isOwner || isIncomingFromExternal) && (
             <DeleteShipmentDraftButton
               shipmentId={shipment.id}
               shipmentCode={shipment.shipmentCode}
@@ -224,45 +229,61 @@ export default function ShipmentDetailPage() {
 
       {/* Packages Section */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">Packages</h2>
-            {shipment.packages.length > 0 && (
-              <p className="text-sm text-muted-foreground">
-                Total: {formatVolume(totalVolume)} m³
-              </p>
-            )}
-          </div>
-          {canEdit && (
-            <Button variant="outline" size="sm" onClick={() => setShowPackageSelector(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Add Packages
-            </Button>
-          )}
-        </div>
+        <h2 className="text-lg font-semibold">Packages</h2>
 
-        {shipment.packages.length === 0 ? (
-          <div
-            className={`rounded-lg border bg-card p-6 text-center ${canEdit ? "cursor-pointer hover:border-primary/50 hover:bg-accent/50 transition-colors" : ""}`}
-            onClick={canEdit ? () => setShowPackageSelector(true) : undefined}
-          >
-            <p className="text-sm text-muted-foreground">
-              {canEdit ? "No packages added yet. Click here to select packages from inventory." : "No packages in this shipment."}
-            </p>
-          </div>
-        ) : (
-          <ShipmentPalletTable
+        {/* For incoming external shipments: show editable package table */}
+        {isIncomingFromExternal && isDraft ? (
+          <IncomingShipmentPackageEditor
             shipmentId={shipment.id}
+            shipmentCode={shipment.shipmentCode}
             packages={shipment.packages}
-            pallets={shipment.pallets}
-            canEdit={canEdit}
             onRefresh={fetchShipment}
           />
+        ) : (
+          <>
+            {/* Header with package count and add button */}
+            <div className="flex items-center justify-between">
+              <div>
+                {shipment.packages.length > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Total: {formatVolume(totalVolume)} m³
+                  </p>
+                )}
+              </div>
+              {canEdit && !isIncomingFromExternal && (
+                <Button variant="outline" size="sm" onClick={() => setShowPackageSelector(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Packages
+                </Button>
+              )}
+            </div>
+
+            {shipment.packages.length === 0 ? (
+              <div
+                className={`rounded-lg border bg-card p-6 text-center ${canEdit && !isIncomingFromExternal ? "cursor-pointer hover:border-primary/50 hover:bg-accent/50 transition-colors" : ""}`}
+                onClick={canEdit && !isIncomingFromExternal ? () => setShowPackageSelector(true) : undefined}
+              >
+                <p className="text-sm text-muted-foreground">
+                  {canEdit && !isIncomingFromExternal
+                    ? "No packages added yet. Click here to select packages from inventory."
+                    : "No packages in this shipment."}
+                </p>
+              </div>
+            ) : (
+              <ShipmentPalletTable
+                shipmentId={shipment.id}
+                packages={shipment.packages}
+                pallets={shipment.pallets}
+                canEdit={canEdit && !isIncomingFromExternal}
+                onRefresh={fetchShipment}
+              />
+            )}
+          </>
         )}
       </div>
 
-      {/* Package Selector Dialog */}
-      {showPackageSelector && (
+      {/* Package Selector Dialog (for outgoing shipments) */}
+      {showPackageSelector && !isIncomingFromExternal && (
         <ShipmentPackageSelector
           shipmentId={shipment.id}
           existingPackageIds={shipment.packages.map((p) => p.id)}
