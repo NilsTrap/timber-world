@@ -1,6 +1,6 @@
 # Story 8.3: Submit Shipment for Acceptance
 
-Status: ready
+Status: done
 
 ## Story
 
@@ -127,3 +127,8 @@ export async function submitShipmentForAcceptance(
 ### Change Log
 
 - 2026-01-25: Story 8.3 created and ready for development
+- 2026-02-18: Extended for incoming shipments from external suppliers
+  - Receivers can submit incoming shipments "On The Way" (not just senders)
+  - Authorization: isOwner OR (isReceiver AND isFromExternal) can submit
+  - Cancel submission also available for receivers of incoming external shipments
+  - Delete button added to shipment drafts list and detail view

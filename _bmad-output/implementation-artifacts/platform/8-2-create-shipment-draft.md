@@ -1,6 +1,6 @@
 # Story 8.2: Create Shipment Draft
 
-Status: ready
+Status: done
 
 ## Story
 
@@ -139,3 +139,8 @@ The package selector should:
 ### Change Log
 
 - 2026-01-25: Story 8.2 created and ready for development
+- 2026-02-18: Extended for incoming shipments from external suppliers
+  - Receivers can create incoming shipment drafts from external organizations
+  - IncomingShipmentPackageEditor for creating packages from scratch
+  - StartIncomingShipmentForm for initiating incoming shipments
+  - Trading partners system for managing supplier relationships
