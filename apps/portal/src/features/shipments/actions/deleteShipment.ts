@@ -9,12 +9,15 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Delete a shipment and all its related packages.
+ * Delete a shipment and unlink its packages (return them to available inventory).
  *
  * Multi-tenancy:
  * - Super Admin can delete any shipment
  * - Org users can delete their own draft shipments
  * - Validates that no packages from this shipment are used as production inputs
+ *
+ * Note: Packages are NOT deleted - they are unlinked (shipment_id set to null)
+ * so they return to available inventory.
  */
 export async function deleteShipment(
   shipmentId: string
@@ -80,15 +83,19 @@ export async function deleteShipment(
       };
     }
 
-    // Delete all packages from this shipment
+    // Unlink packages from this shipment (return to available inventory)
+    // Previously this was incorrectly DELETING packages - now it just unlinks them
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: packagesDeleteError } = await (supabase as any)
+    const { error: unlinkError } = await (supabase as any)
       .from("inventory_packages")
-      .delete()
+      .update({
+        shipment_id: null,
+        package_sequence: null,
+      })
       .eq("shipment_id", shipmentId);
 
-    if (packagesDeleteError) {
-      return { success: false, error: `Failed to delete packages: ${packagesDeleteError.message}`, code: "DELETE_FAILED" };
+    if (unlinkError) {
+      return { success: false, error: `Failed to unlink packages: ${unlinkError.message}`, code: "UPDATE_FAILED" };
     }
   }
 
