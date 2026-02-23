@@ -10,12 +10,16 @@ import {
   Boxes,
   Settings,
   User,
+  Users,
   Building2,
   Truck,
   Shield,
   Eye,
   FileText,
   BarChart3,
+  PoundSterling,
+  Contact,
+  ShoppingCart,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,12 +35,16 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Boxes,
   Settings,
   User,
+  Users,
   Building2,
   Truck,
   Shield,
   Eye,
   FileText,
   BarChart3,
+  PoundSterling,
+  Contact,
+  ShoppingCart,
 };
 
 export type IconName = keyof typeof ICON_MAP;

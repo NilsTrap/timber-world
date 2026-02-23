@@ -21,4 +21,6 @@ export {
 } from "./permissions";
 export type { PermissionContext, AuthContext } from "./permissions";
 
+export { getOrgEnabledFeatures, orgHasFeature } from "./getOrgFeatures";
+
 export { usePermissions } from "./usePermissions";

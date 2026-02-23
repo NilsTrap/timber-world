@@ -2,6 +2,7 @@ import {
   getSession,
   isSuperAdmin,
   hasMultipleOrganizations,
+  getOrgEnabledFeatures,
   type UserRole,
 } from "@/lib/auth";
 import { Sidebar, type NavItem } from "./Sidebar";
@@ -11,39 +12,59 @@ import type { OrganizationOption } from "./OrganizationSelector";
 import type { OrganizationSwitcherOption } from "./OrganizationSwitcher";
 
 /**
- * Navigation items for Admin users
+ * Extended NavItem with optional feature requirement
  */
-const ADMIN_NAV_ITEMS: NavItem[] = [
+interface FeatureNavItem extends NavItem {
+  /** Feature code required to show this nav item (null = always show) */
+  requiresFeature?: string | null;
+}
+
+/**
+ * Navigation items for Admin users
+ * Admin users see all items - feature filtering is for org-level access
+ */
+const ADMIN_NAV_ITEMS: FeatureNavItem[] = [
   { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
   { href: "/admin/inventory", label: "Inventory", iconName: "Package" },
   { href: "/admin/shipments", label: "Shipments", iconName: "Truck" },
+  { href: "/orders", label: "Orders", iconName: "ShoppingCart" },
   { href: "/production", label: "Production", iconName: "Factory" },
   { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText" },
   { href: "/admin/crm", label: "CRM", iconName: "Users" },
   { href: "/admin/analytics", label: "Website Analytics", iconName: "BarChart3" },
+  { href: "/admin/uk-staircase-pricing", label: "UK Staircase Pricing", iconName: "PoundSterling" },
   { href: "/admin/reference", label: "Reference Data", iconName: "Settings" },
-  { href: "/admin/organisations", label: "Organisations", iconName: "Building2" },
+  { href: "/admin/organisations", label: "Contacts", iconName: "Contact" },
   { href: "/admin/roles", label: "Roles", iconName: "Shield" },
 ];
 
 /**
  * Navigation items for Producer users (Organization Users)
- * @param pendingShipmentCount - Number of pending incoming shipments for badge
+ * Feature requirements determine which items are visible per organization
  */
-function getProducerNavItems(pendingShipmentCount: number = 0): NavItem[] {
+function getProducerNavItems(pendingShipmentCount: number = 0): FeatureNavItem[] {
   return [
-    { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
-    { href: "/inventory", label: "Inventory", iconName: "Package" },
-    { href: "/shipments", label: "Shipments", iconName: "Truck", badge: pendingShipmentCount },
-    { href: "/production", label: "Production", iconName: "Factory" },
+    { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard", requiresFeature: "dashboard.view" },
+    { href: "/inventory", label: "Inventory", iconName: "Package", requiresFeature: "inventory.view" },
+    { href: "/shipments", label: "Shipments", iconName: "Truck", badge: pendingShipmentCount, requiresFeature: "shipments.view" },
+    { href: "/orders", label: "Orders", iconName: "ShoppingCart", requiresFeature: "orders.view" },
+    { href: "/production", label: "Production", iconName: "Factory", requiresFeature: "production.view" },
   ];
 }
 
 /**
- * Get navigation items based on user role
+ * Filter nav items based on enabled features
  */
-function getNavItems(role: UserRole, pendingShipmentCount: number = 0): NavItem[] {
-  return role === "admin" ? ADMIN_NAV_ITEMS : getProducerNavItems(pendingShipmentCount);
+function filterNavItemsByFeatures(
+  items: FeatureNavItem[],
+  enabledFeatures: Set<string>
+): NavItem[] {
+  return items.filter((item) => {
+    // No feature requirement = always show
+    if (!item.requiresFeature) return true;
+    // Check if feature is enabled
+    return enabledFeatures.has(item.requiresFeature);
+  });
 }
 
 /**
@@ -52,6 +73,7 @@ function getNavItems(role: UserRole, pendingShipmentCount: number = 0): NavItem[
  * Fetches session and passes role-appropriate nav items to the client Sidebar.
  * For Super Admin, also fetches organizations for the org selector.
  * For multi-org users, provides organization switcher data.
+ * Filters producer nav items based on organization feature configuration.
  */
 export async function SidebarWrapper() {
   const session = await getSession();
@@ -70,7 +92,19 @@ export async function SidebarWrapper() {
     }
   }
 
-  const navItems = getNavItems(session?.role || "producer", pendingShipmentCount);
+  // Get nav items based on role
+  let navItems: NavItem[];
+
+  if (session?.role === "admin") {
+    // Admin users see all items
+    navItems = ADMIN_NAV_ITEMS;
+  } else {
+    // Producer users - filter by organization features
+    const producerItems = getProducerNavItems(pendingShipmentCount);
+    const orgId = session?.currentOrganizationId || session?.organisationId || null;
+    const enabledFeatures = await getOrgEnabledFeatures(orgId);
+    navItems = filterNavItemsByFeatures(producerItems, enabledFeatures);
+  }
 
   // Fetch organizations for Super Admin org selector
   let organizations: OrganizationOption[] | undefined;
