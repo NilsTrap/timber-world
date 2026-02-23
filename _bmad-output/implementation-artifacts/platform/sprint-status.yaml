@@ -689,3 +689,43 @@ ad_hoc_changes:
       - "apps/portal/src/features/quotes/components/QuoteRequestsTable.tsx"
     files_modified:
       - "apps/portal/src/components/layout/SidebarWrapper.tsx"
+
+  - date: 2026-02-23
+    description: "Orders management with feature flag integration"
+    changes:
+      - "Orders table with auto-generated codes (ORD-001, ORD-002, etc.)"
+      - "Order-shipment link table for future shipment associations"
+      - "CRUD operations: create, update, delete (draft only), status changes"
+      - "Status workflow: draft → pending → confirmed → in_progress → shipped → completed"
+      - "OrdersTable component with sorting, status badges, inline status changes"
+      - "OrderForm dialog for creating/editing orders"
+      - "Feature flag integration: sidebar filters nav items by organization features"
+      - "Producer access control: orders.view feature check on page and getOrders action"
+      - "Admins can manage all orders; producers see only their org's orders"
+      - "Organization feature management in Contacts → [Org] → Features tab"
+    files_created:
+      - "supabase/migrations/20260221000001_orders.sql"
+      - "apps/portal/src/app/(portal)/orders/page.tsx"
+      - "apps/portal/src/features/orders/types.ts"
+      - "apps/portal/src/features/orders/schemas/order.ts"
+      - "apps/portal/src/features/orders/schemas/index.ts"
+      - "apps/portal/src/features/orders/index.ts"
+      - "apps/portal/src/features/orders/actions/getOrders.ts"
+      - "apps/portal/src/features/orders/actions/createOrder.ts"
+      - "apps/portal/src/features/orders/actions/updateOrder.ts"
+      - "apps/portal/src/features/orders/actions/updateOrderStatus.ts"
+      - "apps/portal/src/features/orders/actions/deleteOrder.ts"
+      - "apps/portal/src/features/orders/actions/index.ts"
+      - "apps/portal/src/features/orders/components/OrdersTable.tsx"
+      - "apps/portal/src/features/orders/components/OrderForm.tsx"
+      - "apps/portal/src/features/orders/components/index.ts"
+      - "apps/portal/src/lib/auth/getOrgFeatures.ts"
+    files_modified:
+      - "apps/portal/src/components/layout/SidebarWrapper.tsx"
+      - "apps/portal/src/components/layout/SidebarLink.tsx"
+      - "apps/portal/src/lib/auth/index.ts"
+    database_changes:
+      - "New table: orders (id, code, name, organisation_id, order_date, volume_m3, value_cents, currency, status, notes, created_by, created_at, updated_at)"
+      - "New table: order_shipments (order_id, shipment_id, created_at)"
+      - "New enum: order_status (draft, pending, confirmed, in_progress, shipped, completed)"
+      - "New sequence: order_number_seq for auto-generated order codes"
