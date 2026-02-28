@@ -11,13 +11,16 @@ import {
 } from "@timber/ui";
 import { PageHeader, SummaryGrid, SummaryCard, SectionHeader } from "@timber/ui";
 import { ExternalLink, Save, Loader2 } from "lucide-react";
-import type { CrmCompany, CrmContact, CompanyStatus } from "../types";
+import type { CrmCompany, CrmContact, CrmKeyword, CompanyStatus } from "../types";
 import { updateCompany, updateCompanyStatus } from "../actions";
 import { ContactsTable } from "./ContactsTable";
 import { AddContactModal } from "./AddContactModal";
+import { CompanyKeywords } from "./CompanyKeywords";
 
 interface CompanyDetailProps {
   company: CrmCompany & { contacts: CrmContact[] };
+  companyKeywords: CrmKeyword[];
+  allKeywords: CrmKeyword[];
 }
 
 const STATUS_COLORS: Record<CompanyStatus, "default" | "success" | "warning" | "secondary"> = {
@@ -29,7 +32,7 @@ const STATUS_COLORS: Record<CompanyStatus, "default" | "success" | "warning" | "
   archived: "default",
 };
 
-export function CompanyDetail({ company }: CompanyDetailProps) {
+export function CompanyDetail({ company, companyKeywords, allKeywords }: CompanyDetailProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<CompanyStatus>(company.status);
@@ -137,6 +140,13 @@ export function CompanyDetail({ company }: CompanyDetailProps) {
           value={company.contacts.length.toString()}
         />
       </SummaryGrid>
+
+      {/* Keywords */}
+      <CompanyKeywords
+        companyId={company.id}
+        assignedKeywords={companyKeywords}
+        allKeywords={allKeywords}
+      />
 
       {/* Company Details Form */}
       <div className="rounded-lg border bg-card p-6">

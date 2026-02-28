@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   Table,
@@ -10,24 +10,24 @@ import {
   TableHeader,
   TableRow,
   Button,
-  Badge,
+  ColumnHeaderMenu,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  type ColumnSortState,
 } from "@timber/ui";
-import { ExternalLink, Trash2, Users } from "lucide-react";
-import type { CrmCompany, CompanyStatus } from "../types";
+import { ExternalLink, Trash2, Users, X } from "lucide-react";
+import type { CrmCompany, CrmKeyword, CompanyStatus } from "../types";
+import type { CompanyWithKeywords } from "../actions/getCompanies";
 import { updateCompanyStatus, deleteCompany } from "../actions";
 
 interface CompaniesTableProps {
-  companies: CrmCompany[];
+  companies: CompanyWithKeywords[];
+  searchQuery?: string;
 }
 
-const STATUS_COLORS: Record<CompanyStatus, "default" | "success" | "warning" | "secondary"> = {
-  new: "warning",
-  researching: "secondary",
-  contacted: "secondary",
-  customer: "success",
-  rejected: "default",
-  archived: "default",
-};
+type ColumnKey = "name" | "website" | "location" | "industry" | "founded_year" | "registration_number" | "employees" | "turnover_eur" | "contacts_count" | "keywords" | "status";
 
 function formatCurrency(value: number | null | undefined): string {
   if (!value) return "—";
@@ -45,8 +45,175 @@ function formatNumber(value: number | null | undefined): string {
   return value.toLocaleString();
 }
 
-export function CompaniesTable({ companies }: CompaniesTableProps) {
+function getColumnValue(company: CompanyWithKeywords, key: ColumnKey): string {
+  switch (key) {
+    case "name":
+      return company.name || "";
+    case "website":
+      return company.website?.replace(/^https?:\/\//, "").replace(/\/$/, "") || "";
+    case "location":
+      return [company.city, company.country].filter(Boolean).join(", ");
+    case "industry":
+      return company.industry || company.industry_codes?.join(", ") || "";
+    case "founded_year":
+      return company.founded_year?.toString() || "";
+    case "registration_number":
+      return company.registration_number || "";
+    case "employees":
+      return company.employees?.toString() || "";
+    case "turnover_eur":
+      return company.turnover_eur?.toString() || "";
+    case "contacts_count":
+      return (company.contacts_count || 0).toString();
+    case "keywords":
+      return company.keywords?.map((k) => k.name).join(", ") || "";
+    case "status":
+      return company.status || "";
+    default:
+      return "";
+  }
+}
+
+export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTableProps) {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [activeSort, setActiveSort] = useState<ColumnSortState | null>({ column: "name", direction: "asc" });
+  const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
+
+  // Get unique values for each column
+  const uniqueValues = useMemo(() => {
+    const values: Record<ColumnKey, string[]> = {
+      name: [],
+      website: [],
+      location: [],
+      industry: [],
+      founded_year: [],
+      registration_number: [],
+      employees: [],
+      turnover_eur: [],
+      contacts_count: [],
+      keywords: [],
+      status: [],
+    };
+
+    const sets: Record<ColumnKey, Set<string>> = {
+      name: new Set(),
+      website: new Set(),
+      location: new Set(),
+      industry: new Set(),
+      founded_year: new Set(),
+      registration_number: new Set(),
+      employees: new Set(),
+      turnover_eur: new Set(),
+      contacts_count: new Set(),
+      keywords: new Set(),
+      status: new Set(),
+    };
+
+    // For keywords, we want individual keyword names for filtering
+    companies.forEach((company) => {
+      company.keywords?.forEach((k) => {
+        if (k.name) sets.keywords.add(k.name);
+      });
+    });
+
+    companies.forEach((company) => {
+      (Object.keys(values) as ColumnKey[]).forEach((key) => {
+        const val = getColumnValue(company, key);
+        if (val) sets[key].add(val);
+      });
+    });
+
+    (Object.keys(values) as ColumnKey[]).forEach((key) => {
+      values[key] = Array.from(sets[key]);
+    });
+
+    return values;
+  }, [companies]);
+
+  // Filter and sort companies
+  const filteredCompanies = useMemo(() => {
+    let result = [...companies];
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((company) => {
+        const searchableText = [
+          company.name,
+          company.website,
+          company.city,
+          company.country,
+          company.industry,
+          company.registration_number,
+          company.status,
+          company.founded_year?.toString(),
+          company.employees?.toString(),
+          ...(company.keywords?.map((k) => k.name) || []),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return searchableText.includes(query);
+      });
+    }
+
+    // Apply column filters
+    (Object.keys(columnFilters) as ColumnKey[]).forEach((key) => {
+      const filterSet = columnFilters[key];
+      if (filterSet && filterSet.size > 0) {
+        if (key === "keywords") {
+          // Special handling for keywords - match if any keyword is in filter
+          result = result.filter((company) => {
+            return company.keywords?.some((k) => filterSet.has(k.name)) || false;
+          });
+        } else {
+          result = result.filter((company) => {
+            const val = getColumnValue(company, key);
+            return filterSet.has(val);
+          });
+        }
+      }
+    });
+
+    // Apply sorting
+    if (activeSort) {
+      const { column, direction } = activeSort;
+      result.sort((a, b) => {
+        const aVal = getColumnValue(a, column as ColumnKey);
+        const bVal = getColumnValue(b, column as ColumnKey);
+
+        // Try numeric comparison for numeric columns
+        const numericColumns = ["founded_year", "employees", "turnover_eur", "contacts_count"];
+        if (numericColumns.includes(column)) {
+          const aNum = parseFloat(aVal) || 0;
+          const bNum = parseFloat(bVal) || 0;
+          return direction === "asc" ? aNum - bNum : bNum - aNum;
+        }
+
+        // String comparison
+        const cmp = aVal.localeCompare(bVal);
+        return direction === "asc" ? cmp : -cmp;
+      });
+    }
+
+    return result;
+  }, [companies, searchQuery, activeSort, columnFilters]);
+
+  const handleFilterChange = useCallback((columnKey: string, values: Set<string>) => {
+    setColumnFilters((prev) => ({
+      ...prev,
+      [columnKey]: values,
+    }));
+  }, []);
+
+  const hasActiveFilters = useMemo(() => {
+    return Object.values(columnFilters).some((set) => set.size > 0) || activeSort !== null;
+  }, [columnFilters, activeSort]);
+
+  const clearAllFilters = useCallback(() => {
+    setColumnFilters({});
+    setActiveSort(null);
+  }, []);
 
   const handleStatusChange = async (id: string, status: CompanyStatus) => {
     await updateCompanyStatus(id, status);
@@ -73,100 +240,288 @@ export function CompaniesTable({ companies }: CompaniesTableProps) {
   }
 
   return (
-    <div className="rounded-lg border bg-card overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Company</TableHead>
-            <TableHead>Location</TableHead>
-            <TableHead>Industry</TableHead>
-            <TableHead>Founded</TableHead>
-            <TableHead>Employees</TableHead>
-            <TableHead>Turnover</TableHead>
-            <TableHead>Contacts</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="w-[50px]"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {companies.map((company) => (
-            <TableRow key={company.id}>
-              <TableCell>
-                <div className="min-w-[200px]">
-                  <Link
-                    href={`/admin/crm/${company.id}`}
-                    className="font-medium hover:underline"
-                  >
-                    {company.name}
-                  </Link>
-                  <div className="flex items-center gap-2 mt-1">
-                    {company.website && (
+    <div className="space-y-2">
+      {/* Filter status bar */}
+      {hasActiveFilters && (
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={clearAllFilters} className="gap-1">
+            <X className="h-4 w-4" />
+            Clear filters
+          </Button>
+          <div className="text-sm text-muted-foreground">
+            {filteredCompanies.length} of {companies.length} companies
+          </div>
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="rounded-lg border bg-card overflow-auto max-h-[calc(100vh-220px)] [&_[data-slot=table-container]]:overflow-visible">
+        <Table>
+          <TableHeader className="sticky top-0 bg-card z-10">
+            <TableRow>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  Company
+                  <ColumnHeaderMenu
+                    columnKey="name"
+                    uniqueValues={uniqueValues.name}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.name || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  Website
+                  <ColumnHeaderMenu
+                    columnKey="website"
+                    uniqueValues={uniqueValues.website}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.website || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  Location
+                  <ColumnHeaderMenu
+                    columnKey="location"
+                    uniqueValues={uniqueValues.location}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.location || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  Industry
+                  <ColumnHeaderMenu
+                    columnKey="industry"
+                    uniqueValues={uniqueValues.industry}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.industry || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  Founded
+                  <ColumnHeaderMenu
+                    columnKey="founded_year"
+                    isNumeric
+                    uniqueValues={uniqueValues.founded_year}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.founded_year || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  <span className="whitespace-nowrap">Reg. No.</span>
+                  <ColumnHeaderMenu
+                    columnKey="registration_number"
+                    uniqueValues={uniqueValues.registration_number}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.registration_number || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  Employees
+                  <ColumnHeaderMenu
+                    columnKey="employees"
+                    isNumeric
+                    uniqueValues={uniqueValues.employees}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.employees || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  Turnover
+                  <ColumnHeaderMenu
+                    columnKey="turnover_eur"
+                    isNumeric
+                    uniqueValues={uniqueValues.turnover_eur}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.turnover_eur || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  Contacts
+                  <ColumnHeaderMenu
+                    columnKey="contacts_count"
+                    isNumeric
+                    uniqueValues={uniqueValues.contacts_count}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.contacts_count || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  Keywords
+                  <ColumnHeaderMenu
+                    columnKey="keywords"
+                    uniqueValues={uniqueValues.keywords}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.keywords || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  Status
+                  <ColumnHeaderMenu
+                    columnKey="status"
+                    uniqueValues={uniqueValues.status}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.status || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="w-[50px] bg-card"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredCompanies.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                  No companies match your search criteria
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredCompanies.map((company) => (
+                <TableRow key={company.id}>
+                  <TableCell>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="max-w-[150px] overflow-hidden">
+                            <Link
+                              href={`/admin/crm/${company.id}`}
+                              className="font-medium hover:underline whitespace-nowrap"
+                            >
+                              {company.name}
+                            </Link>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{company.name}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableCell>
+                  <TableCell>
+                    {company.website ? (
                       <a
                         href={company.website.startsWith("http") ? company.website : `https://${company.website}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
                       >
                         <ExternalLink className="h-3 w-3" />
-                        Website
+                        <span className="max-w-[150px] truncate">
+                          {company.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                        </span>
                       </a>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
                     )}
-                    {company.registration_number && (
-                      <span className="text-xs text-muted-foreground">
-                        Reg: {company.registration_number}
-                      </span>
+                  </TableCell>
+                  <TableCell>
+                    <span>{company.city || "—"}</span>
+                    {company.country && (
+                      <span className="text-muted-foreground">, {company.country}</span>
                     )}
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell>
-                <span>{company.city || "—"}</span>
-                {company.country && (
-                  <span className="text-muted-foreground">, {company.country}</span>
-                )}
-              </TableCell>
-              <TableCell className="max-w-[200px]">
-                <span className="line-clamp-2 text-sm">
-                  {company.industry || company.industry_codes?.join(", ") || "—"}
-                </span>
-              </TableCell>
-              <TableCell>{company.founded_year || "—"}</TableCell>
-              <TableCell>{formatNumber(company.employees)}</TableCell>
-              <TableCell>{formatCurrency(company.turnover_eur)}</TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1">
-                  <Users className="h-3 w-3 text-muted-foreground" />
-                  <span>{company.contacts_count || 0}</span>
-                </div>
-              </TableCell>
-              <TableCell>
-                <select
-                  value={company.status}
-                  onChange={(e) => handleStatusChange(company.id, e.target.value as CompanyStatus)}
-                  className="text-xs border rounded px-2 py-1 bg-background"
-                >
-                  <option value="new">New</option>
-                  <option value="researching">Researching</option>
-                  <option value="contacted">Contacted</option>
-                  <option value="customer">Customer</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </TableCell>
-              <TableCell>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDelete(company.id)}
-                  disabled={isDeleting === company.id}
-                >
-                  <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+                  </TableCell>
+                  <TableCell className="max-w-[200px]">
+                    <span className="line-clamp-2 text-sm">
+                      {company.industry || company.industry_codes?.join(", ") || "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell>{company.founded_year || "—"}</TableCell>
+                  <TableCell>{company.registration_number || "—"}</TableCell>
+                  <TableCell>{formatNumber(company.employees)}</TableCell>
+                  <TableCell>{formatCurrency(company.turnover_eur)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Users className="h-3 w-3 text-muted-foreground" />
+                      <span>{company.contacts_count || 0}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1 max-w-[150px]">
+                      {company.keywords?.length > 0 ? (
+                        company.keywords.map((keyword) => (
+                          <span
+                            key={keyword.id}
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-muted"
+                          >
+                            {keyword.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <select
+                      value={company.status}
+                      onChange={(e) => handleStatusChange(company.id, e.target.value as CompanyStatus)}
+                      className="text-xs border rounded px-2 py-1 bg-background"
+                    >
+                      <option value="new">New</option>
+                      <option value="researching">Researching</option>
+                      <option value="contacted">Contacted</option>
+                      <option value="customer">Customer</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(company.id)}
+                      disabled={isDeleting === company.id}
+                    >
+                      <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

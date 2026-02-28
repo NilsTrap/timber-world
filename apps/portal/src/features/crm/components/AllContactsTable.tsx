@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Table,
@@ -22,6 +22,7 @@ type ContactWithCompany = CrmContact & {
 
 interface AllContactsTableProps {
   contacts: ContactWithCompany[];
+  searchQuery?: string;
 }
 
 const CONSENT_COLORS: Record<ConsentStatus, "default" | "success" | "warning" | "secondary"> = {
@@ -30,8 +31,30 @@ const CONSENT_COLORS: Record<ConsentStatus, "default" | "success" | "warning" | 
   unsubscribed: "default",
 };
 
-export function AllContactsTable({ contacts }: AllContactsTableProps) {
+export function AllContactsTable({ contacts, searchQuery = "" }: AllContactsTableProps) {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+  // Filter contacts based on search query
+  const filteredContacts = useMemo(() => {
+    if (!searchQuery.trim()) return contacts;
+
+    const query = searchQuery.toLowerCase();
+    return contacts.filter((contact) => {
+      const searchableText = [
+        contact.first_name,
+        contact.last_name,
+        contact.email,
+        contact.phone,
+        contact.position,
+        contact.company?.name,
+        contact.consent_status,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchableText.includes(query);
+    });
+  }, [contacts, searchQuery]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this contact?")) {
@@ -54,20 +77,26 @@ export function AllContactsTable({ contacts }: AllContactsTableProps) {
   }
 
   return (
-    <div className="rounded-lg border bg-card">
+    <div className="rounded-lg border bg-card overflow-auto max-h-[calc(100vh-220px)] [&_[data-slot=table-container]]:overflow-visible">
       <Table>
-        <TableHeader>
+        <TableHeader className="sticky top-0 bg-card z-10">
           <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Company</TableHead>
-            <TableHead>Position</TableHead>
-            <TableHead>Contact</TableHead>
-            <TableHead>GDPR Status</TableHead>
-            <TableHead className="w-[50px]"></TableHead>
+            <TableHead className="bg-card">Name</TableHead>
+            <TableHead className="bg-card">Company</TableHead>
+            <TableHead className="bg-card">Position</TableHead>
+            <TableHead className="bg-card">Contact</TableHead>
+            <TableHead className="bg-card">GDPR Status</TableHead>
+            <TableHead className="w-[50px] bg-card"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {contacts.map((contact) => (
+          {filteredContacts.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                No contacts match your search criteria
+              </TableCell>
+            </TableRow>
+          ) : filteredContacts.map((contact) => (
             <TableRow
               key={contact.id}
               className={contact.do_not_contact ? "opacity-50" : ""}

@@ -1,4 +1,4 @@
-export { getCompanies, getCompanyById } from "./getCompanies";
+export { getCompanies, getCompanyById, type CompanyWithKeywords } from "./getCompanies";
 export { getAllContacts } from "./getContacts";
 export {
   createCompany,
@@ -14,3 +14,11 @@ export {
 export { searchCompaniesHouse, importDiscoveredCompanies } from "./discoverCompanies";
 export { searchWeb } from "./searchWeb";
 export { enrichCompanies } from "./enrichCompanies";
+export {
+  getKeywords,
+  createKeyword,
+  deleteKeyword,
+  getCompanyKeywords,
+  addKeywordToCompany,
+  removeKeywordFromCompany,
+} from "./keywords";

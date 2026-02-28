@@ -59,6 +59,15 @@ export interface CrmContact {
 export type ConsentStatus = 'pending' | 'subscribed' | 'unsubscribed';
 
 /**
+ * CRM Keywords
+ */
+export interface CrmKeyword {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+/**
  * Companies House API Types
  */
 export interface CompaniesHouseSearchResult {

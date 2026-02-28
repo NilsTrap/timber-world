@@ -1,14 +1,18 @@
 "use server";
 
 import { createCrmClient } from "../lib/supabase";
-import type { CrmCompany, CrmContact } from "../types";
+import type { CrmCompany, CrmContact, CrmKeyword } from "../types";
+
+export type CompanyWithKeywords = CrmCompany & {
+  keywords: CrmKeyword[];
+};
 
 type GetCompaniesResult =
-  | { success: true; data: CrmCompany[] }
+  | { success: true; data: CompanyWithKeywords[] }
   | { success: false; error: string };
 
 /**
- * Get all CRM companies with contact counts
+ * Get all CRM companies with contact counts and keywords
  */
 export async function getCompanies(): Promise<GetCompaniesResult> {
   const supabase = await createCrmClient();
@@ -17,7 +21,10 @@ export async function getCompanies(): Promise<GetCompaniesResult> {
     .from("crm_companies")
     .select(`
       *,
-      contacts_count:crm_contacts(count)
+      contacts_count:crm_contacts(count),
+      crm_company_keywords(
+        crm_keywords(id, name, created_at)
+      )
     `)
     .order("created_at", { ascending: false });
 
@@ -26,11 +33,19 @@ export async function getCompanies(): Promise<GetCompaniesResult> {
     return { success: false, error: error.message };
   }
 
-  // Transform the count from array to number
-  const companies = (data || []).map((company: Record<string, unknown>) => ({
-    ...company,
-    contacts_count: (company.contacts_count as { count: number }[])?.[0]?.count || 0,
-  })) as CrmCompany[];
+  // Transform the data
+  const companies = (data || []).map((company: Record<string, unknown>) => {
+    // Extract keywords from the nested structure
+    const companyKeywords = company.crm_company_keywords as Array<{ crm_keywords: CrmKeyword }> | null;
+    const keywords = companyKeywords?.map((ck) => ck.crm_keywords).filter(Boolean) || [];
+
+    return {
+      ...company,
+      contacts_count: (company.contacts_count as { count: number }[])?.[0]?.count || 0,
+      keywords,
+      crm_company_keywords: undefined, // Remove the raw join data
+    };
+  }) as CompanyWithKeywords[];
 
   return { success: true, data: companies };
 }

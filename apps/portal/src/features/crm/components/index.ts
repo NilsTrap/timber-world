@@ -4,3 +4,6 @@ export { DiscoverTab } from "./DiscoverTab";
 export { CompanyDetail } from "./CompanyDetail";
 export { ContactsTable } from "./ContactsTable";
 export { AddContactModal } from "./AddContactModal";
+export { CrmPageContent } from "./CrmPageContent";
+export { KeywordsTab } from "./KeywordsTab";
+export { CompanyKeywords } from "./CompanyKeywords";

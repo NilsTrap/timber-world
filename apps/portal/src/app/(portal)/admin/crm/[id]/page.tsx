@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 import { getSession, isAdmin } from "@/lib/auth";
-import { getCompanyById, CompanyDetail } from "@/features/crm";
+import {
+  getCompanyById,
+  getKeywords,
+  getCompanyKeywords,
+  CompanyDetail,
+} from "@/features/crm";
 
 interface CompanyPageProps {
   params: Promise<{ id: string }>;
@@ -37,11 +42,24 @@ export default async function CompanyPage({ params }: CompanyPageProps) {
   }
 
   const { id } = await params;
-  const result = await getCompanyById(id);
+  const [companyResult, keywordsResult, companyKeywordsResult] = await Promise.all([
+    getCompanyById(id),
+    getKeywords(),
+    getCompanyKeywords(id),
+  ]);
 
-  if (!result.success) {
+  if (!companyResult.success) {
     notFound();
   }
 
-  return <CompanyDetail company={result.data} />;
+  const allKeywords = keywordsResult.success ? keywordsResult.data ?? [] : [];
+  const companyKeywords = companyKeywordsResult.success ? companyKeywordsResult.data ?? [] : [];
+
+  return (
+    <CompanyDetail
+      company={companyResult.data}
+      companyKeywords={companyKeywords}
+      allKeywords={allKeywords}
+    />
+  );
 }
