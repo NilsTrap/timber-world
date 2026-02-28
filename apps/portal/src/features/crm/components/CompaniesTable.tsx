@@ -27,7 +27,7 @@ interface CompaniesTableProps {
   searchQuery?: string;
 }
 
-type ColumnKey = "name" | "website" | "location" | "industry" | "founded_year" | "registration_number" | "account_type" | "employees" | "turnover_eur" | "contacts_count" | "keywords" | "status";
+type ColumnKey = "name" | "website" | "phone" | "email" | "location" | "industry" | "founded_year" | "registration_number" | "account_type" | "employees" | "turnover_eur" | "contacts_count" | "keywords" | "status";
 
 function formatCurrency(value: number | null | undefined): string {
   if (!value) return "—";
@@ -51,6 +51,10 @@ function getColumnValue(company: CompanyWithKeywords, key: ColumnKey): string {
       return company.name || "";
     case "website":
       return company.website?.replace(/^https?:\/\//, "").replace(/\/$/, "") || "";
+    case "phone":
+      return company.phone || "";
+    case "email":
+      return company.email || "";
     case "location":
       return [company.city, company.country].filter(Boolean).join(", ");
     case "industry":
@@ -86,6 +90,8 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
     const values: Record<ColumnKey, string[]> = {
       name: [],
       website: [],
+      phone: [],
+      email: [],
       location: [],
       industry: [],
       founded_year: [],
@@ -101,6 +107,8 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
     const sets: Record<ColumnKey, Set<string>> = {
       name: new Set(),
       website: new Set(),
+      phone: new Set(),
+      email: new Set(),
       location: new Set(),
       industry: new Set(),
       founded_year: new Set(),
@@ -291,6 +299,32 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
               </TableHead>
               <TableHead className="bg-card">
                 <div className="flex items-center gap-1">
+                  Phone
+                  <ColumnHeaderMenu
+                    columnKey="phone"
+                    uniqueValues={uniqueValues.phone}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.phone || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  Email
+                  <ColumnHeaderMenu
+                    columnKey="email"
+                    uniqueValues={uniqueValues.email}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.email || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
                   Location
                   <ColumnHeaderMenu
                     columnKey="location"
@@ -429,7 +463,7 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
           <TableBody>
             {filteredCompanies.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={15} className="text-center py-8 text-muted-foreground">
                   No companies match your search criteria
                 </TableCell>
               </TableRow>
@@ -473,15 +507,45 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
                     )}
                   </TableCell>
                   <TableCell>
+                    <span className="text-sm whitespace-nowrap">
+                      {company.phone || "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    {company.email ? (
+                      <a
+                        href={`mailto:${company.email}`}
+                        className="text-sm text-muted-foreground hover:text-foreground whitespace-nowrap"
+                      >
+                        {company.email}
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <span>{company.city || "—"}</span>
                     {company.country && (
                       <span className="text-muted-foreground">, {company.country}</span>
                     )}
                   </TableCell>
-                  <TableCell className="max-w-[200px]">
-                    <span className="line-clamp-2 text-sm">
-                      {company.industry || company.industry_codes?.join(", ") || "—"}
-                    </span>
+                  <TableCell>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="max-w-[150px] overflow-hidden">
+                            <span className="text-sm whitespace-nowrap">
+                              {company.industry || company.industry_codes?.join(", ") || "—"}
+                            </span>
+                          </div>
+                        </TooltipTrigger>
+                        {(company.industry || company.industry_codes?.length) && (
+                          <TooltipContent>
+                            <p className="max-w-[300px]">{company.industry || company.industry_codes?.join(", ")}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell>{company.founded_year || "—"}</TableCell>
                   <TableCell>{company.registration_number || "—"}</TableCell>
@@ -499,20 +563,33 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1 max-w-[150px]">
-                      {company.keywords?.length > 0 ? (
-                        company.keywords.map((keyword) => (
-                          <span
-                            key={keyword.id}
-                            className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-muted"
-                          >
-                            {keyword.name}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </div>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="max-w-[120px] overflow-hidden">
+                            <div className="flex gap-1 whitespace-nowrap">
+                              {company.keywords?.length > 0 ? (
+                                company.keywords.map((keyword) => (
+                                  <span
+                                    key={keyword.id}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-muted"
+                                  >
+                                    {keyword.name}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        {company.keywords?.length > 0 && (
+                          <TooltipContent>
+                            <p>{company.keywords.map((k) => k.name).join(", ")}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell>
                     <select
