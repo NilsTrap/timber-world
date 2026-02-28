@@ -22,6 +22,7 @@ export interface CrmCompany {
   source_url: string | null;
   notes: string | null;
   status: CompanyStatus;
+  account_type: string | null;
   created_at: string;
   updated_at: string;
   // Joined data

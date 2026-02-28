@@ -27,7 +27,7 @@ interface CompaniesTableProps {
   searchQuery?: string;
 }
 
-type ColumnKey = "name" | "website" | "location" | "industry" | "founded_year" | "registration_number" | "employees" | "turnover_eur" | "contacts_count" | "keywords" | "status";
+type ColumnKey = "name" | "website" | "location" | "industry" | "founded_year" | "registration_number" | "account_type" | "employees" | "turnover_eur" | "contacts_count" | "keywords" | "status";
 
 function formatCurrency(value: number | null | undefined): string {
   if (!value) return "—";
@@ -59,6 +59,8 @@ function getColumnValue(company: CompanyWithKeywords, key: ColumnKey): string {
       return company.founded_year?.toString() || "";
     case "registration_number":
       return company.registration_number || "";
+    case "account_type":
+      return company.account_type || "";
     case "employees":
       return company.employees?.toString() || "";
     case "turnover_eur":
@@ -88,6 +90,7 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
       industry: [],
       founded_year: [],
       registration_number: [],
+      account_type: [],
       employees: [],
       turnover_eur: [],
       contacts_count: [],
@@ -102,6 +105,7 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
       industry: new Set(),
       founded_year: new Set(),
       registration_number: new Set(),
+      account_type: new Set(),
       employees: new Set(),
       turnover_eur: new Set(),
       contacts_count: new Set(),
@@ -340,6 +344,19 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
               </TableHead>
               <TableHead className="bg-card">
                 <div className="flex items-center gap-1">
+                  <span className="whitespace-nowrap">Account Type</span>
+                  <ColumnHeaderMenu
+                    columnKey="account_type"
+                    uniqueValues={uniqueValues.account_type}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.account_type || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
                   Employees
                   <ColumnHeaderMenu
                     columnKey="employees"
@@ -412,7 +429,7 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
           <TableBody>
             {filteredCompanies.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
                   No companies match your search criteria
                 </TableCell>
               </TableRow>
@@ -468,6 +485,11 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
                   </TableCell>
                   <TableCell>{company.founded_year || "—"}</TableCell>
                   <TableCell>{company.registration_number || "—"}</TableCell>
+                  <TableCell>
+                    <span className="text-xs whitespace-nowrap">
+                      {company.account_type || "—"}
+                    </span>
+                  </TableCell>
                   <TableCell>{formatNumber(company.employees)}</TableCell>
                   <TableCell>{formatCurrency(company.turnover_eur)}</TableCell>
                   <TableCell>
