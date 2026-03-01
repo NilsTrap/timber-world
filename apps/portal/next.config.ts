@@ -11,6 +11,16 @@ const nextConfig: NextConfig = {
     "@timber/config",
     "@timber/utils",
   ],
+  // Allow images from Supabase storage
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "psmramegggsciirwldjz.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

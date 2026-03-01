@@ -38,6 +38,17 @@ export {
 } from "./components/alert-dialog";
 export { Label } from "./components/label";
 export { Checkbox } from "./components/checkbox";
+export { Switch } from "./components/switch";
+export {
+  Select,
+  SelectGroup,
+  SelectValue,
+  SelectTrigger,
+  SelectContent,
+  SelectLabel,
+  SelectItem,
+  SelectSeparator,
+} from "./components/select";
 export { Toaster } from "./components/sonner";
 export { ErrorBoundary } from "./components/error-boundary";
 export {

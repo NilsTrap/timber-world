@@ -220,6 +220,11 @@
     "accept": "Accept",
     "reject": "Reject"
   },
+  "products": {
+    "title": "Our Products",
+    "description": "Explore our range of premium oak panels and wood solutions, crafted with expertise from sustainable European forests.",
+    "noProducts": "Products coming soon. Check back later."
+  },
   "privacy": {
     "title": "Privacy Policy",
     "intro": "At Timber International, we respect your privacy. This policy explains what information we collect when you visit our website and how we use it.",

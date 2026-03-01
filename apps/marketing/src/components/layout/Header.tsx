@@ -114,6 +114,18 @@ export function Header({ variant: propVariant }: HeaderProps) {
             <LanguageSwitcher variant={variant} />
             <Button
               asChild
+              variant="ghost"
+              className={cn(
+                "font-medium",
+                variant === "transparent"
+                  ? "text-white hover:bg-white/20"
+                  : "text-charcoal hover:bg-charcoal/10"
+              )}
+            >
+              <Link href="/products">{t("products")}</Link>
+            </Button>
+            <Button
+              asChild
               className={cn(
                 "font-medium border-0",
                 variant === "transparent"
@@ -121,7 +133,7 @@ export function Header({ variant: propVariant }: HeaderProps) {
                   : "bg-forest-green text-white hover:bg-forest-green/90"
               )}
             >
-              <Link href="/products">{t("viewProducts")}</Link>
+              <Link href="/stock">{t("inStock")}</Link>
             </Button>
             <Button
               asChild
