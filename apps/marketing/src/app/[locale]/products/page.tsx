@@ -69,7 +69,7 @@ export default async function ProductsPage({ params }: Props) {
                   className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
                 >
                   {/* Product Image */}
-                  <div className="aspect-square relative bg-gray-100">
+                  <div className="aspect-video relative bg-gray-100">
                     {product.imageUrl ? (
                       <Image
                         src={product.imageUrl}
