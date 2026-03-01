@@ -1,6 +1,5 @@
 export { MarketingCmsManager } from "./MarketingCmsManager";
-export { PhotosVideosTab } from "./PhotosVideosTab";
-export { TextsTab } from "./TextsTab";
+export { ContentTab } from "./ContentTab";
 export { MetaTab } from "./MetaTab";
 export { JourneyMediaGrid } from "./JourneyMediaGrid";
 export { MediaCard } from "./MediaCard";

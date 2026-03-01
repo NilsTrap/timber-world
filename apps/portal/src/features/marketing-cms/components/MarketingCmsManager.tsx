@@ -2,8 +2,7 @@
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@timber/ui";
-import { PhotosVideosTab } from "./PhotosVideosTab";
-import { TextsTab } from "./TextsTab";
+import { ContentTab } from "./ContentTab";
 import { MetaTab } from "./MetaTab";
 import { ReferenceDataManager } from "@/features/reference-data";
 import { AnalyticsDashboard } from "@/features/analytics";
@@ -13,14 +12,14 @@ interface MarketingCmsManagerProps {
   canDelete?: boolean;
 }
 
-const VALID_TABS = ["media", "texts", "meta", "reference", "analytics"] as const;
+const VALID_TABS = ["content", "meta", "reference", "analytics"] as const;
 type TabValue = (typeof VALID_TABS)[number];
 
 /**
  * MarketingCmsManager
  *
  * Main component for the Marketing CMS page.
- * Five tabs: Photos/Videos, Texts, Meta, Reference Data, and Analytics.
+ * Four tabs: Content (media + texts), Meta, Reference Data, and Analytics.
  * Tab state is synced with URL query param for deep linking.
  */
 export function MarketingCmsManager({ canDelete = false }: MarketingCmsManagerProps) {
@@ -28,16 +27,16 @@ export function MarketingCmsManager({ canDelete = false }: MarketingCmsManagerPr
   const router = useRouter();
   const pathname = usePathname();
 
-  // Get tab from URL or default to "media"
+  // Get tab from URL or default to "content"
   const tabParam = searchParams.get("tab");
   const currentTab: TabValue = VALID_TABS.includes(tabParam as TabValue)
     ? (tabParam as TabValue)
-    : "media";
+    : "content";
 
   // Update URL when tab changes
   const handleTabChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (value === "media") {
+    if (value === "content") {
       params.delete("tab");
     } else {
       params.set("tab", value);
@@ -49,19 +48,14 @@ export function MarketingCmsManager({ canDelete = false }: MarketingCmsManagerPr
   return (
     <Tabs value={currentTab} onValueChange={handleTabChange}>
       <TabsList>
-        <TabsTrigger value="media">Photos/Videos</TabsTrigger>
-        <TabsTrigger value="texts">Texts</TabsTrigger>
+        <TabsTrigger value="content">Content</TabsTrigger>
         <TabsTrigger value="meta">Meta</TabsTrigger>
         <TabsTrigger value="reference">Reference Data</TabsTrigger>
         <TabsTrigger value="analytics">Analytics</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="media" className="mt-4">
-        <PhotosVideosTab />
-      </TabsContent>
-
-      <TabsContent value="texts" className="mt-4">
-        <TextsTab />
+      <TabsContent value="content" className="mt-4">
+        <ContentTab />
       </TabsContent>
 
       <TabsContent value="meta" className="mt-4">

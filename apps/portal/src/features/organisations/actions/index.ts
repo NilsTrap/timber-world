@@ -50,3 +50,7 @@ export { getTradingPartners } from "./getTradingPartners";
 export { addTradingPartner } from "./addTradingPartner";
 export { removeTradingPartner } from "./removeTradingPartner";
 export { getAvailablePartners } from "./getAvailablePartners";
+
+// People (all users across organisations)
+export { getAllPeople } from "./getAllPeople";
+export type { Person } from "./getAllPeople";

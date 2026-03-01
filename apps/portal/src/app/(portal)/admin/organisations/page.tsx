@@ -2,17 +2,19 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getSession, isAdmin } from "@/lib/auth";
 import { OrganisationsTable } from "@/features/organisations";
+import { PeopleTable } from "@/features/organisations/components/PeopleTable";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@timber/ui";
 
 export const metadata: Metadata = {
-  title: "Organisations",
+  title: "Contacts",
 };
 
 /**
- * Organisations Management Page (Admin Only)
+ * Contacts Management Page (Admin Only)
  *
- * Allows admins to manage organisations.
+ * Allows admins to manage organisations and people.
  */
-export default async function OrganisationsPage() {
+export default async function ContactsPage() {
   const session = await getSession();
 
   if (!session) {
@@ -26,13 +28,26 @@ export default async function OrganisationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Organisations</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Contacts</h1>
         <p className="text-muted-foreground">
-          Manage organisations
+          Manage organisations and people
         </p>
       </div>
 
-      <OrganisationsTable />
+      <Tabs defaultValue="organisations">
+        <TabsList>
+          <TabsTrigger value="organisations">Organisations</TabsTrigger>
+          <TabsTrigger value="people">People</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="organisations" className="mt-4">
+          <OrganisationsTable />
+        </TabsContent>
+
+        <TabsContent value="people" className="mt-4">
+          <PeopleTable />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
