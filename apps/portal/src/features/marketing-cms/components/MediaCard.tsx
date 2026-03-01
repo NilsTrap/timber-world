@@ -30,7 +30,7 @@ export function MediaCard({ media, onReplace }: MediaCardProps) {
   return (
     <Card className="overflow-hidden group relative">
       {/* Preview area */}
-      <div className="aspect-[4/3] bg-muted relative flex items-center justify-center">
+      <div className="aspect-video bg-muted relative flex items-center justify-center">
         {hasFile ? (
           isVideo ? (
             <video
