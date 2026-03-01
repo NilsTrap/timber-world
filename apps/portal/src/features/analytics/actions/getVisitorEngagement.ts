@@ -5,6 +5,8 @@ import type { DateRange } from "../types";
 
 export interface VisitorEngagement {
   totalSessions: number;
+  productsPageViewers: number;
+  productsPageViewerPercent: number;
   stockPageViewers: number;
   stockPageViewerPercent: number;
   journeyStarters: number;
@@ -67,6 +69,8 @@ export async function getVisitorEngagement(
         success: true,
         data: {
           totalSessions: 0,
+          productsPageViewers: 0,
+          productsPageViewerPercent: 0,
           stockPageViewers: 0,
           stockPageViewerPercent: 0,
           journeyStarters: 0,
@@ -79,13 +83,36 @@ export async function getVisitorEngagement(
       };
     }
 
-    // Get sessions that viewed stock pages (/products)
+    // Get sessions that viewed products page (/products - product gallery)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let productsQuery = (supabase as any)
+      .from("analytics_events")
+      .select("session_id")
+      .eq("event_name", "page_view")
+      .like("page_path", "%/products%");
+
+    if (dateFilter) {
+      productsQuery = productsQuery.gte("created_at", dateFilter.toISOString());
+    }
+
+    const { data: productsData, error: productsError } = await productsQuery;
+
+    if (productsError) {
+      console.error("Failed to fetch products viewers:", productsError);
+      return { success: false, error: productsError.message };
+    }
+
+    const productsViewerSessions = new Set(
+      (productsData || []).map((e: { session_id: string }) => e.session_id)
+    );
+
+    // Get sessions that viewed stock pages (/stock - inventory catalog)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let stockQuery = (supabase as any)
       .from("analytics_events")
       .select("session_id")
       .eq("event_name", "page_view")
-      .like("page_path", "%/products%");
+      .like("page_path", "%/stock%");
 
     if (dateFilter) {
       stockQuery = stockQuery.gte("created_at", dateFilter.toISOString());
@@ -168,6 +195,7 @@ export async function getVisitorEngagement(
       (quoteData || []).map((e: { session_id: string }) => e.session_id)
     );
 
+    const productsPageViewers = productsViewerSessions.size;
     const stockPageViewers = stockViewerSessions.size;
     const journeyStarters = journeyStarterSessions.size;
     const filterUsers = filterUserSessions.size;
@@ -177,6 +205,8 @@ export async function getVisitorEngagement(
       success: true,
       data: {
         totalSessions: total,
+        productsPageViewers,
+        productsPageViewerPercent: Math.round((productsPageViewers / total) * 100),
         stockPageViewers,
         stockPageViewerPercent: Math.round((stockPageViewers / total) * 100),
         journeyStarters,

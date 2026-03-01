@@ -17,7 +17,13 @@ interface EngagementMetric {
 export function VisitorEngagementCard({ data }: VisitorEngagementCardProps) {
   const metrics: EngagementMetric[] = [
     {
-      label: "Viewed Stock Pages",
+      label: "Viewed Products Page",
+      count: data.productsPageViewers,
+      percent: data.productsPageViewerPercent,
+      color: "bg-emerald-500",
+    },
+    {
+      label: "Viewed Stock Page",
       count: data.stockPageViewers,
       percent: data.stockPageViewerPercent,
       color: "bg-blue-500",
