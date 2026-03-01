@@ -74,12 +74,11 @@ export async function getCMSProducts(): Promise<CMSProduct[]> {
     if (!media.file_name) continue;
 
     const key = media.slot_key;
-    const storagePath = media.storage_path;
 
-    // Get public URL for the image
+    // Get public URL for the image (storage_path already includes filename)
     const { data: urlData } = supabase.storage
       .from("marketing")
-      .getPublicUrl(storagePath + media.file_name);
+      .getPublicUrl(media.storage_path);
 
     products.push({
       key,
