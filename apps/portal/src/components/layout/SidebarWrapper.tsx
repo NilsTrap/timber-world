@@ -32,6 +32,7 @@ const ADMIN_NAV_ITEMS: FeatureNavItem[] = [
   { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText" },
   { href: "/admin/crm", label: "CRM", iconName: "Users" },
   { href: "/admin/uk-staircase-pricing", label: "UK Staircase Pricing", iconName: "PoundSterling" },
+  { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp" },
   { href: "/admin/marketing", label: "CMS", iconName: "Image" },
   { href: "/admin/reference", label: "Reference Data", iconName: "Settings" },
   { href: "/admin/organisations", label: "Contacts", iconName: "Contact" },

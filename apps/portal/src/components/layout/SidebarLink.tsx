@@ -21,6 +21,7 @@ import {
   Contact,
   ShoppingCart,
   Image,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Contact,
   ShoppingCart,
   Image,
+  TrendingUp,
 };
 
 export type IconName = keyof typeof ICON_MAP;
