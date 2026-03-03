@@ -18,7 +18,9 @@ type SortKey =
   | "width_mm"
   | "length_mm"
   | "quality"
-  | "price_per_piece"
+  | "price_per_m2"
+  | "ti_price_per_m2"
+  | "price_diff_percent"
   | "stock_total";
 type SortDirection = "asc" | "desc";
 
@@ -98,7 +100,9 @@ export function PriceTable({ data }: PriceTableProps) {
             <SortableHeader column="width_mm" label="Width" />
             <SortableHeader column="length_mm" label="Length" />
             <SortableHeader column="quality" label="Quality" />
-            <SortableHeader column="price_per_piece" label="Price/pc" />
+            <SortableHeader column="price_per_m2" label="Mass.ee €/m²" />
+            <SortableHeader column="ti_price_per_m2" label="TI €/m²" />
+            <SortableHeader column="price_diff_percent" label="Diff %" />
             <SortableHeader column="stock_total" label="Stock" />
             <TableHead className="w-10"></TableHead>
           </TableRow>
@@ -112,7 +116,26 @@ export function PriceTable({ data }: PriceTableProps) {
               <TableCell>{item.width_mm}mm</TableCell>
               <TableCell>{item.length_mm}mm</TableCell>
               <TableCell>{item.quality || "-"}</TableCell>
-              <TableCell>{formatPrice(item.price_per_piece)}</TableCell>
+              <TableCell>{formatPrice(item.price_per_m2)}</TableCell>
+              <TableCell>{formatPrice(item.ti_price_per_m2)}</TableCell>
+              <TableCell>
+                {item.price_diff_percent !== null ? (
+                  <span
+                    className={
+                      item.price_diff_percent > 0
+                        ? "text-red-600"
+                        : item.price_diff_percent < 0
+                          ? "text-green-600"
+                          : ""
+                    }
+                  >
+                    {item.price_diff_percent > 0 ? "+" : ""}
+                    {item.price_diff_percent.toFixed(1)}%
+                  </span>
+                ) : (
+                  "-"
+                )}
+              </TableCell>
               <TableCell>
                 <div className="flex flex-col">
                   <span className="font-medium">{item.stock_total}</span>

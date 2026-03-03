@@ -7,7 +7,7 @@
  */
 
 import "dotenv/config";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import * as fs from "fs";
 
 // Types matching the scraper output
@@ -39,10 +39,24 @@ interface CompetitorPriceInsert {
   quality: string | null;
   price_per_piece: number | null;
   price_per_m2: number | null;
+  ti_price_per_piece: number | null;
+  ti_price_per_m2: number | null;
+  price_diff_percent: number | null;
   stock_total: number;
   stock_locations: Record<string, number>;
   product_url: string;
   scraped_at: string;
+}
+
+// TI inventory package from database
+interface InventoryPackage {
+  thickness: string;
+  width: string;
+  length: string;
+  unit_price_piece: number | null;
+  unit_price_m2: number | null;
+  wood_species: { value: string } | null;
+  type: { value: string } | null;
 }
 
 function parseArgs(): { inputFile: string; dryRun: boolean } {
@@ -66,7 +80,113 @@ function parseArgs(): { inputFile: string; dryRun: boolean } {
   return { inputFile, dryRun };
 }
 
-function transformProduct(product: PanelProduct): CompetitorPriceInsert {
+// Determine panel type from URL or name
+function getPanelType(product: PanelProduct): string {
+  if (
+    product.url.includes("sormjatk") ||
+    product.name.toLowerCase().includes("sõrmjätk")
+  ) {
+    return "FJ";
+  }
+  if (
+    product.url.includes("pikk-lamell") ||
+    product.name.toLowerCase().includes("pikk lamell")
+  ) {
+    return "FS";
+  }
+  return "";
+}
+
+// Normalize species name for matching
+function normalizeSpecies(species: string): string {
+  return species.toLowerCase().replace(/european\s*/i, "").trim();
+}
+
+// Create product key for matching
+function makeKey(
+  species: string,
+  panelType: string,
+  thickness: number,
+  width: number,
+  length: number
+): string {
+  return `${normalizeSpecies(species)}-${panelType}-${thickness}x${width}x${length}`;
+}
+
+// Fetch TI prices from inventory_packages
+async function fetchTIPrices(
+  supabase: SupabaseClient
+): Promise<Map<string, { pricePerPiece: number; pricePerM2: number }>> {
+  const { data: packages, error } = await supabase
+    .from("inventory_packages")
+    .select(
+      `
+      thickness,
+      width,
+      length,
+      unit_price_piece,
+      unit_price_m2,
+      wood_species:ref_wood_species(value),
+      type:ref_types(value)
+    `
+    )
+    .not("unit_price_m2", "is", null);
+
+  if (error) {
+    console.error("Error fetching TI prices:", error.message);
+    return new Map();
+  }
+
+  const tiPrices = new Map<
+    string,
+    { pricePerPiece: number; pricePerM2: number }
+  >();
+
+  for (const pkg of packages || []) {
+    const p = pkg as unknown as InventoryPackage;
+    if (!p.wood_species?.value || !p.type?.value) continue;
+
+    const thickness = parseInt(p.thickness?.split("-")[0] || "0", 10);
+    const width = parseInt(p.width?.split("-")[0] || "0", 10);
+    const length = parseInt(p.length?.split("-")[0] || "0", 10);
+
+    if (!thickness || !width || !length) continue;
+
+    const panelType = p.type.value.toLowerCase().includes("fj")
+      ? "FJ"
+      : p.type.value.toLowerCase().includes("full") ||
+          p.type.value.toLowerCase().includes("stave")
+        ? "FS"
+        : "";
+
+    if (!panelType) continue;
+
+    const key = makeKey(p.wood_species.value, panelType, thickness, width, length);
+    const pricePerPiece = p.unit_price_piece ? p.unit_price_piece / 100 : 0;
+    const pricePerM2 = p.unit_price_m2 ? p.unit_price_m2 / 100 : 0;
+
+    if (pricePerM2 > 0) {
+      tiPrices.set(key, { pricePerPiece, pricePerM2 });
+    }
+  }
+
+  return tiPrices;
+}
+
+function transformProduct(
+  product: PanelProduct,
+  tiPrices: Map<string, { pricePerPiece: number; pricePerM2: number }>
+): CompetitorPriceInsert {
+  const panelType = getPanelType(product);
+  const key = makeKey(product.species, panelType, product.thickness, product.width, product.length);
+  const tiPrice = tiPrices.get(key);
+
+  let priceDiffPercent: number | null = null;
+  if (tiPrice && tiPrice.pricePerM2 > 0 && product.pricePerM2 > 0) {
+    priceDiffPercent =
+      Math.round(((product.pricePerM2 - tiPrice.pricePerM2) / tiPrice.pricePerM2) * 1000) / 10;
+  }
+
   return {
     source: "mass.ee",
     product_name: product.name,
@@ -77,6 +197,9 @@ function transformProduct(product: PanelProduct): CompetitorPriceInsert {
     quality: product.quality || null,
     price_per_piece: product.pricePerPiece || null,
     price_per_m2: product.pricePerM2 || null,
+    ti_price_per_piece: tiPrice?.pricePerPiece || null,
+    ti_price_per_m2: tiPrice?.pricePerM2 || null,
+    price_diff_percent: priceDiffPercent,
     stock_total: product.totalStock,
     stock_locations: {
       tallinn: product.stockTallinn,
@@ -128,21 +251,6 @@ async function main() {
 
   console.log(`Found ${products.length} products to push`);
 
-  // Transform to database format
-  const records = products.map(transformProduct);
-
-  if (dryRun) {
-    console.log("\n--- DRY RUN: Preview of records to insert ---\n");
-    for (const record of records) {
-      console.log(`  [${record.species}] ${record.thickness_mm}x${record.width_mm}x${record.length_mm}mm ${record.quality || "N/A"}`);
-      console.log(`    Price: EUR ${record.price_per_piece}/pc, EUR ${record.price_per_m2}/m2`);
-      console.log(`    Stock: ${record.stock_total} (TLN: ${record.stock_locations.tallinn}, TRT: ${record.stock_locations.tartu})`);
-      console.log("");
-    }
-    console.log("--- Dry run complete. No data was inserted. ---");
-    return;
-  }
-
   // Connect to Supabase
   console.log("\nConnecting to Supabase...");
   const supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -151,6 +259,36 @@ async function main() {
       persistSession: false,
     },
   });
+
+  // Fetch TI prices for comparison
+  console.log("Fetching TI prices from inventory...");
+  const tiPrices = await fetchTIPrices(supabase);
+  console.log(`Found ${tiPrices.size} TI price entries`);
+
+  // Transform to database format with TI prices
+  const records = products.map((p) => transformProduct(p, tiPrices));
+  const matchedCount = records.filter((r) => r.ti_price_per_m2 !== null).length;
+  console.log(`Matched ${matchedCount} products with TI prices`);
+
+  if (dryRun) {
+    console.log("\n--- DRY RUN: Preview of records to insert ---\n");
+    for (const record of records.slice(0, 20)) {
+      console.log(`  [${record.species}] ${record.thickness_mm}x${record.width_mm}x${record.length_mm}mm ${record.quality || "N/A"}`);
+      console.log(`    Mass.ee: €${record.price_per_piece}/pc, €${record.price_per_m2}/m²`);
+      if (record.ti_price_per_m2) {
+        console.log(`    TI:      €${record.ti_price_per_piece}/pc, €${record.ti_price_per_m2}/m² (${record.price_diff_percent! > 0 ? "+" : ""}${record.price_diff_percent}%)`);
+      } else {
+        console.log(`    TI:      No match`);
+      }
+      console.log(`    Stock: ${record.stock_total} (TLN: ${record.stock_locations.tallinn}, TRT: ${record.stock_locations.tartu})`);
+      console.log("");
+    }
+    if (records.length > 20) {
+      console.log(`  ... and ${records.length - 20} more products\n`);
+    }
+    console.log("--- Dry run complete. No data was inserted. ---");
+    return;
+  }
 
   // Insert records
   console.log(`Inserting ${records.length} records...`);
