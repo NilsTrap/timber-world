@@ -39,8 +39,10 @@ interface CompetitorPriceInsert {
   quality: string | null;
   price_per_piece: number | null;
   price_per_m2: number | null;
+  price_per_m3: number | null;
   ti_price_per_piece: number | null;
   ti_price_per_m2: number | null;
+  ti_price_per_m3: number | null;
   price_diff_percent: number | null;
   stock_total: number;
   stock_locations: Record<string, number>;
@@ -55,8 +57,16 @@ interface InventoryPackage {
   length: string;
   unit_price_piece: number | null;
   unit_price_m2: number | null;
+  unit_price_m3: number | null;
   wood_species: { value: string } | null;
   type: { value: string } | null;
+}
+
+// TI price data
+interface TIPrice {
+  pricePerPiece: number;
+  pricePerM2: number;
+  pricePerM3: number;
 }
 
 function parseArgs(): { inputFile: string; dryRun: boolean } {
@@ -116,7 +126,7 @@ function makeKey(
 // Fetch TI prices from inventory_packages
 async function fetchTIPrices(
   supabase: SupabaseClient
-): Promise<Map<string, { pricePerPiece: number; pricePerM2: number }>> {
+): Promise<Map<string, TIPrice>> {
   const { data: packages, error } = await supabase
     .from("inventory_packages")
     .select(
@@ -126,6 +136,7 @@ async function fetchTIPrices(
       length,
       unit_price_piece,
       unit_price_m2,
+      unit_price_m3,
       wood_species:ref_wood_species(value),
       type:ref_types(value)
     `
@@ -137,10 +148,7 @@ async function fetchTIPrices(
     return new Map();
   }
 
-  const tiPrices = new Map<
-    string,
-    { pricePerPiece: number; pricePerM2: number }
-  >();
+  const tiPrices = new Map<string, TIPrice>();
 
   for (const pkg of packages || []) {
     const p = pkg as unknown as InventoryPackage;
@@ -164,18 +172,33 @@ async function fetchTIPrices(
     const key = makeKey(p.wood_species.value, panelType, thickness, width, length);
     const pricePerPiece = p.unit_price_piece ? p.unit_price_piece / 100 : 0;
     const pricePerM2 = p.unit_price_m2 ? p.unit_price_m2 / 100 : 0;
+    const pricePerM3 = p.unit_price_m3 ? p.unit_price_m3 / 100 : 0;
 
     if (pricePerM2 > 0) {
-      tiPrices.set(key, { pricePerPiece, pricePerM2 });
+      tiPrices.set(key, { pricePerPiece, pricePerM2, pricePerM3 });
     }
   }
 
   return tiPrices;
 }
 
+// Calculate price per m³ from piece price and dimensions
+function calculatePricePerM3(
+  pricePerPiece: number,
+  thickness: number,
+  width: number,
+  length: number
+): number | null {
+  if (!pricePerPiece || !thickness || !width || !length) return null;
+  // Convert mm to m and calculate volume
+  const volumeM3 = (thickness / 1000) * (width / 1000) * (length / 1000);
+  if (volumeM3 <= 0) return null;
+  return Math.round((pricePerPiece / volumeM3) * 100) / 100;
+}
+
 function transformProduct(
   product: PanelProduct,
-  tiPrices: Map<string, { pricePerPiece: number; pricePerM2: number }>
+  tiPrices: Map<string, TIPrice>
 ): CompetitorPriceInsert {
   const panelType = getPanelType(product);
   const key = makeKey(product.species, panelType, product.thickness, product.width, product.length);
@@ -187,6 +210,14 @@ function transformProduct(
       Math.round(((product.pricePerM2 - tiPrice.pricePerM2) / tiPrice.pricePerM2) * 1000) / 10;
   }
 
+  // Calculate mass.ee price per m³ from dimensions
+  const pricePerM3 = calculatePricePerM3(
+    product.pricePerPiece,
+    product.thickness,
+    product.width,
+    product.length
+  );
+
   return {
     source: "mass.ee",
     product_name: product.name,
@@ -197,8 +228,10 @@ function transformProduct(
     quality: product.quality || null,
     price_per_piece: product.pricePerPiece || null,
     price_per_m2: product.pricePerM2 || null,
+    price_per_m3: pricePerM3,
     ti_price_per_piece: tiPrice?.pricePerPiece || null,
     ti_price_per_m2: tiPrice?.pricePerM2 || null,
+    ti_price_per_m3: tiPrice?.pricePerM3 || null,
     price_diff_percent: priceDiffPercent,
     stock_total: product.totalStock,
     stock_locations: {

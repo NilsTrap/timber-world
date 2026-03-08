@@ -18,8 +18,12 @@ type SortKey =
   | "width_mm"
   | "length_mm"
   | "quality"
+  | "price_per_piece"
   | "price_per_m2"
+  | "price_per_m3"
+  | "ti_price_per_piece"
   | "ti_price_per_m2"
+  | "ti_price_per_m3"
   | "price_diff_percent"
   | "stock_total";
 type SortDirection = "asc" | "desc";
@@ -96,13 +100,17 @@ export function PriceTable({ data }: PriceTableProps) {
       <Table>
         <TableHeader>
           <TableRow>
-            <SortableHeader column="thickness_mm" label="Thickness" />
+            <SortableHeader column="thickness_mm" label="Thick" />
             <SortableHeader column="width_mm" label="Width" />
             <SortableHeader column="length_mm" label="Length" />
-            <SortableHeader column="quality" label="Quality" />
-            <SortableHeader column="price_per_m2" label="Mass.ee €/m²" />
+            <SortableHeader column="quality" label="Qual" />
+            <SortableHeader column="price_per_piece" label="Mass €/pc" />
+            <SortableHeader column="price_per_m2" label="Mass €/m²" />
+            <SortableHeader column="price_per_m3" label="Mass €/m³" />
+            <SortableHeader column="ti_price_per_piece" label="TI €/pc" />
             <SortableHeader column="ti_price_per_m2" label="TI €/m²" />
-            <SortableHeader column="price_diff_percent" label="Diff %" />
+            <SortableHeader column="ti_price_per_m3" label="TI €/m³" />
+            <SortableHeader column="price_diff_percent" label="Diff" />
             <SortableHeader column="stock_total" label="Stock" />
             <TableHead className="w-10"></TableHead>
           </TableRow>
@@ -111,13 +119,17 @@ export function PriceTable({ data }: PriceTableProps) {
           {sortedData.map((item) => (
             <TableRow key={item.id}>
               <TableCell className="font-medium">
-                {item.thickness_mm}mm
+                {item.thickness_mm}
               </TableCell>
-              <TableCell>{item.width_mm}mm</TableCell>
-              <TableCell>{item.length_mm}mm</TableCell>
+              <TableCell>{item.width_mm}</TableCell>
+              <TableCell>{item.length_mm}</TableCell>
               <TableCell>{item.quality || "-"}</TableCell>
+              <TableCell>{formatPrice(item.price_per_piece)}</TableCell>
               <TableCell>{formatPrice(item.price_per_m2)}</TableCell>
+              <TableCell>{formatPrice(item.price_per_m3)}</TableCell>
+              <TableCell>{formatPrice(item.ti_price_per_piece)}</TableCell>
               <TableCell>{formatPrice(item.ti_price_per_m2)}</TableCell>
+              <TableCell>{formatPrice(item.ti_price_per_m3)}</TableCell>
               <TableCell>
                 {item.price_diff_percent !== null ? (
                   <span

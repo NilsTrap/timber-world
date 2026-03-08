@@ -96,8 +96,10 @@ export interface CompetitorPriceDb {
   quality: string | null;
   price_per_piece: number | null;
   price_per_m2: number | null;
+  price_per_m3: number | null;
   ti_price_per_piece: number | null;
   ti_price_per_m2: number | null;
+  ti_price_per_m3: number | null;
   price_diff_percent: number | null;
   stock_total: number;
   stock_locations: Record<string, number>;
