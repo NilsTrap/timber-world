@@ -138,11 +138,12 @@ export function ShipmentPalletTable({
 
   // Apply filters and sort to packages
   const filteredPackages = useMemo(() => {
-    // Default sort by packageSequence (numeric order)
+    // Default sort by package number (extract numeric part for proper ordering)
     let rows = [...packages].sort((a, b) => {
-      const seqA = a.packageSequence ?? 0;
-      const seqB = b.packageSequence ?? 0;
-      return seqA - seqB;
+      // Extract numeric part from package number (e.g., "TIM-001" -> 1)
+      const numA = parseInt((a.packageNumber ?? "0").replace(/\D/g, "") || "0", 10);
+      const numB = parseInt((b.packageNumber ?? "0").replace(/\D/g, "") || "0", 10);
+      return numA - numB;
     });
 
     // Filter
