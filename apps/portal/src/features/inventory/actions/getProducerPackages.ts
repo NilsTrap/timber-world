@@ -61,7 +61,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     .eq("shipments.to_organisation_id", orgId)
     .in("shipments.status", ["accepted", "completed"])
     .neq("status", "consumed")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (shipmentError) {
     console.error("Failed to fetch shipment packages:", shipmentError);
@@ -97,7 +97,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     .eq("portal_production_entries.organisation_id", orgId)
     .eq("organisation_id", orgId)
     .eq("status", "produced")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (productionError) {
     console.error("Failed to fetch production packages:", productionError);
@@ -132,7 +132,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     .is("shipment_id", null)
     .is("production_entry_id", null)
     .neq("status", "consumed")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (directError) {
     console.error("Failed to fetch direct packages:", directError);
@@ -166,7 +166,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     .eq("shipments.from_organisation_id", orgId)
     .eq("shipments.status", "draft")
     .neq("status", "consumed")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (outgoingDraftError) {
     console.error("Failed to fetch outgoing draft packages:", outgoingDraftError);
@@ -207,7 +207,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     .eq("shipments.from_organisation_id", orgId)
     .eq("shipments.status", "pending")
     .neq("status", "consumed")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (onTheWayError) {
     console.error("Failed to fetch on-the-way packages:", onTheWayError);

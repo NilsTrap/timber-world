@@ -59,7 +59,7 @@ export async function getEditablePackages(orgIds?: string[]): Promise<ActionResu
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
     .neq("status", "consumed")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (packagesError) {
     console.error("Failed to fetch packages:", packagesError);

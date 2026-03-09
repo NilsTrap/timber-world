@@ -73,7 +73,7 @@ export async function getAvailablePackages(
     .in("shipments.status", ["accepted", "completed"])
     .neq("status", "consumed")
     .or("pieces.neq.0,pieces.is.null,volume_m3.gt.0")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (usedPackageIds.length > 0) {
     shipmentQuery = shipmentQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
@@ -92,7 +92,7 @@ export async function getAvailablePackages(
     .eq("portal_production_entries.organisation_id", session.organisationId)
     .eq("status", "produced")
     .or("pieces.neq.0,pieces.is.null,volume_m3.gt.0")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (usedPackageIds.length > 0) {
     productionQuery = productionQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
@@ -112,7 +112,7 @@ export async function getAvailablePackages(
     .is("shipment_id", null)
     .neq("status", "consumed")
     .or("pieces.neq.0,pieces.is.null,volume_m3.gt.0")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (usedPackageIds.length > 0) {
     orphanedProductionQuery = orphanedProductionQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
@@ -132,7 +132,7 @@ export async function getAvailablePackages(
     .is("production_entry_id", null)
     .neq("status", "consumed")
     .or("pieces.neq.0,pieces.is.null,volume_m3.gt.0")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (usedPackageIds.length > 0) {
     directQuery = directQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
@@ -152,7 +152,7 @@ export async function getAvailablePackages(
     .eq("shipments.status", "draft")
     .neq("status", "consumed")
     .or("pieces.neq.0,pieces.is.null,volume_m3.gt.0")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (usedPackageIds.length > 0) {
     outgoingDraftQuery = outgoingDraftQuery.not("id", "in", `(${usedPackageIds.join(",")})`);

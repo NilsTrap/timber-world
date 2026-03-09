@@ -249,7 +249,7 @@ export async function getAvailablePackagesForShipment(
     .eq("organisation_id", session.organisationId)
     .in("status", ["available", "produced"])
     .neq("shipment_id", shipmentId)
-    .order("package_number");
+    .order("package_sequence");
 
   if (error) {
     console.error("Failed to fetch available packages:", error);

@@ -110,7 +110,7 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
     .eq("shipments.to_organisation_id", orgId)
     .in("shipments.status", ["accepted", "completed"])
     .in("status", ["available", "produced"])
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (shipmentError) {
     console.error("Failed to fetch shipment packages:", shipmentError);
@@ -150,7 +150,7 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
     `)
     .eq("portal_production_entries.organisation_id", orgId)
     .eq("status", "produced")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (productionError) {
     console.error("Failed to fetch production packages:", productionError);
@@ -190,7 +190,7 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
     .is("shipment_id", null)
     .is("production_entry_id", null)
     .in("status", ["available", "produced"])
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   if (directError) {
     console.error("Failed to fetch direct packages:", directError);

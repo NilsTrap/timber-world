@@ -251,7 +251,7 @@ export async function validateProduction(
       .from("portal_production_outputs")
       .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes")
       .eq("production_entry_id", productionEntryId)
-      .order("package_number", { ascending: true }),
+      .order("package_sequence", { ascending: true }),
   ]);
 
   const { data: inputs, error: inputsError } = inputsResult;

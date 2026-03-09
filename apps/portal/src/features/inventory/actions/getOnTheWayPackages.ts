@@ -74,7 +74,7 @@ export async function getOnTheWayPackages(orgId?: string): Promise<ActionResult<
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
     .eq("shipments.status", "pending")
-    .order("package_number", { ascending: true });
+    .order("package_sequence", { ascending: true });
 
   // Filter by org if specified (either from or to)
   if (orgId) {
