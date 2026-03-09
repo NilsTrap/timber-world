@@ -138,7 +138,12 @@ export function ShipmentPalletTable({
 
   // Apply filters and sort to packages
   const filteredPackages = useMemo(() => {
-    let rows = [...packages];
+    // Default sort by packageSequence (numeric order)
+    let rows = [...packages].sort((a, b) => {
+      const seqA = a.packageSequence ?? 0;
+      const seqB = b.packageSequence ?? 0;
+      return seqA - seqB;
+    });
 
     // Filter
     for (const [colKey, filterValues] of Object.entries(filterState)) {
