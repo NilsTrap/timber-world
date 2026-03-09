@@ -171,5 +171,12 @@ export async function getEditablePackages(orgIds?: string[]): Promise<ActionResu
     packages = allPackages;
   }
 
+  // Sort by numeric part of package number for consistent ordering
+  packages.sort((a, b) => {
+    const numA = parseInt((a.packageNumber ?? "0").replace(/\D/g, "") || "0", 10);
+    const numB = parseInt((b.packageNumber ?? "0").replace(/\D/g, "") || "0", 10);
+    return numA - numB;
+  });
+
   return { success: true, data: packages };
 }

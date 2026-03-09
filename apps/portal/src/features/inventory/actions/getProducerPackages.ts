@@ -270,8 +270,12 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     };
   });
 
-  // Sort by package number after merging
-  packages.sort((a, b) => (a.packageNumber ?? "").localeCompare(b.packageNumber ?? ""));
+  // Sort by numeric part of package number for consistent ordering
+  packages.sort((a, b) => {
+    const numA = parseInt((a.packageNumber ?? "0").replace(/\D/g, "") || "0", 10);
+    const numB = parseInt((b.packageNumber ?? "0").replace(/\D/g, "") || "0", 10);
+    return numA - numB;
+  });
 
   return { success: true, data: packages };
 }
