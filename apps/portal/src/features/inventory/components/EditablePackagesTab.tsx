@@ -191,14 +191,27 @@ export function EditablePackagesTab({ packages, defaultOrgId }: EditablePackages
   // Create a new empty row
   const createRow = useCallback((): EditablePackageItem => {
     const clientId = `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    // Use filtered org if available, otherwise fall back to first org
-    const defaultOrg = defaultOrgId
-      ? organisations.find(o => o.id === defaultOrgId)
-      : organisations[0];
 
-    // Debug: log which org is being used for new rows
-    console.log(`[createRow] defaultOrgId: ${defaultOrgId}, using org: ${defaultOrg?.code} (${defaultOrg?.id})`);
-    console.log(`[createRow] organisations[0]: ${organisations[0]?.code}`);
+    // Determine default org:
+    // 1. Use defaultOrgId prop if provided (from URL filter)
+    // 2. Otherwise infer from existing packages - if all have same org, use that
+    // 3. Fall back to first org in list
+    let defaultOrg = defaultOrgId
+      ? organisations.find(o => o.id === defaultOrgId)
+      : undefined;
+
+    if (!defaultOrg && localPackages.length > 0) {
+      // Check if all packages have the same org
+      const orgIds = new Set(localPackages.map(p => p.organisationId).filter(Boolean));
+      if (orgIds.size === 1) {
+        const inferredOrgId = localPackages[0]?.organisationId;
+        defaultOrg = organisations.find(o => o.id === inferredOrgId);
+      }
+    }
+
+    if (!defaultOrg) {
+      defaultOrg = organisations[0];
+    }
     return {
       id: clientId,
       isNew: true,
@@ -230,7 +243,7 @@ export function EditablePackagesTab({ packages, defaultOrgId }: EditablePackages
       volumeIsCalculated: false,
       notes: null,
     };
-  }, [organisations, defaultOrgId]);
+  }, [organisations, defaultOrgId, localPackages]);
 
   // Copy a row - explicitly preserve all editable fields to avoid stale closure issues
   const copyRow = useCallback((row: EditablePackageItem): EditablePackageItem => {
