@@ -50,7 +50,7 @@ export async function getAllOrgShipments(): Promise<ActionResult<OrgShipmentList
       rejection_reason,
       completed_at,
       reviewer:portal_users!shipments_reviewed_by_fkey(name),
-      inventory_packages(volume_m3)
+      inventory_packages!inventory_packages_shipment_id_fkey(volume_m3)
     `)
     .eq("from_organisation_id", orgId)
     .order("created_at", { ascending: false });
@@ -81,7 +81,7 @@ export async function getAllOrgShipments(): Promise<ActionResult<OrgShipmentList
       rejection_reason,
       completed_at,
       reviewer:portal_users!shipments_reviewed_by_fkey(name),
-      inventory_packages(volume_m3)
+      inventory_packages!inventory_packages_shipment_id_fkey(volume_m3)
     `)
     .eq("to_organisation_id", orgId)
     .order("created_at", { ascending: false });

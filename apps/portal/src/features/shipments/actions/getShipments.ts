@@ -51,7 +51,7 @@ export async function getShipments(orgIds?: string[]): Promise<ActionResult<Ship
       rejection_reason,
       completed_at,
       reviewer:portal_users!shipments_reviewed_by_fkey(name),
-      inventory_packages(volume_m3)
+      inventory_packages!inventory_packages_shipment_id_fkey(volume_m3)
     `)
     .order("shipment_date", { ascending: false });
 
