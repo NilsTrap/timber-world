@@ -41,7 +41,8 @@ export async function submitShipmentForAcceptance(
       from_organisation_id,
       to_organisation_id,
       status,
-      from_organisation:organisations!shipments_from_party_id_fkey(is_external)
+      from_organisation:organisations!shipments_from_party_id_fkey(is_external),
+      to_organisation:organisations!shipments_to_party_id_fkey(is_external)
     `)
     .eq("id", shipmentId)
     .single();
@@ -80,13 +81,21 @@ export async function submitShipmentForAcceptance(
     return { success: false, error: "At least one package is required", code: "NO_PACKAGES" };
   }
 
-  // Update shipment status to pending
+  // Check if destination is external - if so, auto-complete the shipment
+  // External organizations don't have portal access, so no approval needed
+  const isToExternal = shipment.to_organisation?.is_external ?? false;
+  const newStatus = isToExternal ? "completed" : "pending";
+  const now = new Date().toISOString();
+
+  // Update shipment status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: updated, error: updateError } = await (supabase as any)
     .from("shipments")
     .update({
-      status: "pending",
-      submitted_at: new Date().toISOString(),
+      status: newStatus,
+      submitted_at: now,
+      // If auto-completing, also set completed_at
+      ...(isToExternal ? { completed_at: now } : {}),
     })
     .eq("id", shipmentId)
     .select("id, status")
