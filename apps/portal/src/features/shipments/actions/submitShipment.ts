@@ -87,6 +87,22 @@ export async function submitShipmentForAcceptance(
   const newStatus = isToExternal ? "completed" : "pending";
   const now = new Date().toISOString();
 
+  // If auto-completing to external org, transfer package ownership first
+  if (isToExternal) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: transferError } = await (supabase as any)
+      .from("inventory_packages")
+      .update({
+        organisation_id: shipment.to_organisation_id,
+      })
+      .eq("shipment_id", shipmentId);
+
+    if (transferError) {
+      console.error("Failed to transfer packages:", transferError);
+      return { success: false, error: "Failed to transfer inventory", code: "TRANSFER_FAILED" };
+    }
+  }
+
   // Update shipment status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: updated, error: updateError } = await (supabase as any)
@@ -103,6 +119,16 @@ export async function submitShipmentForAcceptance(
 
   if (updateError) {
     console.error("Failed to submit shipment:", updateError);
+    // If we transferred packages but failed to update shipment, rollback
+    if (isToExternal) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from("inventory_packages")
+        .update({
+          organisation_id: shipment.from_organisation_id,
+        })
+        .eq("shipment_id", shipmentId);
+    }
     return { success: false, error: "Failed to submit shipment", code: "UPDATE_FAILED" };
   }
 
