@@ -90,13 +90,27 @@ export async function addPackagesToShipment(
   // Update packages to link to this shipment
   // For inter-org shipments, we're essentially "marking" which packages are part of the shipment
   // Keep original package numbers - only update shipment_id and sequence
+  // IMPORTANT: Preserve source_shipment_id to maintain incoming shipment history
   for (const pkgId of validPackageIds) {
+    // Get the package's current shipment_id to preserve as source if not already set
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: currentPkg } = await (supabase as any)
+      .from("inventory_packages")
+      .select("shipment_id, source_shipment_id")
+      .eq("id", pkgId)
+      .single();
+
+    // If source_shipment_id is not set and package has a current shipment, preserve it
+    const sourceShipmentId = currentPkg?.source_shipment_id || currentPkg?.shipment_id || null;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
       .from("inventory_packages")
       .update({
         shipment_id: shipmentId,
         package_sequence: nextSequence,
+        // Preserve the original incoming shipment reference
+        source_shipment_id: sourceShipmentId,
       })
       .eq("id", pkgId);
 

@@ -91,6 +91,8 @@ export async function getOrgShipmentDetail(
   }));
 
   // Fetch packages with all reference joins
+  // For completed incoming shipments, also include packages that have this as source_shipment_id
+  // (packages may have been sent out in another shipment but should still show in history)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: packages, error: packagesError } = await (supabase as any)
     .from("inventory_packages")
@@ -120,7 +122,7 @@ export async function getOrgShipmentDetail(
       ref_fsc!inventory_packages_fsc_id_fkey(value),
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
-    .eq("shipment_id", shipmentId)
+    .or(`shipment_id.eq.${shipmentId},source_shipment_id.eq.${shipmentId}`)
     .order("package_sequence", { ascending: true });
 
   if (packagesError) {
