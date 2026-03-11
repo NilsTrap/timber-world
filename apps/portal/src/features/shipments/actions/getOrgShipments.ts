@@ -143,17 +143,20 @@ export async function getIncomingShipments(): Promise<ActionResult<ShipmentListI
       );
 
     for (const pkg of packages ?? []) {
-      const incomingShipmentId = incomingIds.includes(pkg.source_shipment_id)
-        ? pkg.source_shipment_id
-        : incomingIds.includes(pkg.shipment_id)
-          ? pkg.shipment_id
-          : null;
-
-      if (incomingShipmentId) {
-        const current = packageCounts.get(incomingShipmentId) ?? { count: 0, volume: 0 };
+      const vol = pkg.volume_m3 != null ? Number(pkg.volume_m3) : 0;
+      // Count under shipment_id (current shipment)
+      if (pkg.shipment_id && incomingIds.includes(pkg.shipment_id)) {
+        const current = packageCounts.get(pkg.shipment_id) ?? { count: 0, volume: 0 };
         current.count++;
-        current.volume += pkg.volume_m3 != null ? Number(pkg.volume_m3) : 0;
-        packageCounts.set(incomingShipmentId, current);
+        current.volume += vol;
+        packageCounts.set(pkg.shipment_id, current);
+      }
+      // Also count under source_shipment_id (original incoming shipment) if different
+      if (pkg.source_shipment_id && incomingIds.includes(pkg.source_shipment_id) && pkg.source_shipment_id !== pkg.shipment_id) {
+        const current = packageCounts.get(pkg.source_shipment_id) ?? { count: 0, volume: 0 };
+        current.count++;
+        current.volume += vol;
+        packageCounts.set(pkg.source_shipment_id, current);
       }
     }
   }

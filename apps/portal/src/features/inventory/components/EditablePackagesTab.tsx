@@ -188,23 +188,33 @@ export function EditablePackagesTab({ packages, defaultOrgId }: EditablePackages
     setIsDirty(hasChanges);
   }, [localPackages, originalPackages, deletedIds, pendingShipmentCodeUpdates]);
 
+  // Track displayed packages for inferring default org
+  const [displayedPackages, setDisplayedPackages] = useState<EditablePackageItem[]>(packages);
+
+  const handleDisplayRowsChange = useCallback((rows: EditablePackageItem[]) => {
+    setDisplayedPackages(rows);
+  }, []);
+
   // Create a new empty row
   const createRow = useCallback((): EditablePackageItem => {
     const clientId = `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // Determine default org:
     // 1. Use defaultOrgId prop if provided (from URL filter)
-    // 2. Otherwise infer from existing packages - if all have same org, use that
+    // 2. Otherwise infer from DISPLAYED packages (respects table filters)
     // 3. Fall back to first org in list
     let defaultOrg = defaultOrgId
       ? organisations.find(o => o.id === defaultOrgId)
       : undefined;
 
-    if (!defaultOrg && localPackages.length > 0) {
-      // Check if all packages have the same org
-      const orgIds = new Set(localPackages.map(p => p.organisationId).filter(Boolean));
+    // Use displayedPackages (filtered view) not localPackages (all packages)
+    const packagesToCheck = displayedPackages.length > 0 ? displayedPackages : localPackages;
+
+    if (!defaultOrg && packagesToCheck.length > 0) {
+      // Check if all visible packages have the same org
+      const orgIds = new Set(packagesToCheck.map(p => p.organisationId).filter(Boolean));
       if (orgIds.size === 1) {
-        const inferredOrgId = localPackages[0]?.organisationId;
+        const inferredOrgId = packagesToCheck[0]?.organisationId;
         defaultOrg = organisations.find(o => o.id === inferredOrgId);
       }
     }
@@ -243,7 +253,7 @@ export function EditablePackagesTab({ packages, defaultOrgId }: EditablePackages
       volumeIsCalculated: false,
       notes: null,
     };
-  }, [organisations, defaultOrgId, localPackages]);
+  }, [organisations, defaultOrgId, localPackages, displayedPackages]);
 
   // Copy a row - explicitly preserve all editable fields to avoid stale closure issues
   const copyRow = useCallback((row: EditablePackageItem): EditablePackageItem => {
@@ -703,12 +713,6 @@ export function EditablePackagesTab({ packages, defaultOrgId }: EditablePackages
     },
     [dropdowns, organisations]
   );
-
-  const [displayedPackages, setDisplayedPackages] = useState<EditablePackageItem[]>(packages);
-
-  const handleDisplayRowsChange = useCallback((rows: EditablePackageItem[]) => {
-    setDisplayedPackages(rows);
-  }, []);
 
   const summaryItems = useMemo(
     () => [
