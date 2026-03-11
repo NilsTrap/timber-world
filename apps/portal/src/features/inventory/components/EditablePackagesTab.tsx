@@ -131,9 +131,11 @@ function OrgDropdown({
 
 interface EditablePackagesTabProps {
   packages: EditablePackageItem[];
+  /** Default org ID for new packages (when filtered by single org) */
+  defaultOrgId?: string;
 }
 
-export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
+export function EditablePackagesTab({ packages, defaultOrgId }: EditablePackagesTabProps) {
   const router = useRouter();
   const [localPackages, setLocalPackages] = useState(packages);
   const [originalPackages, setOriginalPackages] = useState(packages);
@@ -189,15 +191,19 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
   // Create a new empty row
   const createRow = useCallback((): EditablePackageItem => {
     const clientId = `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Use filtered org if available, otherwise fall back to first org
+    const defaultOrg = defaultOrgId
+      ? organisations.find(o => o.id === defaultOrgId)
+      : organisations[0];
     return {
       id: clientId,
       isNew: true,
       packageNumber: "",
       shipmentCode: "",
       shipmentId: "",
-      organisationId: organisations[0]?.id || null,
-      organisationCode: organisations[0]?.code || null,
-      organisationName: organisations[0]?.name || null,
+      organisationId: defaultOrg?.id || null,
+      organisationCode: defaultOrg?.code || null,
+      organisationName: defaultOrg?.name || null,
       productNameId: null,
       productName: null,
       woodSpeciesId: null,
@@ -220,7 +226,7 @@ export function EditablePackagesTab({ packages }: EditablePackagesTabProps) {
       volumeIsCalculated: false,
       notes: null,
     };
-  }, [organisations]);
+  }, [organisations, defaultOrgId]);
 
   // Copy a row - explicitly preserve all editable fields to avoid stale closure issues
   const copyRow = useCallback((row: EditablePackageItem): EditablePackageItem => {

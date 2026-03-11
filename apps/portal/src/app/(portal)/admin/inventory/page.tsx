@@ -66,6 +66,7 @@ export default async function InventoryPage({
         packages={packages}
         consolidated={consolidated}
         initialFilters={Object.keys(initialFilters).length > 0 ? initialFilters : undefined}
+        defaultOrgId={orgFilter?.length === 1 ? orgFilter[0] : undefined}
       />
     </div>
   );

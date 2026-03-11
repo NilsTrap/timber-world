@@ -13,6 +13,8 @@ interface AdminInventoryPageContentProps {
   consolidated: ConsolidatedInventoryItem[];
   /** Initial filter values from URL params */
   initialFilters?: Record<string, string[]>;
+  /** Default org ID for new packages (when filtered by single org) */
+  defaultOrgId?: string;
 }
 
 /**
@@ -23,7 +25,7 @@ interface AdminInventoryPageContentProps {
  * - Consolidated: Grouped view by product attributes
  * - Edit: Full editing capabilities (add, edit, delete, import)
  */
-export function AdminInventoryPageContent({ packages, consolidated, initialFilters }: AdminInventoryPageContentProps) {
+export function AdminInventoryPageContent({ packages, consolidated, initialFilters, defaultOrgId }: AdminInventoryPageContentProps) {
   return (
     <Tabs defaultValue="inventory">
       <TabsList>
@@ -46,7 +48,7 @@ export function AdminInventoryPageContent({ packages, consolidated, initialFilte
 
       <TabsContent value="edit">
         <Suspense fallback={<div className="animate-pulse h-64 bg-muted rounded-lg" />}>
-          <EditablePackagesTab packages={packages} />
+          <EditablePackagesTab packages={packages} defaultOrgId={defaultOrgId} />
         </Suspense>
       </TabsContent>
     </Tabs>
