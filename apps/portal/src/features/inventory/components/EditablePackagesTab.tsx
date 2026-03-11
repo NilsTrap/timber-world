@@ -195,6 +195,10 @@ export function EditablePackagesTab({ packages, defaultOrgId }: EditablePackages
     const defaultOrg = defaultOrgId
       ? organisations.find(o => o.id === defaultOrgId)
       : organisations[0];
+
+    // Debug: log which org is being used for new rows
+    console.log(`[createRow] defaultOrgId: ${defaultOrgId}, using org: ${defaultOrg?.code} (${defaultOrg?.id})`);
+    console.log(`[createRow] organisations[0]: ${organisations[0]?.code}`);
     return {
       id: clientId,
       isNew: true,

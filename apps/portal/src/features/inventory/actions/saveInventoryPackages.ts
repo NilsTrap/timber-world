@@ -175,6 +175,9 @@ export async function saveInventoryPackages(
       continue;
     }
 
+    // Debug: log which org is being used for new packages
+    console.log(`[saveInventoryPackages] Creating package "${pkg.packageNumber}" for org: ${pkg.organisationId}`);
+
     const packageNumber = pkg.packageNumber || `PKG-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     let shipmentId: string | null = null;
 
