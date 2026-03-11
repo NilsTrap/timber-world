@@ -98,6 +98,8 @@ export async function getIncomingShipments(): Promise<ActionResult<ShipmentListI
 
   const supabase = await createClient();
 
+  // Fetch incoming shipments without embedded packages
+  // We need separate query for package counts due to source_shipment_id
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("shipments")
@@ -116,8 +118,7 @@ export async function getIncomingShipments(): Promise<ActionResult<ShipmentListI
       reviewed_by,
       rejection_reason,
       completed_at,
-      reviewer:portal_users!shipments_reviewed_by_fkey(name),
-      inventory_packages!inventory_packages_shipment_id_fkey(volume_m3)
+      reviewer:portal_users!shipments_reviewed_by_fkey(name)
     `)
     .eq("to_organisation_id", session.organisationId)
     .neq("status", "draft") // Don't show drafts to receiver
@@ -128,31 +129,59 @@ export async function getIncomingShipments(): Promise<ActionResult<ShipmentListI
     return { success: false, error: `Failed to fetch shipments: ${error.message}`, code: "QUERY_FAILED" };
   }
 
+  // For incoming shipments, count packages by shipment_id OR source_shipment_id
+  const incomingIds = (data ?? []).map((s: { id: string }) => s.id);
+  const packageCounts: Map<string, { count: number; volume: number }> = new Map();
+
+  if (incomingIds.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: packages } = await (supabase as any)
+      .from("inventory_packages")
+      .select("shipment_id, source_shipment_id, volume_m3")
+      .or(
+        `shipment_id.in.(${incomingIds.join(",")}),source_shipment_id.in.(${incomingIds.join(",")})`
+      );
+
+    for (const pkg of packages ?? []) {
+      const incomingShipmentId = incomingIds.includes(pkg.source_shipment_id)
+        ? pkg.source_shipment_id
+        : incomingIds.includes(pkg.shipment_id)
+          ? pkg.shipment_id
+          : null;
+
+      if (incomingShipmentId) {
+        const current = packageCounts.get(incomingShipmentId) ?? { count: 0, volume: 0 };
+        current.count++;
+        current.volume += pkg.volume_m3 != null ? Number(pkg.volume_m3) : 0;
+        packageCounts.set(incomingShipmentId, current);
+      }
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const shipments: ShipmentListItem[] = (data as any[]).map((row: any) => ({
-    id: row.id,
-    shipmentCode: row.shipment_code,
-    fromOrganisationId: row.from_organisation_id,
-    fromOrganisationName: row.from_organisation?.name ?? "",
-    fromOrganisationCode: row.from_organisation?.code ?? "",
-    toOrganisationId: row.to_organisation_id,
-    toOrganisationName: row.to_organisation?.name ?? "",
-    toOrganisationCode: row.to_organisation?.code ?? "",
-    shipmentDate: row.shipment_date,
-    transportCostEur: row.transport_cost_eur != null ? Number(row.transport_cost_eur) : null,
-    packageCount: row.inventory_packages?.length ?? 0,
-    totalVolumeM3: (row.inventory_packages ?? []).reduce(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (sum: number, pkg: any) => sum + (pkg.volume_m3 != null ? Number(pkg.volume_m3) : 0),
-      0
-    ),
-    status: (row.status ?? "completed") as ShipmentStatus,
-    submittedAt: row.submitted_at ?? null,
-    reviewedAt: row.reviewed_at ?? null,
-    reviewedByName: row.reviewer?.name ?? null,
-    rejectionReason: row.rejection_reason ?? null,
-    completedAt: row.completed_at ?? null,
-  }));
+  const shipments: ShipmentListItem[] = (data as any[]).map((row: any) => {
+    const pkgData = packageCounts.get(row.id) ?? { count: 0, volume: 0 };
+    return {
+      id: row.id,
+      shipmentCode: row.shipment_code,
+      fromOrganisationId: row.from_organisation_id,
+      fromOrganisationName: row.from_organisation?.name ?? "",
+      fromOrganisationCode: row.from_organisation?.code ?? "",
+      toOrganisationId: row.to_organisation_id,
+      toOrganisationName: row.to_organisation?.name ?? "",
+      toOrganisationCode: row.to_organisation?.code ?? "",
+      shipmentDate: row.shipment_date,
+      transportCostEur: row.transport_cost_eur != null ? Number(row.transport_cost_eur) : null,
+      packageCount: pkgData.count,
+      totalVolumeM3: pkgData.volume,
+      status: (row.status ?? "completed") as ShipmentStatus,
+      submittedAt: row.submitted_at ?? null,
+      reviewedAt: row.reviewed_at ?? null,
+      reviewedByName: row.reviewer?.name ?? null,
+      rejectionReason: row.rejection_reason ?? null,
+      completedAt: row.completed_at ?? null,
+    };
+  });
 
   return { success: true, data: shipments };
 }

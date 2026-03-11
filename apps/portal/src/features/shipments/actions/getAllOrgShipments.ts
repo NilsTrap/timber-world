@@ -62,6 +62,7 @@ export async function getAllOrgShipments(): Promise<ActionResult<OrgShipmentList
 
   // Fetch incoming shipments (to this org)
   // Include drafts - these are incoming shipments from external suppliers that the receiver creates
+  // Note: We don't embed packages here because we need to count by both shipment_id AND source_shipment_id
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: incomingData, error: incomingError } = await (supabase as any)
     .from("shipments")
@@ -80,8 +81,7 @@ export async function getAllOrgShipments(): Promise<ActionResult<OrgShipmentList
       reviewed_by,
       rejection_reason,
       completed_at,
-      reviewer:portal_users!shipments_reviewed_by_fkey(name),
-      inventory_packages!inventory_packages_shipment_id_fkey(volume_m3)
+      reviewer:portal_users!shipments_reviewed_by_fkey(name)
     `)
     .eq("to_organisation_id", orgId)
     .order("created_at", { ascending: false });
@@ -91,9 +91,45 @@ export async function getAllOrgShipments(): Promise<ActionResult<OrgShipmentList
     return { success: false, error: `Failed to fetch shipments: ${incomingError.message}`, code: "QUERY_FAILED" };
   }
 
-  // Transform and combine
+  // For incoming shipments, we need to count packages that either:
+  // - Have shipment_id pointing to this shipment (still here), OR
+  // - Have source_shipment_id pointing to this shipment (forwarded out)
+  // Build a map of shipment_id -> { count, volume }
+  const incomingIds = (incomingData ?? []).map((s: { id: string }) => s.id);
+  const incomingPackageCounts: Map<string, { count: number; volume: number }> = new Map();
+
+  if (incomingIds.length > 0) {
+    // Get packages where shipment_id OR source_shipment_id matches any incoming shipment
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: packages } = await (supabase as any)
+      .from("inventory_packages")
+      .select("shipment_id, source_shipment_id, volume_m3")
+      .or(
+        `shipment_id.in.(${incomingIds.join(",")}),source_shipment_id.in.(${incomingIds.join(",")})`
+      );
+
+    // Count packages per incoming shipment
+    for (const pkg of packages ?? []) {
+      // Determine which incoming shipment this package belongs to
+      // Prefer source_shipment_id (original incoming) over shipment_id
+      const incomingShipmentId = incomingIds.includes(pkg.source_shipment_id)
+        ? pkg.source_shipment_id
+        : incomingIds.includes(pkg.shipment_id)
+          ? pkg.shipment_id
+          : null;
+
+      if (incomingShipmentId) {
+        const current = incomingPackageCounts.get(incomingShipmentId) ?? { count: 0, volume: 0 };
+        current.count++;
+        current.volume += pkg.volume_m3 != null ? Number(pkg.volume_m3) : 0;
+        incomingPackageCounts.set(incomingShipmentId, current);
+      }
+    }
+  }
+
+  // Transform outgoing shipments (use embedded packages)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapRow = (row: any, direction: "outgoing" | "incoming"): OrgShipmentListItem => ({
+  const mapOutgoingRow = (row: any): OrgShipmentListItem => ({
     id: row.id,
     shipmentCode: row.shipment_code,
     fromOrganisationId: row.from_organisation_id,
@@ -116,11 +152,38 @@ export async function getAllOrgShipments(): Promise<ActionResult<OrgShipmentList
     reviewedByName: row.reviewer?.name ?? null,
     rejectionReason: row.rejection_reason ?? null,
     completedAt: row.completed_at ?? null,
-    direction,
+    direction: "outgoing",
   });
 
-  const outgoing = (outgoingData ?? []).map((row: unknown) => mapRow(row, "outgoing"));
-  const incoming = (incomingData ?? []).map((row: unknown) => mapRow(row, "incoming"));
+  // Transform incoming shipments (use counts from separate query)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapIncomingRow = (row: any): OrgShipmentListItem => {
+    const pkgData = incomingPackageCounts.get(row.id) ?? { count: 0, volume: 0 };
+    return {
+      id: row.id,
+      shipmentCode: row.shipment_code,
+      fromOrganisationId: row.from_organisation_id,
+      fromOrganisationName: row.from_organisation?.name ?? "",
+      fromOrganisationCode: row.from_organisation?.code ?? "",
+      toOrganisationId: row.to_organisation_id,
+      toOrganisationName: row.to_organisation?.name ?? "",
+      toOrganisationCode: row.to_organisation?.code ?? "",
+      shipmentDate: row.shipment_date,
+      transportCostEur: row.transport_cost_eur != null ? Number(row.transport_cost_eur) : null,
+      packageCount: pkgData.count,
+      totalVolumeM3: pkgData.volume,
+      status: (row.status ?? "completed") as ShipmentStatus,
+      submittedAt: row.submitted_at ?? null,
+      reviewedAt: row.reviewed_at ?? null,
+      reviewedByName: row.reviewer?.name ?? null,
+      rejectionReason: row.rejection_reason ?? null,
+      completedAt: row.completed_at ?? null,
+      direction: "incoming",
+    };
+  };
+
+  const outgoing = (outgoingData ?? []).map(mapOutgoingRow);
+  const incoming = (incomingData ?? []).map(mapIncomingRow);
 
   // Combine and sort by date (newest first)
   const allShipments = [...outgoing, ...incoming].sort((a, b) => {
