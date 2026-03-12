@@ -4,21 +4,31 @@ import { useState, useMemo, useRef } from "react";
 import { Printer } from "lucide-react";
 import { Button, Dialog, DialogContent, DialogHeader, DialogTitle } from "@timber/ui";
 import { printHtml, PRINT_STYLES_TABLE } from "@/lib/print";
-import type { OutputRow, ReferenceDropdowns } from "../types";
+import type { PackageDetail } from "../types";
 
-interface PrintOutputsButtonProps {
-  rows: OutputRow[];
-  dropdowns: ReferenceDropdowns;
-  processName?: string;
-  productionDate?: string;
+interface PrintShipmentButtonProps {
+  shipmentCode: string;
+  fromOrgName: string;
+  toOrgName: string;
+  shipmentDate: string;
+  packages: PackageDetail[];
 }
 
-export function PrintOutputsButton({
-  rows,
-  dropdowns,
-  processName,
-  productionDate,
-}: PrintOutputsButtonProps) {
+function formatVolume(vol: number | null): string {
+  if (vol === null || vol === 0) return "-";
+  return vol.toLocaleString("de-DE", {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  });
+}
+
+export function PrintShipmentButton({
+  shipmentCode,
+  fromOrgName,
+  toOrgName,
+  shipmentDate,
+  packages,
+}: PrintShipmentButtonProps) {
   const [open, setOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -27,36 +37,21 @@ export function PrintOutputsButton({
     printHtml(contentRef.current.innerHTML, PRINT_STYLES_TABLE);
   };
 
-  const resolveValue = (options: { id: string; value: string }[], id: string): string => {
-    const found = options.find((o) => o.id === id);
-    return found?.value || "-";
-  };
+  const totalVolume = useMemo(
+    () => packages.reduce((sum, p) => sum + (p.volumeM3 ?? 0), 0),
+    [packages]
+  );
 
-  const resolvedRows = useMemo(() => {
-    return rows.map((row) => ({
-      packageNumber: row.packageNumber || "-",
-      productName: resolveValue(dropdowns.productNames, row.productNameId),
-      woodSpecies: resolveValue(dropdowns.woodSpecies, row.woodSpeciesId),
-      humidity: resolveValue(dropdowns.humidity, row.humidityId),
-      typeName: resolveValue(dropdowns.types, row.typeId),
-      processing: resolveValue(dropdowns.processing, row.processingId),
-      fsc: resolveValue(dropdowns.fsc, row.fscId),
-      quality: resolveValue(dropdowns.quality, row.qualityId),
-      thickness: row.thickness || "-",
-      width: row.width || "-",
-      length: row.length || "-",
-      pieces: row.pieces || "-",
-      volumeM3: row.volumeM3 ? parseFloat(row.volumeM3) : 0,
-    }));
-  }, [rows, dropdowns]);
+  const totalPieces = useMemo(
+    () =>
+      packages.reduce((sum, p) => {
+        const n = p.pieces != null ? Number(p.pieces) : 0;
+        return sum + (isNaN(n) ? 0 : n);
+      }, 0),
+    [packages]
+  );
 
-  const totalVolume = resolvedRows.reduce((sum, r) => sum + r.volumeM3, 0);
-  const totalPieces = resolvedRows.reduce((sum, r) => {
-    const n = r.pieces !== "-" ? parseInt(r.pieces, 10) : 0;
-    return sum + (isNaN(n) ? 0 : n);
-  }, 0);
-
-  if (rows.length === 0) {
+  if (packages.length === 0) {
     return null;
   }
 
@@ -70,20 +65,17 @@ export function PrintOutputsButton({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-[98vw] max-h-[90vh] overflow-auto w-fit min-w-[900px]">
           <DialogHeader>
-            <DialogTitle>Print Production Outputs</DialogTitle>
+            <DialogTitle>Print Shipment {shipmentCode}</DialogTitle>
           </DialogHeader>
 
           <div ref={contentRef} className="overflow-x-auto">
             <div className="header mb-6">
-              <h1 className="text-xl font-bold">Production Outputs</h1>
-              {processName && (
-                <p className="text-sm text-gray-600">Process: {processName}</p>
-              )}
-              {productionDate && (
-                <p className="text-sm text-gray-600">Date: {productionDate}</p>
-              )}
+              <h1 className="text-xl font-bold">Shipment {shipmentCode}</h1>
+              <p className="text-sm text-gray-600">From: {fromOrgName}</p>
+              <p className="text-sm text-gray-600">To: {toOrgName}</p>
+              <p className="text-sm text-gray-600">Date: {shipmentDate}</p>
               <p className="text-sm text-gray-600">
-                Total packages: {rows.length} | Total pieces: {totalPieces} | Total volume: {totalVolume.toFixed(3).replace(".", ",")} m³
+                Total packages: {packages.length} | Total pieces: {totalPieces} | Total volume: {formatVolume(totalVolume)} m³
               </p>
             </div>
 
@@ -102,22 +94,22 @@ export function PrintOutputsButton({
                 </tr>
               </thead>
               <tbody>
-                {resolvedRows.map((row, index) => (
-                  <tr key={index} className="border-b border-gray-300">
+                {packages.map((pkg, index) => (
+                  <tr key={pkg.id} className="border-b border-gray-300">
                     <td className="py-2 px-2">{index + 1}</td>
-                    <td className="py-2 px-2 font-medium">{row.packageNumber}</td>
-                    <td className="py-2 px-2">{row.productName}</td>
-                    <td className="py-2 px-2">{row.woodSpecies}</td>
-                    <td className="py-2 px-2">{row.humidity}</td>
-                    <td className="py-2 px-2">{row.typeName}</td>
+                    <td className="py-2 px-2 font-medium">{pkg.packageNumber ?? "-"}</td>
+                    <td className="py-2 px-2">{pkg.productName ?? "-"}</td>
+                    <td className="py-2 px-2">{pkg.woodSpecies ?? "-"}</td>
+                    <td className="py-2 px-2">{pkg.humidity ?? "-"}</td>
+                    <td className="py-2 px-2">{pkg.typeName ?? "-"}</td>
                     <td className="py-2 px-2">
-                      {row.thickness !== "-" && row.width !== "-" && row.length !== "-"
-                        ? `${row.thickness}x${row.width}x${row.length}`
+                      {pkg.thickness && pkg.width && pkg.length
+                        ? `${pkg.thickness}x${pkg.width}x${pkg.length}`
                         : "-"}
                     </td>
-                    <td className="py-2 px-2 text-right tabular-nums">{row.pieces}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{pkg.pieces ?? "-"}</td>
                     <td className="py-2 px-2 text-right tabular-nums">
-                      {row.volumeM3 > 0 ? row.volumeM3.toFixed(3).replace(".", ",") : "-"}
+                      {pkg.volumeM3 ? formatVolume(pkg.volumeM3) : "-"}
                     </td>
                   </tr>
                 ))}
@@ -127,7 +119,7 @@ export function PrintOutputsButton({
                   <td colSpan={7} className="py-2 px-2">Total</td>
                   <td className="py-2 px-2 text-right tabular-nums">{totalPieces}</td>
                   <td className="py-2 px-2 text-right tabular-nums">
-                    {totalVolume.toFixed(3).replace(".", ",")}
+                    {formatVolume(totalVolume)}
                   </td>
                 </tr>
               </tfoot>

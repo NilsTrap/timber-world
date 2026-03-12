@@ -70,14 +70,89 @@ export async function acceptShipment(
   const portalUserId = await getPortalUserId(supabase, session.id);
 
   const now = new Date().toISOString();
+  const receiverOrgId = session.organisationId;
 
   // Phase 1: Transfer packages to receiver's organization FIRST
   // This is the more critical operation - if it fails, shipment stays pending
+  //
+  // We must handle package_number collisions: the receiver org may already have
+  // packages with the same package_number (unique constraint on org+package_number).
+  // Strategy: fetch shipment packages, find collisions, renumber before transferring.
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: shipmentPackages, error: fetchPkgError } = await (supabase as any)
+    .from("inventory_packages")
+    .select("id, package_number")
+    .eq("shipment_id", shipmentId);
+
+  if (fetchPkgError || !shipmentPackages) {
+    console.error("Failed to fetch shipment packages:", fetchPkgError);
+    return { success: false, error: "Failed to transfer inventory", code: "TRANSFER_FAILED" };
+  }
+
+  // Find which package_numbers already exist in the receiver's org
+  const incomingNumbers = shipmentPackages
+    .map((p: { package_number: string | null }) => p.package_number)
+    .filter(Boolean) as string[];
+
+  if (incomingNumbers.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing } = await (supabase as any)
+      .from("inventory_packages")
+      .select("package_number")
+      .eq("organisation_id", receiverOrgId)
+      .in("package_number", incomingNumbers);
+
+    const existingSet = new Set(
+      (existing ?? []).map((r: { package_number: string }) => r.package_number)
+    );
+
+    // For colliding packages, get ALL receiver's package numbers to find safe new ones
+    if (existingSet.size > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: allReceiverPkgs } = await (supabase as any)
+        .from("inventory_packages")
+        .select("package_number")
+        .eq("organisation_id", receiverOrgId)
+        .not("package_number", "is", null);
+
+      const allReceiverNumbers = new Set(
+        (allReceiverPkgs ?? []).map((r: { package_number: string }) => r.package_number)
+      );
+
+      // Renumber colliding packages one by one
+      for (const pkg of shipmentPackages as { id: string; package_number: string | null }[]) {
+        if (pkg.package_number && existingSet.has(pkg.package_number)) {
+          // Find next available number: append -N suffix to original
+          let newNumber = pkg.package_number;
+          let suffix = 2;
+          while (allReceiverNumbers.has(newNumber)) {
+            newNumber = `${pkg.package_number}-${suffix}`;
+            suffix++;
+          }
+          allReceiverNumbers.add(newNumber);
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: renumberErr } = await (supabase as any)
+            .from("inventory_packages")
+            .update({ package_number: newNumber })
+            .eq("id", pkg.id);
+
+          if (renumberErr) {
+            console.error("Failed to renumber package:", renumberErr);
+            return { success: false, error: "Failed to transfer inventory", code: "TRANSFER_FAILED" };
+          }
+        }
+      }
+    }
+  }
+
+  // Now bulk-transfer all packages to the receiver org (no more collisions)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: updatePackagesError } = await (supabase as any)
     .from("inventory_packages")
     .update({
-      organisation_id: session.organisationId,
+      organisation_id: receiverOrgId,
     })
     .eq("shipment_id", shipmentId);
 

@@ -16,6 +16,7 @@ import { AcceptRejectButtons } from "@/features/shipments/components/AcceptRejec
 import { DeleteShipmentDraftButton } from "@/features/shipments/components/DeleteShipmentDraftButton";
 import { ShipmentPalletTable } from "@/features/shipments/components/ShipmentPalletTable";
 import { IncomingShipmentPackageEditor } from "@/features/shipments/components/IncomingShipmentPackageEditor";
+import { PrintShipmentButton } from "@/features/shipments/components/PrintShipmentButton";
 
 const statusColors: Record<ShipmentStatus, string> = {
   draft: "bg-yellow-100 text-yellow-800",
@@ -179,6 +180,15 @@ export default function ShipmentDetailPage() {
               totalVolume={totalVolume}
               fromOrgName={shipment.fromOrganisationName}
               onSuccess={fetchShipment}
+            />
+          )}
+          {shipment.packages.length > 0 && (
+            <PrintShipmentButton
+              shipmentCode={shipment.shipmentCode}
+              fromOrgName={shipment.fromOrganisationName}
+              toOrgName={shipment.toOrganisationName}
+              shipmentDate={formatDate(shipment.shipmentDate)}
+              packages={shipment.packages}
             />
           )}
           <span

@@ -520,6 +520,11 @@ export function ProductionOutputsSection({
           volumeM3 = vol.toFixed(3);
           volumeIsCalculated = true;
         }
+      } else if (input.volumeM3 != null && input.volumeM3 > 0) {
+        // Can't auto-calculate (e.g. range dimensions like "100-350")
+        // but the input already has a volume — carry it over
+        volumeM3 = input.volumeM3.toFixed(3);
+        volumeIsCalculated = false;
       }
 
       return {
