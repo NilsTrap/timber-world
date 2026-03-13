@@ -251,7 +251,7 @@ export async function validateProduction(
       .from("portal_production_outputs")
       .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes")
       .eq("production_entry_id", productionEntryId)
-      .order("package_sequence", { ascending: true }),
+      .order("created_at", { ascending: true }),
   ]);
 
   const { data: inputs, error: inputsError } = inputsResult;
@@ -679,6 +679,25 @@ export async function validateProduction(
         updatedOutputOriginals.push({ id: sortedExisting[i].id, original });
       }
 
+      // Phase 1: Set all package_numbers to temporary values to avoid unique constraint
+      // conflicts when package numbers are swapped or reassigned between rows
+      const tmpResults = await Promise.all(
+        sortedExisting.slice(0, reusableCount).map((existing: any, i: number) =>
+          (supabase as any)
+            .from("inventory_packages")
+            .update({ package_number: `__tmp_${productionEntryId}_${i}` })
+            .eq("id", existing.id)
+        )
+      );
+      for (const r of tmpResults) {
+        if (r.error) {
+          console.error("[validateProduction] Failed to set temp package number:", r.error);
+          await revertChanges();
+          return { success: false, error: `Failed to update output package: ${r.error.message}`, code: "UPDATE_FAILED" };
+        }
+      }
+
+      // Phase 2: Update all fields including final package_numbers
       const updateResults = await Promise.all(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         outputPackages.slice(0, reusableCount).map((pkg: any, i: number) => {

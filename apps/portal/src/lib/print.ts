@@ -59,7 +59,7 @@ export function printHtml(html: string, styles: string): void {
 }
 
 export const PRINT_STYLES_TABLE = `
-  @page { size: portrait; margin: 10mm; }
+  @page { size: 210mm 297mm; margin: 10mm; }
   body { font-family: system-ui, -apple-system, sans-serif; padding: 15px; margin: 0; }
   table { border-collapse: collapse; width: 100%; font-size: 8pt; white-space: nowrap; }
   th, td { text-align: left; padding: 3px 4px; }
@@ -77,7 +77,7 @@ export const PRINT_STYLES_TABLE = `
 `;
 
 export const PRINT_STYLES_PORTRAIT = `
-  @page { size: portrait; margin: 15mm; }
+  @page { size: 210mm 297mm; margin: 15mm; }
   body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; margin: 0; }
   table { border-collapse: collapse; width: 100%; font-size: 11pt; }
   th, td { text-align: left; padding: 8px 6px; }
