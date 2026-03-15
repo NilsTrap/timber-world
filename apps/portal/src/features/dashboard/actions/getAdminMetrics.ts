@@ -34,7 +34,7 @@ export async function getAdminMetrics(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: packagesData, error: packagesError } = await (supabase as any)
     .from("inventory_packages")
-    .select("volume_m3, shipment_id, production_entry_id, organisation_id, shipments(to_organisation_id)")
+    .select("volume_m3, shipment_id, production_entry_id, organisation_id, shipments!shipment_id(to_organisation_id)")
     .neq("status", "consumed");
 
   if (packagesError) {

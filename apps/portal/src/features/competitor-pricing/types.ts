@@ -6,30 +6,36 @@
  * Available options for scraper configuration
  *
  * These are the options available on mass.ee for solid wood panels.
- * Based on actual product availability as of 2026-03-01.
- *
- * Species names use Estonian terminology:
- *   - tamm = oak (primary, confirmed working)
- *   - saar = ash
- *   - pähkel = walnut
- *   - kask = birch
+ * Based on discovered products and known URL patterns as of 2026-03-14.
  */
 export const SCRAPER_OPTIONS = {
   species: [
     { value: "oak", label: "Oak (Tamm)" },
     { value: "ash", label: "Ash (Saar)" },
-    { value: "walnut", label: "Walnut (Pähkel)" },
     { value: "birch", label: "Birch (Kask)" },
+    { value: "pine", label: "Pine (Mänd)" },
+    { value: "beech", label: "Beech (Pöök)" },
+    { value: "walnut", label: "Walnut (Pähkel)" },
+    { value: "maple", label: "Maple (Vaher)" },
+    { value: "linden", label: "Linden (Pärn)" },
+    { value: "alder", label: "Alder (Lepp)" },
+    { value: "cherry", label: "Cherry (Kirsipuu)" },
+    { value: "sapele", label: "Sapele (Sapeli)" },
+    { value: "pear", label: "Pear (Pirn)" },
+    { value: "thermo", label: "Thermo-treated (Termo)" },
   ] as const,
-  // Based on actual products found on mass.ee
-  thicknesses: [20, 30, 40] as const,
-  widths: [620, 1220] as const,
-  lengths: [800, 900, 1000, 1200, 1450, 1500, 2000, 2100, 2500] as const,
+  thicknesses: [14, 16, 18, 19, 20, 24, 26, 27, 28, 30, 38, 40] as const,
+  widths: [200, 400, 600, 620, 630, 635, 640, 650, 760, 900, 924, 960, 1200, 1210, 1220, 1225, 1260] as const,
+  lengths: [
+    800, 900, 950, 1000, 1050, 1100, 1150, 1200, 1250, 1300, 1350, 1400, 1500,
+    1600, 1700, 1800, 1900, 2000, 2020, 2100, 2200, 2300, 2400, 2440, 2500,
+    2600, 2700, 2800, 2900, 3000, 3020, 3100, 3200, 3300, 3500, 3800, 4000, 4200, 4500,
+  ] as const,
   panelTypes: [
     { value: "FJ", label: "FJ (Finger Jointed / Sõrmjätkatud)" },
     { value: "FS", label: "FS (Full Stave / Pika Lamelliga)" },
   ] as const,
-  qualities: ["A/B", "B/C"] as const,
+  qualities: ["A/A", "A/B", "B/B", "B/C", "C/C", "Rustic"] as const,
 } as const;
 
 /**
@@ -90,6 +96,7 @@ export interface CompetitorPriceDb {
   source: string;
   product_name: string;
   species: string | null;
+  panel_type: string | null;
   thickness_mm: number;
   width_mm: number;
   length_mm: number;

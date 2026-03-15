@@ -33,6 +33,7 @@ interface CompetitorPriceInsert {
   source: string;
   product_name: string;
   species: string;
+  panel_type: string | null;
   thickness_mm: number;
   width_mm: number;
   length_mm: number;
@@ -222,6 +223,7 @@ function transformProduct(
     source: "mass.ee",
     product_name: product.name,
     species: product.species || "oak",
+    panel_type: panelType || null,
     thickness_mm: product.thickness,
     width_mm: product.width,
     length_mm: product.length,
@@ -338,6 +340,35 @@ async function main() {
   }
 
   console.log(`Successfully inserted ${data?.length || 0} records`);
+
+  // Save discovered product URLs to scraper_product_urls
+  console.log("\nSaving product URLs for future scraping...");
+  const urlRecords = products.map((p) => {
+    const panelType = getPanelType(p);
+    return {
+      source: "mass.ee",
+      url: p.url,
+      species: p.species || null,
+      panel_type: panelType || null,
+      thickness_mm: p.thickness,
+      width_mm: p.width,
+      length_mm: p.length,
+      quality: p.quality || null,
+      is_active: true,
+      last_checked_at: p.scrapedAt,
+    };
+  });
+
+  const { data: urlData, error: urlError } = await supabase
+    .from("scraper_product_urls")
+    .upsert(urlRecords, { onConflict: "source,url" })
+    .select("id");
+
+  if (urlError) {
+    console.error("Warning: Failed to save product URLs:", urlError.message);
+  } else {
+    console.log(`Saved ${urlData?.length || 0} product URLs`);
+  }
 
   // Summary
   const speciesCounts = records.reduce((acc, r) => {

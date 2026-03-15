@@ -81,13 +81,22 @@ export async function loadConfig(source: string): Promise<ScraperConfig | null> 
 }
 
 /**
- * Species name mapping (English -> Estonian slug)
+ * Species name mapping (English -> Estonian slug for mass.ee URLs)
  */
 const SPECIES_SLUGS: Record<string, string> = {
   oak: "tamm",
-  ash: "saar",
-  walnut: "pahkel",
+  ash: "eur--saar",
   birch: "kask",
+  pine: "mand",
+  beech: "pook",
+  walnut: "pahkel",
+  maple: "vaher",
+  linden: "parn",
+  alder: "lepp",
+  cherry: "kirsi",
+  sapele: "sapeli",
+  pear: "pirn",
+  thermo: "termo",
 };
 
 /**
@@ -95,7 +104,19 @@ const SPECIES_SLUGS: Record<string, string> = {
  */
 const PANEL_TYPE_SLUGS: Record<string, string> = {
   FS: "pikk-lamell", // Full Stave / Pika lamelliga
-  FJ: "sormjatkatud", // Finger Jointed / Sõrmjätkatud
+  FJ: "sormjatk",    // Finger Jointed / Sõrmjätkatud
+};
+
+/**
+ * Quality grade -> URL slug mapping
+ */
+const QUALITY_SLUGS: Record<string, string> = {
+  "A/A": "a-a",
+  "A/B": "a-b",
+  "B/B": "b-b",
+  "B/C": "b-c",
+  "C/C": "c-c",
+  "Rustic": "rustic",
 };
 
 /**
@@ -103,7 +124,7 @@ const PANEL_TYPE_SLUGS: Record<string, string> = {
  *
  * mass.ee URL patterns:
  * Full Stave: https://mass.ee/liimpuit-{species}-pikk-lamell-{thickness}-x-{width}-x-{length}mm-{quality}
- * Finger Jointed: https://mass.ee/liimpuit-{species}-sormjatkatud-{thickness}-x-{width}-x-{length}mm-{quality}
+ * Finger Jointed: https://mass.ee/liimpuit-{species}-sormjatk-{thickness}-x-{width}-x-{length}mm-{quality}
  */
 export function generateUrls(config: ScraperConfig): string[] {
   const urls: string[] = [];
@@ -124,8 +145,7 @@ export function generateUrls(config: ScraperConfig): string[] {
         for (const width of config.widths) {
           for (const length of config.lengths) {
             for (const quality of config.qualities) {
-              // Convert quality format: "A/B" -> "a-b", "Rustic" -> "rustic"
-              const qualitySlug = quality.toLowerCase().replace("/", "-");
+              const qualitySlug = QUALITY_SLUGS[quality] || quality.toLowerCase().replace("/", "-");
               const url = `https://mass.ee/liimpuit-${speciesSlug}-${typeSlug}-${thickness}-x-${width}-x-${length}mm-${qualitySlug}`;
               urls.push(url);
             }
@@ -136,6 +156,37 @@ export function generateUrls(config: ScraperConfig): string[] {
   }
 
   return urls;
+}
+
+/**
+ * Load saved product URLs from scraper_product_urls table
+ * These are URLs that were previously discovered to have actual products
+ */
+export async function loadSavedUrls(source: string): Promise<string[]> {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error("Error: Missing environment variables for loading saved URLs");
+    return [];
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const { data, error } = await supabase
+    .from("scraper_product_urls")
+    .select("url")
+    .eq("source", source)
+    .eq("is_active", true);
+
+  if (error) {
+    console.error(`Error loading saved URLs for ${source}:`, error.message);
+    return [];
+  }
+
+  return (data || []).map((row) => row.url);
 }
 
 /**
@@ -163,7 +214,8 @@ export function matchesConfig(
   // Check quality (if specified)
   if (config.qualities.length > 0 && product.quality) {
     const normalizedQuality = product.quality.toUpperCase().replace("-", "/");
-    if (!config.qualities.includes(normalizedQuality)) {
+    const normalizedQualities = config.qualities.map(q => q.toUpperCase());
+    if (!normalizedQualities.includes(normalizedQuality) && !normalizedQualities.includes(product.quality)) {
       return false;
     }
   }

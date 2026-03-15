@@ -18,7 +18,7 @@
 
 import { chromium, type Browser, type Page } from 'playwright';
 import * as fs from 'fs';
-import { loadConfig, generateUrls, matchesConfig, type ScraperConfig } from './config';
+import { type ScraperConfig } from './config';
 
 // Types
 interface PanelProduct {
@@ -117,9 +117,7 @@ interface ScraperOptions {
   outputFormat?: 'table' | 'json' | 'csv';
   outputFile?: string;
   debug?: boolean;
-  noConfig?: boolean; // Skip loading config from database
-  discover?: boolean; // Use discovery mode to find products from category pages
-  full?: boolean;     // Full scan mode - test all species/dimension combinations
+  discover?: boolean; // Only discover URLs (don't scrape prices)
   fromFile?: boolean; // Scrape products from products-to-scrape.json
 }
 
@@ -129,9 +127,7 @@ function parseArgs(): ScraperOptions {
   const options: ScraperOptions = {
     outputFormat: 'table',
     debug: false,
-    noConfig: false,
     discover: false,
-    full: false,
     fromFile: false
   };
 
@@ -149,15 +145,8 @@ function parseArgs(): ScraperOptions {
       case '--debug':
         options.debug = true;
         break;
-      case '--no-config':
-        options.noConfig = true;
-        break;
       case '--discover':
         options.discover = true;
-        break;
-      case '--full':
-        options.full = true;
-        options.discover = true; // Full scan implies discovery
         break;
       case '--from-file':
         options.fromFile = true;
@@ -170,8 +159,8 @@ function parseArgs(): ScraperOptions {
 
 // Parse dimensions from text like "20 x 1220 x 900mm" or "40 x 620 x 1450mm"
 function parseDimensions(text: string): { thickness: number; width: number; length: number } | null {
-  // Look for pattern like "20 x 620 x 800" or "20x620x800"
-  const match = text.match(/(\d+)\s*x\s*(\d+)\s*x\s*(\d+)/i);
+  // Look for pattern like "20 x 620 x 800", "20x620x800", or "20-x-620-x-800" (URL format)
+  const match = text.match(/(\d+)\s*[-]?\s*x\s*[-]?\s*(\d+)\s*[-]?\s*x\s*[-]?\s*(\d+)/i);
   if (match) {
     return {
       thickness: parseInt(match[1], 10),
@@ -182,8 +171,11 @@ function parseDimensions(text: string): { thickness: number; width: number; leng
   return null;
 }
 
-// Parse quality grade from text
+// Parse quality grade from text or URL
 function parseQuality(text: string): string {
+  // Check for "Rustic" first
+  if (/\brustic\b/i.test(text)) return 'Rustic';
+  // Check for letter grades like A/B, B/C, A-B, etc.
   const match = text.match(/\b([ABC])\/([ABC])\b/i) || text.match(/\b([ABC])\s*-\s*([ABC])\b/i);
   return match ? match[0].toUpperCase().replace('-', '/') : '';
 }
@@ -214,6 +206,23 @@ class MassScraper {
     console.log('Launching browser...');
     this.browser = await chromium.launch({ headless: true });
     this.page = await this.browser.newPage();
+    // Set a generous default navigation timeout
+    this.page.setDefaultNavigationTimeout(60000);
+  }
+
+  /** Navigate to a URL with retries */
+  private async navigateTo(url: string, retries = 3): Promise<void> {
+    if (!this.page) throw new Error('Browser not initialized');
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        return;
+      } catch (err) {
+        if (attempt === retries) throw err;
+        console.log(`    Navigation timeout (attempt ${attempt}/${retries}), retrying...`);
+        await this.page.waitForTimeout(2000);
+      }
+    }
 
     // Set Estonian locale
     await this.page.setExtraHTTPHeaders({
@@ -252,8 +261,14 @@ class MassScraper {
       'A/B': 'a-b',
       AA: 'a-a',
       'A/A': 'a-a',
+      BB: 'b-b',
+      'B/B': 'b-b',
       BC: 'b-c',
       'B/C': 'b-c',
+      CC: 'c-c',
+      'C/C': 'c-c',
+      Rustic: 'rustic',
+      RUSTIC: 'rustic',
     };
 
     // Load products from file
@@ -302,290 +317,833 @@ class MassScraper {
   }
 
   /**
-   * Generate focused list of URLs for all species with common dimensions
-   * Based on known URL patterns from mass.ee
+   * Scrape the actual filter values from mass.ee category pages.
+   * These are the real values available on the site (thickness, width, length)
+   * extracted from the filter checkbox UI.
+   *
+   * Returns merged values from both FS and FJ category pages.
    */
-  generateComprehensiveUrls(): string[] {
-    const urls: string[] = [];
+  async scrapeFilterValues(): Promise<{
+    thicknesses: number[];
+    widths: number[];
+    lengths: number[];
+  }> {
+    if (!this.page) throw new Error('Browser not initialized');
 
-    // Species with their Estonian slugs (most common ones)
-    const species = ['tamm', 'saar', 'hele-saar', 'kask', 'mand', 'pook', 'pahkel', 'vaher'];
+    const allThicknesses = new Set<number>();
+    const allWidths = new Set<number>();
+    const allLengths = new Set<number>();
 
-    // Panel types
-    const panelTypes = ['pikk-lamell', 'sormjatk'];
+    const categoryPages = [
+      'https://mass.ee/liimpuit-pika-lamelliga',
+      'https://mass.ee/liimpuit-sormjatkatud',
+    ];
 
-    // Focus on most common thicknesses
-    const thicknesses = [18, 19, 20, 26, 27, 30, 40];
+    for (const url of categoryPages) {
+      console.log(`\nScraping filter values from: ${url}`);
+      await this.page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+      await this.page.waitForTimeout(3000);
 
-    // Focus on most common widths
-    const widths = [400, 600, 620, 1000, 1200, 1220];
-
-    // Focus on most common lengths
-    const lengths = [800, 900, 1000, 1200, 1500, 2000, 2100, 2500, 3000, 4000, 4200];
-
-    console.log('Generating focused URL list...');
-    console.log(`  Species: ${species.length}`);
-    console.log(`  Panel types: ${panelTypes.length}`);
-    console.log(`  Thicknesses: ${thicknesses.length}`);
-    console.log(`  Widths: ${widths.length}`);
-    console.log(`  Lengths: ${lengths.length}`);
-
-    // Generate URLs for focused combinations
-    for (const speciesSlug of species) {
-      for (const panelType of panelTypes) {
-        for (const thickness of thicknesses) {
-          for (const width of widths) {
-            for (const length of lengths) {
-              // Only include A/B quality (most common)
-              const url = `https://mass.ee/liimpuit-${speciesSlug}-${panelType}-${thickness}-x-${width}-x-${length}mm-a-b`;
-              urls.push(url);
-            }
+      // Extract filter blocks: each .filter-block has a label and checkbox values
+      // The page has filter groups for: location, thickness (Paksus), width (Laius), length (Pikkus), tags
+      // We identify them by the order: after location come thickness, width, length
+      const filterGroups = await this.page.evaluate(() => {
+        const groups: { label: string; values: string[] }[] = [];
+        document.querySelectorAll('.filter-block').forEach((block) => {
+          const labelEl = block.querySelector('.filter-block-label');
+          const label = labelEl?.textContent?.trim() || '';
+          const values: string[] = [];
+          block.querySelectorAll('.filter-label').forEach((fl) => {
+            const text = fl.textContent?.trim() || '';
+            // Extract the number+mm part, e.g. "20  mm 78" → "20"
+            const match = text.match(/^(\d+)\s*mm/);
+            if (match) values.push(match[1]);
+          });
+          if (values.length > 0) {
+            groups.push({ label, values });
           }
+        });
+        return groups;
+      });
+
+      console.log(`  Found ${filterGroups.length} filter groups with mm values`);
+
+      // mass.ee filter groups with mm values are in order: thickness, width, length
+      // Identify by typical value ranges:
+      // thickness: < 100mm, width: 100-1300mm, length: > 700mm
+      for (const group of filterGroups) {
+        const nums = group.values.map(Number).filter((n) => n > 0);
+        console.log(`  Group "${group.label}": ${nums.join(', ')}`);
+
+        const maxVal = Math.max(...nums);
+        const minVal = Math.min(...nums);
+
+        if (maxVal <= 100) {
+          // Thicknesses (12-41mm range)
+          for (const n of nums) allThicknesses.add(n);
+        } else if (minVal >= 100 && maxVal <= 1300) {
+          // Widths (200-1220mm range)
+          for (const n of nums) allWidths.add(n);
+        } else if (minVal >= 700) {
+          // Lengths (800-4000mm range)
+          for (const n of nums) allLengths.add(n);
         }
       }
     }
 
-    console.log(`  Generated ${urls.length} URLs to test`);
-    return urls;
+    const result = {
+      thicknesses: [...allThicknesses].sort((a, b) => a - b),
+      widths: [...allWidths].sort((a, b) => a - b),
+      lengths: [...allLengths].sort((a, b) => a - b),
+    };
+
+    console.log(`\nFilter values from mass.ee:`);
+    console.log(`  Thicknesses (${result.thicknesses.length}): ${result.thicknesses.join(', ')}mm`);
+    console.log(`  Widths (${result.widths.length}): ${result.widths.join(', ')}mm`);
+    console.log(`  Lengths (${result.lengths.length}): ${result.lengths.join(', ')}mm`);
+
+    return result;
   }
 
   /**
    * Discover ALL solid wood panel products from category pages
    * This crawls the category pages with pagination and extracts all product links
    */
-  async discoverAllProducts(): Promise<string[]> {
-    if (!this.page) throw new Error('Browser not initialized');
+  /**
+   * Save discovered filter values to the scraper_config table
+   */
+  async saveDiscoveredFilterValues(values: {
+    thicknesses: number[];
+    widths: number[];
+    lengths: number[];
+  }): Promise<void> {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseServiceKey) return;
 
-    const allUrls: Set<string> = new Set();
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
-    // Category pages to crawl
-    const categoryPages = [
-      'https://mass.ee/liimpuit-pika-lamelliga',  // Full stave panels
-      'https://mass.ee/liimpuit-sormjatkatud',     // Finger jointed panels
-    ];
+    const { error } = await supabase
+      .from('scraper_config')
+      .update({
+        discovered_thicknesses: values.thicknesses,
+        discovered_widths: values.widths,
+        discovered_lengths: values.lengths,
+        discovered_at: new Date().toISOString(),
+      })
+      .eq('source', 'mass.ee');
 
-    for (const categoryUrl of categoryPages) {
-      console.log(`\nDiscovering products from: ${categoryUrl}`);
-
-      let currentPage = 1;
-      const maxPages = 50; // Safety limit
-
-      while (currentPage <= maxPages) {
-        try {
-          // Build URL with pagination
-          const pageUrl = currentPage === 1
-            ? categoryUrl
-            : `${categoryUrl}?page=${currentPage}`;
-
-          await this.page.goto(pageUrl, { waitUntil: 'networkidle', timeout: 30000 });
-          await this.page.waitForTimeout(2000);
-
-          // Scroll to trigger lazy loading
-          for (let i = 0; i < 3; i++) {
-            await this.page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
-            await this.page.waitForTimeout(500);
-          }
-
-          // Find all product links
-          const links = await this.page.evaluate(() => {
-            const urls: string[] = [];
-            const anchors = document.querySelectorAll('a[href*="liimpuit-"]');
-
-            for (const anchor of anchors) {
-              const href = (anchor as HTMLAnchorElement).href;
-              // Filter for product pages (contain dimensions pattern like "20-x-620-x-800")
-              if (href && href.match(/\d+-x-\d+-x-\d+/)) {
-                urls.push(href);
-              }
-            }
-
-            return urls;
-          });
-
-          if (links.length === 0) {
-            // No more products, stop pagination
-            break;
-          }
-
-          const prevCount = allUrls.size;
-          for (const link of links) {
-            allUrls.add(link);
-          }
-          const newCount = allUrls.size - prevCount;
-
-          if (currentPage === 1) {
-            console.log(`  Found ${links.length} product links`);
-          } else {
-            console.log(`  Page ${currentPage}: Found ${links.length} product links`);
-          }
-
-          // If no new unique URLs were added, we've likely reached the end
-          if (newCount === 0 && currentPage > 1) {
-            break;
-          }
-
-          currentPage++;
-
-          // Be respectful - small delay between pages
-          await this.page.waitForTimeout(500);
-
-        } catch (error) {
-          console.error(`  Error on page ${currentPage}: ${error}`);
-          break;
-        }
-      }
+    if (error) {
+      console.error('Failed to save discovered filter values:', error.message);
+    } else {
+      console.log('Saved discovered filter values to database');
     }
-
-    const uniqueUrls = Array.from(allUrls);
-    console.log(`\nTotal unique product URLs discovered: ${uniqueUrls.length}`);
-
-    return uniqueUrls;
   }
 
   /**
-   * Full scan mode - generate comprehensive URLs for all species/dimensions
+   * Parse metadata from a product URL without visiting the page.
+   * URL pattern: https://mass.ee/liimpuit-{species}-{panelType}-{thickness}-x-{width}-x-{length}mm-{quality}
    */
-  async fullScan(): Promise<string[]> {
-    // First discover from category pages
-    const discovered = await this.discoverAllProducts();
+  private parseUrlMetadata(url: string): {
+    species: string;
+    panelType: string;
+    quality: string;
+    thickness: number | null;
+    width: number | null;
+    length: number | null;
+  } {
+    const species = detectSpecies(url, '');
+    const panelType = url.includes('sormjatk') ? 'FJ' : url.includes('pikk-lamell') || url.includes('pika-lamell') ? 'FS' : '';
+    const dims = parseDimensions(url);
 
-    // Then add comprehensive URL generation
-    console.log('\nGenerating comprehensive URLs for full scan...');
-    const comprehensive = this.generateComprehensiveUrls();
-
-    // Merge (discovered first as they're known to exist)
-    const merged = [...new Set([...discovered, ...comprehensive])];
-    console.log(`\nTotal URLs for full scan: ${merged.length} (${discovered.length} discovered + ${comprehensive.length} generated)`);
-
-    return merged;
-  }
-
-  async discoverOakPanelUrls(): Promise<string[]> {
-    if (!this.page) throw new Error('Browser not initialized');
-
-    const urls: string[] = [];
-
-    // Go to the oak panel category page and find product links
-    try {
-      console.log(`\nNavigating to oak panel category...`);
-      await this.page.goto('https://mass.ee/liimpuit-pika-lamelliga', { waitUntil: 'networkidle', timeout: 30000 });
-      await this.page.waitForTimeout(3000);
-
-      // Look for product links that contain dimensions in the URL
-      const links = await this.page.evaluate(`
-        (function() {
-          var links = [];
-          var anchors = document.querySelectorAll('a');
-          for (var i = 0; i < anchors.length; i++) {
-            var href = anchors[i].href;
-            // Look for URLs with dimension patterns like "20-x-620-x-800" or containing "tamm" with dimensions
-            if (href && href.includes('mass.ee') && !href.includes('#')) {
-              // Check for dimension pattern in URL
-              if (href.match(/\\d+[-x]+\\d+[-x]+\\d+/i) ||
-                  (href.includes('tamm') && href.match(/\\d+mm/i))) {
-                links.push(href);
-              }
-            }
-          }
-          return links;
-        })()
-      `);
-
-      if (Array.isArray(links) && links.length > 0) {
-        console.log(`  Found ${links.length} product links with dimensions`);
-        for (const link of links) {
-          if (!urls.includes(link)) {
-            urls.push(link);
-          }
-        }
-      }
-
-      // Also look for product cards/tiles with links
-      const productCards = await this.page.evaluate(`
-        (function() {
-          var links = [];
-          // Look for common product card patterns
-          var cards = document.querySelectorAll('.product-card a, .product-item a, .product a, [class*="product"] a');
-          for (var i = 0; i < cards.length; i++) {
-            var href = cards[i].href;
-            if (href && href.includes('mass.ee') && !href.includes('#')) {
-              links.push(href);
-            }
-          }
-          return links;
-        })()
-      `);
-
-      if (Array.isArray(productCards) && productCards.length > 0) {
-        console.log(`  Found ${productCards.length} product card links`);
-        for (const link of productCards) {
-          if (!urls.includes(link)) {
-            urls.push(link);
-          }
-        }
-      }
-
-      // Check for "tamm" specific pages
-      console.log(`\nNavigating to oak (tamm) category...`);
-      await this.page.goto('https://mass.ee/tamm', { waitUntil: 'networkidle', timeout: 30000 });
-      await this.page.waitForTimeout(3000);
-
-      // Find product links on this page
-      const oakLinks = await this.page.evaluate(`
-        (function() {
-          var links = [];
-          var anchors = document.querySelectorAll('a');
-          for (var i = 0; i < anchors.length; i++) {
-            var href = anchors[i].href;
-            var text = (anchors[i].innerText || '').toLowerCase();
-            if (href && href.includes('mass.ee') && !href.includes('#')) {
-              // Look for dimension patterns or "liimpuit" products
-              if (href.match(/\\d+[-x]+\\d+[-x]+\\d+/i) ||
-                  (href.includes('liimpuit') && href.includes('tamm'))) {
-                links.push(href);
-              }
-            }
-          }
-          return links;
-        })()
-      `);
-
-      if (Array.isArray(oakLinks) && oakLinks.length > 0) {
-        console.log(`  Found ${oakLinks.length} oak product links`);
-        for (const link of oakLinks) {
-          if (!urls.includes(link)) {
-            urls.push(link);
-          }
-        }
-      }
-
-    } catch (error) {
-      console.error(`  Error discovering URLs: ${error}`);
+    // Quality is the segment after "mm-", e.g. "...800mm-a-b" or "...800mm-a-b-est" → "a-b" → "A/B"
+    let quality = '';
+    const qualityMatch = url.match(/mm-([a-z](?:[/-][a-z])?)(?:\?|$|-[a-z]{2,})/i);
+    if (qualityMatch) {
+      quality = qualityMatch[1].toUpperCase().replace('-', '/');
+    }
+    // Also check for named quality slugs
+    if (/rustic/i.test(url)) {
+      quality = 'Rustic';
+    } else if (/\bdiy\b/i.test(url)) {
+      quality = 'DIY';
     }
 
-    // Filter out category/navigation links and keep only OAK (TAMM) product pages
-    const productUrls = urls.filter(url => {
-      // Exclude category pages and navigation
-      const excludePatterns = [
-        '/liimpuit-sormjatkatud',
-        '/liimpuit-pika-lamelliga',
-        '/liimpuit-detailid',
-        '/liimpuitplaadid',
-        '/tammest-liimpuitplaadid',
-        '/tooted?',
-        '/otsing',
-        '/blogi',
-        '/kontakt',
-      ];
-      if (excludePatterns.some(pattern => url.includes(pattern))) {
-        return false;
+    return {
+      species,
+      panelType,
+      quality,
+      thickness: dims?.thickness ?? null,
+      width: dims?.width ?? null,
+      length: dims?.length ?? null,
+    };
+  }
+
+  /**
+   * Discovery mode: find all product URLs and save metadata to database.
+   * Does NOT visit individual product pages — only crawls category pages
+   * and parses metadata from URLs.
+   */
+  /**
+   * Collect all product links from the current page (with pagination + scroll).
+   * Returns unique URLs found across all pages.
+   */
+  /**
+   * Collect product URLs from the current filtered page.
+   * Mass.ee shows products in merged tables — multiple size variants inside one container.
+   * We extract dimensions from the page content and also collect any direct product links.
+   */
+  private async collectProductLinksFromPage(): Promise<string[]> {
+    if (!this.page) return [];
+
+    const allLinks = new Set<string>();
+    let currentPage = 1;
+    const maxPages = 50;
+
+    while (currentPage <= maxPages) {
+      // Scroll to trigger lazy loading
+      for (let i = 0; i < 3; i++) {
+        await this.page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+        await this.page.waitForTimeout(500);
       }
-      // Only keep URLs that contain "tamm" (oak)
-      return url.toLowerCase().includes('tamm');
+
+      const results = await this.page.evaluate(() => {
+        const links: string[] = [];
+
+        // Collect any direct product links with dimension pattern
+        document.querySelectorAll('a[href]').forEach(a => {
+          const href = (a as HTMLAnchorElement).href;
+          if (href && href.match(/\d+-x-\d+-x-\d+/)) {
+            links.push(href);
+          }
+        });
+
+        // Also extract dimension text from the page body
+        // Mass.ee shows rows like "12 x 620 x 800mm" or "12x620x1800"
+        const bodyText = document.body.innerText;
+        const dimMatches = bodyText.match(/(\d+)\s*x\s*(\d+)\s*x\s*(\d+)\s*mm/gi) || [];
+        const dimensions: { thickness: number; width: number; length: number }[] = [];
+        for (const m of dimMatches) {
+          const parts = m.match(/(\d+)\s*x\s*(\d+)\s*x\s*(\d+)/i);
+          if (parts) {
+            dimensions.push({
+              thickness: parseInt(parts[1], 10),
+              width: parseInt(parts[2], 10),
+              length: parseInt(parts[3], 10),
+            });
+          }
+        }
+
+        return { links, dimensions };
+      });
+
+      // Add direct links
+      for (const link of results.links) allLinks.add(link);
+
+      // For dimensions found in text, we'll return them as synthetic "dimension:" entries
+      // that the caller can use to construct URLs
+      for (const dim of results.dimensions) {
+        allLinks.add(`dim:${dim.thickness}x${dim.width}x${dim.length}`);
+      }
+
+      if (results.links.length === 0 && results.dimensions.length === 0) break;
+
+      // Check for next page
+      const hasNextPage = await this.page.evaluate(() => {
+        const paginationLinks = document.querySelectorAll('.pagination a, a[rel="next"], .page-link');
+        for (const link of paginationLinks) {
+          if (link.textContent?.includes('›') || link.textContent?.includes('Next') || link.getAttribute('rel') === 'next') {
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (!hasNextPage) break;
+
+      currentPage++;
+      const currentUrl = new URL(this.page.url());
+      currentUrl.searchParams.set('page', String(currentPage));
+      await this.page.goto(currentUrl.toString(), { waitUntil: 'networkidle', timeout: 30000 });
+      await this.page.waitForTimeout(1500);
+    }
+
+    return Array.from(allLinks);
+  }
+
+  /**
+   * Get the currently visible filter values (which ones are available/not greyed out).
+   * Returns the mm values for each filter group that has mm-based values.
+   */
+  private async getAvailableFilterValues(debugMode: boolean = false): Promise<{
+    thicknesses: number[];
+    widths: number[];
+    lengths: number[];
+  }> {
+    if (!this.page) return { thicknesses: [], widths: [], lengths: [] };
+
+    // First, debug: dump the HTML structure of filter items to understand how mass.ee marks disabled options
+    if (debugMode) {
+      const debugInfo = await this.page.evaluate(() => {
+        const info: string[] = [];
+        document.querySelectorAll('.filter-block').forEach((block) => {
+          const labelEl = block.querySelector('.filter-block-label');
+          const blockLabel = labelEl?.textContent?.trim() || 'UNKNOWN';
+          info.push(`\nFILTER BLOCK: "${blockLabel}"`);
+
+          block.querySelectorAll('.filter-label').forEach((fl) => {
+            const text = fl.textContent?.trim() || '';
+            const match = text.match(/^(\d+)\s*mm/);
+            if (!match) return;
+
+            // Walk up the DOM to find relevant parent classes
+            let el: Element | null = fl;
+            const classChain: string[] = [];
+            for (let i = 0; i < 5 && el; i++) {
+              if (el.className) classChain.push(`${el.tagName.toLowerCase()}.${el.className}`);
+              el = el.parentElement;
+            }
+
+            // Check if there's a count/number after mm
+            const countMatch = text.match(/(\d+)\s*mm\s*(\d*)/);
+            const count = countMatch?.[2] || 'N/A';
+
+            info.push(`  ${match[1]}mm (count: ${count}) | classes: ${classChain.join(' > ')}`);
+          });
+        });
+        return info.join('\n');
+      });
+      console.log('\n=== FILTER DEBUG INFO ===');
+      console.log(debugInfo);
+      console.log('=== END FILTER DEBUG ===\n');
+    }
+
+    const filterGroups = await this.page.evaluate(() => {
+      const groups: { label: string; values: number[] }[] = [];
+      document.querySelectorAll('.filter-block').forEach((block) => {
+        const labelEl = block.querySelector('.filter-block-label');
+        const label = labelEl?.textContent?.trim() || '';
+        const values: number[] = [];
+        block.querySelectorAll('.filter-label').forEach((fl) => {
+          const text = fl.textContent?.trim() || '';
+          const match = text.match(/^(\d+)\s*mm/);
+          if (match) {
+            // Check if this filter option has a count > 0 (mass.ee shows "20 mm 78" where 78 is count)
+            // If count is 0 or the item is visually hidden/disabled, skip it
+            const countMatch = text.match(/(\d+)\s*mm\s+(\d+)/);
+            const count = countMatch ? parseInt(countMatch[2], 10) : -1; // -1 means no count found
+
+            // Walk up DOM to check for disabled/unavailable classes
+            let el: Element | null = fl;
+            let isDisabled = false;
+            for (let i = 0; i < 4 && el; i++) {
+              const cls = el.className?.toLowerCase() || '';
+              if (cls.includes('disabled') || cls.includes('unavailable') || cls.includes('hidden') || cls.includes('inactive')) {
+                isDisabled = true;
+                break;
+              }
+              // Check computed style for display:none or opacity:0
+              el = el.parentElement;
+            }
+
+            // Include if: count > 0, or count not found (assume available), and not disabled
+            if (!isDisabled && count !== 0) {
+              values.push(parseInt(match[1], 10));
+            }
+          }
+        });
+        if (values.length > 0) {
+          groups.push({ label, values });
+        }
+      });
+      return groups;
     });
 
-    console.log(`\nFiltered to ${productUrls.length} oak (TAMM) product URLs`);
-    return productUrls;
+    const thicknesses: number[] = [];
+    const widths: number[] = [];
+    const lengths: number[] = [];
+
+    for (const group of filterGroups) {
+      const label = group.label.toLowerCase();
+
+      // Use Estonian filter labels from mass.ee's UI
+      if (label.includes('paksus')) {
+        thicknesses.push(...group.values);
+      } else if (label.includes('laius')) {
+        widths.push(...group.values);
+      } else if (label.includes('pikkus')) {
+        lengths.push(...group.values);
+      }
+    }
+
+    return {
+      thicknesses: [...new Set(thicknesses)].sort((a, b) => a - b),
+      widths: [...new Set(widths)].sort((a, b) => a - b),
+      lengths: [...new Set(lengths)].sort((a, b) => a - b),
+    };
+  }
+
+  /**
+   * Click a filter checkbox by its mm value within the appropriate filter block.
+   * Returns true if the checkbox was found and clicked.
+   */
+  private async clickFilterCheckbox(value: number): Promise<boolean> {
+    if (!this.page) return false;
+
+    const clicked = await this.page.evaluate((val: number) => {
+      const labels = document.querySelectorAll('.filter-label');
+      for (const label of labels) {
+        const text = label.textContent?.trim() || '';
+        const match = text.match(/^(\d+)\s*mm/);
+        if (match && parseInt(match[1], 10) === val) {
+          // Click the label or its parent (which toggles the checkbox)
+          const clickTarget = label.closest('label, .filter-item, .filter-option') || label;
+          (clickTarget as HTMLElement).click();
+          return true;
+        }
+      }
+      return false;
+    }, value);
+
+    if (clicked) {
+      // Wait for the page to update after filter click
+      await this.page.waitForTimeout(1500);
+      try {
+        await this.page.waitForLoadState('networkidle', { timeout: 5000 });
+      } catch {
+        // Timeout is OK — some filter updates are client-side only
+      }
+    }
+
+    return clicked;
+  }
+
+  async discoverAllProducts(): Promise<void> {
+    if (!this.page) throw new Error('Browser not initialized');
+
+    // Step 1: Scrape initial filter values from mass.ee
+    const filterValues = await this.scrapeFilterValues();
+    await this.saveDiscoveredFilterValues(filterValues);
+
+    const allDiscoveredUrls = new Set<string>();
+
+    // Step 2: For each category page, use filters to discover all products
+    const categoryPages = [
+      { url: 'https://mass.ee/liimpuit-pika-lamelliga', name: 'Full Stave (FS)' },
+      // TEST: FJ disabled — uncomment when FS is verified
+      // { url: 'https://mass.ee/liimpuit-sormjatkatud', name: 'Finger Jointed (FJ)' },
+    ];
+
+    for (const category of categoryPages) {
+      console.log(`\n${'='.repeat(60)}`);
+      console.log(`Discovering products: ${category.name}`);
+      console.log(`${'='.repeat(60)}`);
+
+      // Load the category page fresh
+      await this.page.goto(category.url, { waitUntil: 'networkidle', timeout: 30000 });
+      await this.page.waitForTimeout(3000);
+
+      // Get available thicknesses for this category
+      const categoryFilters = await this.getAvailableFilterValues();
+      const thicknesses = categoryFilters.thicknesses;
+
+      console.log(`\nAvailable thicknesses: ${thicknesses.join(', ')}mm`);
+
+      // TEST: only first 2 thicknesses — remove this limit when verified
+      const testThicknesses = thicknesses.slice(0, 3);
+      console.log(`  TEST: Processing ${testThicknesses.join(', ')}mm only`);
+
+      for (const thickness of testThicknesses) {
+        console.log(`\n--- Thickness: ${thickness}mm ---`);
+
+        // Reload the category page fresh (clean filters)
+        await this.page.goto(category.url, { waitUntil: 'networkidle', timeout: 30000 });
+        await this.page.waitForTimeout(2000);
+
+        // Click thickness filter
+        const thicknessClicked = await this.clickFilterCheckbox(thickness);
+        if (!thicknessClicked) {
+          console.log(`  Could not click thickness ${thickness}mm filter, skipping`);
+          continue;
+        }
+
+        // See which widths are now available
+        const afterThickness = await this.getAvailableFilterValues();
+        console.log(`  Available widths: ${afterThickness.widths.join(', ')}mm`);
+
+        if (afterThickness.widths.length === 0) {
+          // No width filters visible — just collect whatever products are shown
+          const links = await this.collectProductLinksFromPage();
+          for (const link of links) allDiscoveredUrls.add(link);
+          console.log(`  Found ${links.length} products (no width filter)`);
+          continue;
+        }
+
+        for (const width of afterThickness.widths) {
+          // Reload with just thickness selected
+          await this.page.goto(category.url, { waitUntil: 'networkidle', timeout: 30000 });
+          await this.page.waitForTimeout(1500);
+          await this.clickFilterCheckbox(thickness);
+
+          // Click width filter
+          const widthClicked = await this.clickFilterCheckbox(width);
+          if (!widthClicked) {
+            console.log(`  Could not click width ${width}mm filter, skipping`);
+            continue;
+          }
+
+          // Get available lengths from filter sidebar (fast, reliable)
+          const afterWidth = await this.getAvailableFilterValues();
+          const availableLengths = afterWidth.lengths;
+
+          // Get species + quality from all product links on the page
+          const allLiimpuitLinks = await this.page.evaluate(() => {
+            const links: string[] = [];
+            document.querySelectorAll('a[href*="liimpuit-"]').forEach(a => {
+              links.push((a as HTMLAnchorElement).href);
+            });
+            return [...new Set(links)];
+          });
+
+          const speciesFound = new Set<string>();
+          const qualitiesFound = new Set<string>();
+
+          for (const link of allLiimpuitLinks) {
+            const species = detectSpecies(link, '');
+            if (species !== 'unknown') speciesFound.add(species);
+            const meta = this.parseUrlMetadata(link);
+            if (meta.quality) qualitiesFound.add(meta.quality);
+          }
+
+          if (speciesFound.size === 0 || qualitiesFound.size === 0) {
+            // Debug: dump ALL links on the page to understand why detection failed
+            const allPageLinks = await this.page.evaluate(() => {
+              const links: string[] = [];
+              document.querySelectorAll('a[href]').forEach(a => {
+                const href = (a as HTMLAnchorElement).href;
+                if (href && !href.startsWith('javascript') && !href.includes('#')) links.push(href);
+              });
+              return [...new Set(links)];
+            });
+            console.log(`  ${thickness}x${width}mm: ⚠ Could not detect species (${speciesFound.size}) or qualities (${qualitiesFound.size})`);
+            console.log(`    DEBUG: ${allPageLinks.length} total links on page`);
+            // Show links that might be product links (contain dimensions or product keywords)
+            const productishLinks = allPageLinks.filter(l => l.match(/\d+-x-\d+/) || l.includes('pook') || l.includes('beech') || l.includes('lamell'));
+            console.log(`    DEBUG product-ish links: ${productishLinks.map(l => l.replace('https://mass.ee/', '')).join(', ')}`);
+            continue;
+          }
+
+          // Construct URLs for each length × species × quality
+          const SPECIES_SLUGS: Record<string, string> = {
+            oak: 'tamm', ash: 'eur--saar', birch: 'kask', pine: 'mand',
+            beech: 'pook', walnut: 'pahkel', maple: 'vaher', linden: 'parn',
+            alder: 'lepp', cherry: 'kirsi', sapele: 'sapeli', pear: 'pirn', thermo: 'termo',
+          };
+          const QUALITY_SLUGS: Record<string, string> = {
+            'A/B': 'a-b', 'A/A': 'a-a', 'B/B': 'b-b', 'B/C': 'b-c', 'C/C': 'c-c',
+            'Rustic': 'rustic', 'DIY': 'diy',
+          };
+          const ptSlug = category.url.includes('sormjatk') ? 'sormjatk' : 'pikk-lamell';
+
+          // Construct candidate URLs
+          const candidateUrls: string[] = [];
+          for (const species of speciesFound) {
+            const speciesSlug = SPECIES_SLUGS[species];
+            if (!speciesSlug) continue;
+            for (const quality of qualitiesFound) {
+              const qualitySlug = QUALITY_SLUGS[quality];
+              if (!qualitySlug) continue;
+              for (const length of availableLengths) {
+                const url = `https://mass.ee/liimpuit-${speciesSlug}-${ptSlug}-${thickness}-x-${width}-x-${length}mm-${qualitySlug}`;
+                if (!allDiscoveredUrls.has(url)) {
+                  candidateUrls.push(url);
+                }
+              }
+            }
+          }
+
+          // Verify candidates with HEAD requests (5 in parallel)
+          let verifiedCount = 0;
+          for (let i = 0; i < candidateUrls.length; i += 5) {
+            const batch = candidateUrls.slice(i, i + 5);
+            const results = await Promise.all(
+              batch.map(async (url) => {
+                try {
+                  const response = await fetch(url, { method: 'HEAD', redirect: 'manual' });
+                  return { url, exists: response.status === 200 };
+                } catch {
+                  return { url, exists: false };
+                }
+              })
+            );
+            for (const { url, exists } of results) {
+              if (exists) {
+                allDiscoveredUrls.add(url);
+                verifiedCount++;
+              }
+            }
+          }
+
+          console.log(`  ${thickness}x${width}mm: ${availableLengths.length} lengths [${availableLengths.join(', ')}], ${[...speciesFound].join('+')} species, ${[...qualitiesFound].join('+')} qualities → ${verifiedCount}/${candidateUrls.length} verified (total: ${allDiscoveredUrls.size})`);
+        }
+      }
+    }
+
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`Total verified product URLs: ${allDiscoveredUrls.size}`);
+    console.log(`${'='.repeat(60)}`);
+
+    // Parse metadata from verified URLs and save to database
+    console.log('\nParsing metadata from verified URLs...');
+    const urlRecords = [...allDiscoveredUrls].map((url) => {
+      const meta = this.parseUrlMetadata(url);
+      return {
+        source: 'mass.ee',
+        url,
+        species: meta.species || null,
+        panel_type: meta.panelType || null,
+        thickness_mm: meta.thickness,
+        width_mm: meta.width,
+        length_mm: meta.length,
+        quality: meta.quality || null,
+        is_active: true,
+        last_checked_at: new Date().toISOString(),
+      };
+    });
+
+    const finalSpecies = [...new Set(urlRecords.map((r) => r.species).filter(Boolean))].sort();
+    const finalPanelTypes = [...new Set(urlRecords.map((r) => r.panel_type).filter(Boolean))].sort();
+    const finalQualities = [...new Set(urlRecords.map((r) => r.quality).filter(Boolean))].sort();
+    console.log(`  Species: ${finalSpecies.join(', ')}`);
+    console.log(`  Panel types: ${finalPanelTypes.join(', ')}`);
+    console.log(`  Qualities: ${finalQualities.join(', ')}`);
+
+    // Save to database
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — cannot save URLs');
+      return;
+    }
+
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Deactivate URLs no longer found on the site
+    const { data: existingUrls } = await supabase
+      .from('scraper_product_urls')
+      .select('url')
+      .eq('source', 'mass.ee')
+      .eq('is_active', true);
+
+    const discoveredUrlSet = new Set([...allDiscoveredUrls]);
+    const urlsToDeactivate = (existingUrls || [])
+      .map((r: { url: string }) => r.url)
+      .filter((url: string) => !discoveredUrlSet.has(url));
+
+    if (urlsToDeactivate.length > 0) {
+      console.log(`\nDeactivating ${urlsToDeactivate.length} URLs no longer found on the site`);
+      await supabase
+        .from('scraper_product_urls')
+        .update({ is_active: false })
+        .eq('source', 'mass.ee')
+        .in('url', urlsToDeactivate);
+    }
+
+    // Upsert discovered URLs (in batches)
+    const batchSize = 100;
+    let totalSaved = 0;
+    for (let i = 0; i < urlRecords.length; i += batchSize) {
+      const batch = urlRecords.slice(i, i + batchSize);
+      const { data: urlData, error: urlError } = await supabase
+        .from('scraper_product_urls')
+        .upsert(batch, { onConflict: 'source,url' })
+        .select('id');
+
+      if (urlError) {
+        console.error(`Failed to save batch ${i / batchSize + 1}:`, urlError.message);
+      } else {
+        totalSaved += urlData?.length || 0;
+      }
+    }
+
+    console.log(`\nSaved ${totalSaved} product URLs to database (discovered: ${urlRecords.length}, deactivated: ${urlsToDeactivate.length})`);
+    console.log('\nDiscovery complete!');
+  }
+
+  /**
+   * EXPERIMENTAL: Discovery by reading the page's product group structure.
+   * Instead of using filter sidebar, reads the product divisions directly:
+   *   Category page → product groups (species/quality) → thickness sub-groups → individual product links
+   */
+  async discoverByPageStructure(): Promise<string[]> {
+    if (!this.page) throw new Error('Browser not initialized');
+
+    const allDiscoveredUrls = new Set<string>();
+
+    const categoryPages = [
+      { url: 'https://mass.ee/liimpuit-pika-lamelliga', name: 'Full Stave (FS)', panelType: 'FS' },
+      { url: 'https://mass.ee/liimpuit-sormjatkatud', name: 'Finger Jointed (FJ)', panelType: 'FJ' },
+    ];
+
+    for (const category of categoryPages) {
+      console.log(`\n${'='.repeat(60)}`);
+      console.log(`Discovering: ${category.name}`);
+      console.log(`${'='.repeat(60)}`);
+
+      await this.navigateTo(category.url);
+      await this.page.waitForTimeout(2000);
+
+      // Step 1: Find product group cards on the category page
+      // Each group is an <a> inside div.product-data with an H2 heading
+      const groups = await this.page.evaluate(() => {
+        const result: { heading: string; href: string }[] = [];
+        document.querySelectorAll('.product-data').forEach(pd => {
+          const h2 = pd.querySelector('h2')?.textContent?.trim() || '';
+          const parentA = pd.parentElement;
+          if (parentA?.tagName === 'A') {
+            const href = (parentA as HTMLAnchorElement).href;
+            if (h2 && href) {
+              result.push({ heading: h2, href });
+            }
+          }
+        });
+        return result;
+      });
+
+      console.log(`\nFound ${groups.length} product groups on category page`);
+
+      // Step 2: Visit each group page and collect all product links
+      for (const group of groups) {
+        console.log(`\n  Visiting: "${group.heading}"`);
+        await this.navigateTo(group.href);
+        await this.page.waitForTimeout(1500);
+
+        // Scroll to load all content
+        for (let i = 0; i < 5; i++) {
+          await this.page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+          await this.page.waitForTimeout(300);
+        }
+
+        // Collect all dimension-patterned product links
+        const productLinks = await this.page.evaluate(() => {
+          const links: string[] = [];
+          document.querySelectorAll('a[href]').forEach(a => {
+            const href = (a as HTMLAnchorElement).href;
+            if (href.match(/\d+-x-\d+-x-\d+/)) {
+              // Strip query params like ?hl=1 or ?export=pdf
+              const clean = href.split('?')[0];
+              links.push(clean);
+            }
+          });
+          return [...new Set(links)];
+        });
+
+        // Add to discovered URLs
+        let newCount = 0;
+        const thicknesses = new Set<number>();
+        for (const link of productLinks) {
+          const dims = parseDimensions(link);
+          if (dims) thicknesses.add(dims.thickness);
+          if (!allDiscoveredUrls.has(link)) {
+            allDiscoveredUrls.add(link);
+            newCount++;
+          }
+        }
+
+        const sortedThicknesses = [...thicknesses].sort((a, b) => a - b);
+        console.log(`    ${productLinks.length} products, thicknesses: [${sortedThicknesses.join(', ')}]mm → ${newCount} new URLs (total: ${allDiscoveredUrls.size})`);
+      }
+    }
+
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`Total product URLs discovered: ${allDiscoveredUrls.size}`);
+    console.log(`${'='.repeat(60)}`);
+
+    // Save to database
+    console.log('\nParsing metadata and saving...');
+    const urlRecords = [...allDiscoveredUrls].map((url) => {
+      const meta = this.parseUrlMetadata(url);
+      return {
+        source: 'mass.ee',
+        url,
+        species: meta.species || null,
+        panel_type: meta.panelType || null,
+        thickness_mm: meta.thickness,
+        width_mm: meta.width,
+        length_mm: meta.length,
+        quality: meta.quality || null,
+        is_active: true,
+        last_checked_at: new Date().toISOString(),
+      };
+    });
+
+    const finalSpecies = [...new Set(urlRecords.map((r) => r.species).filter(Boolean))].sort();
+    const finalQualities = [...new Set(urlRecords.map((r) => r.quality).filter(Boolean))].sort();
+    console.log(`  Species: ${finalSpecies.join(', ')}`);
+    console.log(`  Qualities: ${finalQualities.join(', ')}`);
+
+    // Save to DB
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — cannot save URLs to DB');
+      console.log('Continuing with discovered URLs without saving...');
+      return [...allDiscoveredUrls];
+    }
+
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Deactivate URLs no longer found
+    const { data: existingUrls } = await supabase
+      .from('scraper_product_urls')
+      .select('url')
+      .eq('source', 'mass.ee')
+      .eq('is_active', true);
+
+    const discoveredUrlSet = new Set([...allDiscoveredUrls]);
+    const urlsToDeactivate = (existingUrls || [])
+      .map((r: { url: string }) => r.url)
+      .filter((url: string) => !discoveredUrlSet.has(url));
+
+    if (urlsToDeactivate.length > 0) {
+      console.log(`Deactivating ${urlsToDeactivate.length} URLs no longer found`);
+      await supabase
+        .from('scraper_product_urls')
+        .update({ is_active: false })
+        .eq('source', 'mass.ee')
+        .in('url', urlsToDeactivate);
+    }
+
+    // Upsert
+    const batchSize = 100;
+    let totalSaved = 0;
+    for (let i = 0; i < urlRecords.length; i += batchSize) {
+      const batch = urlRecords.slice(i, i + batchSize);
+      const { data: urlData, error: urlError } = await supabase
+        .from('scraper_product_urls')
+        .upsert(batch, { onConflict: 'source,url' })
+        .select('id');
+
+      if (urlError) {
+        console.error(`Failed to save batch:`, urlError.message);
+      } else {
+        totalSaved += urlData?.length || 0;
+      }
+    }
+
+    console.log(`Saved ${totalSaved} product URLs to database`);
+    console.log('\nDiscovery complete!');
+
+    return [...allDiscoveredUrls];
   }
 
   async scrapeProductPage(url: string): Promise<PanelProduct | null> {
@@ -593,8 +1151,8 @@ class MassScraper {
 
     try {
       console.log(`\nScraping: ${url}`);
-      await this.page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-      await this.page.waitForTimeout(2000);
+      await this.navigateTo(url);
+      await this.page.waitForTimeout(1000);
 
       // Get page content
       const pageTitle = await this.page.title();
@@ -719,15 +1277,12 @@ class MassScraper {
         })()
       `) as { pricePerPiece: number; pricePerM2: number; tallinn: number; tartu: number };
 
-      const pricePerPiece = productData.pricePerPiece;
-      const pricePerM2 = productData.pricePerM2;
+      // Remove 24% VAT from prices (mass.ee shows prices with VAT)
+      const pricePerPiece = Math.round((productData.pricePerPiece / 1.24) * 100) / 100;
+      const pricePerM2 = Math.round((productData.pricePerM2 / 1.24) * 100) / 100;
       const stockData = { tallinn: productData.tallinn, tartu: productData.tartu };
 
-      console.log(`  Species: ${species}`);
-      console.log(`  Dimensions: ${dims.thickness}x${dims.width}x${dims.length}mm`);
-      console.log(`  Quality: ${quality || 'N/A'}`);
-      console.log(`  Price: €${pricePerPiece}/pc, €${pricePerM2}/m²`);
-      console.log(`  Stock: Tallinn ${stockData.tallinn}, Tartu ${stockData.tartu}`);
+      console.log(`  ${species} ${dims.thickness}x${dims.width}x${dims.length}mm ${quality || '-'} | €${pricePerM2}/m² excl VAT | Stock: TLL ${stockData.tallinn}, TRT ${stockData.tartu}`);
 
       return {
         name: pageTitle.replace(' - MASS', '').replace(' | MASS', '').trim(),
@@ -756,81 +1311,34 @@ class MassScraper {
     const allProducts: PanelProduct[] = [];
     let urls: string[] = [];
 
-    // From-file mode: generate URLs from products-to-scrape.json
+    // Step 1: Get URLs
     if (options.fromFile) {
       console.log('\n--- FROM-FILE MODE: Scraping products from products-to-scrape.json ---');
       urls = this.generateUrlsFromFile();
-    }
-    // Full scan mode: comprehensive URL testing for all species/dimensions
-    else if (options.full) {
-      console.log('\n--- FULL SCAN MODE: Testing all species/dimension combinations ---');
-      urls = await this.fullScan();
-    }
-    // Discovery mode: crawl category pages to find products
-    else if (options.discover) {
-      console.log('\n--- DISCOVERY MODE: Finding products from category pages ---');
-      urls = await this.discoverAllProducts();
-    }
-    // Generate URLs from config if available
-    else if (config && !options.noConfig) {
-      console.log('\n--- Generating URLs from database config ---');
-      console.log(`  Thicknesses: ${config.thicknesses.join(', ')}mm`);
-      console.log(`  Widths: ${config.widths.join(', ')}mm`);
-      console.log(`  Lengths: ${config.lengths.join(', ')}mm`);
-      console.log(`  Qualities: ${config.qualities.join(', ')}`);
-      urls = generateUrls(config);
-      console.log(`  Generated ${urls.length} URLs to scrape`);
+    } else if (options.discover) {
+      // Discovery only — find URLs, save to DB, stop
+      console.log('\n--- DISCOVERY MODE: Finding product URLs from page structure ---');
+      await this.discoverByPageStructure();
+      console.log('\nDiscovery complete. URLs saved to database.');
+      return [];
     } else {
-      // Fallback: discover URLs dynamically
-      console.log('\n--- Discovering product URLs (no config) ---');
-      urls = await this.discoverOakPanelUrls();
-
-      // If no oak URLs found or fewer than expected, add fallback known URLs
-      if (urls.length < 5) {
-        console.log('\nFew oak URLs discovered, adding fallback list...');
-        const fallbackUrls = [
-          // 20mm x 620mm width
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-620-x-800mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-620-x-900mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-620-x-1000mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-620-x-1200mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-620-x-1500mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-620-x-2000mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-620-x-2500mm-a-b',
-          // 20mm x 1220mm width
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-1220-x-800mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-1220-x-900mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-1220-x-1000mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-1220-x-1200mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-1220-x-1500mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-1220-x-2000mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-20-x-1220-x-2100mm-a-b',
-          // 26mm panels
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-26-x-620-x-1000mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-26-x-620-x-2000mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-26-x-1220-x-2000mm-a-b',
-          // 30mm panels
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-30-x-620-x-1000mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-30-x-620-x-2000mm-a-b',
-          // 40mm panels
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-40-x-620-x-1000mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-40-x-620-x-1450mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-40-x-620-x-2000mm-a-b',
-          'https://mass.ee/liimpuit-tamm-pikk-lamell-40-x-1020-x-2000mm-a-b',
-        ];
-        // Merge fallback URLs with discovered URLs (avoid duplicates)
-        for (const fallbackUrl of fallbackUrls) {
-          if (!urls.includes(fallbackUrl)) {
-            urls.push(fallbackUrl);
-          }
-        }
+      // Default: load saved URLs from database
+      console.log('\n--- Loading saved product URLs from database ---');
+      const { loadSavedUrls } = await import('./config');
+      urls = await loadSavedUrls('mass.ee');
+      if (urls.length === 0) {
+        console.log('No saved URLs found. Run with --discover first.');
+        return [];
       }
+      console.log(`Loaded ${urls.length} saved URLs`);
     }
 
+    // Step 2: Scrape each URL with rate limiting
     console.log(`\n--- Processing ${urls.length} URLs ---`);
+    let processed = 0;
 
     for (const url of urls) {
-      // Filter by thickness if specified via CLI (overrides config)
+      // Filter by thickness if specified via CLI
       if (options.thickness) {
         const urlDims = parseDimensions(url);
         if (urlDims && urlDims.thickness !== options.thickness) {
@@ -840,24 +1348,21 @@ class MassScraper {
 
       const product = await this.scrapeProductPage(url);
       if (product) {
-        // Check thickness filter again on actual product (CLI override)
         if (options.thickness && product.thickness !== options.thickness) {
           continue;
         }
-
-        // Check against config filters if using config (not in discovery mode)
-        if (config && !options.noConfig && !options.discover) {
-          if (!matchesConfig(config, product)) {
-            console.log(`  Skipping (not in config): ${product.thickness}x${product.width}x${product.length}`);
-            continue;
-          }
-        }
-
         allProducts.push(product);
       }
 
-      // Be respectful - delay between requests
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      processed++;
+
+      // Rate limiting: 2s between requests, 10s pause every 25 requests
+      if (processed % 25 === 0) {
+        console.log(`\n  Progress: ${processed}/${urls.length} URLs processed, ${allProducts.length} products found. Pausing 10s...`);
+        await new Promise(resolve => setTimeout(resolve, 10000));
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
 
     return allProducts;
@@ -920,38 +1425,15 @@ async function main() {
   console.log('Mass.ee Solid Wood Panel Scraper');
   console.log('='.repeat(60));
 
-  if (options.fromFile) {
+  if (options.discover) {
+    console.log('Mode: DISCOVERY (find product URLs, save to database)');
+  } else if (options.fromFile) {
     console.log('Mode: FROM-FILE (scraping products from products-to-scrape.json)');
-  } else if (options.full) {
-    console.log('Mode: FULL SCAN (testing all species/dimension combinations)');
-    console.log('       This may take a while...');
-  } else if (options.discover) {
-    console.log('Mode: DISCOVERY (finding products from category pages)');
+  } else {
+    console.log('Mode: SCRAPE (using saved URLs from database)');
   }
 
-  // Load config from database (skip if in discovery/full/fromFile mode)
-  let config: ScraperConfig | null = null;
-  if (!options.noConfig && !options.discover && !options.full && !options.fromFile) {
-    console.log('Loading configuration from database...');
-    config = await loadConfig('mass.ee');
-    if (config) {
-      if (!config.isEnabled) {
-        console.log('Scraper is DISABLED in configuration. Exiting.');
-        return;
-      }
-      console.log('Configuration loaded successfully');
-    } else {
-      console.log('No configuration found, using fallback URLs');
-    }
-  } else if (options.fromFile) {
-    console.log('From-file mode - skipping database config');
-  } else if (options.full) {
-    console.log('Full scan mode - skipping database config');
-  } else if (options.discover) {
-    console.log('Discovery mode - skipping database config');
-  } else {
-    console.log('Skipping database config (--no-config)');
-  }
+  const config: ScraperConfig | null = null;
 
   if (options.thickness) {
     console.log(`CLI Override: ${options.thickness}mm thickness only`);
@@ -969,33 +1451,23 @@ async function main() {
     console.log(`Total products found: ${products.length}`);
     console.log('='.repeat(60));
 
-    // Auto-save results to all-products.json (always save for fromFile/discover/full modes)
-    if (options.fromFile || options.discover || options.full) {
-      const outputPath = options.outputFile || 'all-products.json';
+    // Save results
+    if (options.outputFile) {
       const json = JSON.stringify(products, null, 2);
-      fs.writeFileSync(outputPath, json);
-      console.log(`Saved to: ${outputPath}`);
+      fs.writeFileSync(options.outputFile, json);
+      console.log(`Saved to: ${options.outputFile}`);
     }
 
     // Format output for display
     switch (options.outputFormat) {
       case 'json':
-        const json = JSON.stringify(products, null, 2);
-        if (options.outputFile && !options.fromFile && !options.discover && !options.full) {
-          fs.writeFileSync(options.outputFile, json);
-          console.log(`Saved to: ${options.outputFile}`);
-        } else if (!options.fromFile && !options.discover && !options.full) {
-          console.log(json);
+        if (!options.outputFile) {
+          console.log(JSON.stringify(products, null, 2));
         }
         break;
       case 'csv':
         const csv = formatAsCsv(products);
-        if (options.outputFile) {
-          fs.writeFileSync(options.outputFile, csv);
-          console.log(`Saved to: ${options.outputFile}`);
-        } else {
-          console.log(csv);
-        }
+        console.log(csv);
         break;
       default:
         formatAsTable(products);

@@ -1,22 +1,127 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import { Button, Checkbox, Label } from "@timber/ui";
-import { ChevronDown, Loader2, Settings } from "lucide-react";
-import { getScraperConfig, updateScraperConfig } from "../actions";
+import { ChevronDown, Loader2, Play, RefreshCw, Search, Settings } from "lucide-react";
+
+/** Collapsible multi-select dropdown used for each config category */
+function MultiSelectDropdown({
+  label,
+  selectedCount,
+  totalCount,
+  isOpen,
+  onToggle,
+  onAll,
+  onNone,
+  children,
+}: {
+  label: string;
+  selectedCount: number;
+  totalCount: number;
+  isOpen: boolean;
+  onToggle: () => void;
+  onAll: () => void;
+  onNone: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-md border">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted/50"
+      >
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{label}</span>
+          <span className="text-xs text-muted-foreground">
+            {selectedCount}/{totalCount}
+          </span>
+        </div>
+        <ChevronDown
+          className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+      {isOpen && (
+        <div className="border-t px-3 py-2 space-y-2">
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onAll}>
+              All
+            </Button>
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onNone}>
+              None
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {children}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+import { getScraperConfig, getDiscoveredOptions, getSavedUrlCount, getSavedUrls, updateScraperConfig } from "../actions";
+import type { SavedUrl } from "../actions";
+import type { DiscoveredOptions } from "../actions";
 import type { ScraperConfig } from "../types";
-import { SCRAPER_OPTIONS } from "../types";
+import { SCRAPER_OPTIONS, formatRelativeTime } from "../types";
+
+/** Species label lookup */
+const SPECIES_LABELS: Record<string, string> = {};
+for (const s of SCRAPER_OPTIONS.species) SPECIES_LABELS[s.value] = s.label;
+/** Panel type label lookup */
+const PANEL_TYPE_LABELS: Record<string, string> = {};
+for (const pt of SCRAPER_OPTIONS.panelTypes) PANEL_TYPE_LABELS[pt.value] = pt.label;
 
 interface ScraperConfigFormProps {
   source?: string;
+  lastScrapedAt?: string | null;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }
 
-export function ScraperConfigForm({ source = "mass.ee" }: ScraperConfigFormProps) {
+export function ScraperConfigForm({
+  source = "mass.ee",
+  lastScrapedAt,
+  onRefresh,
+  refreshing,
+}: ScraperConfigFormProps) {
   const [config, setConfig] = useState<ScraperConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [savedUrlCount, setSavedUrlCount] = useState<number>(0);
+  const [scraperRunning, setScraperRunning] = useState<"discover" | "scrape" | null>(null);
+  const [scraperLogs, setScraperLogs] = useState<string[]>([]);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [discovered, setDiscovered] = useState<DiscoveredOptions | null>(null);
+  const [showUrls, setShowUrls] = useState(false);
+  const [savedUrls, setSavedUrls] = useState<SavedUrl[] | null>(null);
+  const [loadingUrls, setLoadingUrls] = useState(false);
+
+  const toggleSection = (key: string) =>
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  // Use discovered options when available, fall back to hardcoded SCRAPER_OPTIONS
+  const availableSpecies = discovered && discovered.species.length > 0
+    ? discovered.species
+    : SCRAPER_OPTIONS.species.map((s) => s.value);
+  const availablePanelTypes = discovered && discovered.panelTypes.length > 0
+    ? discovered.panelTypes
+    : SCRAPER_OPTIONS.panelTypes.map((pt) => pt.value);
+  const availableQualities = discovered && discovered.qualities.length > 0
+    ? discovered.qualities
+    : [...SCRAPER_OPTIONS.qualities];
+  const availableThicknesses = discovered && discovered.thicknesses.length > 0
+    ? discovered.thicknesses
+    : [...SCRAPER_OPTIONS.thicknesses];
+  const availableWidths = discovered && discovered.widths.length > 0
+    ? discovered.widths
+    : [...SCRAPER_OPTIONS.widths];
+  const availableLengths = discovered && discovered.lengths.length > 0
+    ? discovered.lengths
+    : [...SCRAPER_OPTIONS.lengths];
 
   // Local form state
   const [isEnabled, setIsEnabled] = useState(true);
@@ -35,18 +140,31 @@ export function ScraperConfigForm({ source = "mass.ee" }: ScraperConfigFormProps
     setLoading(true);
     setError(null);
 
-    const result = await getScraperConfig(source);
-    if (result.success) {
-      setConfig(result.data);
-      setIsEnabled(result.data.isEnabled);
-      setSpecies(result.data.species);
-      setThicknesses(result.data.thicknesses);
-      setWidths(result.data.widths);
-      setLengths(result.data.lengths);
-      setPanelTypes(result.data.panelTypes);
-      setQualities(result.data.qualities);
+    const [configResult, urlCountResult, discoveredResult] = await Promise.all([
+      getScraperConfig(source),
+      getSavedUrlCount(source),
+      getDiscoveredOptions(source),
+    ]);
+
+    if (configResult.success) {
+      setConfig(configResult.data);
+      setIsEnabled(configResult.data.isEnabled);
+      setSpecies(configResult.data.species);
+      setThicknesses(configResult.data.thicknesses);
+      setWidths(configResult.data.widths);
+      setLengths(configResult.data.lengths);
+      setPanelTypes(configResult.data.panelTypes);
+      setQualities(configResult.data.qualities);
     } else {
-      setError(result.error);
+      setError(configResult.error);
+    }
+
+    if (urlCountResult.success) {
+      setSavedUrlCount(urlCountResult.data);
+    }
+
+    if (discoveredResult.success) {
+      setDiscovered(discoveredResult.data);
     }
 
     setLoading(false);
@@ -124,6 +242,84 @@ export function ScraperConfigForm({ source = "mass.ee" }: ScraperConfigFormProps
     );
   }
 
+  const runScraper = useCallback(async (mode: "discover" | "scrape") => {
+    setScraperRunning(mode);
+    setScraperLogs([]);
+
+    try {
+      const response = await fetch("/api/scraper", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        setScraperLogs((prev) => [...prev, `Error: ${err.error || response.statusText}`]);
+        setScraperRunning(null);
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        setScraperLogs((prev) => [...prev, "Error: No response stream"]);
+        setScraperRunning(null);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const msg = JSON.parse(line);
+            setScraperLogs((prev) => [...prev, msg.message]);
+            setTimeout(() => {
+              const c = logContainerRef.current;
+              if (c) c.scrollTop = c.scrollHeight;
+            }, 50);
+          } catch {
+            // ignore parse errors
+          }
+        }
+      }
+    } catch (err) {
+      setScraperLogs((prev) => [...prev, `Error: ${err}`]);
+    }
+
+    setScraperRunning(null);
+    // Refresh data, URL count, and discovered options
+    onRefresh?.();
+    const [urlCountResult, discoveredResult] = await Promise.all([
+      getSavedUrlCount(source),
+      getDiscoveredOptions(source),
+    ]);
+    if (urlCountResult.success) {
+      setSavedUrlCount(urlCountResult.data);
+    }
+    if (discoveredResult.success) {
+      setDiscovered(discoveredResult.data);
+      // Reset selections to empty after discovery — user picks what to include
+      setSpecies([]);
+      setPanelTypes([]);
+      setQualities([]);
+      setThicknesses([]);
+      setWidths([]);
+      setLengths([]);
+    }
+    // Reset cached saved URLs so they reload with fresh data
+    setSavedUrls(null);
+  }, [source, onRefresh]);
+
   if (loading) {
     return (
       <div className="rounded-lg border bg-card p-4 shadow-sm">
@@ -141,61 +337,212 @@ export function ScraperConfigForm({ source = "mass.ee" }: ScraperConfigFormProps
 
   return (
     <div className="rounded-lg border bg-card shadow-sm">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center justify-between p-4 text-left hover:bg-muted/50"
-      >
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between p-4">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-2 text-left hover:opacity-80"
+        >
           <Settings className="h-4 w-4 text-muted-foreground" />
           <span className="font-medium">Scraper Configuration</span>
           <span className="text-sm text-muted-foreground">({source})</span>
+          <ChevronDown
+            className={`h-4 w-4 text-muted-foreground transition-transform ${
+              isOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="text-sm text-muted-foreground hover:text-foreground underline decoration-dotted underline-offset-4"
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (showUrls) {
+                setShowUrls(false);
+                return;
+              }
+              if (!savedUrls) {
+                setLoadingUrls(true);
+                const result = await getSavedUrls(source);
+                if (result.success) setSavedUrls(result.data);
+                setLoadingUrls(false);
+              }
+              setShowUrls(true);
+            }}
+          >
+            Saved URLs: {savedUrlCount}
+          </button>
+          <span className="text-sm text-muted-foreground">|</span>
+          <span className="text-sm text-muted-foreground">
+            Last scraped: {formatRelativeTime(lastScrapedAt ?? null)}
+          </span>
+          {onRefresh && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRefresh}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
+          )}
         </div>
-        <ChevronDown
-          className={`h-4 w-4 text-muted-foreground transition-transform ${
-            isOpen ? "rotate-180" : ""
-          }`}
-        />
-      </button>
+      </div>
+
+      {/* Saved URLs list */}
+      {showUrls && (
+        <div className="border-t px-4 py-3">
+          {loadingUrls ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading URLs...
+            </div>
+          ) : savedUrls && savedUrls.length > 0 ? (
+            <div className="space-y-2">
+              <div className="text-sm font-medium">{savedUrls.length} saved product URLs</div>
+              <div className="max-h-64 overflow-y-auto rounded-md border bg-muted/30">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-muted">
+                    <tr>
+                      <th className="text-left px-2 py-1 font-medium">Species</th>
+                      <th className="text-left px-2 py-1 font-medium">Type</th>
+                      <th className="text-left px-2 py-1 font-medium">Qual</th>
+                      <th className="text-right px-2 py-1 font-medium">Thick</th>
+                      <th className="text-right px-2 py-1 font-medium">Width</th>
+                      <th className="text-right px-2 py-1 font-medium">Length</th>
+                      <th className="text-left px-2 py-1 font-medium">URL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {savedUrls.map((u, i) => (
+                      <tr key={i} className="border-t border-muted hover:bg-muted/50">
+                        <td className="px-2 py-1">{u.species || "-"}</td>
+                        <td className="px-2 py-1">{u.panel_type || "-"}</td>
+                        <td className="px-2 py-1">{u.quality || "-"}</td>
+                        <td className="px-2 py-1 text-right">{u.thickness_mm ?? "-"}</td>
+                        <td className="px-2 py-1 text-right">{u.width_mm ?? "-"}</td>
+                        <td className="px-2 py-1 text-right">{u.length_mm ?? "-"}</td>
+                        <td className="px-2 py-1">
+                          <a
+                            href={u.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline truncate block max-w-[300px]"
+                          >
+                            {u.url.replace("https://mass.ee/", "")}
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">No saved URLs yet. Run Discovery to find product URLs.</div>
+          )}
+        </div>
+      )}
 
       {isOpen && (
         <div className="border-t p-4 space-y-6">
-          {/* Enabled toggle */}
-          <div className="flex items-center gap-3">
-            <Checkbox
-              id="enabled"
-              checked={isEnabled}
-              onCheckedChange={(checked) => setIsEnabled(checked === true)}
-            />
-            <Label htmlFor="enabled" className="font-medium">
-              Enabled
-            </Label>
-          </div>
+          {/* Config dropdowns */}
+          {!discovered && savedUrlCount === 0 && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30 p-3 text-sm text-blue-700 dark:text-blue-300">
+              Options below are defaults. Run Discovery to load actual values from {source}.
+            </div>
+          )}
 
-          {/* Species */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Species</Label>
-            <div className="flex flex-wrap gap-4">
-              {SCRAPER_OPTIONS.species.map((s) => (
-                <div key={s.value} className="flex items-center gap-2">
+            {/* Species */}
+            <MultiSelectDropdown
+              label="Species"
+              selectedCount={species.length}
+              totalCount={availableSpecies.length}
+              isOpen={!!openSections.species}
+              onToggle={() => toggleSection("species")}
+              onAll={() => setSpecies([...availableSpecies])}
+              onNone={() => setSpecies([])}
+            >
+              {availableSpecies.map((s) => (
+                <div key={s} className="flex items-center gap-2">
                   <Checkbox
-                    id={`species-${s.value}`}
-                    checked={species.includes(s.value)}
-                    onCheckedChange={() => toggleSpecies(s.value)}
+                    id={`species-${s}`}
+                    checked={species.includes(s)}
+                    onCheckedChange={() => toggleSpecies(s)}
                   />
-                  <Label htmlFor={`species-${s.value}`} className="text-sm">
-                    {s.label}
+                  <Label htmlFor={`species-${s}`} className="text-sm">
+                    {SPECIES_LABELS[s] || s.charAt(0).toUpperCase() + s.slice(1)}
                   </Label>
                 </div>
               ))}
-            </div>
-          </div>
+            </MultiSelectDropdown>
 
-          {/* Thicknesses */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Thicknesses</Label>
-            <div className="flex flex-wrap gap-4">
-              {SCRAPER_OPTIONS.thicknesses.map((t) => (
+            {/* Panel Types */}
+            <MultiSelectDropdown
+              label="Panel Types"
+              selectedCount={panelTypes.length}
+              totalCount={availablePanelTypes.length}
+              isOpen={!!openSections.panelTypes}
+              onToggle={() => toggleSection("panelTypes")}
+              onAll={() => setPanelTypes([...availablePanelTypes])}
+              onNone={() => setPanelTypes([])}
+            >
+              {availablePanelTypes.map((pt) => (
+                <div key={pt} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`panel-${pt}`}
+                    checked={panelTypes.includes(pt)}
+                    onCheckedChange={() => togglePanelType(pt)}
+                  />
+                  <Label htmlFor={`panel-${pt}`} className="text-sm">
+                    {PANEL_TYPE_LABELS[pt] || pt}
+                  </Label>
+                </div>
+              ))}
+            </MultiSelectDropdown>
+
+            {/* Qualities */}
+            <MultiSelectDropdown
+              label="Qualities"
+              selectedCount={qualities.length}
+              totalCount={availableQualities.length}
+              isOpen={!!openSections.qualities}
+              onToggle={() => toggleSection("qualities")}
+              onAll={() => setQualities([...availableQualities])}
+              onNone={() => setQualities([])}
+            >
+              {availableQualities.map((q) => (
+                <div key={q} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`quality-${q}`}
+                    checked={qualities.includes(q)}
+                    onCheckedChange={() => toggleQuality(q)}
+                  />
+                  <Label htmlFor={`quality-${q}`} className="text-sm">
+                    {q}
+                  </Label>
+                </div>
+              ))}
+            </MultiSelectDropdown>
+
+            {/* Thicknesses */}
+            <MultiSelectDropdown
+              label="Thicknesses"
+              selectedCount={thicknesses.length}
+              totalCount={availableThicknesses.length}
+              isOpen={!!openSections.thicknesses}
+              onToggle={() => toggleSection("thicknesses")}
+              onAll={() => setThicknesses([...availableThicknesses])}
+              onNone={() => setThicknesses([])}
+            >
+              {availableThicknesses.map((t) => (
                 <div key={t} className="flex items-center gap-2">
                   <Checkbox
                     id={`thickness-${t}`}
@@ -207,14 +554,19 @@ export function ScraperConfigForm({ source = "mass.ee" }: ScraperConfigFormProps
                   </Label>
                 </div>
               ))}
-            </div>
-          </div>
+            </MultiSelectDropdown>
 
-          {/* Widths */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Widths</Label>
-            <div className="flex flex-wrap gap-4">
-              {SCRAPER_OPTIONS.widths.map((w) => (
+            {/* Widths */}
+            <MultiSelectDropdown
+              label="Widths"
+              selectedCount={widths.length}
+              totalCount={availableWidths.length}
+              isOpen={!!openSections.widths}
+              onToggle={() => toggleSection("widths")}
+              onAll={() => setWidths([...availableWidths])}
+              onNone={() => setWidths([])}
+            >
+              {availableWidths.map((w) => (
                 <div key={w} className="flex items-center gap-2">
                   <Checkbox
                     id={`width-${w}`}
@@ -226,14 +578,19 @@ export function ScraperConfigForm({ source = "mass.ee" }: ScraperConfigFormProps
                   </Label>
                 </div>
               ))}
-            </div>
-          </div>
+            </MultiSelectDropdown>
 
-          {/* Lengths */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Lengths</Label>
-            <div className="flex flex-wrap gap-4">
-              {SCRAPER_OPTIONS.lengths.map((l) => (
+            {/* Lengths */}
+            <MultiSelectDropdown
+              label="Lengths"
+              selectedCount={lengths.length}
+              totalCount={availableLengths.length}
+              isOpen={!!openSections.lengths}
+              onToggle={() => toggleSection("lengths")}
+              onAll={() => setLengths([...availableLengths])}
+              onNone={() => setLengths([])}
+            >
+              {availableLengths.map((l) => (
                 <div key={l} className="flex items-center gap-2">
                   <Checkbox
                     id={`length-${l}`}
@@ -245,48 +602,7 @@ export function ScraperConfigForm({ source = "mass.ee" }: ScraperConfigFormProps
                   </Label>
                 </div>
               ))}
-            </div>
-          </div>
-
-          {/* Panel Types and Qualities side by side */}
-          <div className="grid grid-cols-2 gap-8">
-            {/* Panel Types */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Panel Types</Label>
-              <div className="flex flex-col gap-2">
-                {SCRAPER_OPTIONS.panelTypes.map((pt) => (
-                  <div key={pt.value} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`panel-${pt.value}`}
-                      checked={panelTypes.includes(pt.value)}
-                      onCheckedChange={() => togglePanelType(pt.value)}
-                    />
-                    <Label htmlFor={`panel-${pt.value}`} className="text-sm">
-                      {pt.label}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Qualities */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Qualities</Label>
-              <div className="flex flex-col gap-2">
-                {SCRAPER_OPTIONS.qualities.map((q) => (
-                  <div key={q} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`quality-${q}`}
-                      checked={qualities.includes(q)}
-                      onCheckedChange={() => toggleQuality(q)}
-                    />
-                    <Label htmlFor={`quality-${q}`} className="text-sm">
-                      {q}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
+            </MultiSelectDropdown>
           </div>
 
           {/* Error message */}
@@ -296,9 +612,40 @@ export function ScraperConfigForm({ source = "mass.ee" }: ScraperConfigFormProps
             </div>
           )}
 
-          {/* Save button */}
-          <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={saving}>
+          {/* Actions */}
+          <div className="flex items-center justify-between border-t pt-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => runScraper("discover")}
+                disabled={scraperRunning !== null || saving}
+              >
+                {scraperRunning === "discover" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="mr-2 h-4 w-4" />
+                )}
+                Discover URLs
+              </Button>
+              <Button
+                onClick={() => runScraper("scrape")}
+                disabled={scraperRunning !== null || saving || savedUrlCount === 0}
+              >
+                {scraperRunning === "scrape" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="mr-2 h-4 w-4" />
+                )}
+                Scrape Prices
+              </Button>
+              {savedUrlCount === 0 && (
+                <span className="text-xs text-muted-foreground">
+                  Run Discover first to find product URLs
+                </span>
+              )}
+            </div>
+
+            <Button variant="outline" onClick={handleSave} disabled={saving || scraperRunning !== null}>
               {saving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -309,6 +656,17 @@ export function ScraperConfigForm({ source = "mass.ee" }: ScraperConfigFormProps
               )}
             </Button>
           </div>
+
+          {/* Scraper log output */}
+          {scraperLogs.length > 0 && (
+            <div ref={logContainerRef} className="rounded-md border bg-muted/30 p-3 max-h-64 overflow-y-auto font-mono text-xs space-y-0.5">
+              {scraperLogs.map((log, i) => (
+                <div key={i} className={log.startsWith("Error") ? "text-destructive" : "text-muted-foreground"}>
+                  {log}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
