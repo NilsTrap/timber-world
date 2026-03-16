@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -11,9 +11,10 @@ import {
   ColumnHeaderMenu,
   type ColumnSortState,
 } from "@timber/ui";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Trash2 } from "lucide-react";
 import type { CompetitorPriceDb } from "../types";
 import { formatPrice, formatStockLocations } from "../types";
+import { deleteCompetitorPrice } from "../actions";
 
 type FilterableColumn =
   | "source"
@@ -37,6 +38,7 @@ type SortableColumn =
 
 interface PriceTableProps {
   data: CompetitorPriceDb[];
+  onDelete?: (id: string) => void;
 }
 
 function capitalizeFirst(s: string | null): string {
@@ -54,9 +56,40 @@ const FILTERABLE_COLUMNS: FilterableColumn[] = [
   "quality",
 ];
 
-export function PriceTable({ data }: PriceTableProps) {
-  const [sortState, setSortState] = useState<ColumnSortState | null>(null);
-  const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
+const STORAGE_KEY = "competitor-pricing-filters";
+
+function loadPersistedState(): { sort: ColumnSortState | null; filters: Record<string, Set<string>> } {
+  if (typeof window === "undefined") return { sort: null, filters: {} };
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { sort: null, filters: {} };
+    const parsed = JSON.parse(raw);
+    const filters: Record<string, Set<string>> = {};
+    for (const [key, values] of Object.entries(parsed.filters || {})) {
+      filters[key] = new Set(values as string[]);
+    }
+    return { sort: parsed.sort || null, filters };
+  } catch {
+    return { sort: null, filters: {} };
+  }
+}
+
+function persistState(sort: ColumnSortState | null, filters: Record<string, Set<string>>): void {
+  const serialized: Record<string, string[]> = {};
+  for (const [key, set] of Object.entries(filters)) {
+    if (set.size > 0) serialized[key] = [...set];
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ sort, filters: serialized }));
+}
+
+export function PriceTable({ data, onDelete }: PriceTableProps) {
+  const [sortState, setSortState] = useState<ColumnSortState | null>(() => loadPersistedState().sort);
+  const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>(() => loadPersistedState().filters);
+
+  // Persist on change
+  useEffect(() => {
+    persistState(sortState, columnFilters);
+  }, [sortState, columnFilters]);
 
   // Compute unique values for each filterable column
   const uniqueValues = useMemo(() => {
@@ -127,6 +160,17 @@ export function PriceTable({ data }: PriceTableProps) {
 
   const activeFilterCount = Object.values(columnFilters).filter((s) => s.size > 0).length;
 
+  const filteredSummary = useMemo(() => {
+    const totalStock = filteredAndSorted.reduce((sum, item) => sum + (item.stock_total || 0), 0);
+    const totalM3 = filteredAndSorted.reduce((sum, item) => {
+      if (item.thickness_mm && item.width_mm && item.length_mm && item.stock_total) {
+        return sum + (item.thickness_mm / 1000) * (item.width_mm / 1000) * (item.length_mm / 1000) * item.stock_total;
+      }
+      return sum;
+    }, 0);
+    return { totalStock, totalM3 };
+  }, [filteredAndSorted]);
+
   const renderHeader = (
     column: string,
     label: string,
@@ -191,7 +235,7 @@ export function PriceTable({ data }: PriceTableProps) {
       {activeFilterCount > 0 && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>
-            Showing {filteredAndSorted.length} of {data.length} products ({activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active)
+            Showing {filteredAndSorted.length} of {data.length} products | {filteredSummary.totalStock} pcs | {filteredSummary.totalM3.toFixed(3).replace(".", ",")} m³ ({activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active)
           </span>
           <button
             onClick={() => setColumnFilters({})}
@@ -239,6 +283,7 @@ export function PriceTable({ data }: PriceTableProps) {
               <TableHead><span className="text-xs">Mass -18% €/m²</span></TableHead>
               {renderHeader("ti_price_per_piece", "TIM €/pc", { isNumeric: true, filterable: false })}
               {renderHeader("ti_price_per_m2", "TIM €/m²", { isNumeric: true, filterable: false })}
+              <TableHead className="w-8"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -321,6 +366,18 @@ export function PriceTable({ data }: PriceTableProps) {
                 <TableCell>{formatPrice(item.price_per_m2 !== null ? item.price_per_m2 * 0.82 : null)}</TableCell>
                 <TableCell>{formatPrice(item.ti_price_per_piece)}</TableCell>
                 <TableCell>{formatPrice(item.ti_price_per_m2)}</TableCell>
+                <TableCell>
+                  <button
+                    onClick={async () => {
+                      const res = await deleteCompetitorPrice(item.id);
+                      if (res.success && onDelete) onDelete(item.id);
+                    }}
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                    title="Delete row"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

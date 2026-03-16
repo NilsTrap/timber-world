@@ -14,3 +14,4 @@ export { getStockPrices, updateStockPrice, addStockPriceRow, deleteStockPriceRow
 export type { StockPriceRow } from "./stockPrices";
 export { getScraperScripts } from "./getScraperScripts";
 export type { ScraperScript } from "./getScraperScripts";
+export { deleteCompetitorPrice } from "./deleteCompetitorPrice";

@@ -87,7 +87,11 @@ export function CompetitorPricingManager() {
         )}
 
         {/* Table */}
-        {!loading && <PriceTable data={data} />}
+        {!loading && <PriceTable data={data} onDelete={(id) => {
+          const newData = data.filter((d) => d.id !== id);
+          setData(newData);
+          setSummary(calculateSummary(newData));
+        }} />}
       </TabsContent>
 
       <TabsContent value="stock-prices" className="space-y-6">
