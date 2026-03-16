@@ -16,6 +16,7 @@ import type { CompetitorPriceDb } from "../types";
 import { formatPrice, formatStockLocations } from "../types";
 
 type FilterableColumn =
+  | "source"
   | "species"
   | "panel_type"
   | "thickness_mm"
@@ -40,10 +41,11 @@ interface PriceTableProps {
 
 function capitalizeFirst(s: string | null): string {
   if (!s) return "-";
-  return s.charAt(0).toUpperCase() + s.slice(1);
+  return s.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
 const FILTERABLE_COLUMNS: FilterableColumn[] = [
+  "source",
   "species",
   "panel_type",
   "thickness_mm",
@@ -106,9 +108,10 @@ export function PriceTable({ data }: PriceTableProps) {
         return dir === "asc" ? cmp : -cmp;
       });
     } else {
-      // Default sort: species → panel_type → quality → thickness → width → length
+      // Default sort: source → species → panel_type → quality → thickness → width → length
       result = [...result].sort((a, b) => {
         return (
+          compare(a.source, b.source) ||
           compare(a.species, b.species) ||
           compare(a.panel_type, b.panel_type) ||
           compare(a.quality, b.quality) ||
@@ -199,30 +202,49 @@ export function PriceTable({ data }: PriceTableProps) {
         </div>
       )}
 
-      <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader>
+      <div className="rounded-lg border bg-card shadow-sm relative overflow-auto max-h-[80vh]">
+        <table className="w-full caption-bottom text-sm">
+          <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card [&_th]:border-b">
             <TableRow>
+              {renderHeader("source", "Source")}
               {renderHeader("species", "Species")}
               {renderHeader("panel_type", "Type")}
               {renderHeader("quality", "Qual")}
               {renderHeader("thickness_mm", "Thick", { isNumeric: true })}
               {renderHeader("width_mm", "Width", { isNumeric: true })}
               {renderHeader("length_mm", "Length", { isNumeric: true })}
+              {renderHeader("price_per_m3", "Mass €/m³", { isNumeric: true, filterable: false })}
+              <TableHead><span className="text-xs">Mass -18% €/m³</span></TableHead>
+              {renderHeader("ti_price_per_m3", "TIM €/m³", { isNumeric: true, filterable: false })}
+              {renderHeader("price_diff_percent", "Diff", { isNumeric: true, filterable: false })}
+              <TableHead><span className="text-xs">Diff -18%</span></TableHead>
+              <TableHead className="min-w-[160px]">
+                <div className="flex items-center gap-1">
+                  <span className="cursor-pointer select-none" onClick={() => {
+                    if (sortState?.column === "stock_total") {
+                      setSortState(sortState.direction === "asc" ? { column: "stock_total", direction: "desc" } : null);
+                    } else {
+                      setSortState({ column: "stock_total", direction: "asc" });
+                    }
+                  }}>Stock</span>
+                  <ColumnHeaderMenu columnKey="stock_total" isNumeric uniqueValues={[]} activeSort={sortState} activeFilter={new Set()} onSortChange={setSortState} onFilterChange={() => {}} />
+                </div>
+              </TableHead>
+              <TableHead className="whitespace-nowrap text-right">m³</TableHead>
+              <TableHead className="w-10">URL</TableHead>
+              <TableHead className="whitespace-nowrap">Scraped</TableHead>
               {renderHeader("price_per_piece", "Mass €/pc", { isNumeric: true, filterable: false })}
               {renderHeader("price_per_m2", "Mass €/m²", { isNumeric: true, filterable: false })}
-              {renderHeader("price_per_m3", "Mass €/m³", { isNumeric: true, filterable: false })}
-              {renderHeader("ti_price_per_piece", "TI €/pc", { isNumeric: true, filterable: false })}
-              {renderHeader("ti_price_per_m2", "TI €/m²", { isNumeric: true, filterable: false })}
-              {renderHeader("ti_price_per_m3", "TI €/m³", { isNumeric: true, filterable: false })}
-              {renderHeader("price_diff_percent", "Diff", { isNumeric: true, filterable: false })}
-              {renderHeader("stock_total", "Stock", { isNumeric: true, filterable: false })}
-              <TableHead className="w-10">URL</TableHead>
+              <TableHead><span className="text-xs">Mass -18% €/pc</span></TableHead>
+              <TableHead><span className="text-xs">Mass -18% €/m²</span></TableHead>
+              {renderHeader("ti_price_per_piece", "TIM €/pc", { isNumeric: true, filterable: false })}
+              {renderHeader("ti_price_per_m2", "TIM €/m²", { isNumeric: true, filterable: false })}
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredAndSorted.map((item) => (
               <TableRow key={item.id}>
+                <TableCell className="text-muted-foreground">{item.source}</TableCell>
                 <TableCell className="font-medium">
                   {capitalizeFirst(item.species)}
                 </TableCell>
@@ -231,11 +253,8 @@ export function PriceTable({ data }: PriceTableProps) {
                 <TableCell>{item.thickness_mm}</TableCell>
                 <TableCell>{item.width_mm}</TableCell>
                 <TableCell>{item.length_mm}</TableCell>
-                <TableCell>{formatPrice(item.price_per_piece)}</TableCell>
-                <TableCell>{formatPrice(item.price_per_m2)}</TableCell>
                 <TableCell>{formatPrice(item.price_per_m3)}</TableCell>
-                <TableCell>{formatPrice(item.ti_price_per_piece)}</TableCell>
-                <TableCell>{formatPrice(item.ti_price_per_m2)}</TableCell>
+                <TableCell>{formatPrice(item.price_per_m3 !== null ? item.price_per_m3 * 0.82 : null)}</TableCell>
                 <TableCell>{formatPrice(item.ti_price_per_m3)}</TableCell>
                 <TableCell>
                   {item.price_diff_percent !== null ? (
@@ -256,12 +275,28 @@ export function PriceTable({ data }: PriceTableProps) {
                   )}
                 </TableCell>
                 <TableCell>
-                  <div className="flex flex-col">
-                    <span className="font-medium">{item.stock_total}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatStockLocations(item.stock_locations)}
+                  {item.price_per_m3 !== null && item.ti_price_per_m3 !== null ? (() => {
+                    const discounted = item.price_per_m3 * 0.82;
+                    const diff = Math.round(((discounted - item.ti_price_per_m3) / item.ti_price_per_m3) * 1000) / 10;
+                    return (
+                      <span className={diff > 0 ? "text-red-600" : diff < 0 ? "text-green-600" : ""}>
+                        {diff > 0 ? "+" : ""}{diff.toFixed(1)}%
+                      </span>
+                    );
+                  })() : "-"}
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
+                  <span className="font-medium">{item.stock_total}</span>
+                  {item.stock_locations && (
+                    <span className="text-xs text-muted-foreground ml-1">
+                      (TLN {item.stock_locations.tallinn ?? 0}, TRT {item.stock_locations.tartu ?? 0})
                     </span>
-                  </div>
+                  )}
+                </TableCell>
+                <TableCell className="text-right whitespace-nowrap">
+                  {item.thickness_mm && item.width_mm && item.length_mm && item.stock_total
+                    ? ((item.thickness_mm / 1000) * (item.width_mm / 1000) * (item.length_mm / 1000) * item.stock_total).toFixed(3).replace(".", ",")
+                    : "-"}
                 </TableCell>
                 <TableCell>
                   {item.product_url && (
@@ -276,10 +311,20 @@ export function PriceTable({ data }: PriceTableProps) {
                     </a>
                   )}
                 </TableCell>
+                <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                  {new Date(item.scraped_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}{" "}
+                  {new Date(item.scraped_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                </TableCell>
+                <TableCell>{formatPrice(item.price_per_piece)}</TableCell>
+                <TableCell>{formatPrice(item.price_per_m2)}</TableCell>
+                <TableCell>{formatPrice(item.price_per_piece !== null ? item.price_per_piece * 0.82 : null)}</TableCell>
+                <TableCell>{formatPrice(item.price_per_m2 !== null ? item.price_per_m2 * 0.82 : null)}</TableCell>
+                <TableCell>{formatPrice(item.ti_price_per_piece)}</TableCell>
+                <TableCell>{formatPrice(item.ti_price_per_m2)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+        </table>
       </div>
     </div>
   );

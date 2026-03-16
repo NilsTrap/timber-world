@@ -7,8 +7,18 @@ import type { ActionResult } from "../types";
 /**
  * Get the count of saved product URLs for a source
  */
+export interface UrlFilter {
+  species?: string[];
+  panelTypes?: string[];
+  qualities?: string[];
+  thicknesses?: number[];
+  widths?: number[];
+  lengths?: number[];
+}
+
 export async function getSavedUrlCount(
-  source: string
+  source: string,
+  filter?: UrlFilter
 ): Promise<ActionResult<number>> {
   const session = await getSession();
   if (!session) {
@@ -21,11 +31,22 @@ export async function getSavedUrlCount(
   const supabase = await createClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { count, error } = await (supabase as any)
+  let query = (supabase as any)
     .from("scraper_product_urls")
     .select("id", { count: "exact", head: true })
     .eq("source", source)
     .eq("is_active", true);
+
+  if (filter) {
+    if (filter.species && filter.species.length > 0) query = query.in("species", filter.species);
+    if (filter.panelTypes && filter.panelTypes.length > 0) query = query.in("panel_type", filter.panelTypes);
+    if (filter.qualities && filter.qualities.length > 0) query = query.in("quality", filter.qualities);
+    if (filter.thicknesses && filter.thicknesses.length > 0) query = query.in("thickness_mm", filter.thicknesses);
+    if (filter.widths && filter.widths.length > 0) query = query.in("width_mm", filter.widths);
+    if (filter.lengths && filter.lengths.length > 0) query = query.in("length_mm", filter.lengths);
+  }
+
+  const { count, error } = await query;
 
   if (error) {
     console.error("Failed to count saved URLs:", error);

@@ -25,6 +25,9 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const mode: string = body.mode || "scrape";
+  const filter = body.filter || {};
+
+  console.log("[scraper route] mode:", mode, "filter:", JSON.stringify(filter));
 
   // Resolve paths
   const projectRoot = path.resolve(process.cwd(), "../..");
@@ -39,11 +42,15 @@ export async function POST(request: NextRequest) {
     scraperArgs.push("--discover");
   }
 
+  // Pass filter via env var to avoid shell escaping issues
+  const hasFilter = mode === "scrape" && Object.keys(filter).length > 0;
+
   const scraperEnv = {
     ...process.env,
     NODE_ENV: "production",
     SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "",
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+    ...(hasFilter ? { SCRAPER_FILTER: JSON.stringify(filter) } : {}),
   } as NodeJS.ProcessEnv;
 
   // Stream output back to client

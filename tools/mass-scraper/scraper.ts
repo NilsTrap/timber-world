@@ -14,6 +14,7 @@
  *   npx tsx scraper.ts --file out.json    # Save to file
  *   npx tsx scraper.ts --no-config        # Ignore DB config, use fallbacks
  *   npx tsx scraper.ts --debug            # Show debug output
+ *   npx tsx scraper.ts --resume           # Resume interrupted scrape from checkpoint
  */
 
 import { chromium, type Browser, type Page } from 'playwright';
@@ -57,6 +58,9 @@ function detectSpecies(url: string, pageTitle: string): string {
   // Pine (Mänd)
   if (urlLower.includes('mand')) return 'pine';
 
+  // Ash White (Hele Saar) - check before generic ash
+  if (urlLower.includes('hele') && urlLower.includes('saar')) return 'ash white';
+
   // Ash (Saar) - check before oak
   if (urlLower.includes('saar')) return 'ash';
 
@@ -89,6 +93,7 @@ function detectSpecies(url: string, pageTitle: string): string {
   if (titleLower.includes('pähkel') || titleLower.includes('pahkel')) return 'walnut';
   if (titleLower.includes('pöök') || titleLower.includes('pook')) return 'beech';
   if (titleLower.includes('mänd') || titleLower.includes('mand')) return 'pine';
+  if (titleLower.includes('hele') && titleLower.includes('saar')) return 'ash white';
   if (titleLower.includes('saar')) return 'ash';
   if (titleLower.includes('kask')) return 'birch';
   if (titleLower.includes('pärn') || titleLower.includes('parn')) return 'linden';
@@ -117,8 +122,38 @@ interface ScraperOptions {
   outputFormat?: 'table' | 'json' | 'csv';
   outputFile?: string;
   debug?: boolean;
-  discover?: boolean; // Only discover URLs (don't scrape prices)
-  fromFile?: boolean; // Scrape products from products-to-scrape.json
+  discover?: boolean;
+  fromFile?: boolean;
+  resume?: boolean;
+  // Filter is passed via SCRAPER_FILTER env var from portal UI
+}
+
+// Checkpoint file for resume capability
+const CHECKPOINT_FILE = '.scraper-checkpoint.json';
+
+interface CheckpointData {
+  urls: string[];
+  completedIndex: number;
+  products: PanelProduct[];
+  startedAt: string;
+  lastUpdated: string;
+}
+
+function saveCheckpoint(data: CheckpointData): void {
+  fs.writeFileSync(CHECKPOINT_FILE, JSON.stringify(data, null, 2));
+}
+
+function loadCheckpoint(): CheckpointData | null {
+  if (!fs.existsSync(CHECKPOINT_FILE)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+function clearCheckpoint(): void {
+  if (fs.existsSync(CHECKPOINT_FILE)) fs.unlinkSync(CHECKPOINT_FILE);
 }
 
 // Parse command line arguments
@@ -128,7 +163,8 @@ function parseArgs(): ScraperOptions {
     outputFormat: 'table',
     debug: false,
     discover: false,
-    fromFile: false
+    fromFile: false,
+    resume: false
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -150,6 +186,9 @@ function parseArgs(): ScraperOptions {
         break;
       case '--from-file':
         options.fromFile = true;
+        break;
+      case '--resume':
+        options.resume = true;
         break;
     }
   }
@@ -177,7 +216,9 @@ function parseQuality(text: string): string {
   if (/\brustic\b/i.test(text)) return 'Rustic';
   // Check for letter grades like A/B, B/C, A-B, etc.
   const match = text.match(/\b([ABC])\/([ABC])\b/i) || text.match(/\b([ABC])\s*-\s*([ABC])\b/i);
-  return match ? match[0].toUpperCase().replace('-', '/') : '';
+  if (!match) return '';
+  // Store without slash: A/B → AB, B/C → BC
+  return (match[1] + match[2]).toUpperCase();
 }
 
 // Parse price from text
@@ -244,6 +285,7 @@ class MassScraper {
     const SPECIES_SLUGS: Record<string, string> = {
       oak: 'tamm',
       ash: 'eur--saar',  // European ash (most common) - note double dash
+      'ash white': 'hele-saar',  // White ash (Hele Saar)
       birch: 'kask',
       pine: 'mand',
       beech: 'pook',
@@ -838,11 +880,12 @@ class MassScraper {
 
           // Construct URLs for each length × species × quality
           const SPECIES_SLUGS: Record<string, string> = {
-            oak: 'tamm', ash: 'eur--saar', birch: 'kask', pine: 'mand',
+            oak: 'tamm', ash: 'eur--saar', 'ash white': 'hele-saar', birch: 'kask', pine: 'mand',
             beech: 'pook', walnut: 'pahkel', maple: 'vaher', linden: 'parn',
             alder: 'lepp', cherry: 'kirsi', sapele: 'sapeli', pear: 'pirn', thermo: 'termo',
           };
           const QUALITY_SLUGS: Record<string, string> = {
+            'AB': 'a-b', 'AA': 'a-a', 'BB': 'b-b', 'BC': 'b-c', 'CC': 'c-c',
             'A/B': 'a-b', 'A/A': 'a-a', 'B/B': 'b-b', 'B/C': 'b-c', 'C/C': 'c-c',
             'Rustic': 'rustic', 'DIY': 'diy',
           };
@@ -1030,17 +1073,26 @@ class MassScraper {
           await this.page.waitForTimeout(300);
         }
 
-        // Collect all dimension-patterned product links
+        // Collect product links only from .product-data containers (not related products / footer)
         const productLinks = await this.page.evaluate(() => {
           const links: string[] = [];
-          document.querySelectorAll('a[href]').forEach(a => {
+          document.querySelectorAll('.product-data a[href]').forEach(a => {
             const href = (a as HTMLAnchorElement).href;
             if (href.match(/\d+-x-\d+-x-\d+/)) {
-              // Strip query params like ?hl=1 or ?export=pdf
               const clean = href.split('?')[0];
               links.push(clean);
             }
           });
+          // Fallback: if no links found in .product-data, try main content area
+          if (links.length === 0) {
+            document.querySelectorAll('.products a[href], .product-list a[href], main a[href]').forEach(a => {
+              const href = (a as HTMLAnchorElement).href;
+              if (href.match(/\d+-x-\d+-x-\d+/) && href.includes('liimpuit')) {
+                const clean = href.split('?')[0];
+                links.push(clean);
+              }
+            });
+          }
           return [...new Set(links)];
         });
 
@@ -1150,7 +1202,6 @@ class MassScraper {
     if (!this.page) throw new Error('Browser not initialized');
 
     try {
-      console.log(`\nScraping: ${url}`);
       await this.navigateTo(url);
       await this.page.waitForTimeout(1000);
 
@@ -1308,62 +1359,121 @@ class MassScraper {
   }
 
   async scrapeAllOakPanels(options: ScraperOptions, config: ScraperConfig | null): Promise<PanelProduct[]> {
-    const allProducts: PanelProduct[] = [];
+    let allProducts: PanelProduct[] = [];
     let urls: string[] = [];
+    let startIndex = 0;
 
-    // Step 1: Get URLs
-    if (options.fromFile) {
-      console.log('\n--- FROM-FILE MODE: Scraping products from products-to-scrape.json ---');
-      urls = this.generateUrlsFromFile();
-    } else if (options.discover) {
-      // Discovery only — find URLs, save to DB, stop
-      console.log('\n--- DISCOVERY MODE: Finding product URLs from page structure ---');
-      await this.discoverByPageStructure();
-      console.log('\nDiscovery complete. URLs saved to database.');
-      return [];
-    } else {
-      // Default: load saved URLs from database
-      console.log('\n--- Loading saved product URLs from database ---');
-      const { loadSavedUrls } = await import('./config');
-      urls = await loadSavedUrls('mass.ee');
-      if (urls.length === 0) {
-        console.log('No saved URLs found. Run with --discover first.');
-        return [];
+    // Check for resume
+    if (options.resume) {
+      const checkpoint = loadCheckpoint();
+      if (checkpoint) {
+        urls = checkpoint.urls;
+        allProducts = checkpoint.products;
+        startIndex = checkpoint.completedIndex + 1;
+        console.log(`\n--- RESUMING from checkpoint ---`);
+        console.log(`  Started: ${checkpoint.startedAt}`);
+        console.log(`  Last updated: ${checkpoint.lastUpdated}`);
+        console.log(`  Completed: ${checkpoint.completedIndex + 1}/${urls.length} URLs`);
+        console.log(`  Products found so far: ${allProducts.length}`);
+        console.log(`  Resuming from URL #${startIndex + 1}...`);
+      } else {
+        console.log('\nNo checkpoint found. Starting fresh scrape.');
+        options.resume = false;
       }
-      console.log(`Loaded ${urls.length} saved URLs`);
     }
 
-    // Step 2: Scrape each URL with rate limiting
-    console.log(`\n--- Processing ${urls.length} URLs ---`);
-    let processed = 0;
+    // Step 1: Get URLs (skip if resuming)
+    if (!options.resume) {
+      if (options.fromFile) {
+        console.log('\n--- FROM-FILE MODE: Scraping products from products-to-scrape.json ---');
+        urls = this.generateUrlsFromFile();
+      } else if (options.discover) {
+        // Discovery only — find URLs, save to DB, stop
+        console.log('\n--- DISCOVERY MODE: Finding product URLs from page structure ---');
+        await this.discoverByPageStructure();
+        console.log('\nDiscovery complete. URLs saved to database.');
+        return [];
+      } else {
+        // Default: load saved URLs from database, filtered by UI selections
+        console.log('\n--- Loading saved product URLs from database ---');
+        const { loadSavedUrls } = await import('./config');
 
-    for (const url of urls) {
+        // Parse filter from SCRAPER_FILTER env var (passed from portal UI)
+        let filter = undefined;
+        const filterJson = process.env.SCRAPER_FILTER;
+        console.log('SCRAPER_FILTER env:', filterJson || '(not set)');
+        if (filterJson) {
+          try {
+            filter = JSON.parse(filterJson);
+            console.log('Applying filters from UI selections...');
+          } catch {
+            console.error('Failed to parse filter JSON, loading all URLs');
+          }
+        }
+
+        urls = await loadSavedUrls('mass.ee', filter);
+        if (urls.length === 0) {
+          console.log('No saved URLs found matching filters. Run discovery or adjust selections.');
+          return [];
+        }
+        console.log(`Loaded ${urls.length} URLs to scrape${filter ? ' (filtered)' : ''}`);
+      }
+
+      // Clear any old checkpoint and save initial state
+      clearCheckpoint();
+    }
+
+    // Step 2: Scrape each URL with rate limiting and checkpointing
+    const totalUrls = urls.length;
+    console.log(`\n--- Processing ${totalUrls} URLs (starting from #${startIndex + 1}) ---`);
+
+    for (let i = startIndex; i < urls.length; i++) {
+      const url = urls[i];
+
       // Filter by thickness if specified via CLI
       if (options.thickness) {
         const urlDims = parseDimensions(url);
         if (urlDims && urlDims.thickness !== options.thickness) {
+          // Save checkpoint even for skipped URLs
+          saveCheckpoint({ urls, completedIndex: i, products: allProducts, startedAt: allProducts.length > 0 ? allProducts[0].scrapedAt : new Date().toISOString(), lastUpdated: new Date().toISOString() });
           continue;
         }
       }
 
+      // Log with URL number
+      console.log(`\n[${i + 1}/${totalUrls}] Scraping: ${url}`);
       const product = await this.scrapeProductPage(url);
       if (product) {
         if (options.thickness && product.thickness !== options.thickness) {
+          // Save checkpoint
+          saveCheckpoint({ urls, completedIndex: i, products: allProducts, startedAt: allProducts.length > 0 ? allProducts[0].scrapedAt : new Date().toISOString(), lastUpdated: new Date().toISOString() });
           continue;
         }
         allProducts.push(product);
       }
 
-      processed++;
+      // Save checkpoint after each URL
+      saveCheckpoint({
+        urls,
+        completedIndex: i,
+        products: allProducts,
+        startedAt: allProducts.length > 0 ? allProducts[0].scrapedAt : new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+      });
 
       // Rate limiting: 2s between requests, 10s pause every 25 requests
+      const processed = i - startIndex + 1;
       if (processed % 25 === 0) {
-        console.log(`\n  Progress: ${processed}/${urls.length} URLs processed, ${allProducts.length} products found. Pausing 10s...`);
+        console.log(`\n  Progress: ${i + 1}/${totalUrls} URLs processed, ${allProducts.length} products found. Pausing 10s...`);
         await new Promise(resolve => setTimeout(resolve, 10000));
       } else {
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
+
+    // All done — clear checkpoint
+    clearCheckpoint();
+    console.log(`\nScraping complete. Checkpoint cleared.`);
 
     return allProducts;
   }
@@ -1425,7 +1535,9 @@ async function main() {
   console.log('Mass.ee Solid Wood Panel Scraper');
   console.log('='.repeat(60));
 
-  if (options.discover) {
+  if (options.resume) {
+    console.log('Mode: RESUME (continuing interrupted scrape from checkpoint)');
+  } else if (options.discover) {
     console.log('Mode: DISCOVERY (find product URLs, save to database)');
   } else if (options.fromFile) {
     console.log('Mode: FROM-FILE (scraping products from products-to-scrape.json)');

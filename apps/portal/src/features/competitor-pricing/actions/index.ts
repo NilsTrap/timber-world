@@ -10,3 +10,7 @@ export { getSavedUrlCount, getSavedUrls } from "./getSavedUrlCount";
 export type { SavedUrl } from "./getSavedUrlCount";
 export { updateScraperConfig } from "./updateScraperConfig";
 export type { UpdateScraperConfigInput } from "./updateScraperConfig";
+export { getStockPrices, updateStockPrice, addStockPriceRow, deleteStockPriceRow } from "./stockPrices";
+export type { StockPriceRow } from "./stockPrices";
+export { getScraperScripts } from "./getScraperScripts";
+export type { ScraperScript } from "./getScraperScripts";

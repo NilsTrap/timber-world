@@ -183,6 +183,67 @@ async function fetchTIPrices(
   return tiPrices;
 }
 
+// TIM stock prices (€/m³) — fetched from stock_prices table
+interface StockPriceEntry {
+  species: string;
+  panelType: string;
+  quality: string;
+  lengthMin: number;
+  lengthMax: number;
+  stockPrice: number;
+}
+
+let STOCK_PRICES: StockPriceEntry[] = [];
+
+// Fetch stock prices from database and parse length ranges
+async function loadStockPrices(supabase: SupabaseClient): Promise<void> {
+  const { data, error } = await supabase
+    .from("stock_prices")
+    .select("species, panel_type, quality, length_range, stock_price");
+
+  if (error) {
+    console.error("Error fetching stock prices:", error.message);
+    return;
+  }
+
+  STOCK_PRICES = (data || []).map((row: { species: string; panel_type: string; quality: string; length_range: string; stock_price: number }) => {
+    let lengthMin = 0;
+    let lengthMax = 99999;
+    if (row.length_range !== "All" && row.length_range !== "-") {
+      const parts = row.length_range.split("-");
+      lengthMin = parseInt(parts[0], 10) || 0;
+      lengthMax = parseInt(parts[1], 10) || lengthMin;
+    }
+    return {
+      species: row.species.toLowerCase(),
+      panelType: row.panel_type,
+      quality: row.quality,
+      lengthMin,
+      lengthMax,
+      stockPrice: Number(row.stock_price),
+    };
+  });
+
+  console.log(`Loaded ${STOCK_PRICES.length} stock price entries from database`);
+}
+
+function findStockPriceM3(
+  species: string,
+  panelType: string,
+  quality: string,
+  lengthMm: number
+): number | null {
+  const match = STOCK_PRICES.find(
+    (sp) =>
+      sp.species === species &&
+      sp.panelType === panelType &&
+      sp.quality === quality &&
+      lengthMm >= sp.lengthMin &&
+      lengthMm <= sp.lengthMax
+  );
+  return match && match.stockPrice > 0 ? match.stockPrice : null;
+}
+
 // Calculate price per m³ from piece price and dimensions
 function calculatePricePerM3(
   pricePerPiece: number,
@@ -205,12 +266,6 @@ function transformProduct(
   const key = makeKey(product.species, panelType, product.thickness, product.width, product.length);
   const tiPrice = tiPrices.get(key);
 
-  let priceDiffPercent: number | null = null;
-  if (tiPrice && tiPrice.pricePerM2 > 0 && product.pricePerM2 > 0) {
-    priceDiffPercent =
-      Math.round(((product.pricePerM2 - tiPrice.pricePerM2) / tiPrice.pricePerM2) * 1000) / 10;
-  }
-
   // Calculate mass.ee price per m³ from dimensions
   const pricePerM3 = calculatePricePerM3(
     product.pricePerPiece,
@@ -218,6 +273,32 @@ function transformProduct(
     product.width,
     product.length
   );
+
+  // Use inventory price if available, otherwise fall back to stock price list
+  let tiPricePerPiece = tiPrice?.pricePerPiece || null;
+  let tiPricePerM2 = tiPrice?.pricePerM2 || null;
+  let tiPricePerM3 = tiPrice?.pricePerM3 || null;
+
+  if (!tiPricePerM3) {
+    const stockM3 = findStockPriceM3(
+      product.species || "oak",
+      panelType,
+      product.quality || "AB",
+      product.length
+    );
+    if (stockM3) {
+      tiPricePerM3 = stockM3;
+      const volumeM3 = (product.thickness / 1000) * (product.width / 1000) * (product.length / 1000);
+      tiPricePerPiece = Math.round(stockM3 * volumeM3 * 100) / 100;
+      tiPricePerM2 = Math.round(stockM3 * (product.thickness / 1000) * 100) / 100;
+    }
+  }
+
+  let priceDiffPercent: number | null = null;
+  if (tiPricePerM3 && tiPricePerM3 > 0 && pricePerM3 && pricePerM3 > 0) {
+    priceDiffPercent =
+      Math.round(((pricePerM3 - tiPricePerM3) / tiPricePerM3) * 1000) / 10;
+  }
 
   return {
     source: "mass.ee",
@@ -231,9 +312,9 @@ function transformProduct(
     price_per_piece: product.pricePerPiece || null,
     price_per_m2: product.pricePerM2 || null,
     price_per_m3: pricePerM3,
-    ti_price_per_piece: tiPrice?.pricePerPiece || null,
-    ti_price_per_m2: tiPrice?.pricePerM2 || null,
-    ti_price_per_m3: tiPrice?.pricePerM3 || null,
+    ti_price_per_piece: tiPricePerPiece,
+    ti_price_per_m2: tiPricePerM2,
+    ti_price_per_m3: tiPricePerM3,
     price_diff_percent: priceDiffPercent,
     stock_total: product.totalStock,
     stock_locations: {
@@ -300,6 +381,10 @@ async function main() {
   const tiPrices = await fetchTIPrices(supabase);
   console.log(`Found ${tiPrices.size} TI price entries`);
 
+  // Fetch stock prices from database (fallback for TI prices)
+  console.log("Fetching stock prices from database...");
+  await loadStockPrices(supabase);
+
   // Transform to database format with TI prices
   const records = products.map((p) => transformProduct(p, tiPrices));
   const matchedCount = records.filter((r) => r.ti_price_per_m2 !== null).length;
@@ -325,12 +410,13 @@ async function main() {
     return;
   }
 
-  // Insert records
-  console.log(`Inserting ${records.length} records...`);
+  // Upsert records — updates existing entries (matched by source + product_url),
+  // inserts new ones, and leaves untouched products from previous scrapes intact.
+  console.log(`Upserting ${records.length} records...`);
 
   const { data, error } = await supabase
     .from("competitor_prices")
-    .insert(records)
+    .upsert(records, { onConflict: "source,product_url" })
     .select("id");
 
   if (error) {

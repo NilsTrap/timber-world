@@ -12,6 +12,7 @@ export const SCRAPER_OPTIONS = {
   species: [
     { value: "oak", label: "Oak (Tamm)" },
     { value: "ash", label: "Ash (Saar)" },
+    { value: "ash white", label: "Ash White (Saar Hele)" },
     { value: "birch", label: "Birch (Kask)" },
     { value: "pine", label: "Pine (Mänd)" },
     { value: "beech", label: "Beech (Pöök)" },
@@ -35,7 +36,7 @@ export const SCRAPER_OPTIONS = {
     { value: "FJ", label: "FJ (Finger Jointed / Sõrmjätkatud)" },
     { value: "FS", label: "FS (Full Stave / Pika Lamelliga)" },
   ] as const,
-  qualities: ["A/A", "A/B", "B/B", "B/C", "C/C", "Rustic"] as const,
+  qualities: ["AA", "AB", "BB", "BC", "CC", "Rustic"] as const,
 } as const;
 
 /**
@@ -136,6 +137,7 @@ export interface PricingFilters {
 export interface PricingSummary {
   totalProducts: number;
   totalStock: number;
+  totalM3: number;
   averagePrice: number;
   lastScrapedAt: string | null;
 }
@@ -145,12 +147,8 @@ export interface PricingSummary {
  */
 export function formatPrice(price: number | null): string {
   if (price === null || price === undefined) return "-";
-  return new Intl.NumberFormat("de-DE", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(price);
+  const parts = price.toFixed(2).split(".");
+  return parts[0] + "," + parts[1];
 }
 
 /**
@@ -205,12 +203,19 @@ export function calculateSummary(data: CompetitorPriceDb[]): PricingSummary {
     return {
       totalProducts: 0,
       totalStock: 0,
+      totalM3: 0,
       averagePrice: 0,
       lastScrapedAt: null,
     };
   }
 
   const totalStock = data.reduce((sum, item) => sum + (item.stock_total || 0), 0);
+  const totalM3 = data.reduce((sum, item) => {
+    if (item.thickness_mm && item.width_mm && item.length_mm && item.stock_total) {
+      return sum + (item.thickness_mm / 1000) * (item.width_mm / 1000) * (item.length_mm / 1000) * item.stock_total;
+    }
+    return sum;
+  }, 0);
   const pricesWithValues = data.filter((item) => item.price_per_piece !== null);
   const averagePrice =
     pricesWithValues.length > 0
@@ -226,6 +231,7 @@ export function calculateSummary(data: CompetitorPriceDb[]): PricingSummary {
   return {
     totalProducts: data.length,
     totalStock,
+    totalM3,
     averagePrice,
     lastScrapedAt: sortedByScrapedAt[0]?.scraped_at || null,
   };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { Button, Checkbox, Label } from "@timber/ui";
 import { ChevronDown, Loader2, Play, RefreshCw, Search, Settings } from "lucide-react";
 
@@ -99,6 +99,8 @@ export function ScraperConfigForm({
   const [showUrls, setShowUrls] = useState(false);
   const [savedUrls, setSavedUrls] = useState<SavedUrl[] | null>(null);
   const [loadingUrls, setLoadingUrls] = useState(false);
+  const [filteredUrlCount, setFilteredUrlCount] = useState<number | null>(null);
+  const [loadingFilteredCount, setLoadingFilteredCount] = useState(false);
 
   const toggleSection = (key: string) =>
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -136,6 +138,33 @@ export function ScraperConfigForm({
     loadConfig();
   }, [source]);
 
+  // Update filtered URL count when selections change
+  useEffect(() => {
+    const hasAnyFilter = species.length > 0 || panelTypes.length > 0 || qualities.length > 0 ||
+      thicknesses.length > 0 || widths.length > 0 || lengths.length > 0;
+
+    if (!hasAnyFilter) {
+      setFilteredUrlCount(null); // null = show total count
+      return;
+    }
+
+    setLoadingFilteredCount(true);
+    const timeout = setTimeout(async () => {
+      const result = await getSavedUrlCount(source, {
+        species: species.length > 0 ? species : undefined,
+        panelTypes: panelTypes.length > 0 ? panelTypes : undefined,
+        qualities: qualities.length > 0 ? qualities : undefined,
+        thicknesses: thicknesses.length > 0 ? thicknesses : undefined,
+        widths: widths.length > 0 ? widths : undefined,
+        lengths: lengths.length > 0 ? lengths : undefined,
+      });
+      if (result.success) setFilteredUrlCount(result.data);
+      setLoadingFilteredCount(false);
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [source, species, panelTypes, qualities, thicknesses, widths, lengths]);
+
   async function loadConfig() {
     setLoading(true);
     setError(null);
@@ -149,12 +178,13 @@ export function ScraperConfigForm({
     if (configResult.success) {
       setConfig(configResult.data);
       setIsEnabled(configResult.data.isEnabled);
-      setSpecies(configResult.data.species);
-      setThicknesses(configResult.data.thicknesses);
-      setWidths(configResult.data.widths);
-      setLengths(configResult.data.lengths);
-      setPanelTypes(configResult.data.panelTypes);
-      setQualities(configResult.data.qualities);
+      // Always start with empty selections — user picks what to include
+      setSpecies([]);
+      setThicknesses([]);
+      setWidths([]);
+      setLengths([]);
+      setPanelTypes([]);
+      setQualities([]);
     } else {
       setError(configResult.error);
     }
@@ -242,7 +272,7 @@ export function ScraperConfigForm({
     );
   }
 
-  const runScraper = useCallback(async (mode: "discover" | "scrape") => {
+  const runScraper = async (mode: "discover" | "scrape") => {
     setScraperRunning(mode);
     setScraperLogs([]);
 
@@ -250,7 +280,20 @@ export function ScraperConfigForm({
       const response = await fetch("/api/scraper", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode }),
+        body: JSON.stringify({
+          mode,
+          // Pass current filter selections for scrape mode
+          ...(mode === "scrape" ? {
+            filter: {
+              species: species.length > 0 ? species : undefined,
+              panelTypes: panelTypes.length > 0 ? panelTypes : undefined,
+              qualities: qualities.length > 0 ? qualities : undefined,
+              thicknesses: thicknesses.length > 0 ? thicknesses : undefined,
+              widths: widths.length > 0 ? widths : undefined,
+              lengths: lengths.length > 0 ? lengths : undefined,
+            }
+          } : {}),
+        }),
       });
 
       if (!response.ok) {
@@ -318,7 +361,7 @@ export function ScraperConfigForm({
     }
     // Reset cached saved URLs so they reload with fresh data
     setSavedUrls(null);
-  }, [source, onRefresh]);
+  };
 
   if (loading) {
     return (
@@ -638,6 +681,15 @@ export function ScraperConfigForm({
                 )}
                 Scrape Prices
               </Button>
+              {savedUrlCount > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  {loadingFilteredCount ? "..." : (
+                    filteredUrlCount !== null
+                      ? `${filteredUrlCount} / ${savedUrlCount} URLs`
+                      : `${savedUrlCount} URLs (all)`
+                  )}
+                </span>
+              )}
               {savedUrlCount === 0 && (
                 <span className="text-xs text-muted-foreground">
                   Run Discover first to find product URLs
@@ -645,16 +697,6 @@ export function ScraperConfigForm({
               )}
             </div>
 
-            <Button variant="outline" onClick={handleSave} disabled={saving || scraperRunning !== null}>
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Configuration"
-              )}
-            </Button>
           </div>
 
           {/* Scraper log output */}

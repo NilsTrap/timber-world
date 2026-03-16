@@ -111,6 +111,11 @@ const PANEL_TYPE_SLUGS: Record<string, string> = {
  * Quality grade -> URL slug mapping
  */
 const QUALITY_SLUGS: Record<string, string> = {
+  "AA": "a-a",
+  "AB": "a-b",
+  "BB": "b-b",
+  "BC": "b-c",
+  "CC": "c-c",
   "A/A": "a-a",
   "A/B": "a-b",
   "B/B": "b-b",
@@ -162,7 +167,16 @@ export function generateUrls(config: ScraperConfig): string[] {
  * Load saved product URLs from scraper_product_urls table
  * These are URLs that were previously discovered to have actual products
  */
-export async function loadSavedUrls(source: string): Promise<string[]> {
+export interface UrlFilter {
+  species?: string[];
+  panelTypes?: string[];
+  qualities?: string[];
+  thicknesses?: number[];
+  widths?: number[];
+  lengths?: number[];
+}
+
+export async function loadSavedUrls(source: string, filter?: UrlFilter): Promise<string[]> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -175,18 +189,42 @@ export async function loadSavedUrls(source: string): Promise<string[]> {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("scraper_product_urls")
     .select("url")
     .eq("source", source)
     .eq("is_active", true);
+
+  // Apply filters if any selections were made
+  if (filter) {
+    if (filter.species && filter.species.length > 0) {
+      query = query.in("species", filter.species);
+    }
+    if (filter.panelTypes && filter.panelTypes.length > 0) {
+      query = query.in("panel_type", filter.panelTypes);
+    }
+    if (filter.qualities && filter.qualities.length > 0) {
+      query = query.in("quality", filter.qualities);
+    }
+    if (filter.thicknesses && filter.thicknesses.length > 0) {
+      query = query.in("thickness_mm", filter.thicknesses);
+    }
+    if (filter.widths && filter.widths.length > 0) {
+      query = query.in("width_mm", filter.widths);
+    }
+    if (filter.lengths && filter.lengths.length > 0) {
+      query = query.in("length_mm", filter.lengths);
+    }
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error(`Error loading saved URLs for ${source}:`, error.message);
     return [];
   }
 
-  return (data || []).map((row) => row.url);
+  return (data || []).map((row: { url: string }) => row.url);
 }
 
 /**
