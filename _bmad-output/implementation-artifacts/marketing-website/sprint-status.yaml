@@ -262,3 +262,14 @@ ad_hoc_changes:
       - "packages/config/src/site.ts"
       - "packages/ui/src/components/switch.tsx (new)"
       - "packages/ui/src/components/select.tsx (new)"
+
+  - date: 2026-03-17
+    description: "Replace default Vercel favicon with Timber International logo"
+    changes:
+      - "New SVG favicon: white circle with black bold T on top, thin red horizontal line in center, black bold I below"
+      - "Removed old Vercel favicon.ico"
+      - "Next.js auto-serves icon.svg over favicon.ico"
+    files_created:
+      - "apps/marketing/src/app/icon.svg"
+    files_modified:
+      - "apps/marketing/src/app/favicon.ico (deleted)"

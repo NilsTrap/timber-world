@@ -12,8 +12,8 @@ user_name: 'Nils'
 date: '2026-01-21'
 status: 'complete'
 completedAt: '2026-01-21'
-lastAddendum: '2026-02-06'
-addendumNotes: 'Shipment Workflow Enhancement Addendum added (pallets, on-the-way status, draft blocking)'
+lastAddendum: '2026-03-17'
+addendumNotes: 'Competitor Pricing & Marketing Stock Addendum added (scraper tools, price comparison, marketing stock management, favicon)'
 ---
 
 # Architecture Decision Document
@@ -2986,4 +2986,52 @@ interface EditablePackageItem {
 | `assignPackageToPallet` | Assign package to pallet or unassign |
 | `getPackagesInShipmentDrafts` | Get packages in draft shipments for blocking |
 | `getOnTheWayPackages` | Get packages in pending shipments for admin view |
+
+---
+
+## Addendum: Competitor Pricing & Marketing Stock (2026-03-17)
+
+### Competitor Pricing System
+
+New admin feature for scraping and comparing UK timber competitor prices against TIM stock prices.
+
+**New Tables:**
+- `competitor_prices` — scraped product data (source, dimensions, competitor prices in source currency, TIM prices in EUR, price diff percent, stock levels)
+- `scraper_config` — per-source scraper configuration (species, thicknesses, qualities to scrape)
+- `scraper_product_urls` — discovered product URLs for scraping pipeline
+- `stock_prices` — TIM stock prices for comparison (keyed by species, panel_type, quality, thickness range, length range)
+
+**Architecture Pattern:**
+- Scrapers run as standalone CLI tools (`tools/*-scraper/`) using Playwright for browser automation
+- Each scraper has: `scraper.ts` (discover + scrape phases) and `push.ts` (upsert to Supabase with TIM price matching)
+- Portal provides admin UI for configuration, data viewing, and triggering scraper runs via API route
+- API route (`/api/scraper/route.ts`) executes scraper scripts as child processes
+
+**Price Comparison:**
+- Source-aware diff formula using `isGbp` flag
+- Mass.ee (EUR): `(competitor - TIM) / TIM`
+- UK sources (GBP): `(TIM - competitor) / competitor` after GBP→EUR conversion (rate: 1/0.9)
+- Positive diff = red (bad for TIM), negative = green (good for TIM)
+
+**Export to MAS Inventory:**
+- Server action converts Mass.ee scraped data to inventory_packages for MAS organisation
+- Creates dummy shipment (code: SCRAPE-YYYYMMDD), maps species/quality to ref_* table IDs
+- TIM prices stored as unit prices in EUR cents
+
+### Marketing Stock Management
+
+New CMS sub-feature for managing which organisations' inventory appears on the marketing website.
+
+**Database Change:**
+- Added `marketing_enabled` (BOOLEAN NOT NULL DEFAULT FALSE) to `organisations` table
+
+**UI:**
+- Stock tab added to existing CMS page (MarketingCmsManager) with sub-tabs:
+  - Stock: consolidated inventory table from marketing-enabled orgs
+  - Sources: toggle switches per organisation with package count display
+
+### Favicon
+
+- Replaced default Vercel favicon with custom SVG (`apps/marketing/src/app/icon.svg`)
+- Design: white circle, bold black T (top), thin red horizontal line (center), bold black I (bottom)
 

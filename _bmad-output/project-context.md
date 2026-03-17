@@ -1,9 +1,9 @@
 ---
 project_name: 'Timber-World-Platform'
 user_name: 'Nils'
-date: '2026-02-06'
+date: '2026-03-17'
 status: 'complete'
-sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime', 'session_verification', 'print_functionality', 'shipment_workflow', 'pallet_grouping', 'draft_blocking']
+sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime', 'session_verification', 'print_functionality', 'shipment_workflow', 'pallet_grouping', 'draft_blocking', 'competitor_pricing', 'marketing_stock']
 architecture_ref: '_bmad-output/planning-artifacts/platform/architecture.md'
 ---
 
@@ -483,6 +483,46 @@ In lists/tables, show shipment entries as:
 {CODE}  {From Org Full Name} → {To Org Full Name}
 Example: TIM-TWG-001  Timber International → The Wooden Good
 ```
+
+## Competitor Pricing System
+
+The competitor pricing feature scrapes UK timber competitor websites and compares prices with TIM (Timber International) stock prices.
+
+### Key Tables
+- `competitor_prices` — scraped product data with competitor and TIM prices
+- `scraper_config` — per-source scraper configuration (species, thicknesses, qualities)
+- `scraper_product_urls` — discovered product URLs for scraping
+- `stock_prices` — TIM stock prices for comparison (species, panel_type, quality, thickness/length ranges)
+
+### Price Diff Formula (Source-Aware)
+- **Mass.ee** (EUR source): `diff = (comp - TIM) / TIM` — positive means competitor is more expensive (bad for TIM)
+- **UK sources** (GBP sources): `diff = (TIM - comp) / comp` — positive means TIM is more expensive (bad for TIM)
+- GBP → EUR conversion: `1 / 0.9`
+- Colors: red = positive (bad), green = negative (good) — same for both source types
+
+### Scrapers
+- `tools/mass-scraper/` — Mass.ee (Playwright, Estonian e-commerce)
+- `tools/sl-hardwoods-scraper/` — SL Hardwoods UK
+- `tools/uk-timber-scraper/` — UK Timber
+- `tools/timbersource-scraper/` — Timber Source (Playwright for Cloudflare)
+- `tools/fiximer-scraper/` — Fiximer (WooCommerce variation parsing)
+- Each scraper has `scraper.ts` (discover + scrape) and `push.ts` (upsert to competitor_prices with TIM price matching)
+
+### Export to MAS Inventory
+- Button on Scraped Data tab exports all Mass.ee products to MAS organisation inventory
+- Creates dummy shipment (code: `SCRAPE-YYYYMMDD`)
+- Deletes existing MAS packages, inserts new ones with TIM prices as unit prices (EUR cents)
+- Species fallback: "ash white" → "Ash"; Quality fallback: "Rustic" → "BC"
+
+## Marketing Stock Management
+
+Located in CMS page → Stock tab. Two sub-tabs:
+- **Stock** — consolidated inventory table from marketing-enabled organisations
+- **Sources** — toggle `marketing_enabled` per organisation
+
+### Database
+- `organisations.marketing_enabled` (BOOLEAN) — controls which orgs appear on marketing website stock page
+- Marketing website query should filter by `marketing_enabled = true` (future: update marketing site query)
 
 ## Architecture Reference
 

@@ -2530,3 +2530,43 @@ Epic is complete when:
 - [ ] Super Admin can configure features per org
 - [ ] Super Admin can View As any org/user
 - [ ] All impersonation actions are audited
+
+---
+
+## Post-MVP Ad-Hoc Features (2026-02-23 — 2026-03-17)
+
+These features were implemented outside the original epic structure as ad-hoc enhancements.
+
+### Orders Management (2026-02-23)
+- Orders table with auto-generated codes (ORD-001, etc.)
+- Status workflow: draft → pending → confirmed → in_progress → shipped → completed
+- Feature flag integration for producer access control
+- Order-shipment link table for future associations
+
+### Marketing CMS (2026-03-01)
+- Admin CMS page for managing marketing website content
+- Media management with Supabase Storage
+- Text/meta editing for website pages
+- Reference data management
+- Analytics dashboard integration
+- Products page on marketing website
+
+### Competitor Pricing System (2026-03-14)
+- Scraper infrastructure for UK timber competitors (5 sources: Mass.ee, SL Hardwoods, UK Timber, Timber Source, Fiximer)
+- TIM price comparison via stock_prices table
+- PriceTable with column sorting, filtering, and PDF export
+- Scraper configuration UI per source
+- Source-aware price diff calculation (EUR vs GBP sources)
+
+### MAS Inventory Export (2026-03-17)
+- Export Mass.ee scraped data to MAS organisation inventory
+- Creates dummy shipment, maps ref table IDs, stores TIM prices as unit prices
+
+### Marketing Stock Management (2026-03-17)
+- Stock tab in CMS page with consolidated inventory view
+- Organisation source toggles (marketing_enabled flag)
+- Database: marketing_enabled column on organisations table
+
+### Favicon Update (2026-03-17)
+- Custom SVG favicon replacing Vercel default
+- Design: white circle, black T/I letters, red separator line
