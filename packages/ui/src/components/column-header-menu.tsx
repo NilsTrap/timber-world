@@ -35,8 +35,11 @@ function ColumnHeaderMenu({
     (activeSort?.column === columnKey) || activeFilter.size > 0;
 
   const sortedUniqueValues = useMemo(
-    () => [...uniqueValues].sort((a, b) => a.localeCompare(b)),
-    [uniqueValues]
+    () =>
+      [...uniqueValues].sort((a, b) =>
+        isNumeric ? Number(a) - Number(b) : a.localeCompare(b)
+      ),
+    [uniqueValues, isNumeric]
   );
 
   const ascLabel = isNumeric ? "Small → Large" : "A → Z";

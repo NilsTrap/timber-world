@@ -9,8 +9,8 @@ import {
   TableHeader,
   TableRow,
 } from "@timber/ui";
-import { Loader2 } from "lucide-react";
-import { getStockPrices, updateStockPrice } from "../actions";
+import { Loader2, Plus, Trash2 } from "lucide-react";
+import { getStockPrices, updateStockPrice, addStockPriceRow, deleteStockPriceRow, reorderStockPrices } from "../actions";
 import type { StockPriceRow } from "../actions";
 
 function formatEur(value: number): string {
@@ -96,10 +96,10 @@ function EditableText({
 
   return (
     <span
-      className="cursor-pointer hover:text-primary hover:underline decoration-dotted underline-offset-4"
+      className="cursor-pointer hover:text-primary hover:underline decoration-dotted underline-offset-4 min-w-[2rem] inline-block"
       onClick={() => { setInput(value); setEditing(true); }}
     >
-      {value}
+      {value || <span className="text-muted-foreground/40">—</span>}
     </span>
   );
 }
@@ -120,11 +120,70 @@ export function StockPricesTable() {
   }
 
   async function handleUpdate(id: string, field: string, value: string | number) {
-    // Update locally first for instant feedback
     setPrices((prev) =>
       prev.map((row) => (row.id === id ? { ...row, [field]: value } : row))
     );
     await updateStockPrice(id, field, value);
+  }
+
+  async function handleInsertAfter(index: number) {
+    const ref = prices[index]!;
+    // Calculate sort_order: midpoint between current and next row
+    const currentOrder = ref.sort_order;
+    const nextOrder = index < prices.length - 1 ? prices[index + 1]!.sort_order : currentOrder + 10;
+    let newOrder = Math.floor((currentOrder + nextOrder) / 2);
+
+    // If no gap, reorder all rows to create space
+    if (newOrder === currentOrder) {
+      const reorders = prices.map((row, i) => ({ id: row.id, sort_order: (i + 1) * 10 }));
+      await reorderStockPrices(reorders);
+      newOrder = (index + 1) * 10 + 5;
+    }
+
+    const newRow: Omit<StockPriceRow, "id"> & { sort_order: number } = {
+      species: ref.species,
+      panel_type: ref.panel_type,
+      quality: ref.quality,
+      thickness: ref.thickness,
+      length_range: "",
+      order_price: 0,
+      stock_price: 0,
+      sort_order: newOrder,
+    };
+
+    const result = await addStockPriceRow(newRow);
+    if (result.success) {
+      // Insert into local state at the right position
+      setPrices((prev) => {
+        const copy = [...prev];
+        copy.splice(index + 1, 0, result.data);
+        return copy;
+      });
+    }
+  }
+
+  async function handleAddToEnd() {
+    const lastOrder = prices.length > 0 ? prices[prices.length - 1]!.sort_order : 0;
+    const newRow: Omit<StockPriceRow, "id"> & { sort_order: number } = {
+      species: prices.length > 0 ? prices[prices.length - 1]!.species : "Oak",
+      panel_type: prices.length > 0 ? prices[prices.length - 1]!.panel_type : "FS",
+      quality: prices.length > 0 ? prices[prices.length - 1]!.quality : "AB",
+      thickness: "All",
+      length_range: "",
+      order_price: 0,
+      stock_price: 0,
+      sort_order: lastOrder + 10,
+    };
+
+    const result = await addStockPriceRow(newRow);
+    if (result.success) {
+      setPrices((prev) => [...prev, result.data]);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setPrices((prev) => prev.filter((row) => row.id !== id));
+    await deleteStockPriceRow(id);
   }
 
   if (loading) {
@@ -139,11 +198,20 @@ export function StockPricesTable() {
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">Click any cell to edit. Changes are saved to the database automatically.</p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">Click any cell to edit. Click + to insert a row below. Changes are saved automatically.</p>
+        <button
+          onClick={handleAddToEnd}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add row
+        </button>
+      </div>
       <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8"></TableHead>
               <TableHead>Species</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Quality</TableHead>
@@ -151,6 +219,7 @@ export function StockPricesTable() {
               <TableHead>Length (mm)</TableHead>
               <TableHead className="text-right">Order Price (€/m³)</TableHead>
               <TableHead className="text-right">Stock Price (€/m³)</TableHead>
+              <TableHead className="w-8"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -159,6 +228,15 @@ export function StockPricesTable() {
               lastSpecies = row.species;
               return (
                 <TableRow key={row.id} className={isNewSpecies && i > 0 ? "border-t-2" : ""}>
+                  <TableCell className="px-1">
+                    <button
+                      onClick={() => handleInsertAfter(i)}
+                      className="text-muted-foreground/40 hover:text-primary transition-colors p-0.5"
+                      title="Insert row below"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </TableCell>
                   <TableCell className="font-medium">
                     <EditableText value={row.species} onSave={(v) => handleUpdate(row.id, "species", v)} className="w-16" />
                   </TableCell>
@@ -179,6 +257,15 @@ export function StockPricesTable() {
                   </TableCell>
                   <TableCell className="text-right">
                     <EditablePrice value={Number(row.stock_price)} onSave={(v) => handleUpdate(row.id, "stock_price", v)} />
+                  </TableCell>
+                  <TableCell className="px-1">
+                    <button
+                      onClick={() => handleDelete(row.id)}
+                      className="text-muted-foreground/40 hover:text-destructive transition-colors p-0.5"
+                      title="Delete row"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </TableCell>
                 </TableRow>
               );

@@ -14,6 +14,7 @@ export interface StockPriceRow {
   length_range: string;
   order_price: number;
   stock_price: number;
+  sort_order: number;
 }
 
 export async function getStockPrices(): Promise<ActionResult<StockPriceRow[]>> {
@@ -27,7 +28,7 @@ export async function getStockPrices(): Promise<ActionResult<StockPriceRow[]>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("stock_prices")
-    .select("id, species, panel_type, quality, thickness, length_range, order_price, stock_price")
+    .select("id, species, panel_type, quality, thickness, length_range, order_price, stock_price, sort_order")
     .order("sort_order");
 
   if (error) {
@@ -66,8 +67,35 @@ export async function updateStockPrice(
   return { success: true, data: null };
 }
 
+export async function reorderStockPrices(
+  updates: { id: string; sort_order: number }[]
+): Promise<ActionResult<null>> {
+  const session = await getSession();
+  if (!session) {
+    return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  }
+  if (!isAdmin(session)) {
+    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
+
+  const supabase = createAdminClient();
+
+  for (const { id, sort_order } of updates) {
+    const { error } = await supabase
+      .from("stock_prices" as never)
+      .update({ sort_order } as never)
+      .eq("id", id);
+    if (error) {
+      console.error("Failed to reorder stock prices:", error);
+      return { success: false, error: "Failed to reorder", code: "UPDATE_FAILED" };
+    }
+  }
+
+  return { success: true, data: null };
+}
+
 export async function addStockPriceRow(
-  row: Omit<StockPriceRow, "id">
+  row: Omit<StockPriceRow, "id"> & { sort_order?: number }
 ): Promise<ActionResult<StockPriceRow>> {
   const session = await getSession();
   if (!session) {

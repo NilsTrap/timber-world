@@ -1,0 +1,134 @@
+[
+  {
+    "url": "https://www.slhardwoods.co.uk/product/solid-oak-furniture-panels-2/#9x600x1800",
+    "species": "oak",
+    "panelType": "FS",
+    "quality": "AB",
+    "thickness_mm": 9,
+    "width_mm": 600,
+    "length_mm": 1800,
+    "price_inc_vat": 163.3,
+    "price_exc_vat": 136.08
+  },
+  {
+    "url": "https://www.slhardwoods.co.uk/product/solid-oak-furniture-panels-2/#18x600x3000",
+    "species": "oak",
+    "panelType": "FS",
+    "quality": "AB",
+    "thickness_mm": 18,
+    "width_mm": 600,
+    "length_mm": 3000,
+    "price_inc_vat": 266.11,
+    "price_exc_vat": 221.76
+  },
+  {
+    "url": "https://www.slhardwoods.co.uk/product/solid-oak-furniture-panels-2/#12x600x2400",
+    "species": "oak",
+    "panelType": "FS",
+    "quality": "AB",
+    "thickness_mm": 12,
+    "width_mm": 600,
+    "length_mm": 2400,
+    "price_inc_vat": 183.53,
+    "price_exc_vat": 152.94
+  },
+  {
+    "url": "https://www.slhardwoods.co.uk/product/solid-oak-furniture-panels-2/#23x600x2400",
+    "species": "oak",
+    "panelType": "FS",
+    "quality": "AB",
+    "thickness_mm": 23,
+    "width_mm": 600,
+    "length_mm": 2400,
+    "price_inc_vat": 258.13,
+    "price_exc_vat": 215.11
+  },
+  {
+    "url": "https://www.slhardwoods.co.uk/product/solid-oak-furniture-panels-2/#15x600x2400",
+    "species": "oak",
+    "panelType": "FS",
+    "quality": "AB",
+    "thickness_mm": 15,
+    "width_mm": 600,
+    "length_mm": 2400,
+    "price_inc_vat": 189.34,
+    "price_exc_vat": 157.78
+  },
+  {
+    "url": "https://www.slhardwoods.co.uk/product/solid-oak-furniture-panels-2/#24x600x1800",
+    "species": "oak",
+    "panelType": "FS",
+    "quality": "AB",
+    "thickness_mm": 24,
+    "width_mm": 600,
+    "length_mm": 1800,
+    "price_inc_vat": 176.2,
+    "price_exc_vat": 146.83
+  },
+  {
+    "url": "https://www.slhardwoods.co.uk/product/solid-oak-furniture-panels-2/#18x600x1500",
+    "species": "oak",
+    "panelType": "FS",
+    "quality": "AB",
+    "thickness_mm": 18,
+    "width_mm": 600,
+    "length_mm": 1500,
+    "price_inc_vat": 105.41,
+    "price_exc_vat": 87.84
+  },
+  {
+    "url": "https://www.slhardwoods.co.uk/product/solid-oak-furniture-panels-2/#30x915x1830",
+    "species": "oak",
+    "panelType": "FS",
+    "quality": "AB",
+    "thickness_mm": 30,
+    "width_mm": 915,
+    "length_mm": 1830,
+    "price_inc_vat": 621.5,
+    "price_exc_vat": 517.92
+  },
+  {
+    "url": "https://www.slhardwoods.co.uk/product/solid-oak-furniture-panels-2/#18x600x2300",
+    "species": "oak",
+    "panelType": "FS",
+    "quality": "AB",
+    "thickness_mm": 18,
+    "width_mm": 600,
+    "length_mm": 2300,
+    "price_inc_vat": 175.03,
+    "price_exc_vat": 145.86
+  },
+  {
+    "url": "https://www.slhardwoods.co.uk/product/solid-oak-furniture-panels-2/#40x915x1830",
+    "species": "oak",
+    "panelType": "FS",
+    "quality": "AB",
+    "thickness_mm": 40,
+    "width_mm": 915,
+    "length_mm": 1830,
+    "price_inc_vat": 852.62,
+    "price_exc_vat": 710.52
+  },
+  {
+    "url": "https://www.slhardwoods.co.uk/product/solid-oak-furniture-panels-2/#18x600x2700",
+    "species": "oak",
+    "panelType": "FS",
+    "quality": "AB",
+    "thickness_mm": 18,
+    "width_mm": 600,
+    "length_mm": 2700,
+    "price_inc_vat": 239.5,
+    "price_exc_vat": 199.58
+  },
+  {
+    "url": "https://www.slhardwoods.co.uk/product/solid-oak-furniture-panels-2/#40x915x2440",
+    "species": "oak",
+    "panelType": "FS",
+    "quality": "AB",
+    "thickness_mm": 40,
+    "width_mm": 915,
+    "length_mm": 2440,
+    "price_inc_vat": 1135.44,
+    "price_exc_vat": 946.2
+  }
+]

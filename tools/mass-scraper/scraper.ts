@@ -1333,7 +1333,8 @@ class MassScraper {
       const pricePerM2 = Math.round((productData.pricePerM2 / 1.24) * 100) / 100;
       const stockData = { tallinn: productData.tallinn, tartu: productData.tartu };
 
-      console.log(`  ${species} ${dims.thickness}x${dims.width}x${dims.length}mm ${quality || '-'} | €${pricePerM2}/m² excl VAT | Stock: TLL ${stockData.tallinn}, TRT ${stockData.tartu}`);
+      const panelType = url.includes('sormjatk') ? 'FJ' : url.includes('pikk-lamell') || url.includes('pika-lamell') ? 'FS' : '';
+      console.log(`  ${species} ${panelType} ${dims.thickness}x${dims.width}x${dims.length}mm ${quality || '-'} | €${pricePerM2}/m² excl VAT | Stock: TLL ${stockData.tallinn}, TRT ${stockData.tartu}`);
 
       return {
         name: pageTitle.replace(' - MASS', '').replace(' | MASS', '').trim(),
@@ -1363,23 +1364,22 @@ class MassScraper {
     let urls: string[] = [];
     let startIndex = 0;
 
-    // Check for resume
-    if (options.resume) {
-      const checkpoint = loadCheckpoint();
-      if (checkpoint) {
-        urls = checkpoint.urls;
-        allProducts = checkpoint.products;
-        startIndex = checkpoint.completedIndex + 1;
-        console.log(`\n--- RESUMING from checkpoint ---`);
-        console.log(`  Started: ${checkpoint.startedAt}`);
-        console.log(`  Last updated: ${checkpoint.lastUpdated}`);
-        console.log(`  Completed: ${checkpoint.completedIndex + 1}/${urls.length} URLs`);
-        console.log(`  Products found so far: ${allProducts.length}`);
-        console.log(`  Resuming from URL #${startIndex + 1}...`);
-      } else {
-        console.log('\nNo checkpoint found. Starting fresh scrape.');
-        options.resume = false;
-      }
+    // Auto-resume from checkpoint if one exists (or if --resume flag is set)
+    const checkpoint = loadCheckpoint();
+    if (checkpoint) {
+      urls = checkpoint.urls;
+      allProducts = checkpoint.products;
+      startIndex = checkpoint.completedIndex + 1;
+      console.log(`\n--- RESUMING from checkpoint ---`);
+      console.log(`  Started: ${checkpoint.startedAt}`);
+      console.log(`  Last updated: ${checkpoint.lastUpdated}`);
+      console.log(`  Completed: ${checkpoint.completedIndex + 1}/${urls.length} URLs`);
+      console.log(`  Products found so far: ${allProducts.length}`);
+      console.log(`  Resuming from URL #${startIndex + 1}...`);
+      options.resume = true;
+    } else if (options.resume) {
+      console.log('\nNo checkpoint found. Starting fresh scrape.');
+      options.resume = false;
     }
 
     // Step 1: Get URLs (skip if resuming)

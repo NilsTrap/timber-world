@@ -23,6 +23,10 @@ export async function getScraperScripts(
 
   const scraperDirs: Record<string, string> = {
     "mass.ee": "tools/mass-scraper",
+    "slhardwoods.co.uk": "tools/sl-hardwoods-scraper",
+    "uktimber.co.uk": "tools/uk-timber-scraper",
+    "timbersource.co.uk": "tools/timbersource-scraper",
+    "fiximer.co.uk": "tools/fiximer-scraper",
   };
 
   const dir = scraperDirs[source];
@@ -30,7 +34,12 @@ export async function getScraperScripts(
     return { success: false, error: "Unknown source", code: "NOT_FOUND" };
   }
 
-  const projectRoot = process.cwd();
+  // In Next.js, process.cwd() returns the app dir (apps/portal).
+  // Navigate up to monorepo root.
+  let projectRoot = process.cwd();
+  if (!fs.existsSync(path.join(projectRoot, dir))) {
+    projectRoot = path.resolve(projectRoot, "../..");
+  }
   const fullDir = path.join(projectRoot, dir);
 
   const scriptFiles = ["config.ts", "scraper.ts", "push.ts"];

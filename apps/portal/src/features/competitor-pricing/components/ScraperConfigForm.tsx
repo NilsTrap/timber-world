@@ -72,6 +72,33 @@ for (const s of SCRAPER_OPTIONS.species) SPECIES_LABELS[s.value] = s.label;
 const PANEL_TYPE_LABELS: Record<string, string> = {};
 for (const pt of SCRAPER_OPTIONS.panelTypes) PANEL_TYPE_LABELS[pt.value] = pt.label;
 
+const SCRAPER_UI_KEY_PREFIX = "scraper-config-ui";
+
+interface ScraperUIState {
+  isOpen: boolean;
+  openSections: Record<string, boolean>;
+  species: string[];
+  panelTypes: string[];
+  qualities: string[];
+  thicknesses: number[];
+  widths: number[];
+  lengths: number[];
+}
+
+function loadScraperUIState(source: string): Partial<ScraperUIState> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(`${SCRAPER_UI_KEY_PREFIX}:${source}`);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveScraperUIState(source: string, state: ScraperUIState): void {
+  localStorage.setItem(`${SCRAPER_UI_KEY_PREFIX}:${source}`, JSON.stringify(state));
+}
+
 interface ScraperConfigFormProps {
   source?: string;
   lastScrapedAt?: string | null;
@@ -85,16 +112,17 @@ export function ScraperConfigForm({
   onRefresh,
   refreshing,
 }: ScraperConfigFormProps) {
+  const savedUI = useRef(loadScraperUIState(source)).current;
   const [config, setConfig] = useState<ScraperConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(savedUI.isOpen ?? false);
   const [savedUrlCount, setSavedUrlCount] = useState<number>(0);
   const [scraperRunning, setScraperRunning] = useState<"discover" | "scrape" | null>(null);
   const [scraperLogs, setScraperLogs] = useState<string[]>([]);
   const logContainerRef = useRef<HTMLDivElement>(null);
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(savedUI.openSections ?? {});
   const [discovered, setDiscovered] = useState<DiscoveredOptions | null>(null);
   const [showUrls, setShowUrls] = useState(false);
   const [savedUrls, setSavedUrls] = useState<SavedUrl[] | null>(null);
@@ -125,14 +153,19 @@ export function ScraperConfigForm({
     ? discovered.lengths
     : [...SCRAPER_OPTIONS.lengths];
 
-  // Local form state
+  // Local form state — restore from localStorage
   const [isEnabled, setIsEnabled] = useState(true);
-  const [species, setSpecies] = useState<string[]>([]);
-  const [thicknesses, setThicknesses] = useState<number[]>([]);
-  const [widths, setWidths] = useState<number[]>([]);
-  const [lengths, setLengths] = useState<number[]>([]);
-  const [panelTypes, setPanelTypes] = useState<string[]>([]);
-  const [qualities, setQualities] = useState<string[]>([]);
+  const [species, setSpecies] = useState<string[]>(savedUI.species ?? []);
+  const [thicknesses, setThicknesses] = useState<number[]>(savedUI.thicknesses ?? []);
+  const [widths, setWidths] = useState<number[]>(savedUI.widths ?? []);
+  const [lengths, setLengths] = useState<number[]>(savedUI.lengths ?? []);
+  const [panelTypes, setPanelTypes] = useState<string[]>(savedUI.panelTypes ?? []);
+  const [qualities, setQualities] = useState<string[]>(savedUI.qualities ?? []);
+
+  // Persist UI state on change
+  useEffect(() => {
+    saveScraperUIState(source, { isOpen, openSections, species, panelTypes, qualities, thicknesses, widths, lengths });
+  }, [isOpen, openSections, species, panelTypes, qualities, thicknesses, widths, lengths]);
 
   useEffect(() => {
     loadConfig();
@@ -178,13 +211,7 @@ export function ScraperConfigForm({
     if (configResult.success) {
       setConfig(configResult.data);
       setIsEnabled(configResult.data.isEnabled);
-      // Always start with empty selections — user picks what to include
-      setSpecies([]);
-      setThicknesses([]);
-      setWidths([]);
-      setLengths([]);
-      setPanelTypes([]);
-      setQualities([]);
+      // Keep persisted selections — don't reset on load
     } else {
       setError(configResult.error);
     }
@@ -281,6 +308,7 @@ export function ScraperConfigForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          source,
           mode,
           // Pass current filter selections for scrape mode
           ...(mode === "scrape" ? {
@@ -388,7 +416,6 @@ export function ScraperConfigForm({
         >
           <Settings className="h-4 w-4 text-muted-foreground" />
           <span className="font-medium">Scraper Configuration</span>
-          <span className="text-sm text-muted-foreground">({source})</span>
           <ChevronDown
             className={`h-4 w-4 text-muted-foreground transition-transform ${
               isOpen ? "rotate-180" : ""
@@ -478,7 +505,7 @@ export function ScraperConfigForm({
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:underline truncate block max-w-[300px]"
                           >
-                            {u.url.replace("https://mass.ee/", "")}
+                            {u.url.replace(/^https?:\/\/[^/]+\//, "")}
                           </a>
                         </td>
                       </tr>

@@ -4,13 +4,24 @@ import { spawn } from "child_process";
 import path from "path";
 
 /**
+ * Source → scraper directory mapping
+ */
+const SCRAPER_DIRS: Record<string, string> = {
+  "mass.ee": "tools/mass-scraper",
+  "slhardwoods.co.uk": "tools/sl-hardwoods-scraper",
+  "uktimber.co.uk": "tools/uk-timber-scraper",
+  "timbersource.co.uk": "tools/timbersource-scraper",
+  "fiximer.co.uk": "tools/fiximer-scraper",
+};
+
+/**
  * POST /api/scraper
  *
- * Runs the mass.ee scraper.
- * Body: { mode: "discover" | "scrape" }
+ * Runs a competitor scraper.
+ * Body: { source: string, mode: "discover" | "scrape", filter?: object }
  *
- * - "discover": visits category pages to find all product URLs (~22 page loads)
- * - "scrape": scrapes prices/stock from saved URLs, then pushes to database
+ * - "discover": finds product URLs and saves them to database
+ * - "scrape": scrapes prices from saved URLs, then pushes to database
  *
  * Returns a streaming response with scraper output.
  */
@@ -24,14 +35,20 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
+  const source: string = body.source || "mass.ee";
   const mode: string = body.mode || "scrape";
   const filter = body.filter || {};
 
-  console.log("[scraper route] mode:", mode, "filter:", JSON.stringify(filter));
+  console.log("[scraper route] source:", source, "mode:", mode, "filter:", JSON.stringify(filter));
 
-  // Resolve paths
+  // Resolve paths based on source
+  const scraperDirName = SCRAPER_DIRS[source];
+  if (!scraperDirName) {
+    return NextResponse.json({ error: `Unknown source: ${source}` }, { status: 400 });
+  }
+
   const projectRoot = path.resolve(process.cwd(), "../..");
-  const scraperDir = path.join(projectRoot, "tools/mass-scraper");
+  const scraperDir = path.join(projectRoot, scraperDirName);
   const scraperScript = path.join(scraperDir, "scraper.ts");
   const pushScript = path.join(scraperDir, "push.ts");
   const resultsFile = path.join(scraperDir, "latest-results.json");
@@ -53,6 +70,44 @@ export async function POST(request: NextRequest) {
     ...(hasFilter ? { SCRAPER_FILTER: JSON.stringify(filter) } : {}),
   } as NodeJS.ProcessEnv;
 
+  // Broad log filter — pass through any meaningful output line
+  const isLogLine = (line: string): boolean => {
+    if (!line || line.startsWith("at ")) return false;
+    return (
+      line.startsWith("[") ||
+      line.startsWith("Total") ||
+      line.startsWith("Found") ||
+      line.startsWith("Scraping") ||
+      line.startsWith("Discovering") ||
+      line.startsWith("Parsing") ||
+      line.startsWith("Deactivating") ||
+      line.startsWith("Saved") ||
+      line.startsWith("Discovery") ||
+      line.startsWith("Loaded") ||
+      line.startsWith("Species:") ||
+      line.startsWith("Qualities:") ||
+      line.startsWith("Visiting") ||
+      line.startsWith("Progress") ||
+      line.startsWith("No saved") ||
+      line.startsWith("Reading") ||
+      line.startsWith("MISSING") ||
+      line.startsWith("---") ||
+      line.startsWith("===") ||
+      line.includes("product") ||
+      line.includes("URL") ||
+      line.includes("thickness") ||
+      line.includes("Processing") ||
+      line.includes("excl VAT") ||
+      line.includes("Summary") ||
+      line.includes("stock") ||
+      line.includes("pieces") ||
+      line.includes("upsert") ||
+      line.includes("Upsert") ||
+      line.includes("error") ||
+      line.includes("Error")
+    );
+  };
+
   // Stream output back to client
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -61,7 +116,7 @@ export async function POST(request: NextRequest) {
         controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
       };
 
-      send({ type: "status", message: `Starting ${mode === "discover" ? "discovery" : "scraping"}...` });
+      send({ type: "status", message: `Starting ${mode === "discover" ? "discovery" : "scraping"} for ${source}...` });
 
       const scraper = spawn("npx", scraperArgs, {
         cwd: scraperDir,
@@ -70,35 +125,9 @@ export async function POST(request: NextRequest) {
       });
 
       scraper.stdout?.on("data", (data: Buffer) => {
-        const text = data.toString();
-        for (const line of text.split("\n")) {
+        for (const line of data.toString().split("\n")) {
           const trimmed = line.trim();
-          if (trimmed && !trimmed.startsWith("at ") && (
-            trimmed.startsWith("Total") ||
-            trimmed.startsWith("Found") ||
-            trimmed.startsWith("Scraping") ||
-            trimmed.startsWith("Discovering") ||
-            trimmed.startsWith("Parsing") ||
-            trimmed.startsWith("Deactivating") ||
-            trimmed.startsWith("Saved") ||
-            trimmed.startsWith("Discovery") ||
-            trimmed.startsWith("Loaded") ||
-            trimmed.startsWith("Species:") ||
-            trimmed.startsWith("Qualities:") ||
-            trimmed.startsWith("Visiting") ||
-            trimmed.startsWith("Progress") ||
-            trimmed.startsWith("No saved") ||
-            trimmed.startsWith("---") ||
-            trimmed.startsWith("===") ||
-            trimmed.includes("product") ||
-            trimmed.includes("URL") ||
-            trimmed.includes("thickness") ||
-            trimmed.includes("Processing") ||
-            trimmed.includes("excl VAT") ||
-            trimmed.includes("Summary") ||
-            trimmed.includes("stock") ||
-            trimmed.includes("pieces")
-          )) {
+          if (isLogLine(trimmed)) {
             send({ type: "log", message: trimmed });
           }
         }
@@ -106,9 +135,7 @@ export async function POST(request: NextRequest) {
 
       scraper.stderr?.on("data", (data: Buffer) => {
         const text = data.toString().trim();
-        if (text) {
-          send({ type: "log", message: text });
-        }
+        if (text) send({ type: "log", message: text });
       });
 
       scraper.on("close", (code) => {
@@ -135,19 +162,9 @@ export async function POST(request: NextRequest) {
         });
 
         push.stdout?.on("data", (data: Buffer) => {
-          const text = data.toString();
-          for (const line of text.split("\n")) {
+          for (const line of data.toString().split("\n")) {
             const trimmed = line.trim();
-            if (trimmed && (
-              trimmed.startsWith("Found") ||
-              trimmed.startsWith("Successfully") ||
-              trimmed.startsWith("Saved") ||
-              trimmed.startsWith("Matched") ||
-              trimmed.startsWith("Inserting") ||
-              trimmed.startsWith("Fetching") ||
-              trimmed.includes("product") ||
-              trimmed.includes("record")
-            )) {
+            if (isLogLine(trimmed)) {
               send({ type: "log", message: trimmed });
             }
           }
@@ -155,16 +172,14 @@ export async function POST(request: NextRequest) {
 
         push.stderr?.on("data", (data: Buffer) => {
           const text = data.toString().trim();
-          if (text) {
-            send({ type: "log", message: text });
-          }
+          if (text) send({ type: "log", message: text });
         });
 
         push.on("close", (pushCode) => {
           if (pushCode !== 0) {
             send({ type: "error", message: `Push exited with code ${pushCode}` });
           } else {
-            send({ type: "done", message: "Complete! Prices and stock updated." });
+            send({ type: "done", message: "Complete! Prices updated." });
           }
           controller.close();
         });

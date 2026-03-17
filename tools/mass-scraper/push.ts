@@ -188,6 +188,8 @@ interface StockPriceEntry {
   species: string;
   panelType: string;
   quality: string;
+  thicknessMin: number;
+  thicknessMax: number;
   lengthMin: number;
   lengthMax: number;
   stockPrice: number;
@@ -199,14 +201,14 @@ let STOCK_PRICES: StockPriceEntry[] = [];
 async function loadStockPrices(supabase: SupabaseClient): Promise<void> {
   const { data, error } = await supabase
     .from("stock_prices")
-    .select("species, panel_type, quality, length_range, stock_price");
+    .select("species, panel_type, quality, thickness, length_range, stock_price");
 
   if (error) {
     console.error("Error fetching stock prices:", error.message);
     return;
   }
 
-  STOCK_PRICES = (data || []).map((row: { species: string; panel_type: string; quality: string; length_range: string; stock_price: number }) => {
+  STOCK_PRICES = (data || []).map((row: { species: string; panel_type: string; quality: string; thickness: string; length_range: string; stock_price: number }) => {
     let lengthMin = 0;
     let lengthMax = 99999;
     if (row.length_range !== "All" && row.length_range !== "-") {
@@ -214,10 +216,19 @@ async function loadStockPrices(supabase: SupabaseClient): Promise<void> {
       lengthMin = parseInt(parts[0], 10) || 0;
       lengthMax = parseInt(parts[1], 10) || lengthMin;
     }
+    let thicknessMin = 0;
+    let thicknessMax = 99999;
+    if (row.thickness && row.thickness !== "All" && row.thickness !== "-") {
+      const parts = row.thickness.split("-");
+      thicknessMin = parseInt(parts[0], 10) || 0;
+      thicknessMax = parseInt(parts[1], 10) || thicknessMin;
+    }
     return {
       species: row.species.toLowerCase(),
       panelType: row.panel_type,
       quality: row.quality,
+      thicknessMin,
+      thicknessMax,
       lengthMin,
       lengthMax,
       stockPrice: Number(row.stock_price),
@@ -231,6 +242,7 @@ function findStockPriceM3(
   species: string,
   panelType: string,
   quality: string,
+  thicknessMm: number,
   lengthMm: number
 ): number | null {
   const match = STOCK_PRICES.find(
@@ -238,6 +250,8 @@ function findStockPriceM3(
       sp.species === species &&
       sp.panelType === panelType &&
       sp.quality === quality &&
+      thicknessMm >= sp.thicknessMin &&
+      thicknessMm <= sp.thicknessMax &&
       lengthMm >= sp.lengthMin &&
       lengthMm <= sp.lengthMax
   );
@@ -284,6 +298,7 @@ function transformProduct(
       product.species || "oak",
       panelType,
       product.quality || "AB",
+      product.thickness,
       product.length
     );
     if (stockM3) {
@@ -385,8 +400,13 @@ async function main() {
   console.log("Fetching stock prices from database...");
   await loadStockPrices(supabase);
 
-  // Transform to database format with TI prices
-  const records = products.map((p) => transformProduct(p, tiPrices));
+  // Transform to database format with TI prices, skip zero-stock products
+  const allRecords = products.map((p) => transformProduct(p, tiPrices));
+  const records = allRecords.filter((r) => r.stock_total > 0);
+  const skippedZeroStock = allRecords.length - records.length;
+  if (skippedZeroStock > 0) {
+    console.log(`Skipped ${skippedZeroStock} products with zero stock`);
+  }
   const matchedCount = records.filter((r) => r.ti_price_per_m2 !== null).length;
   console.log(`Matched ${matchedCount} products with TI prices`);
 

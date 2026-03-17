@@ -1,0 +1,14 @@
+{
+  "name": "sl-hardwoods-scraper",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.3"
+  }
+}

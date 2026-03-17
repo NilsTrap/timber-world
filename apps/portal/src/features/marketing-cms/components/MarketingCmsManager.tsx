@@ -6,13 +6,14 @@ import { ContentTab } from "./ContentTab";
 import { MetaTab } from "./MetaTab";
 import { ReferenceDataManager } from "@/features/reference-data";
 import { AnalyticsDashboard } from "@/features/analytics";
+import { MarketingStockManager } from "@/features/marketing-stock";
 
 interface MarketingCmsManagerProps {
   /** If true, shows delete button for reference options (Super Admin only) */
   canDelete?: boolean;
 }
 
-const VALID_TABS = ["content", "meta", "reference", "analytics"] as const;
+const VALID_TABS = ["content", "meta", "reference", "analytics", "stock"] as const;
 type TabValue = (typeof VALID_TABS)[number];
 
 /**
@@ -52,6 +53,7 @@ export function MarketingCmsManager({ canDelete = false }: MarketingCmsManagerPr
         <TabsTrigger value="meta">Meta</TabsTrigger>
         <TabsTrigger value="reference">Reference Data</TabsTrigger>
         <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        <TabsTrigger value="stock">Stock</TabsTrigger>
       </TabsList>
 
       <TabsContent value="content" className="mt-4">
@@ -68,6 +70,10 @@ export function MarketingCmsManager({ canDelete = false }: MarketingCmsManagerPr
 
       <TabsContent value="analytics" className="mt-4">
         <AnalyticsDashboard />
+      </TabsContent>
+
+      <TabsContent value="stock" className="mt-4">
+        <MarketingStockManager />
       </TabsContent>
     </Tabs>
   );
