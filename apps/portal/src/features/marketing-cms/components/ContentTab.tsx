@@ -13,7 +13,7 @@ import {
   Textarea,
   Card,
 } from "@timber/ui";
-import { getMarketingMedia, getHeroTexts, getProductTexts, getJourneyTextsGrouped, updateMarketingText } from "../actions";
+import { getMarketingMedia, getHeroTexts, getProductTexts, getJourneyTextsGrouped, updateMarketingText, updateMarketingMedia } from "../actions";
 import { MediaCard } from "./MediaCard";
 import { MediaUploadDialog } from "./MediaUploadDialog";
 import {
@@ -63,6 +63,7 @@ export function ContentTab() {
   // UI state
   const [isLoading, setIsLoading] = useState(true);
   const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
+  const [togglingSlots, setTogglingSlots] = useState<Set<string>>(new Set());
 
   // Fetch all data
   const fetchData = useCallback(async () => {
@@ -234,9 +235,49 @@ export function ContentTab() {
                   description: "",
                 };
 
+                const isActive = mediaItem?.isActive ?? true;
+
                 return (
-                  <div key={slot.key} className="border rounded-lg p-4 space-y-4">
-                    <div className="text-sm font-semibold">{slot.label}</div>
+                  <div key={slot.key} className={`border rounded-lg p-4 space-y-4 ${!isActive ? "opacity-50" : ""}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold">{slot.label}</div>
+                      {mediaItem && (
+                        <button
+                          onClick={async () => {
+                            setTogglingSlots((prev) => new Set(prev).add(slot.key));
+                            const result = await updateMarketingMedia(slot.key, { isActive: !isActive });
+                            if (result.success) {
+                              setMedia((prev) =>
+                                prev.map((m) =>
+                                  m.slotKey === slot.key ? { ...m, isActive: !isActive } : m
+                                )
+                              );
+                              toast.success(isActive ? "Hidden from website" : "Visible on website");
+                            } else {
+                              toast.error(result.error);
+                            }
+                            setTogglingSlots((prev) => {
+                              const next = new Set(prev);
+                              next.delete(slot.key);
+                              return next;
+                            });
+                          }}
+                          disabled={togglingSlots.has(slot.key)}
+                          className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                          style={{ backgroundColor: isActive ? "#16a34a" : "#d1d5db" }}
+                          title={isActive ? "Visible on website — click to hide" : "Hidden from website — click to show"}
+                        >
+                          {togglingSlots.has(slot.key) ? (
+                            <Loader2 className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 animate-spin text-white" />
+                          ) : (
+                            <span
+                              className="inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform"
+                              style={{ transform: isActive ? "translateX(18px)" : "translateX(3px)" }}
+                            />
+                          )}
+                        </button>
+                      )}
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {/* Image */}

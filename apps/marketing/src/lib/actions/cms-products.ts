@@ -40,6 +40,7 @@ export async function getCMSProducts(): Promise<CMSProduct[]> {
     .from("marketing_media")
     .select("slot_key, file_name, storage_path, alt_text")
     .eq("category", "product")
+    .eq("is_active", true)
     .order("sort_order");
 
   if (mediaError) {
