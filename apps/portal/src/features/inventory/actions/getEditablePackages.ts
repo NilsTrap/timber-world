@@ -179,9 +179,15 @@ export async function getEditablePackages(orgIds?: string[]): Promise<ActionResu
     // 2. Shipment code
     const shipCmp = (a.shipmentCode ?? "").localeCompare(b.shipmentCode ?? "");
     if (shipCmp !== 0) return shipCmp;
-    // 3. Package number (numeric extraction)
-    const numA = parseInt((a.packageNumber ?? "0").replace(/\D/g, "") || "0", 10);
-    const numB = parseInt((b.packageNumber ?? "0").replace(/\D/g, "") || "0", 10);
+    // 3. Package number (prefix alphabetically, then numeric part)
+    const pkgA = a.packageNumber ?? "";
+    const pkgB = b.packageNumber ?? "";
+    const prefA = pkgA.replace(/\d+$/, "");
+    const prefB = pkgB.replace(/\d+$/, "");
+    const prefCmp = prefA.localeCompare(prefB);
+    if (prefCmp !== 0) return prefCmp;
+    const numA = parseInt(pkgA.replace(/\D/g, "") || "0", 10);
+    const numB = parseInt(pkgB.replace(/\D/g, "") || "0", 10);
     return numA - numB;
   });
 
