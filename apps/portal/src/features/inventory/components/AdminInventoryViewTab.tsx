@@ -62,7 +62,6 @@ export function AdminInventoryViewTab({ packages, initialFilters }: AdminInvento
         key: "packageNumber",
         label: "Package",
         type: "custom",
-        isNumeric: true,
         getValue: (row) => row.packageNumber,
         totalType: "count",
         formatTotal: (v) => String(v),

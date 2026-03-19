@@ -548,7 +548,6 @@ export function EditablePackagesTab({ packages, defaultOrgId }: EditablePackages
           key: "packageNumber",
           label: "Package",
           type: "text",
-          isNumeric: true,
           navigable: true,
           getValue: (row) => row.packageNumber,
           totalType: "count",

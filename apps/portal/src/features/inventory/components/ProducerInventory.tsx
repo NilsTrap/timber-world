@@ -55,7 +55,6 @@ export function ProducerInventory({ packages, packagesInDrafts = [], packagesInS
         key: "packageNumber",
         label: "Package",
         type: "custom",
-        isNumeric: true,
         getValue: (row) => row.packageNumber,
         totalType: "count",
         formatTotal: (v) => String(v),

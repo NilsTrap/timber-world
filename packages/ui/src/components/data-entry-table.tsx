@@ -1021,12 +1021,13 @@ function DataEntryTableInner<TRow>(
                       );
                     }
 
+                    const isNum = col.isNumeric || col.type === "numeric";
                     return (
                       <TableCell
                         key={col.key}
-                        className={`px-0.5 text-sm whitespace-nowrap ${col.isNumeric ? "text-right" : ""} ${col.width ?? ""}`}
+                        className={`px-0.5 text-sm whitespace-nowrap ${isNum ? "text-right" : ""} ${col.width ?? ""}`}
                       >
-                        <span className={`inline-flex items-center h-7 ${col.isNumeric ? "w-full justify-end" : ""}`}>
+                        <span className={`inline-flex items-center h-7 ${isNum ? "w-full justify-end" : ""}`}>
                           {displayValue || "-"}
                         </span>
                       </TableCell>
