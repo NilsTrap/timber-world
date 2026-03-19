@@ -275,19 +275,31 @@ function DataEntryTableInner<TRow>(
     [columns]
   );
 
-  /** Compute unique display values per column */
+  /** Compute unique display values per column (cascading: filtered by OTHER active filters) */
   const uniqueValuesMap = useMemo(() => {
     const map: Record<string, string[]> = {};
     for (const col of filterableColumns) {
+      // Filter rows by all OTHER active filters (exclude current column)
+      const filteredRows = rows.filter((row) => {
+        for (const [colKey, allowedValues] of Object.entries(filterState)) {
+          if (colKey === col.key) continue; // Skip current column
+          if (allowedValues.size === 0) continue;
+          const otherCol = columns.find((c) => c.key === colKey);
+          if (!otherCol) continue;
+          const displayVal = getColDisplayValue(row, otherCol);
+          if (!allowedValues.has(displayVal)) return false;
+        }
+        return true;
+      });
       const valSet = new Set<string>();
-      for (const row of rows) {
+      for (const row of filteredRows) {
         const val = getColDisplayValue(row, col);
         if (val) valSet.add(val);
       }
       map[col.key] = [...valSet];
     }
     return map;
-  }, [rows, filterableColumns, getColDisplayValue]);
+  }, [rows, filterableColumns, filterState, columns, getColDisplayValue]);
 
   /** Display rows: filtered (and sorted in readOnly mode) subset with original index */
   const displayRows = useMemo(() => {
