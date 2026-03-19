@@ -36,9 +36,18 @@ function ColumnHeaderMenu({
 
   const sortedUniqueValues = useMemo(
     () =>
-      [...uniqueValues].sort((a, b) =>
-        isNumeric ? Number(a) - Number(b) : a.localeCompare(b)
-      ),
+      [...uniqueValues].sort((a, b) => {
+        if (!isNumeric) return a.localeCompare(b);
+        // Parse leading number (handles ranges like "20-24" by sorting on first number)
+        const aNum = parseFloat(a);
+        const bNum = parseFloat(b);
+        const aValid = !isNaN(aNum);
+        const bValid = !isNaN(bNum);
+        if (aValid && bValid) return aNum - bNum;
+        if (aValid) return -1;
+        if (bValid) return 1;
+        return a.localeCompare(b);
+      }),
     [uniqueValues, isNumeric]
   );
 
