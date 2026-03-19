@@ -194,7 +194,8 @@ export function PriceTable({ data, onDelete, source: sourceProp }: PriceTablePro
     }
   }, []);
 
-  // Compute unique values for all columns with filter support, sorted properly
+  // Compute unique values with cascading filters — each column's options
+  // are filtered by all OTHER active filters (not its own)
   const uniqueValues = useMemo(() => {
     const result: Record<string, string[]> = {};
     const allCols = [
@@ -211,8 +212,17 @@ export function PriceTable({ data, onDelete, source: sourceProp }: PriceTablePro
       "volume_m3",
     ]);
     for (const col of allCols) {
+      // Apply all filters EXCEPT the current column
+      let filtered = data;
+      for (const [filterCol, filterSet] of Object.entries(columnFilters)) {
+        if (filterCol === col || !filterSet || filterSet.size === 0) continue;
+        filtered = filtered.filter((row) => {
+          const v = computeRowValue(row, filterCol);
+          return v !== null && v !== undefined && filterSet.has(String(v));
+        });
+      }
       const values = new Set<string>();
-      for (const row of data) {
+      for (const row of filtered) {
         const v = computeRowValue(row, col);
         if (v !== null && v !== undefined) values.add(String(v));
       }
@@ -225,7 +235,7 @@ export function PriceTable({ data, onDelete, source: sourceProp }: PriceTablePro
       result[col] = arr;
     }
     return result;
-  }, [data, computeRowValue]);
+  }, [data, computeRowValue, columnFilters]);
 
   const handleFilterChange = (columnKey: string, values: Set<string>) => {
     setColumnFilters((prev) => ({ ...prev, [columnKey]: values }));

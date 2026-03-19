@@ -214,11 +214,20 @@ export function PackageSelector({
 
   const getUniqueValues = useCallback(
     (key: string): string[] => {
+      // Apply all filters EXCEPT the current column
+      let filtered = packages;
+      for (const [colKey, filterValues] of Object.entries(filterState)) {
+        if (colKey === key || filterValues.size === 0) continue;
+        const col = columns.find((c) => c.key === colKey);
+        if (col) {
+          filtered = filtered.filter((r) => filterValues.has(col.getValue(r)));
+        }
+      }
       const col = columns.find((c) => c.key === key);
       if (!col) return [];
-      return [...new Set(packages.map((r) => col.getValue(r)))].filter(Boolean);
+      return [...new Set(filtered.map((r) => col.getValue(r)))].filter(Boolean);
     },
-    [packages, columns]
+    [packages, columns, filterState]
   );
 
   const handleToggleSelect = useCallback((pkg: PackageListItem) => {

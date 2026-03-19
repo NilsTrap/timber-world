@@ -85,62 +85,53 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
   const [activeSort, setActiveSort] = useState<ColumnSortState | null>({ column: "name", direction: "asc" });
   const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
 
-  // Get unique values for each column
+  // Get unique values for each column (cascading: filtered by all OTHER active filters)
   const uniqueValues = useMemo(() => {
-    const values: Record<ColumnKey, string[]> = {
-      name: [],
-      website: [],
-      phone: [],
-      email: [],
-      location: [],
-      industry: [],
-      founded_year: [],
-      registration_number: [],
-      account_type: [],
-      employees: [],
-      turnover_eur: [],
-      contacts_count: [],
-      keywords: [],
-      status: [],
-    };
+    const allKeys: ColumnKey[] = [
+      "name", "website", "phone", "email", "location", "industry",
+      "founded_year", "registration_number", "account_type", "employees",
+      "turnover_eur", "contacts_count", "keywords", "status",
+    ];
 
-    const sets: Record<ColumnKey, Set<string>> = {
-      name: new Set(),
-      website: new Set(),
-      phone: new Set(),
-      email: new Set(),
-      location: new Set(),
-      industry: new Set(),
-      founded_year: new Set(),
-      registration_number: new Set(),
-      account_type: new Set(),
-      employees: new Set(),
-      turnover_eur: new Set(),
-      contacts_count: new Set(),
-      keywords: new Set(),
-      status: new Set(),
-    };
+    const values: Record<ColumnKey, string[]> = {} as Record<ColumnKey, string[]>;
 
-    // For keywords, we want individual keyword names for filtering
-    companies.forEach((company) => {
-      company.keywords?.forEach((k) => {
-        if (k.name) sets.keywords.add(k.name);
-      });
-    });
+    for (const key of allKeys) {
+      // Apply all filters EXCEPT the current column
+      let filtered = companies;
+      for (const otherKey of allKeys) {
+        if (otherKey === key) continue;
+        const filterSet = columnFilters[otherKey];
+        if (!filterSet || filterSet.size === 0) continue;
+        if (otherKey === "keywords") {
+          filtered = filtered.filter((company) =>
+            company.keywords?.some((k) => filterSet.has(k.name)) || false
+          );
+        } else {
+          filtered = filtered.filter((company) => {
+            const val = getColumnValue(company, otherKey);
+            return filterSet.has(val);
+          });
+        }
+      }
 
-    companies.forEach((company) => {
-      (Object.keys(values) as ColumnKey[]).forEach((key) => {
-        const val = getColumnValue(company, key);
-        if (val) sets[key].add(val);
-      });
-    });
-
-    (Object.keys(values) as ColumnKey[]).forEach((key) => {
-      values[key] = Array.from(sets[key]);
-    });
+      const set = new Set<string>();
+      if (key === "keywords") {
+        filtered.forEach((company) => {
+          company.keywords?.forEach((k) => {
+            if (k.name) set.add(k.name);
+          });
+        });
+      } else {
+        filtered.forEach((company) => {
+          const val = getColumnValue(company, key);
+          if (val) set.add(val);
+        });
+      }
+      values[key] = Array.from(set);
+    }
 
     return values;
-  }, [companies]);
+  }, [companies, columnFilters]);
 
   // Filter and sort companies
   const filteredCompanies = useMemo(() => {

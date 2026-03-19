@@ -174,19 +174,32 @@ export const ProductionInputsTable = forwardRef<ProductionInputsTableHandle, Pro
   // Unique values for filter menus
   const getUniqueValues = useCallback(
     (key: string): string[] => {
+      // Apply all filters EXCEPT the current column
+      let filtered = inputs;
+      for (const [colKey, filterValues] of Object.entries(filterState)) {
+        if (colKey === key || filterValues.size === 0) continue;
+        const col = columns.find((c) => c.key === colKey);
+        if (col) {
+          filtered = filtered.filter((r) => filterValues.has(col.getValue(r)));
+        } else if (colKey === "piecesUsed") {
+          filtered = filtered.filter((r) => filterValues.has(r.piecesUsed != null ? String(r.piecesUsed) : "-"));
+        } else if (colKey === "volumeM3") {
+          filtered = filtered.filter((r) => filterValues.has(r.volumeM3.toFixed(3).replace(".", ",")));
+        }
+      }
       const col = columns.find((c) => c.key === key);
       if (col) {
-        return [...new Set(inputs.map((r) => col.getValue(r)))].filter(Boolean);
+        return [...new Set(filtered.map((r) => col.getValue(r)))].filter(Boolean);
       }
       if (key === "piecesUsed") {
-        return [...new Set(inputs.map((r) => r.piecesUsed != null ? String(r.piecesUsed) : "-"))];
+        return [...new Set(filtered.map((r) => r.piecesUsed != null ? String(r.piecesUsed) : "-"))];
       }
       if (key === "volumeM3") {
-        return [...new Set(inputs.map((r) => r.volumeM3.toFixed(3).replace(".", ",")))];
+        return [...new Set(filtered.map((r) => r.volumeM3.toFixed(3).replace(".", ",")))];
       }
       return [];
     },
-    [inputs, columns]
+    [inputs, columns, filterState]
   );
 
   const handleStartEdit = useCallback((id: string, field: "pieces" | "volume", currentValue: string) => {

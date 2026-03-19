@@ -140,11 +140,20 @@ export function NewShipmentPackageSelector({
 
   const getUniqueValues = useCallback(
     (key: string): string[] => {
+      // Apply all filters EXCEPT the current column
+      let filtered = availablePackages;
+      for (const [colKey, filterValues] of Object.entries(filterState)) {
+        if (colKey === key || filterValues.size === 0) continue;
+        const col = columns.find((c) => c.key === colKey);
+        if (col) {
+          filtered = filtered.filter((r) => filterValues.has(col.getValue(r)));
+        }
+      }
       const col = columns.find((c) => c.key === key);
       if (!col) return [];
-      return [...new Set(availablePackages.map((r) => col.getValue(r)))].filter(Boolean);
+      return [...new Set(filtered.map((r) => col.getValue(r)))].filter(Boolean);
     },
-    [availablePackages, columns]
+    [availablePackages, columns, filterState]
   );
 
   const handleToggleSelect = useCallback((pkgId: string) => {

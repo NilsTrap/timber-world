@@ -221,11 +221,20 @@ export function ProductionHistoryTable({
     ];
     const result: Record<string, string[]> = {};
     for (const col of cols) {
-      const values = new Set(localEntries.map((e) => getDisplayValue(e, col)));
+      // Apply all filters EXCEPT the current column
+      let filtered = localEntries;
+      for (const otherCol of cols) {
+        if (otherCol === col) continue;
+        const filter = filterState[otherCol];
+        if (filter && filter.size > 0) {
+          filtered = filtered.filter((e) => filter.has(getDisplayValue(e, otherCol)));
+        }
+      }
+      const values = new Set(filtered.map((e) => getDisplayValue(e, col)));
       result[col] = Array.from(values);
     }
     return result;
-  }, [localEntries]);
+  }, [localEntries, filterState]);
 
   const handleFilterChange = (columnKey: string, values: Set<string>) => {
     setFilterState((prev) => ({ ...prev, [columnKey]: values }));

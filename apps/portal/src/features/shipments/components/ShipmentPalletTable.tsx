@@ -113,18 +113,37 @@ export function ShipmentPalletTable({
   // Get unique values for filter menus
   const getUniqueValues = useCallback(
     (key: string): string[] => {
+      // Apply all filters EXCEPT the current column
+      let filtered = packages;
+      for (const [colKey, filterValues] of Object.entries(filterState)) {
+        if (colKey === key || filterValues.size === 0) continue;
+        const col = COLUMNS.find((c) => c.key === colKey);
+        if (col) {
+          filtered = filtered.filter((r) => filterValues.has(col.getValue(r)));
+        } else if (colKey === "pieces") {
+          filtered = filtered.filter((r) => filterValues.has(r.pieces ?? "-"));
+        } else if (colKey === "volumeM3") {
+          filtered = filtered.filter((r) => filterValues.has(formatVolume(r.volumeM3)));
+        } else if (colKey === "pallet") {
+          filtered = filtered.filter((r) => {
+            if (!r.palletId) return filterValues.has("-");
+            const p = pallets.find((pl) => pl.id === r.palletId);
+            return filterValues.has(p ? `Pallet ${p.palletNumber}` : "-");
+          });
+        }
+      }
       const col = COLUMNS.find((c) => c.key === key);
       if (col) {
-        return [...new Set(packages.map((r) => col.getValue(r)))].filter(Boolean);
+        return [...new Set(filtered.map((r) => col.getValue(r)))].filter(Boolean);
       }
       if (key === "pieces") {
-        return [...new Set(packages.map((r) => r.pieces ?? "-"))];
+        return [...new Set(filtered.map((r) => r.pieces ?? "-"))];
       }
       if (key === "volumeM3") {
-        return [...new Set(packages.map((r) => formatVolume(r.volumeM3)))];
+        return [...new Set(filtered.map((r) => formatVolume(r.volumeM3)))];
       }
       if (key === "pallet") {
-        const values = packages.map((r) => {
+        const values = filtered.map((r) => {
           if (!r.palletId) return "-";
           const p = pallets.find((pl) => pl.id === r.palletId);
           return p ? `Pallet ${p.palletNumber}` : "-";
@@ -133,7 +152,7 @@ export function ShipmentPalletTable({
       }
       return [];
     },
-    [packages, pallets]
+    [packages, pallets, filterState]
   );
 
   // Apply filters and sort to packages
