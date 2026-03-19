@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, Fragment, useEffect } from "react";
+import { useState, useCallback, useMemo, Fragment, useEffect, useRef } from "react";
 import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
 import {
   Button,
@@ -43,6 +43,8 @@ interface ColConfig {
 }
 
 const COLLAPSE_STORAGE_KEY = "shipment-packages-collapsed";
+const FILTER_STORAGE_KEY = "shipment-pallets-filters";
+const SCROLL_STORAGE_KEY = "shipment-pallets-scroll";
 
 const COLUMNS: ColConfig[] = [
   { key: "packageNumber", label: "Package", getValue: (r) => r.packageNumber ?? "" },
@@ -85,6 +87,76 @@ export function ShipmentPalletTable({
       const stored = localStorage.getItem(COLLAPSE_STORAGE_KEY);
       if (stored) setCollapsedColumns(new Set(JSON.parse(stored)));
     } catch { /* ignore */ }
+  }, []);
+
+  // --- Filter/sort persistence ---
+  const filterLoaded = useRef(false);
+
+  // Load filter + sort state from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(FILTER_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as { sort?: ColumnSortState | null; filters?: Record<string, string[]> };
+        if (parsed.sort !== undefined) setSortState(parsed.sort);
+        if (parsed.filters) {
+          const restored: Record<string, Set<string>> = {};
+          for (const [key, values] of Object.entries(parsed.filters)) {
+            if (Array.isArray(values) && values.length > 0) {
+              restored[key] = new Set(values);
+            }
+          }
+          if (Object.keys(restored).length > 0) setFilterState(restored);
+        }
+      }
+    } catch { /* ignore */ }
+    filterLoaded.current = true;
+  }, []);
+
+  // Persist filter + sort state to localStorage on change
+  useEffect(() => {
+    if (!filterLoaded.current) return;
+    try {
+      const serialized: Record<string, string[]> = {};
+      for (const [key, values] of Object.entries(filterState)) {
+        if (values.size > 0) serialized[key] = [...values];
+      }
+      const hasFilters = Object.keys(serialized).length > 0;
+      const hasSort = sortState !== null;
+      if (!hasFilters && !hasSort) {
+        localStorage.removeItem(FILTER_STORAGE_KEY);
+      } else {
+        localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ sort: sortState, filters: serialized }));
+      }
+    } catch { /* ignore */ }
+  }, [filterState, sortState]);
+
+  // --- Scroll persistence via sessionStorage (debounced) ---
+  useEffect(() => {
+    // Restore scroll position on mount
+    try {
+      const savedScroll = sessionStorage.getItem(SCROLL_STORAGE_KEY);
+      if (savedScroll) {
+        const y = parseInt(savedScroll, 10);
+        if (!isNaN(y)) window.scrollTo(0, y);
+      }
+    } catch { /* ignore */ }
+
+    let timer: ReturnType<typeof setTimeout>;
+    const handleScroll = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        try {
+          sessionStorage.setItem(SCROLL_STORAGE_KEY, String(window.scrollY));
+        } catch { /* ignore */ }
+      }, 150);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("scroll", handleScroll);
+    };
   }, []);
 
   const toggleColumn = useCallback((key: string) => {

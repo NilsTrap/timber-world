@@ -242,6 +242,7 @@ export function AdminInventoryViewTab({ packages, initialFilters }: AdminInvento
         getRowClassName={(row) => row.isOnTheWay ? "bg-amber-50" : undefined}
         readOnly
         collapseStorageKey="admin-inventory-view-collapsed"
+        filterStorageKey="admin-inventory-view"
         onDisplayRowsChange={handleDisplayRowsChange}
         onFilterActiveChange={setHasActiveFilters}
         initialFilters={initialFilters}

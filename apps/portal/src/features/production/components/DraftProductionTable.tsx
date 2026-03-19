@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -59,11 +59,79 @@ export function DraftProductionTable({
   entries,
   showOrganisation = false,
 }: DraftProductionTableProps) {
+  const STORAGE_KEY = "production-drafts-filters";
+  const SCROLL_KEY = "production-drafts-scroll";
+
   const router = useRouter();
   const [sortState, setSortState] = useState<ColumnSortState | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [localEntries, setLocalEntries] = useState(entries);
   const [filterState, setFilterState] = useState<Record<string, Set<string>>>({});
+  const filterLoaded = useRef(false);
+
+  // Load persisted filter/sort state from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.sort) setSortState(parsed.sort);
+        if (parsed.filters) {
+          const restored: Record<string, Set<string>> = {};
+          for (const [key, values] of Object.entries(parsed.filters)) {
+            restored[key] = new Set(values as string[]);
+          }
+          setFilterState(restored);
+        }
+      }
+    } catch {
+      // ignore corrupt data
+    }
+    filterLoaded.current = true;
+  }, []);
+
+  // Persist filter/sort state to localStorage on change
+  useEffect(() => {
+    if (!filterLoaded.current) return;
+    const hasFilters = Object.values(filterState).some((s) => s.size > 0);
+    if (!hasFilters && !sortState) {
+      localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+    const serialized: Record<string, string[]> = {};
+    for (const [key, values] of Object.entries(filterState)) {
+      if (values.size > 0) serialized[key] = [...values];
+    }
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ sort: sortState, filters: serialized }),
+    );
+  }, [filterState, sortState]);
+
+  // Scroll persistence via sessionStorage (debounced)
+  useEffect(() => {
+    // Restore scroll position on mount
+    const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+    if (savedScroll) {
+      const y = Number(savedScroll);
+      if (!Number.isNaN(y)) {
+        requestAnimationFrame(() => window.scrollTo(0, y));
+      }
+    }
+
+    let timer: ReturnType<typeof setTimeout>;
+    const handleScroll = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+      }, 150);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
 
   const handleDelete = async (entryId: string) => {
     setDeletingId(entryId);
@@ -134,9 +202,15 @@ export function DraftProductionTable({
     return result;
   }, [localEntries, filterState]);
 
-  const handleFilterChange = (columnKey: string, values: Set<string>) => {
-    setFilterState((prev) => ({ ...prev, [columnKey]: values }));
-  };
+  const handleFilterChange = useCallback((columnKey: string, values: Set<string>) => {
+    setFilterState((prev) => {
+      const next = { ...prev, [columnKey]: values };
+      // If all filters are now empty, clear storage
+      const hasAny = Object.values(next).some((s) => s.size > 0);
+      if (!hasAny) localStorage.removeItem(STORAGE_KEY);
+      return next;
+    });
+  }, []);
 
   // Filter and sort entries
   const filteredEntries = useMemo(() => {

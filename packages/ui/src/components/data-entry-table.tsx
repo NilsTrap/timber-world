@@ -118,6 +118,9 @@ export interface DataEntryTableProps<TRow> {
   addRowSuffix?: React.ReactNode;
   /** LocalStorage key for persisting collapsed columns state */
   collapseStorageKey?: string;
+  /** LocalStorage key for persisting filter/sort state and scroll position.
+   *  When set, filters, sort, and scroll position survive page navigations. */
+  filterStorageKey?: string;
   /** ID prefix for input elements (default: "det") */
   idPrefix?: string;
   /** When true, allows deleting all rows (default: false, keeps at least 1 row) */
@@ -167,6 +170,7 @@ function DataEntryTableInner<TRow>(
     addRowLabel = "Add Row",
     addRowSuffix,
     collapseStorageKey = "det-collapsed-columns",
+    filterStorageKey,
     idPrefix = "det",
     allowEmpty = false,
     readOnly = false,
@@ -244,7 +248,7 @@ function DataEntryTableInner<TRow>(
   // ─── Sort & Filter ──────────────────────────────────────────────────────
   const [sortState, setSortState] = useState<ColumnSortState | null>(null);
   const [filterState, setFilterState] = useState<Record<string, Set<string>>>(() => {
-    // Initialize with initialFilters if provided
+    // Initialize with initialFilters if provided (takes precedence over persisted)
     if (initialFilters) {
       const state: Record<string, Set<string>> = {};
       for (const [key, values] of Object.entries(initialFilters)) {
@@ -256,6 +260,90 @@ function DataEntryTableInner<TRow>(
     }
     return {};
   });
+  const filterLoaded = useRef(false);
+
+  // Load persisted filter/sort state from localStorage
+  useEffect(() => {
+    if (!filterStorageKey || initialFilters) { filterLoaded.current = true; return; }
+    try {
+      const raw = localStorage.getItem(`${filterStorageKey}-filters`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.sort) setSortState(parsed.sort);
+        if (parsed.filters) {
+          const state: Record<string, Set<string>> = {};
+          for (const [key, values] of Object.entries(parsed.filters)) {
+            if (Array.isArray(values) && values.length > 0) {
+              state[key] = new Set(values as string[]);
+            }
+          }
+          setFilterState(state);
+        }
+      }
+    } catch {}
+    filterLoaded.current = true;
+  }, [filterStorageKey, initialFilters]);
+
+  // Persist filter/sort changes to localStorage
+  useEffect(() => {
+    if (!filterStorageKey || !filterLoaded.current) return;
+    try {
+      const serialized: Record<string, string[]> = {};
+      for (const [key, set] of Object.entries(filterState)) {
+        if (set.size > 0) serialized[key] = [...set];
+      }
+      const hasData = sortState !== null || Object.keys(serialized).length > 0;
+      if (hasData) {
+        localStorage.setItem(`${filterStorageKey}-filters`, JSON.stringify({ sort: sortState, filters: serialized }));
+      } else {
+        localStorage.removeItem(`${filterStorageKey}-filters`);
+      }
+    } catch {}
+  }, [filterStorageKey, sortState, filterState]);
+
+  // ─── Scroll Persistence ─────────────────────────────────────────────────
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Restore scroll position after mount
+  useEffect(() => {
+    if (!filterStorageKey || !scrollContainerRef.current) return;
+    try {
+      const raw = sessionStorage.getItem(`${filterStorageKey}-scroll`);
+      if (raw) {
+        const { left, top } = JSON.parse(raw);
+        scrollContainerRef.current.scrollLeft = left || 0;
+        // Also restore vertical scroll on the window/parent
+        if (top) window.scrollTo(0, top);
+      }
+    } catch {}
+  }, [filterStorageKey]);
+
+  // Save scroll position on scroll (debounced)
+  useEffect(() => {
+    if (!filterStorageKey) return;
+    const container = scrollContainerRef.current;
+    let timeout: ReturnType<typeof setTimeout>;
+
+    const saveScroll = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        try {
+          sessionStorage.setItem(`${filterStorageKey}-scroll`, JSON.stringify({
+            left: container?.scrollLeft || 0,
+            top: window.scrollY || 0,
+          }));
+        } catch {}
+      }, 150);
+    };
+
+    container?.addEventListener("scroll", saveScroll, { passive: true });
+    window.addEventListener("scroll", saveScroll, { passive: true });
+    return () => {
+      clearTimeout(timeout);
+      container?.removeEventListener("scroll", saveScroll);
+      window.removeEventListener("scroll", saveScroll);
+    };
+  }, [filterStorageKey]);
 
   /** Get display value for a column, resolving dropdowns */
   const getColDisplayValue = useCallback(
@@ -408,7 +496,10 @@ function DataEntryTableInner<TRow>(
   const handleClearAll = useCallback(() => {
     setFilterState({});
     setSortState(null);
-  }, []);
+    if (filterStorageKey) {
+      try { localStorage.removeItem(`${filterStorageKey}-filters`); } catch {}
+    }
+  }, [filterStorageKey]);
 
   // Expose imperative handle for external filter control
   useImperativeHandle(ref, () => ({
@@ -806,7 +897,7 @@ function DataEntryTableInner<TRow>(
         </div>
       )}
 
-      <div className="rounded-lg border overflow-x-auto w-fit max-w-full">
+      <div ref={scrollContainerRef} className="rounded-lg border overflow-x-auto w-fit max-w-full">
         <Table ref={tableRef} className="mb-3">
           <TableHeader>
             <TableRow>

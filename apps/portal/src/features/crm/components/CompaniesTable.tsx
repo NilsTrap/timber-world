@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Table,
@@ -84,6 +84,68 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [activeSort, setActiveSort] = useState<ColumnSortState | null>({ column: "name", direction: "asc" });
   const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
+  const filterLoaded = useRef(false);
+
+  // Load persisted filters/sort from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("crm-companies-filters");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.sort !== undefined) setActiveSort(parsed.sort);
+        if (parsed.filters) {
+          const restored: Record<string, Set<string>> = {};
+          for (const [key, values] of Object.entries(parsed.filters)) {
+            restored[key] = new Set(values as string[]);
+          }
+          setColumnFilters(restored);
+        }
+      }
+    } catch {}
+    filterLoaded.current = true;
+  }, []);
+
+  // Persist filters/sort to localStorage on change
+  useEffect(() => {
+    if (!filterLoaded.current) return;
+    const serialized: Record<string, string[]> = {};
+    for (const [key, set] of Object.entries(columnFilters)) {
+      if (set.size > 0) serialized[key] = Array.from(set);
+    }
+    const hasFilters = Object.keys(serialized).length > 0;
+    if (!hasFilters && activeSort === null) {
+      localStorage.removeItem("crm-companies-filters");
+    } else {
+      localStorage.setItem(
+        "crm-companies-filters",
+        JSON.stringify({ sort: activeSort, filters: serialized })
+      );
+    }
+  }, [columnFilters, activeSort]);
+
+  // Scroll persistence via sessionStorage (debounced)
+  useEffect(() => {
+    const scrollKey = "crm-companies-scroll";
+    const saved = sessionStorage.getItem(scrollKey);
+    if (saved) {
+      const y = parseInt(saved, 10);
+      if (!isNaN(y)) window.scrollTo(0, y);
+      sessionStorage.removeItem(scrollKey);
+    }
+
+    let timeout: ReturnType<typeof setTimeout>;
+    const handleScroll = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        sessionStorage.setItem(scrollKey, String(window.scrollY));
+      }, 150);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
 
   // Get unique values for each column (cascading: filtered by all OTHER active filters)
   const uniqueValues = useMemo(() => {
@@ -216,6 +278,7 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
   const clearAllFilters = useCallback(() => {
     setColumnFilters({});
     setActiveSort(null);
+    localStorage.removeItem("crm-companies-filters");
   }, []);
 
   const handleStatusChange = async (id: string, status: CompanyStatus) => {

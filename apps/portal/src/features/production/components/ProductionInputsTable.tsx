@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback, useTransition, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useMemo, useState, useCallback, useTransition, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import { Trash2, MessageSquare } from "lucide-react";
 import {
   Table,
@@ -44,6 +44,8 @@ interface ColConfig {
 }
 
 const COLLAPSE_STORAGE_KEY = "production-inputs-collapsed";
+const FILTER_STORAGE_KEY = "production-inputs-filters";
+const SCROLL_STORAGE_KEY = "production-inputs-scroll";
 
 function calculateVolume(
   thickness: string | null,
@@ -74,6 +76,70 @@ export const ProductionInputsTable = forwardRef<ProductionInputsTableHandle, Pro
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
   const [sortState, setSortState] = useState<ColumnSortState | null>(null);
   const [filterState, setFilterState] = useState<Record<string, Set<string>>>({});
+  const filterLoaded = useRef(false);
+
+  // Load filter/sort state from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(FILTER_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.sort) setSortState(parsed.sort);
+        if (parsed.filters) {
+          const restored: Record<string, Set<string>> = {};
+          for (const [key, values] of Object.entries(parsed.filters)) {
+            restored[key] = new Set(values as string[]);
+          }
+          setFilterState(restored);
+        }
+      }
+    } catch { /* ignore */ }
+    filterLoaded.current = true;
+  }, []);
+
+  // Persist filter/sort state to localStorage on change
+  useEffect(() => {
+    if (!filterLoaded.current) return;
+    try {
+      const serialized: Record<string, string[]> = {};
+      for (const [key, values] of Object.entries(filterState)) {
+        if (values.size > 0) serialized[key] = [...values];
+      }
+      const hasData = Object.keys(serialized).length > 0 || sortState !== null;
+      if (hasData) {
+        localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({ sort: sortState, filters: serialized }));
+      } else {
+        localStorage.removeItem(FILTER_STORAGE_KEY);
+      }
+    } catch { /* ignore */ }
+  }, [filterState, sortState]);
+
+  // Scroll persistence via sessionStorage (debounced)
+  useEffect(() => {
+    // Restore scroll position on mount
+    try {
+      const saved = sessionStorage.getItem(SCROLL_STORAGE_KEY);
+      if (saved) {
+        const y = parseInt(saved, 10);
+        if (!isNaN(y)) window.scrollTo(0, y);
+      }
+    } catch { /* ignore */ }
+
+    let timer: ReturnType<typeof setTimeout>;
+    const handleScroll = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        try {
+          sessionStorage.setItem(SCROLL_STORAGE_KEY, String(window.scrollY));
+        } catch { /* ignore */ }
+      }, 150);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
 
   // Load collapsed columns from localStorage after mount to avoid hydration mismatch
   useEffect(() => {
@@ -302,6 +368,7 @@ export const ProductionInputsTable = forwardRef<ProductionInputsTableHandle, Pro
   const handleClearAll = useCallback(() => {
     setFilterState({});
     setSortState(null);
+    try { localStorage.removeItem(FILTER_STORAGE_KEY); } catch { /* ignore */ }
   }, []);
 
   useImperativeHandle(ref, () => ({

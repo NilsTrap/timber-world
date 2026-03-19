@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { X, Calendar, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -21,6 +21,40 @@ import { formatDate } from "@/lib/utils";
 import { deleteProductionEntry, cancelProductionEntry, saveInvoiceNumber } from "../actions";
 import type { ProductionHistoryItem } from "../types";
 import { Input } from "@timber/ui";
+
+const STORAGE_KEY = "production-history-filters";
+const SCROLL_KEY = "production-history-scroll";
+
+interface PersistedState {
+  sort: ColumnSortState | null;
+  filters: Record<string, Set<string>>;
+  dateFrom: string;
+  dateTo: string;
+}
+
+function loadPersistedState(): PersistedState {
+  if (typeof window === "undefined") return { sort: null, filters: {}, dateFrom: "", dateTo: "" };
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { sort: null, filters: {}, dateFrom: "", dateTo: "" };
+    const parsed = JSON.parse(raw);
+    const filters: Record<string, Set<string>> = {};
+    for (const [key, values] of Object.entries(parsed.filters || {})) {
+      filters[key] = new Set(values as string[]);
+    }
+    return { sort: parsed.sort ?? null, filters, dateFrom: parsed.dateFrom ?? "", dateTo: parsed.dateTo ?? "" };
+  } catch {
+    return { sort: null, filters: {}, dateFrom: "", dateTo: "" };
+  }
+}
+
+function persistState(sort: ColumnSortState | null, filters: Record<string, Set<string>>, dateFrom: string, dateTo: string): void {
+  const serialized: Record<string, string[]> = {};
+  for (const [key, set] of Object.entries(filters)) {
+    if (set.size > 0) serialized[key] = [...set];
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ sort, filters: serialized, dateFrom, dateTo }));
+}
 
 interface ProductionHistoryTableProps {
   entries: ProductionHistoryItem[];
@@ -153,6 +187,48 @@ export function ProductionHistoryTable({
   const [dateTo, setDateTo] = useState("");
   const dateFromRef = useRef<HTMLInputElement>(null);
   const dateToRef = useRef<HTMLInputElement>(null);
+  const filterLoaded = useRef(false);
+
+  // Load persisted filter/sort/date state on mount (skip when defaultProcess is provided)
+  useEffect(() => {
+    if (defaultProcess) { filterLoaded.current = true; return; }
+    const saved = loadPersistedState();
+    if (saved.sort) setSortState(saved.sort);
+    if (Object.keys(saved.filters).length > 0) setFilterState(saved.filters);
+    if (saved.dateFrom) setDateFrom(saved.dateFrom);
+    if (saved.dateTo) setDateTo(saved.dateTo);
+    filterLoaded.current = true;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist filter/sort/date state on change
+  useEffect(() => {
+    if (!filterLoaded.current) return;
+    persistState(sortState, filterState, dateFrom, dateTo);
+  }, [sortState, filterState, dateFrom, dateTo]);
+
+  // Restore scroll position on mount
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(SCROLL_KEY);
+      if (saved) {
+        const y = JSON.parse(saved);
+        window.scrollTo(0, y);
+      }
+    } catch {}
+  }, []);
+
+  // Save scroll position on scroll (debounced)
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const handler = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        sessionStorage.setItem(SCROLL_KEY, JSON.stringify(window.scrollY));
+      }, 150);
+    };
+    window.addEventListener("scroll", handler, { passive: true });
+    return () => { window.removeEventListener("scroll", handler); clearTimeout(timer); };
+  }, []);
 
   /** Convert YYYY-MM-DD from native picker to DD.MM.YYYY */
   const handleDatePick = (isoValue: string, setter: (v: string) => void) => {

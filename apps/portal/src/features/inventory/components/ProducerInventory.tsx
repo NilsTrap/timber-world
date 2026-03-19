@@ -276,6 +276,7 @@ export function ProducerInventory({ packages, packagesInDrafts = [], packagesInS
         getRowKey={(row) => row.id}
         readOnly
         collapseStorageKey="producer-inventory-collapsed"
+        filterStorageKey="producer-inventory"
         onDisplayRowsChange={handleDisplayRowsChange}
         onFilterActiveChange={setHasActiveFilters}
         initialFilters={initialFilters}

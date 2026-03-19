@@ -251,6 +251,7 @@ export function PackagesTab({ packages, canDelete = false }: PackagesTabProps) {
         getRowKey={(row) => row.id}
         readOnly
         collapseStorageKey="inventory-packages-collapsed"
+        filterStorageKey="shipment-packages-view"
         onDisplayRowsChange={handleDisplayRowsChange}
       />
     </div>

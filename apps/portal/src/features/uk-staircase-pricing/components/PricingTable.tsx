@@ -324,6 +324,7 @@ export function PricingTable({ rows, onRowsChange, globalParams = DEFAULT_GLOBAL
       title="UK Staircase Pricing"
       addRowLabel="Add Product"
       collapseStorageKey="uk-staircase-pricing-collapsed"
+      filterStorageKey="uk-staircase-pricing"
       idPrefix="price"
       allowEmpty={true}
     />

@@ -776,6 +776,7 @@ export function EditablePackagesTab({ packages, defaultOrgId }: EditablePackages
         createRow={createRow}
         copyRow={copyRow}
         collapseStorageKey="editable-inventory-collapsed"
+        filterStorageKey="editable-inventory"
         onDisplayRowsChange={handleDisplayRowsChange}
         allowEmpty
       />
