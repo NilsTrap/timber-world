@@ -269,9 +269,9 @@ function DataEntryTableInner<TRow>(
     []
   );
 
-  /** Filterable columns */
+  /** Filterable columns (custom columns are included if they have getValue) */
   const filterableColumns = useMemo(
-    () => columns.filter((col) => col.filterable !== false && col.type !== "custom"),
+    () => columns.filter((col) => col.filterable !== false),
     [columns]
   );
 
