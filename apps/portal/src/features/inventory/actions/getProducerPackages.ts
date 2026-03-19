@@ -270,8 +270,12 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     };
   });
 
-  // Sort by numeric part of package number for consistent ordering
+  // Sort by Shipment → Package (ascending)
   packages.sort((a, b) => {
+    // 1. Shipment code
+    const shipCmp = (a.shipmentCode ?? "").localeCompare(b.shipmentCode ?? "");
+    if (shipCmp !== 0) return shipCmp;
+    // 2. Package number (numeric extraction)
     const numA = parseInt((a.packageNumber ?? "0").replace(/\D/g, "") || "0", 10);
     const numB = parseInt((b.packageNumber ?? "0").replace(/\D/g, "") || "0", 10);
     return numA - numB;

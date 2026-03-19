@@ -171,8 +171,15 @@ export async function getEditablePackages(orgIds?: string[]): Promise<ActionResu
     packages = allPackages;
   }
 
-  // Sort by numeric part of package number for consistent ordering
+  // Sort by Org → Shipment → Package (left-to-right, ascending)
   packages.sort((a, b) => {
+    // 1. Organisation code
+    const orgCmp = (a.organisationCode ?? "").localeCompare(b.organisationCode ?? "");
+    if (orgCmp !== 0) return orgCmp;
+    // 2. Shipment code
+    const shipCmp = (a.shipmentCode ?? "").localeCompare(b.shipmentCode ?? "");
+    if (shipCmp !== 0) return shipCmp;
+    // 3. Package number (numeric extraction)
     const numA = parseInt((a.packageNumber ?? "0").replace(/\D/g, "") || "0", 10);
     const numB = parseInt((b.packageNumber ?? "0").replace(/\D/g, "") || "0", 10);
     return numA - numB;
