@@ -62,13 +62,14 @@ export function AdminInventoryViewTab({ packages, initialFilters }: AdminInvento
         key: "packageNumber",
         label: "Package",
         type: "custom",
+        isNumeric: true,
         getValue: (row) => row.packageNumber,
         totalType: "count",
         formatTotal: (v) => String(v),
         renderCell: (row) => {
           const hasNote = !!row.notes;
           return (
-            <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
               <span>{row.packageNumber}</span>
               {hasNote && (
                 <TooltipProvider>

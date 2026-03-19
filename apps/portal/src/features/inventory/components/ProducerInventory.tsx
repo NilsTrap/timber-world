@@ -55,6 +55,7 @@ export function ProducerInventory({ packages, packagesInDrafts = [], packagesInS
         key: "packageNumber",
         label: "Package",
         type: "custom",
+        isNumeric: true,
         getValue: (row) => row.packageNumber,
         totalType: "count",
         formatTotal: (v) => String(v),
@@ -63,7 +64,7 @@ export function ProducerInventory({ packages, packagesInDrafts = [], packagesInS
           const shipmentDraftInfo = shipmentDraftsMap.get(row.id);
           const hasNote = !!row.notes;
           return (
-            <div className="flex items-center gap-1.5 whitespace-nowrap text-xs">
+            <div className="flex items-center justify-end gap-1.5 whitespace-nowrap text-xs">
               <span>{row.packageNumber}</span>
               {hasNote && (
                 <TooltipProvider>
