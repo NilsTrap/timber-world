@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
+import { redirect, notFound } from "next/navigation";
+import { getSession, isAdmin, isSuperAdmin, orgHasFeature } from "@/lib/auth";
 import { MarketingCmsManager } from "@/features/marketing-cms";
 
 export const metadata: Metadata = {
@@ -20,7 +20,11 @@ export default async function CmsPage() {
   }
 
   if (!isAdmin(session)) {
-    redirect("/dashboard?access_denied=true");
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const hasFeature = await orgHasFeature(orgId, "marketing.view");
+    if (!hasFeature) {
+      notFound();
+    }
   }
 
   // Super Admin can delete reference options

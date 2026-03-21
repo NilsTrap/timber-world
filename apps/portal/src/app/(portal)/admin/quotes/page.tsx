@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { getSession, isAdmin } from "@/lib/auth";
+import { redirect, notFound } from "next/navigation";
+import { getSession, isAdmin, orgHasFeature } from "@/lib/auth";
 import { QuoteRequestsTable } from "@/features/quotes";
 
 export const metadata: Metadata = {
@@ -20,7 +20,11 @@ export default async function QuoteRequestsPage() {
   }
 
   if (!isAdmin(session)) {
-    redirect("/dashboard?access_denied=true");
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const hasFeature = await orgHasFeature(orgId, "quotes.view");
+    if (!hasFeature) {
+      notFound();
+    }
   }
 
   return (

@@ -1,10 +1,12 @@
 "use server";
 
 import { createCrmClient } from "../lib/supabase";
-import type { CrmCompany, CrmContact, CrmKeyword } from "../types";
+import type { CrmCompany, CrmContact, CrmKeyword, CrmIndustry, CrmCompanyType } from "../types";
 
 export type CompanyWithKeywords = CrmCompany & {
   keywords: CrmKeyword[];
+  industries: CrmIndustry[];
+  companyTypes: CrmCompanyType[];
 };
 
 type GetCompaniesResult =
@@ -24,6 +26,12 @@ export async function getCompanies(): Promise<GetCompaniesResult> {
       contacts_count:crm_contacts(count),
       crm_company_keywords(
         crm_keywords(id, name, created_at)
+      ),
+      crm_company_industries(
+        crm_industries(id, name, created_at)
+      ),
+      crm_company_type_assignments(
+        crm_company_types(id, name, created_at)
       )
     `)
     .order("created_at", { ascending: false });
@@ -39,11 +47,23 @@ export async function getCompanies(): Promise<GetCompaniesResult> {
     const companyKeywords = company.crm_company_keywords as Array<{ crm_keywords: CrmKeyword }> | null;
     const keywords = companyKeywords?.map((ck) => ck.crm_keywords).filter(Boolean) || [];
 
+    // Extract industries from the nested structure
+    const companyIndustries = company.crm_company_industries as Array<{ crm_industries: CrmIndustry }> | null;
+    const industries = companyIndustries?.map((ci) => ci.crm_industries).filter(Boolean) || [];
+
+    // Extract company types from the nested structure
+    const companyTypeAssignments = company.crm_company_type_assignments as Array<{ crm_company_types: CrmCompanyType }> | null;
+    const companyTypes = companyTypeAssignments?.map((ct) => ct.crm_company_types).filter(Boolean) || [];
+
     return {
       ...company,
       contacts_count: (company.contacts_count as { count: number }[])?.[0]?.count || 0,
       keywords,
-      crm_company_keywords: undefined, // Remove the raw join data
+      industries,
+      companyTypes,
+      crm_company_keywords: undefined,
+      crm_company_industries: undefined,
+      crm_company_type_assignments: undefined,
     };
   }) as CompanyWithKeywords[];
 

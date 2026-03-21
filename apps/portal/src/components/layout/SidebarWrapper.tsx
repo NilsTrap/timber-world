@@ -50,6 +50,12 @@ function getProducerNavItems(pendingShipmentCount: number = 0): FeatureNavItem[]
     { href: "/shipments", label: "Shipments", iconName: "Truck", badge: pendingShipmentCount, requiresFeature: "shipments.view" },
     { href: "/orders", label: "Orders", iconName: "ShoppingCart", requiresFeature: "orders.view" },
     { href: "/production", label: "Production", iconName: "Factory", requiresFeature: "production.view" },
+    { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText", requiresFeature: "quotes.view" },
+    { href: "/admin/crm", label: "CRM", iconName: "Users", requiresFeature: "crm.view" },
+    { href: "/admin/marketing", label: "CMS", iconName: "Image", requiresFeature: "marketing.view" },
+    { href: "/admin/reference", label: "Reference Data", iconName: "Settings", requiresFeature: "reference.view" },
+    { href: "/admin/organisations", label: "Contacts", iconName: "Contact", requiresFeature: "organizations.view" },
+    { href: "/admin/roles", label: "Roles", iconName: "Shield", requiresFeature: "roles.view" },
   ];
 }
 

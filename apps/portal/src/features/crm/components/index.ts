@@ -6,4 +6,8 @@ export { ContactsTable } from "./ContactsTable";
 export { AddContactModal } from "./AddContactModal";
 export { CrmPageContent } from "./CrmPageContent";
 export { KeywordsTab } from "./KeywordsTab";
+export { IndustriesTab } from "./IndustriesTab";
+export { CompanyTypesTab } from "./CompanyTypesTab";
 export { CompanyKeywords } from "./CompanyKeywords";
+export { CompanyIndustries } from "./CompanyIndustries";
+export { CompanyTypeAssignments } from "./CompanyTypeAssignments";

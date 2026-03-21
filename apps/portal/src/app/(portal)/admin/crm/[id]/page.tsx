@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, orgHasFeature } from "@/lib/auth";
 import {
   getCompanyById,
   getKeywords,
   getCompanyKeywords,
+  getIndustries,
+  getCompanyIndustries,
+  getCompanyTypes,
+  getCompanyCompanyTypes,
   CompanyDetail,
 } from "@/features/crm";
 
@@ -38,14 +42,22 @@ export default async function CompanyPage({ params }: CompanyPageProps) {
   }
 
   if (!isAdmin(session)) {
-    redirect("/dashboard?access_denied=true");
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const hasFeature = await orgHasFeature(orgId, "crm.view");
+    if (!hasFeature) {
+      notFound();
+    }
   }
 
   const { id } = await params;
-  const [companyResult, keywordsResult, companyKeywordsResult] = await Promise.all([
+  const [companyResult, keywordsResult, companyKeywordsResult, industriesResult, companyIndustriesResult, companyTypesResult, companyCompanyTypesResult] = await Promise.all([
     getCompanyById(id),
     getKeywords(),
     getCompanyKeywords(id),
+    getIndustries(),
+    getCompanyIndustries(id),
+    getCompanyTypes(),
+    getCompanyCompanyTypes(id),
   ]);
 
   if (!companyResult.success) {
@@ -54,12 +66,20 @@ export default async function CompanyPage({ params }: CompanyPageProps) {
 
   const allKeywords = keywordsResult.success ? keywordsResult.data ?? [] : [];
   const companyKeywords = companyKeywordsResult.success ? companyKeywordsResult.data ?? [] : [];
+  const allIndustries = industriesResult.success ? industriesResult.data ?? [] : [];
+  const companyIndustries = companyIndustriesResult.success ? companyIndustriesResult.data ?? [] : [];
+  const allCompanyTypes = companyTypesResult.success ? companyTypesResult.data ?? [] : [];
+  const companyCompanyTypes = companyCompanyTypesResult.success ? companyCompanyTypesResult.data ?? [] : [];
 
   return (
     <CompanyDetail
       company={companyResult.data}
       companyKeywords={companyKeywords}
       allKeywords={allKeywords}
+      companyIndustries={companyIndustries}
+      allIndustries={allIndustries}
+      companyTypes={companyCompanyTypes}
+      allCompanyTypes={allCompanyTypes}
     />
   );
 }

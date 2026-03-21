@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { getSession, isAdmin } from "@/lib/auth";
+import { redirect, notFound } from "next/navigation";
+import { getSession, isAdmin, orgHasFeature } from "@/lib/auth";
 import { OrganisationsTable } from "@/features/organisations";
 import { PeopleTable } from "@/features/organisations/components/PeopleTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@timber/ui";
@@ -22,7 +22,11 @@ export default async function ContactsPage() {
   }
 
   if (!isAdmin(session)) {
-    redirect("/dashboard?access_denied=true");
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const hasFeature = await orgHasFeature(orgId, "organizations.view");
+    if (!hasFeature) {
+      notFound();
+    }
   }
 
   return (

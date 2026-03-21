@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { Package } from "lucide-react";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, orgHasFeature } from "@/lib/auth";
 import { getProducerPackages } from "@/features/inventory/actions";
 import { getAuditPackages } from "@/features/inventory/actions/getAuditPackages";
 import { getPackagesInDrafts } from "@/features/production/actions";
@@ -46,6 +46,13 @@ export default async function InventoryPage({
 
   if (isAdmin(session)) {
     redirect("/admin/inventory");
+  }
+
+  // Check org feature access for non-admin users
+  const orgId = session.currentOrganizationId || session.organisationId;
+  const hasFeature = await orgHasFeature(orgId, "inventory.view");
+  if (!hasFeature) {
+    notFound();
   }
 
   // Producer flow

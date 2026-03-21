@@ -11,16 +11,22 @@ import {
 } from "@timber/ui";
 import { PageHeader, SummaryGrid, SummaryCard, SectionHeader } from "@timber/ui";
 import { ExternalLink, Save, Loader2 } from "lucide-react";
-import type { CrmCompany, CrmContact, CrmKeyword, CompanyStatus } from "../types";
+import type { CrmCompany, CrmContact, CrmKeyword, CrmIndustry, CrmCompanyType, CompanyStatus } from "../types";
 import { updateCompany, updateCompanyStatus } from "../actions";
 import { ContactsTable } from "./ContactsTable";
 import { AddContactModal } from "./AddContactModal";
 import { CompanyKeywords } from "./CompanyKeywords";
+import { CompanyIndustries } from "./CompanyIndustries";
+import { CompanyTypeAssignments } from "./CompanyTypeAssignments";
 
 interface CompanyDetailProps {
   company: CrmCompany & { contacts: CrmContact[] };
   companyKeywords: CrmKeyword[];
   allKeywords: CrmKeyword[];
+  companyIndustries: CrmIndustry[];
+  allIndustries: CrmIndustry[];
+  companyTypes: CrmCompanyType[];
+  allCompanyTypes: CrmCompanyType[];
 }
 
 const STATUS_COLORS: Record<CompanyStatus, "default" | "success" | "warning" | "secondary"> = {
@@ -32,7 +38,7 @@ const STATUS_COLORS: Record<CompanyStatus, "default" | "success" | "warning" | "
   archived: "default",
 };
 
-export function CompanyDetail({ company, companyKeywords, allKeywords }: CompanyDetailProps) {
+export function CompanyDetail({ company, companyKeywords, allKeywords, companyIndustries, allIndustries, companyTypes, allCompanyTypes }: CompanyDetailProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<CompanyStatus>(company.status);
@@ -141,12 +147,24 @@ export function CompanyDetail({ company, companyKeywords, allKeywords }: Company
         />
       </SummaryGrid>
 
-      {/* Keywords */}
-      <CompanyKeywords
-        companyId={company.id}
-        assignedKeywords={companyKeywords}
-        allKeywords={allKeywords}
-      />
+      {/* Tags: Keywords, Industries, Types */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CompanyKeywords
+          companyId={company.id}
+          assignedKeywords={companyKeywords}
+          allKeywords={allKeywords}
+        />
+        <CompanyIndustries
+          companyId={company.id}
+          assignedIndustries={companyIndustries}
+          allIndustries={allIndustries}
+        />
+        <CompanyTypeAssignments
+          companyId={company.id}
+          assignedTypes={companyTypes}
+          allTypes={allCompanyTypes}
+        />
+      </div>
 
       {/* Company Details Form */}
       <div className="rounded-lg border bg-card p-6">

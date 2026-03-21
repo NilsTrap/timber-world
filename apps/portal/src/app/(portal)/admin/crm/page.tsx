@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { getSession, isAdmin } from "@/lib/auth";
+import { redirect, notFound } from "next/navigation";
+import { getSession, isAdmin, orgHasFeature } from "@/lib/auth";
 import {
   getCompanies,
   getAllContacts,
   getKeywords,
+  getIndustries,
+  getCompanyTypes,
   CrmPageContent,
 } from "@/features/crm";
 
@@ -25,18 +27,26 @@ export default async function CrmPage() {
   }
 
   if (!isAdmin(session)) {
-    redirect("/dashboard?access_denied=true");
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const hasFeature = await orgHasFeature(orgId, "crm.view");
+    if (!hasFeature) {
+      notFound();
+    }
   }
 
-  const [companiesResult, contactsResult, keywordsResult] = await Promise.all([
+  const [companiesResult, contactsResult, keywordsResult, industriesResult, companyTypesResult] = await Promise.all([
     getCompanies(),
     getAllContacts(),
     getKeywords(),
+    getIndustries(),
+    getCompanyTypes(),
   ]);
 
   const companies = companiesResult.success ? companiesResult.data ?? [] : [];
   const contacts = contactsResult.success ? contactsResult.data ?? [] : [];
   const keywords = keywordsResult.success ? keywordsResult.data ?? [] : [];
+  const industries = industriesResult.success ? industriesResult.data ?? [] : [];
+  const companyTypes = companyTypesResult.success ? companyTypesResult.data ?? [] : [];
 
   return (
     <div className="space-y-6">
@@ -47,7 +57,7 @@ export default async function CrmPage() {
         </p>
       </div>
 
-      <CrmPageContent companies={companies} contacts={contacts} keywords={keywords} />
+      <CrmPageContent companies={companies} contacts={contacts} keywords={keywords} industries={industries} companyTypes={companyTypes} />
     </div>
   );
 }

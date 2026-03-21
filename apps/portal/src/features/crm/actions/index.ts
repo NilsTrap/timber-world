@@ -22,3 +22,19 @@ export {
   addKeywordToCompany,
   removeKeywordFromCompany,
 } from "./keywords";
+export {
+  getIndustries,
+  createIndustry,
+  deleteIndustry,
+  getCompanyIndustries,
+  addIndustryToCompany,
+  removeIndustryFromCompany,
+} from "./industries";
+export {
+  getCompanyTypes,
+  createCompanyType,
+  deleteCompanyType,
+  getCompanyCompanyTypes,
+  addTypeToCompany,
+  removeTypeFromCompany,
+} from "./companyTypes";

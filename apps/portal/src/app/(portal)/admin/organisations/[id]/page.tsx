@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@timber/ui";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, orgHasFeature } from "@/lib/auth";
 import { getOrganisationById } from "@/features/organisations/actions/getOrganisationById";
 import { OrganisationDetailTabs } from "@/features/organisations/components/OrganisationDetailTabs";
 
@@ -43,7 +43,11 @@ export default async function OrganisationDetailPage({
   }
 
   if (!isAdmin(session)) {
-    redirect("/dashboard?access_denied=true");
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const hasFeature = await orgHasFeature(orgId, "organizations.view");
+    if (!hasFeature) {
+      notFound();
+    }
   }
 
   const { id } = await params;

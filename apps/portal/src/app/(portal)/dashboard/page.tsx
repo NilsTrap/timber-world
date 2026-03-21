@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
-import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
+import { redirect, notFound } from "next/navigation";
+import { getSession, isAdmin, isSuperAdmin, orgHasFeature } from "@/lib/auth";
 import { AccessDeniedHandler } from "@/components/AccessDeniedHandler";
 import { getProducerMetrics, getAdminMetrics } from "@/features/dashboard/actions";
 import { ProducerDashboardMetrics } from "@/features/dashboard/components/ProducerDashboardMetrics";
@@ -93,6 +93,16 @@ export default async function DashboardPage({
   }
 
   const userIsAdmin = isAdmin(session);
+
+  // Check org feature access for non-admin users
+  if (!userIsAdmin) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const hasFeature = await orgHasFeature(orgId, "dashboard.view");
+    if (!hasFeature) {
+      notFound();
+    }
+  }
+
   // Parse comma-separated org IDs for multi-select filter (Super Admin only)
   const orgIds = isSuperAdmin(session) && orgParam
     ? orgParam.split(",").filter(Boolean)

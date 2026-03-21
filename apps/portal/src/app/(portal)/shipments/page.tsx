@@ -1,7 +1,7 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { getSession, isSuperAdmin } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin, orgHasFeature } from "@/lib/auth";
 import { getUserOrganisation, getAllOrgShipments, getActiveOrganisations } from "@/features/shipments/actions";
 import { getAllPendingShipmentCount } from "@/features/shipments/actions/getAllShipments";
 import { ProducerShipmentsPageContent, AllShipmentsTab } from "@/features/shipments/components";
@@ -17,6 +17,15 @@ export default async function ShipmentsPage({
   const session = await getSession();
   if (!session) {
     redirect("/login");
+  }
+
+  // Check org feature access for non-admin users
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const hasFeature = await orgHasFeature(orgId, "shipments.view");
+    if (!hasFeature) {
+      notFound();
+    }
   }
 
   const { tab } = await searchParams;

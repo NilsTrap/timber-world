@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
+import { redirect, notFound } from "next/navigation";
+import { getSession, isAdmin, isSuperAdmin, orgHasFeature } from "@/lib/auth";
 import {
   getProcesses,
   getProcessesWithNotes,
@@ -37,6 +37,17 @@ export default async function ProductionPage({
     redirect("/login");
   }
 
+  const userIsAdmin = isAdmin(session);
+
+  // Check org feature access for non-admin users
+  if (!userIsAdmin) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const hasFeature = await orgHasFeature(orgId, "production.view");
+    if (!hasFeature) {
+      notFound();
+    }
+  }
+
   // Parse comma-separated org IDs for multi-select filter (Super Admin only)
   const orgIds = isSuperAdmin(session) && orgParam
     ? orgParam.split(",").filter(Boolean)
@@ -44,7 +55,6 @@ export default async function ProductionPage({
 
   // Determine which org to use for processes with notes (single org - use first selected or user's org)
   const processNotesOrgId = orgIds?.[0] || session.organisationId || undefined;
-  const userIsAdmin = isAdmin(session);
 
   const [processesResult, processesWithNotesResult, draftsResult, historyResult, breakdownResult] = await Promise.all([
     getProcesses(),

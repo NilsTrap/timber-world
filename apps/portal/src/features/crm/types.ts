@@ -69,6 +69,24 @@ export interface CrmKeyword {
 }
 
 /**
+ * CRM Industries
+ */
+export interface CrmIndustry {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+/**
+ * CRM Company Types (Manufacturer, Installer, Retailer, etc.)
+ */
+export interface CrmCompanyType {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+/**
  * Companies House API Types
  */
 export interface CompaniesHouseSearchResult {

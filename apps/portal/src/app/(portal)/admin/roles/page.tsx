@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-import { getSession, isSuperAdmin } from "@/lib/auth";
+import { redirect, notFound } from "next/navigation";
+import { getSession, isSuperAdmin, isAdmin, orgHasFeature } from "@/lib/auth";
 import { getRoles, getFeaturesByCategory } from "@/features/roles/actions";
 import { RolesTable } from "@/features/roles/components";
 
@@ -14,9 +14,13 @@ export default async function RolesPage() {
     redirect("/login");
   }
 
-  // Only platform admins can access role management
-  if (!isSuperAdmin(session)) {
-    redirect("/dashboard");
+  // Super admins and admins always have access; org users need roles.view feature
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const hasFeature = await orgHasFeature(orgId, "roles.view");
+    if (!hasFeature) {
+      notFound();
+    }
   }
 
   const [rolesResult, featuresResult] = await Promise.all([

@@ -27,7 +27,7 @@ interface CompaniesTableProps {
   searchQuery?: string;
 }
 
-type ColumnKey = "name" | "website" | "phone" | "email" | "location" | "industry" | "founded_year" | "registration_number" | "account_type" | "employees" | "turnover_eur" | "contacts_count" | "keywords" | "status";
+type ColumnKey = "name" | "website" | "phone" | "email" | "location" | "founded_year" | "registration_number" | "account_type" | "employees" | "turnover_eur" | "contacts_count" | "keywords" | "industries" | "companyTypes" | "status";
 
 function formatCurrency(value: number | null | undefined): string {
   if (!value) return "—";
@@ -57,8 +57,6 @@ function getColumnValue(company: CompanyWithKeywords, key: ColumnKey): string {
       return company.email || "";
     case "location":
       return [company.city, company.country].filter(Boolean).join(", ");
-    case "industry":
-      return company.industry || company.industry_codes?.join(", ") || "";
     case "founded_year":
       return company.founded_year?.toString() || "";
     case "registration_number":
@@ -73,6 +71,10 @@ function getColumnValue(company: CompanyWithKeywords, key: ColumnKey): string {
       return (company.contacts_count || 0).toString();
     case "keywords":
       return company.keywords?.map((k) => k.name).join(", ") || "";
+    case "industries":
+      return company.industries?.map((i) => i.name).join(", ") || "";
+    case "companyTypes":
+      return company.companyTypes?.map((t) => t.name).join(", ") || "";
     case "status":
       return company.status || "";
     default:
@@ -102,7 +104,11 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
         }
       }
     } catch {}
-    filterLoaded.current = true;
+    // Delay enabling persistence until after setState calls have re-rendered,
+    // so the persist effect doesn't overwrite saved filters with initial empty state
+    setTimeout(() => {
+      filterLoaded.current = true;
+    }, 0);
   }, []);
 
   // Persist filters/sort to localStorage on change
@@ -123,36 +129,14 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
     }
   }, [columnFilters, activeSort]);
 
-  // Scroll persistence via sessionStorage (debounced)
-  useEffect(() => {
-    const scrollKey = "crm-companies-scroll";
-    const saved = sessionStorage.getItem(scrollKey);
-    if (saved) {
-      const y = parseInt(saved, 10);
-      if (!isNaN(y)) window.scrollTo(0, y);
-      sessionStorage.removeItem(scrollKey);
-    }
-
-    let timeout: ReturnType<typeof setTimeout>;
-    const handleScroll = () => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => {
-        sessionStorage.setItem(scrollKey, String(window.scrollY));
-      }, 150);
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => {
-      clearTimeout(timeout);
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, []);
+  // Scroll persistence is handled at the CrmPageContent level
 
   // Get unique values for each column (cascading: filtered by all OTHER active filters)
   const uniqueValues = useMemo(() => {
     const allKeys: ColumnKey[] = [
-      "name", "website", "phone", "email", "location", "industry",
+      "name", "website", "phone", "email", "location",
       "founded_year", "registration_number", "account_type", "employees",
-      "turnover_eur", "contacts_count", "keywords", "status",
+      "turnover_eur", "contacts_count", "keywords", "industries", "companyTypes", "status",
     ];
 
     const values: Record<ColumnKey, string[]> = {} as Record<ColumnKey, string[]>;
@@ -168,6 +152,14 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
           filtered = filtered.filter((company) =>
             company.keywords?.some((k) => filterSet.has(k.name)) || false
           );
+        } else if (otherKey === "industries") {
+          filtered = filtered.filter((company) =>
+            company.industries?.some((i) => filterSet.has(i.name)) || false
+          );
+        } else if (otherKey === "companyTypes") {
+          filtered = filtered.filter((company) =>
+            company.companyTypes?.some((t) => filterSet.has(t.name)) || false
+          );
         } else {
           filtered = filtered.filter((company) => {
             const val = getColumnValue(company, otherKey);
@@ -181,6 +173,18 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
         filtered.forEach((company) => {
           company.keywords?.forEach((k) => {
             if (k.name) set.add(k.name);
+          });
+        });
+      } else if (key === "industries") {
+        filtered.forEach((company) => {
+          company.industries?.forEach((i) => {
+            if (i.name) set.add(i.name);
+          });
+        });
+      } else if (key === "companyTypes") {
+        filtered.forEach((company) => {
+          company.companyTypes?.forEach((t) => {
+            if (t.name) set.add(t.name);
           });
         });
       } else {
@@ -208,12 +212,13 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
           company.website,
           company.city,
           company.country,
-          company.industry,
           company.registration_number,
           company.status,
           company.founded_year?.toString(),
           company.employees?.toString(),
           ...(company.keywords?.map((k) => k.name) || []),
+          ...(company.industries?.map((i) => i.name) || []),
+          ...(company.companyTypes?.map((t) => t.name) || []),
         ]
           .filter(Boolean)
           .join(" ")
@@ -227,9 +232,16 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
       const filterSet = columnFilters[key];
       if (filterSet && filterSet.size > 0) {
         if (key === "keywords") {
-          // Special handling for keywords - match if any keyword is in filter
           result = result.filter((company) => {
             return company.keywords?.some((k) => filterSet.has(k.name)) || false;
+          });
+        } else if (key === "industries") {
+          result = result.filter((company) => {
+            return company.industries?.some((i) => filterSet.has(i.name)) || false;
+          });
+        } else if (key === "companyTypes") {
+          result = result.filter((company) => {
+            return company.companyTypes?.some((t) => filterSet.has(t.name)) || false;
           });
         } else {
           result = result.filter((company) => {
@@ -392,19 +404,6 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
               </TableHead>
               <TableHead className="bg-card">
                 <div className="flex items-center gap-1">
-                  Industry
-                  <ColumnHeaderMenu
-                    columnKey="industry"
-                    uniqueValues={uniqueValues.industry}
-                    activeSort={activeSort}
-                    activeFilter={columnFilters.industry || new Set()}
-                    onSortChange={setActiveSort}
-                    onFilterChange={handleFilterChange}
-                  />
-                </div>
-              </TableHead>
-              <TableHead className="bg-card">
-                <div className="flex items-center gap-1">
                   Founded
                   <ColumnHeaderMenu
                     columnKey="founded_year"
@@ -500,6 +499,32 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
               </TableHead>
               <TableHead className="bg-card">
                 <div className="flex items-center gap-1">
+                  Industry
+                  <ColumnHeaderMenu
+                    columnKey="industries"
+                    uniqueValues={uniqueValues.industries}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.industries || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
+                  Type
+                  <ColumnHeaderMenu
+                    columnKey="companyTypes"
+                    uniqueValues={uniqueValues.companyTypes}
+                    activeSort={activeSort}
+                    activeFilter={columnFilters.companyTypes || new Set()}
+                    onSortChange={setActiveSort}
+                    onFilterChange={handleFilterChange}
+                  />
+                </div>
+              </TableHead>
+              <TableHead className="bg-card">
+                <div className="flex items-center gap-1">
                   Status
                   <ColumnHeaderMenu
                     columnKey="status"
@@ -517,7 +542,7 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
           <TableBody>
             {filteredCompanies.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={15} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={16} className="text-center py-8 text-muted-foreground">
                   No companies match your search criteria
                 </TableCell>
               </TableRow>
@@ -578,28 +603,24 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
                     )}
                   </TableCell>
                   <TableCell>
-                    <span>{company.city || "—"}</span>
-                    {company.country && (
-                      <span className="text-muted-foreground">, {company.country}</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="max-w-[150px] overflow-hidden">
-                            <span className="text-sm whitespace-nowrap">
-                              {company.industry || company.industry_codes?.join(", ") || "—"}
-                            </span>
-                          </div>
-                        </TooltipTrigger>
-                        {(company.industry || company.industry_codes?.length) && (
-                          <TooltipContent>
-                            <p className="max-w-[300px]">{company.industry || company.industry_codes?.join(", ")}</p>
-                          </TooltipContent>
+                    {company.city ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const query = encodeURIComponent([company.address, company.city, company.postal_code, company.country].filter(Boolean).join(", "));
+                          window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "mapPopup", "width=900,height=700,scrollbars=yes,resizable=yes");
+                        }}
+                        className="hover:text-primary hover:underline cursor-pointer text-left"
+                        title={[company.address, company.city, company.postal_code, company.country].filter(Boolean).join(", ")}
+                      >
+                        <span>{company.city}</span>
+                        {company.country && (
+                          <span className="text-muted-foreground">, {company.country}</span>
                         )}
-                      </Tooltip>
-                    </TooltipProvider>
+                      </button>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell>{company.founded_year || "—"}</TableCell>
                   <TableCell>{company.registration_number || "—"}</TableCell>
@@ -640,6 +661,64 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
                         {company.keywords?.length > 0 && (
                           <TooltipContent>
                             <p>{company.keywords.map((k) => k.name).join(", ")}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableCell>
+                  <TableCell>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="max-w-[120px] overflow-hidden">
+                            <div className="flex gap-1 whitespace-nowrap">
+                              {company.industries?.length > 0 ? (
+                                company.industries.map((ind) => (
+                                  <span
+                                    key={ind.id}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-muted"
+                                  >
+                                    {ind.name}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        {company.industries?.length > 0 && (
+                          <TooltipContent>
+                            <p>{company.industries.map((i) => i.name).join(", ")}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableCell>
+                  <TableCell>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="max-w-[120px] overflow-hidden">
+                            <div className="flex gap-1 whitespace-nowrap">
+                              {company.companyTypes?.length > 0 ? (
+                                company.companyTypes.map((type) => (
+                                  <span
+                                    key={type.id}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-muted"
+                                  >
+                                    {type.name}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        {company.companyTypes?.length > 0 && (
+                          <TooltipContent>
+                            <p>{company.companyTypes.map((t) => t.name).join(", ")}</p>
                           </TooltipContent>
                         )}
                       </Tooltip>
