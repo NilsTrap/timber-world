@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import { getEditablePackages } from "@/features/inventory/actions";
 import { getConsolidatedInventory } from "@/features/dashboard/actions";
+import { getAuditPackages } from "@/features/inventory/actions/getAuditPackages";
 import { AdminInventoryPageContent } from "@/features/inventory/components";
 
 export const metadata: Metadata = {
@@ -37,12 +38,14 @@ export default async function InventoryPage({
     ? orgParam.split(",").filter(Boolean)
     : undefined;
 
-  const [packagesResult, consolidatedResult] = await Promise.all([
+  const [packagesResult, consolidatedResult, auditResult] = await Promise.all([
     getEditablePackages(orgFilter),
     getConsolidatedInventory(orgFilter),
+    getAuditPackages(),
   ]);
   const packages = packagesResult.success ? packagesResult.data : [];
   const consolidated = consolidatedResult.success ? consolidatedResult.data : [];
+  const auditPackages = auditResult.success ? auditResult.data : [];
 
   // Build initial filters from URL params
   const initialFilters: Record<string, string[]> = {};
@@ -65,6 +68,7 @@ export default async function InventoryPage({
       <AdminInventoryPageContent
         packages={packages}
         consolidated={consolidated}
+        auditPackages={auditPackages}
         initialFilters={Object.keys(initialFilters).length > 0 ? initialFilters : undefined}
         defaultOrgId={orgFilter?.length === 1 ? orgFilter[0] : undefined}
       />

@@ -2,6 +2,7 @@
 
 import { useMemo, Suspense, useState, useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@timber/ui";
+import { usePersistedTab } from "@/hooks/usePersistedTab";
 import { StartShipmentForm } from "./StartShipmentForm";
 import { StartIncomingShipmentForm } from "./StartIncomingShipmentForm";
 import { ProducerShipmentsDraftsTable } from "./ProducerShipmentsDraftsTable";
@@ -57,11 +58,7 @@ function ProducerShipmentsPageContentInner({
     };
   }, [shipments]);
 
-  const getDefaultTab = () => {
-    if (defaultTab === "in") return "in";
-    if (defaultTab === "out") return "out";
-    return "drafts";
-  };
+  const [activeTab, setActiveTab] = usePersistedTab("shipments-tab", "drafts", defaultTab);
 
   return (
     <div className="space-y-6">
@@ -71,7 +68,7 @@ function ProducerShipmentsPageContentInner({
         <p className="text-muted-foreground">Create and manage shipments for your organisation</p>
       </div>
 
-      <Tabs defaultValue={getDefaultTab()}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="drafts">
             Drafts {draftShipments.length > 0 && `(${draftShipments.length})`}

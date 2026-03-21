@@ -40,8 +40,7 @@ export async function getOutgoingShipments(): Promise<ActionResult<ShipmentListI
       reviewed_by,
       rejection_reason,
       completed_at,
-      reviewer:portal_users!shipments_reviewed_by_fkey(name),
-      inventory_packages!inventory_packages_shipment_id_fkey(volume_m3)
+      reviewer:portal_users!shipments_reviewed_by_fkey(name)
     `)
     .eq("from_organisation_id", session.organisationId)
     .order("created_at", { ascending: false });
@@ -51,31 +50,77 @@ export async function getOutgoingShipments(): Promise<ActionResult<ShipmentListI
     return { success: false, error: `Failed to fetch shipments: ${error.message}`, code: "QUERY_FAILED" };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const shipments: ShipmentListItem[] = (data as any[]).map((row: any) => ({
-    id: row.id,
-    shipmentCode: row.shipment_code,
-    fromOrganisationId: row.from_organisation_id,
-    fromOrganisationName: row.from_organisation?.name ?? "",
-    fromOrganisationCode: row.from_organisation?.code ?? "",
-    toOrganisationId: row.to_organisation_id,
-    toOrganisationName: row.to_organisation?.name ?? "",
-    toOrganisationCode: row.to_organisation?.code ?? "",
-    shipmentDate: row.shipment_date,
-    transportCostEur: row.transport_cost_eur != null ? Number(row.transport_cost_eur) : null,
-    packageCount: row.inventory_packages?.length ?? 0,
-    totalVolumeM3: (row.inventory_packages ?? []).reduce(
+  // Count packages by shipment_id OR source_shipment_id (handles forwarded packages)
+  const outgoingIds = (data ?? []).map((s: { id: string }) => s.id);
+  const packageCounts: Map<string, { count: number; volume: number }> = new Map();
+
+  if (outgoingIds.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: packages } = await (supabase as any)
+      .from("inventory_packages")
+      .select("id, shipment_id, source_shipment_id, volume_m3")
+      .or(
+        `shipment_id.in.(${outgoingIds.join(",")}),source_shipment_id.in.(${outgoingIds.join(",")})`
+      );
+
+    // Recover original volumes for consumed/partially-consumed packages
+    const pkgIds = (packages ?? []).map((p: { id: string }) => p.id);
+    const deductionsMap = new Map<string, number>();
+    if (pkgIds.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (sum: number, pkg: any) => sum + (pkg.volume_m3 != null ? Number(pkg.volume_m3) : 0),
-      0
-    ),
-    status: (row.status ?? "completed") as ShipmentStatus,
-    submittedAt: row.submitted_at ?? null,
-    reviewedAt: row.reviewed_at ?? null,
-    reviewedByName: row.reviewer?.name ?? null,
-    rejectionReason: row.rejection_reason ?? null,
-    completedAt: row.completed_at ?? null,
-  }));
+      const { data: inputsData } = await (supabase as any)
+        .from("portal_production_inputs")
+        .select("package_id, volume_m3")
+        .in("package_id", pkgIds);
+
+      for (const input of (inputsData ?? []) as { package_id: string; volume_m3: number | null }[]) {
+        deductionsMap.set(input.package_id, (deductionsMap.get(input.package_id) ?? 0) + (Number(input.volume_m3) || 0));
+      }
+    }
+
+    for (const pkg of packages ?? []) {
+      const currentVol = pkg.volume_m3 != null ? Number(pkg.volume_m3) : 0;
+      const deducted = deductionsMap.get(pkg.id) ?? 0;
+      const originalVol = currentVol + deducted;
+      if (pkg.shipment_id && outgoingIds.includes(pkg.shipment_id)) {
+        const current = packageCounts.get(pkg.shipment_id) ?? { count: 0, volume: 0 };
+        current.count++;
+        current.volume += originalVol;
+        packageCounts.set(pkg.shipment_id, current);
+      }
+      if (pkg.source_shipment_id && outgoingIds.includes(pkg.source_shipment_id) && pkg.source_shipment_id !== pkg.shipment_id) {
+        const current = packageCounts.get(pkg.source_shipment_id) ?? { count: 0, volume: 0 };
+        current.count++;
+        current.volume += originalVol;
+        packageCounts.set(pkg.source_shipment_id, current);
+      }
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const shipments: ShipmentListItem[] = (data as any[]).map((row: any) => {
+    const pkgData = packageCounts.get(row.id) ?? { count: 0, volume: 0 };
+    return {
+      id: row.id,
+      shipmentCode: row.shipment_code,
+      fromOrganisationId: row.from_organisation_id,
+      fromOrganisationName: row.from_organisation?.name ?? "",
+      fromOrganisationCode: row.from_organisation?.code ?? "",
+      toOrganisationId: row.to_organisation_id,
+      toOrganisationName: row.to_organisation?.name ?? "",
+      toOrganisationCode: row.to_organisation?.code ?? "",
+      shipmentDate: row.shipment_date,
+      transportCostEur: row.transport_cost_eur != null ? Number(row.transport_cost_eur) : null,
+      packageCount: pkgData.count,
+      totalVolumeM3: pkgData.volume,
+      status: (row.status ?? "completed") as ShipmentStatus,
+      submittedAt: row.submitted_at ?? null,
+      reviewedAt: row.reviewed_at ?? null,
+      reviewedByName: row.reviewer?.name ?? null,
+      rejectionReason: row.rejection_reason ?? null,
+      completedAt: row.completed_at ?? null,
+    };
+  });
 
   return { success: true, data: shipments };
 }
@@ -137,25 +182,42 @@ export async function getIncomingShipments(): Promise<ActionResult<ShipmentListI
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: packages } = await (supabase as any)
       .from("inventory_packages")
-      .select("shipment_id, source_shipment_id, volume_m3")
+      .select("id, shipment_id, source_shipment_id, volume_m3")
       .or(
         `shipment_id.in.(${incomingIds.join(",")}),source_shipment_id.in.(${incomingIds.join(",")})`
       );
 
+    // Recover original volumes for consumed/partially-consumed packages
+    const pkgIds = (packages ?? []).map((p: { id: string }) => p.id);
+    const deductionsMap = new Map<string, number>();
+    if (pkgIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: inputsData } = await (supabase as any)
+        .from("portal_production_inputs")
+        .select("package_id, volume_m3")
+        .in("package_id", pkgIds);
+
+      for (const input of (inputsData ?? []) as { package_id: string; volume_m3: number | null }[]) {
+        deductionsMap.set(input.package_id, (deductionsMap.get(input.package_id) ?? 0) + (Number(input.volume_m3) || 0));
+      }
+    }
+
     for (const pkg of packages ?? []) {
-      const vol = pkg.volume_m3 != null ? Number(pkg.volume_m3) : 0;
+      const currentVol = pkg.volume_m3 != null ? Number(pkg.volume_m3) : 0;
+      const deducted = deductionsMap.get(pkg.id) ?? 0;
+      const originalVol = currentVol + deducted;
       // Count under shipment_id (current shipment)
       if (pkg.shipment_id && incomingIds.includes(pkg.shipment_id)) {
         const current = packageCounts.get(pkg.shipment_id) ?? { count: 0, volume: 0 };
         current.count++;
-        current.volume += vol;
+        current.volume += originalVol;
         packageCounts.set(pkg.shipment_id, current);
       }
       // Also count under source_shipment_id (original incoming shipment) if different
       if (pkg.source_shipment_id && incomingIds.includes(pkg.source_shipment_id) && pkg.source_shipment_id !== pkg.shipment_id) {
         const current = packageCounts.get(pkg.source_shipment_id) ?? { count: 0, volume: 0 };
         current.count++;
-        current.volume += vol;
+        current.volume += originalVol;
         packageCounts.set(pkg.source_shipment_id, current);
       }
     }

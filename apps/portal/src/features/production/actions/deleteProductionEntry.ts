@@ -78,16 +78,61 @@ export async function deleteProductionEntry(
     };
   }
 
-  // Get package numbers from outputs BEFORE deleting (needed for cleanup)
+  // Get outputs BEFORE deleting (needed for cleanup)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: outputs } = await (supabase as any)
     .from("portal_production_outputs")
-    .select("package_number")
+    .select("package_number, inventory_package_id")
     .eq("production_entry_id", entryId);
 
   const outputPackageNumbers = (outputs || [])
     .map((o: { package_number: string | null }) => o.package_number)
     .filter((pn: string | null): pn is string => !!pn);
+
+  // For draft entries: handle individually validated outputs
+  if (entry.status === "draft") {
+    const validatedOutputs = (outputs || []).filter(
+      (o: { inventory_package_id: string | null }) => o.inventory_package_id
+    );
+
+    if (validatedOutputs.length > 0) {
+      const validatedInventoryIds = validatedOutputs.map(
+        (o: { inventory_package_id: string }) => o.inventory_package_id
+      );
+
+      // Check if any are used as inputs in other production entries
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: usedAsInputs } = await (supabase as any)
+        .from("portal_production_inputs")
+        .select("package_id")
+        .in("package_id", validatedInventoryIds);
+
+      if (usedAsInputs && usedAsInputs.length > 0) {
+        const usedPkgNumbers = validatedOutputs
+          .filter((o: { inventory_package_id: string }) =>
+            usedAsInputs.some((u: { package_id: string }) => u.package_id === o.inventory_package_id)
+          )
+          .map((o: { package_number: string }) => o.package_number)
+          .join(", ");
+        return {
+          success: false,
+          error: `Cannot delete: validated output packages (${usedPkgNumbers}) are used as inputs in other production entries`,
+          code: "VALIDATION_FAILED",
+        };
+      }
+
+      // Safe to delete — remove individually validated inventory packages
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: invDeleteError } = await (supabase as any)
+        .from("inventory_packages")
+        .delete()
+        .in("id", validatedInventoryIds);
+
+      if (invDeleteError) {
+        return { success: false, error: `Failed to delete inventory packages: ${invDeleteError.message}`, code: "DELETE_FAILED" };
+      }
+    }
+  }
 
   // For validated entries, we need to:
   // 1. Check if any output packages are used as inputs elsewhere

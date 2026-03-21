@@ -31,3 +31,5 @@ export { applyProductionEdits } from "./applyProductionEdits";
 export type { InputToAdd, InputToUpdate, OutputRow as OutputRowInput } from "./applyProductionEdits";
 export { restoreProductionSnapshot } from "./restoreProductionSnapshot";
 export { saveInvoiceNumber } from "./saveInvoiceNumber";
+export { validateSingleOutput } from "./validateSingleOutput";
+export { unvalidateSingleOutput } from "./unvalidateSingleOutput";

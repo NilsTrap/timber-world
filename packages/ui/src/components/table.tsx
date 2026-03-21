@@ -5,7 +5,7 @@ import { cn } from "../utils";
 const Table = React.forwardRef<HTMLTableElement, React.ComponentProps<"table">>(
   ({ className, ...props }, ref) => {
     return (
-      <div data-slot="table-container" className="relative w-full overflow-auto">
+      <div data-slot="table-container" className="relative w-full">
         <table
           ref={ref}
           data-slot="table"

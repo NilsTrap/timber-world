@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { formatDate } from "@/lib/utils";
 import { getSession, isSuperAdmin, isProducer } from "@/lib/auth";
@@ -15,6 +14,8 @@ import {
 import { ProductionEntryClient } from "@/features/production/components/ProductionEntryClient";
 import { ValidatedEntryActions } from "@/features/production/components/ValidatedEntryActions";
 import { DeleteDraftButton } from "@/features/production/components/DeleteDraftButton";
+import { ProductionBackLink } from "@/features/production/components/ProductionBackLink";
+import { ProductionEntryMemory } from "@/features/production/components/ProductionEntryMemory";
 import type { PackageListItem } from "@/features/shipments/types";
 import type { ProductionInput, ProductionOutput, ReferenceDropdowns } from "@/features/production/types";
 
@@ -88,7 +89,7 @@ export default async function ProductionEntryPage({
     getProductionInputs(id),
     getProductionOutputs(id),
     getReferenceDropdownsForProducer(),
-    isValidated ? checkOutputPackageUsage(id) : Promise.resolve({ success: true, data: { hasUsedPackages: false, usedPackages: [], freePackages: [], totalCount: 0 } }),
+    checkOutputPackageUsage(id),
   ]);
   if (inputResult.success) initialInputs = inputResult.data;
   if (outputResult.success) initialOutputs = outputResult.data;
@@ -121,13 +122,8 @@ export default async function ProductionEntryPage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href={isDraft ? "/production" : "/production?tab=history"}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back
-      </Link>
+      <ProductionEntryMemory />
+      <ProductionBackLink href="/production" />
 
       <div className="flex items-center justify-between">
         <div>
@@ -151,7 +147,11 @@ export default async function ProductionEntryPage({
         </div>
         <div className="flex items-center gap-3">
           {isDraft && (
-            <DeleteDraftButton entryId={id} />
+            <DeleteDraftButton
+              entryId={id}
+              validatedOutputCount={initialOutputs.filter((o) => o.inventoryPackageId).length}
+              usedOutputCount={packageUsageResult.success ? packageUsageResult.data.usedPackages.length : 0}
+            />
           )}
           {isValidated && !isCorrection && !isEditMode && (
             <ValidatedEntryActions

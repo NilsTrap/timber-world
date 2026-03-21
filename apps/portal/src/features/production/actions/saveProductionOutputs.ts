@@ -127,7 +127,7 @@ export async function saveProductionOutputs(
       .single(),
     (supabase as any)
       .from("portal_production_outputs")
-      .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes")
+      .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes, inventory_package_id")
       .eq("production_entry_id", productionEntryId),
   ]);
 
@@ -203,6 +203,47 @@ export async function saveProductionOutputs(
 
   // DELETE: DB rows not in client list
   const toDelete = [...existingMap.keys()].filter((id) => !clientDbIds.has(id));
+
+  // Block deletion of individually validated outputs that are used as inputs elsewhere
+  if (toDelete.length > 0) {
+    const validatedToDelete = toDelete.filter((id) => existingMap.get(id)?.inventory_package_id);
+    if (validatedToDelete.length > 0) {
+      const validatedInventoryIds = validatedToDelete
+        .map((id) => existingMap.get(id)?.inventory_package_id)
+        .filter(Boolean);
+
+      // Check if any of these inventory packages are used as inputs in other production entries
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: usedAsInputs } = await (supabase as any)
+        .from("portal_production_inputs")
+        .select("package_id")
+        .in("package_id", validatedInventoryIds);
+
+      if (usedAsInputs && usedAsInputs.length > 0) {
+        const usedIds = new Set(usedAsInputs.map((u: { package_id: string }) => u.package_id));
+        const blockedPackages = validatedToDelete
+          .filter((id) => usedIds.has(existingMap.get(id)?.inventory_package_id))
+          .map((id) => existingMap.get(id)?.package_number)
+          .join(", ");
+        return {
+          success: false,
+          error: `Cannot delete validated outputs that are used in other production entries: ${blockedPackages}`,
+          code: "VALIDATION_FAILED",
+        };
+      }
+
+      // Safe to delete — also delete the linked inventory packages
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: invDeleteError } = await (supabase as any)
+        .from("inventory_packages")
+        .delete()
+        .in("id", validatedInventoryIds);
+
+      if (invDeleteError) {
+        return { success: false, error: `Failed to delete inventory packages: ${invDeleteError.message}`, code: "DELETE_FAILED" };
+      }
+    }
+  }
 
   // For validated entries, check if deleted outputs are used as inputs elsewhere
   if (isValidated && toDelete.length > 0) {
@@ -391,6 +432,42 @@ export async function saveProductionOutputs(
       if (updateResults[i].error) {
         console.error(`Failed to update output row ${toUpdate[i]!.id}:`, updateResults[i].error);
         return { success: false, error: `Failed to update output: ${updateResults[i].error.message}`, code: "UPDATE_FAILED" };
+      }
+    }
+
+    // Sync changes to linked inventory packages for individually validated outputs
+    const validatedUpdates = toUpdate.filter(({ id }) => existingMap.get(id)?.inventory_package_id);
+    if (validatedUpdates.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const invSyncResults = await Promise.all(
+        validatedUpdates.map(({ id, row }) => {
+          const invId = existingMap.get(id)?.inventory_package_id;
+          return (supabase as any)
+            .from("inventory_packages")
+            .update({
+              package_number: row.packageNumber || null,
+              product_name_id: row.productNameId || null,
+              wood_species_id: row.woodSpeciesId || null,
+              humidity_id: row.humidityId || null,
+              type_id: row.typeId || null,
+              processing_id: row.processingId || null,
+              fsc_id: row.fscId || null,
+              quality_id: row.qualityId || null,
+              thickness: row.thickness || null,
+              width: row.width || null,
+              length: row.length || null,
+              pieces: row.pieces || null,
+              volume_m3: row.volumeM3,
+              notes: row.notes || null,
+            })
+            .eq("id", invId);
+        })
+      );
+
+      for (let i = 0; i < invSyncResults.length; i++) {
+        if (invSyncResults[i].error) {
+          console.error(`Failed to sync inventory package:`, invSyncResults[i].error);
+        }
       }
     }
   }

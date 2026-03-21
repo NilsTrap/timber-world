@@ -249,7 +249,7 @@ export async function validateProduction(
       .eq("production_entry_id", productionEntryId),
     (supabase as any)
       .from("portal_production_outputs")
-      .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes")
+      .select("id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes, inventory_package_id")
       .eq("production_entry_id", productionEntryId)
       .order("created_at", { ascending: true }),
   ]);
@@ -385,13 +385,22 @@ export async function validateProduction(
   // Pre-check: verify package numbers won't conflict with existing inventory within the same organization
   // Package numbers are unique per organization, not globally
   // When existing outputs exist, exclude packages from this entry (they'll be updated in place)
-  if (packageNumbers.length > 0) {
+  // Also exclude pre-validated outputs (they already exist in inventory with the same package number)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const preValidatedPackageNumbers = new Set(
+    outputs
+      .filter((o: any) => o.inventory_package_id)
+      .map((o: any) => o.package_number)
+  );
+  const newPackageNumbers = packageNumbers.filter((pn: string) => !preValidatedPackageNumbers.has(pn));
+
+  if (newPackageNumbers.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (supabase as any)
       .from("inventory_packages")
       .select("package_number")
       .eq("organisation_id", organisationId)
-      .in("package_number", packageNumbers);
+      .in("package_number", newPackageNumbers);
 
     if (hasExistingOutputs) {
       query = query.neq("production_entry_id", productionEntryId);
@@ -769,25 +778,63 @@ export async function validateProduction(
       deletedOutputPackages = orphans;
     }
   } else {
-    // First-time validation: bulk INSERT all output packages
-    console.log(`[validateProduction] Using first-time bulk INSERT flow. Output count: ${outputs.length}`);
-
+    // First-time validation: separate pre-validated outputs (update) from new outputs (insert)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: insertError } = await (supabase as any)
-      .from("inventory_packages")
-      .insert(outputPackages);
+    const preValidatedOutputs: { outputIndex: number; inventoryPackageId: string }[] = [];
+    const newOutputPackages: typeof outputPackages = [];
 
-    if (insertError) {
-      console.error("[validateProduction] Failed to create output packages:", insertError);
-      await revertChanges();
-      if (insertError.message?.includes("package_number") && insertError.message?.includes("null")) {
-        return {
-          success: false,
-          error: "Please assign package numbers to all outputs first. Use the 'Assign Package Numbers' button before validating.",
-          code: "MISSING_PACKAGE_NUMBERS"
-        };
+    for (let i = 0; i < outputs.length; i++) {
+      const output = outputs[i] as any;
+      if (output.inventory_package_id) {
+        preValidatedOutputs.push({ outputIndex: i, inventoryPackageId: output.inventory_package_id });
+      } else {
+        newOutputPackages.push(outputPackages[i]);
       }
-      return { success: false, error: `Failed to create output packages: ${insertError.message}`, code: "INSERT_FAILED" };
+    }
+
+    console.log(`[validateProduction] First-time flow. Total: ${outputs.length}, pre-validated: ${preValidatedOutputs.length}, new: ${newOutputPackages.length}`);
+
+    // Update pre-validated inventory packages in place (sync fields in case they changed)
+    if (preValidatedOutputs.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updateResults = await Promise.all(
+        preValidatedOutputs.map(({ outputIndex, inventoryPackageId }) => {
+          const pkg = outputPackages[outputIndex];
+          const { organisation_id, production_entry_id, shipment_id, ...fields } = pkg;
+          return (supabase as any)
+            .from("inventory_packages")
+            .update(fields)
+            .eq("id", inventoryPackageId);
+        })
+      );
+      for (let i = 0; i < updateResults.length; i++) {
+        if (updateResults[i].error) {
+          console.error("[validateProduction] Failed to update pre-validated output:", updateResults[i].error);
+          await revertChanges();
+          return { success: false, error: `Failed to update pre-validated output: ${updateResults[i].error.message}`, code: "UPDATE_FAILED" };
+        }
+      }
+    }
+
+    // Insert new output packages
+    if (newOutputPackages.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: insertError } = await (supabase as any)
+        .from("inventory_packages")
+        .insert(newOutputPackages);
+
+      if (insertError) {
+        console.error("[validateProduction] Failed to create output packages:", insertError);
+        await revertChanges();
+        if (insertError.message?.includes("package_number") && insertError.message?.includes("null")) {
+          return {
+            success: false,
+            error: "Please assign package numbers to all outputs first. Use the 'Assign Package Numbers' button before validating.",
+            code: "MISSING_PACKAGE_NUMBERS"
+          };
+        }
+        return { success: false, error: `Failed to create output packages: ${insertError.message}`, code: "INSERT_FAILED" };
+      }
     }
   }
 

@@ -74,25 +74,41 @@ export async function getShipments(orgIds?: string[]): Promise<ActionResult<Ship
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: packages } = await (supabase as any)
       .from("inventory_packages")
-      .select("shipment_id, source_shipment_id, volume_m3")
+      .select("id, shipment_id, source_shipment_id, volume_m3")
       .or(
         `shipment_id.in.(${shipmentIds.join(",")}),source_shipment_id.in.(${shipmentIds.join(",")})`
       );
 
+    // Recover original volumes for consumed/partially-consumed packages
+    const pkgIds = (packages ?? []).map((p: { id: string }) => p.id);
+    const deductionsMap = new Map<string, number>();
+    if (pkgIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: inputsData } = await (supabase as any)
+        .from("portal_production_inputs")
+        .select("package_id, volume_m3")
+        .in("package_id", pkgIds);
+
+      for (const input of (inputsData ?? []) as { package_id: string; volume_m3: number | null }[]) {
+        deductionsMap.set(input.package_id, (deductionsMap.get(input.package_id) ?? 0) + (Number(input.volume_m3) || 0));
+      }
+    }
+
     for (const pkg of packages ?? []) {
-      const vol = pkg.volume_m3 != null ? Number(pkg.volume_m3) : 0;
+      const currentVol = pkg.volume_m3 != null ? Number(pkg.volume_m3) : 0;
+      const originalVol = currentVol + (deductionsMap.get(pkg.id) ?? 0);
       // Count under shipment_id (current shipment)
       if (pkg.shipment_id && shipmentIds.includes(pkg.shipment_id)) {
         const current = packageCounts.get(pkg.shipment_id) ?? { count: 0, volume: 0 };
         current.count++;
-        current.volume += vol;
+        current.volume += originalVol;
         packageCounts.set(pkg.shipment_id, current);
       }
       // Also count under source_shipment_id (original incoming shipment) if different
       if (pkg.source_shipment_id && shipmentIds.includes(pkg.source_shipment_id) && pkg.source_shipment_id !== pkg.shipment_id) {
         const current = packageCounts.get(pkg.source_shipment_id) ?? { count: 0, volume: 0 };
         current.count++;
-        current.volume += vol;
+        current.volume += originalVol;
         packageCounts.set(pkg.source_shipment_id, current);
       }
     }

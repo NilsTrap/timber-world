@@ -26,6 +26,8 @@ interface ProductionInputsSectionProps {
   processName?: string;
   /** Production date for print header (formatted) */
   productionDate?: string;
+  /** Incrementing key that triggers a refresh of available packages */
+  refreshKey?: number;
 }
 
 /**
@@ -45,6 +47,7 @@ export function ProductionInputsSection({
   isAdminEdit,
   processName,
   productionDate,
+  refreshKey,
 }: ProductionInputsSectionProps) {
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [packages, setPackages] = useState<PackageListItem[]>(initialPackages);
@@ -90,6 +93,13 @@ export function ProductionInputsSection({
       }
     });
   }, [productionEntryId]);
+
+  // Refresh available packages when refreshKey changes (e.g. after output validation change)
+  useEffect(() => {
+    if (refreshKey && refreshKey > 0) {
+      refreshData();
+    }
+  }, [refreshKey, refreshData]);
 
   // Ctrl+I keyboard shortcut to open package selector
   useEffect(() => {

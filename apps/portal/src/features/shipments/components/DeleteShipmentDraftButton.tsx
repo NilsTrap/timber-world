@@ -36,6 +36,7 @@ export function DeleteShipmentDraftButton({ shipmentId, shipmentCode }: DeleteSh
     const result = await deleteShipment(shipmentId);
     if (result.success) {
       toast.success("Shipment draft deleted");
+      sessionStorage.removeItem("shipment-last-entry");
       router.push("/shipments");
     } else {
       toast.error(result.error);

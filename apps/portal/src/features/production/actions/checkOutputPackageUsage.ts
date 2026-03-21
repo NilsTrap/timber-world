@@ -53,11 +53,14 @@ export async function checkOutputPackageUsage(
     return { success: false, error: "Production entry not found", code: "NOT_FOUND" };
   }
 
-  if (entry.status !== "validated") {
-    return { success: false, error: "Only validated entries have output packages", code: "VALIDATION_FAILED" };
+  // For draft entries: check individually validated outputs
+  // For validated entries: check all output packages
+  if (entry.status !== "validated" && entry.status !== "draft") {
+    return { success: false, error: "Only validated or draft entries have output packages", code: "VALIDATION_FAILED" };
   }
 
   // Get all inventory packages created by this production entry
+  // (includes both fully validated and individually validated packages)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: outputPackages, error: packagesError } = await (supabase as any)
     .from("inventory_packages")
@@ -85,7 +88,7 @@ export async function checkOutputPackageUsage(
     outputPackages.map((p: { id: string; package_number: string }) => [p.id, p.package_number])
   );
 
-  // Find which packages are used as inputs in OTHER production entries
+  // Find which packages are used as inputs in ANY production entries (including this one)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: usedInputs, error: inputsError } = await (supabase as any)
     .from("portal_production_inputs")
@@ -98,8 +101,7 @@ export async function checkOutputPackageUsage(
         ref_processes(value)
       )
     `)
-    .in("package_id", packageIds)
-    .neq("production_entry_id", productionEntryId);
+    .in("package_id", packageIds);
 
   if (inputsError) {
     return { success: false, error: inputsError.message, code: "QUERY_FAILED" };

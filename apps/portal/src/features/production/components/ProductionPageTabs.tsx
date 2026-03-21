@@ -82,9 +82,16 @@ export function ProductionPageTabs({
   }, [pathname, router]);
 
   const getDefaultTab = () => {
+    // URL param takes priority
     if (defaultTab === "history") return "history";
     if (defaultTab === "processes") return "processes";
     if (defaultTab === "consolidated") return "consolidated";
+    if (defaultTab) return defaultTab;
+    // Then check sessionStorage
+    if (typeof window !== "undefined") {
+      const stored = sessionStorage.getItem("production-tab");
+      if (stored) return stored;
+    }
     return "active";
   };
 
@@ -96,12 +103,14 @@ export function ProductionPageTabs({
     setActiveProcessFilter(processName);
     // Switch to the history tab
     setActiveTab("history");
+    sessionStorage.setItem("production-tab", "history");
     // Update the URL with the filter (preserving org)
     router.push(buildUrl({ tab: "history", process: processName }));
   };
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
+    sessionStorage.setItem("production-tab", value);
     // Update URL when tab changes manually (preserving org)
     router.push(buildUrl({ tab: value }));
   };

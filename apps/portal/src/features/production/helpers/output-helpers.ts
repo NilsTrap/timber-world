@@ -68,5 +68,6 @@ export function createEmptyOutputRow(index: number, code: string = "OUT"): Outpu
     volumeM3: "",
     volumeIsCalculated: false,
     notes: "",
+    inventoryPackageId: null,
   };
 }

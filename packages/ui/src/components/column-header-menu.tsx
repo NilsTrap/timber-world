@@ -37,15 +37,24 @@ function ColumnHeaderMenu({
   const sortedUniqueValues = useMemo(
     () =>
       [...uniqueValues].sort((a, b) => {
-        if (!isNumeric) return a.localeCompare(b);
-        // Parse leading number (handles ranges like "20-24" by sorting on first number)
-        const aNum = parseFloat(a);
-        const bNum = parseFloat(b);
-        const aValid = !isNaN(aNum);
-        const bValid = !isNaN(bNum);
-        if (aValid && bValid) return aNum - bNum;
-        if (aValid) return -1;
-        if (bValid) return 1;
+        if (isNumeric) {
+          // Parse leading number (handles ranges like "20-24" by sorting on first number)
+          const aNum = parseFloat(a);
+          const bNum = parseFloat(b);
+          const aValid = !isNaN(aNum);
+          const bValid = !isNaN(bNum);
+          if (aValid && bValid) return aNum - bNum;
+          if (aValid) return -1;
+          if (bValid) return 1;
+        }
+        // Natural sort: compare prefix alphabetically, then trailing number numerically
+        const aPrefix = a.replace(/\d+$/, "");
+        const bPrefix = b.replace(/\d+$/, "");
+        const prefCmp = aPrefix.localeCompare(bPrefix);
+        if (prefCmp !== 0) return prefCmp;
+        const aTrail = parseInt(a.match(/\d+$/)?.[0] || "0", 10);
+        const bTrail = parseInt(b.match(/\d+$/)?.[0] || "0", 10);
+        if (aTrail !== bTrail) return aTrail - bTrail;
         return a.localeCompare(b);
       }),
     [uniqueValues, isNumeric]

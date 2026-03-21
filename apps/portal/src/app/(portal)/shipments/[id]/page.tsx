@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@timber/ui";
 import { ArrowLeft, Plus, Truck, Loader2, X } from "lucide-react";
@@ -48,9 +48,12 @@ function formatVolume(vol: number | null): string {
  * Shows shipment details and allows managing packages for drafts.
  * For pending shipments (incoming), shows accept/reject buttons.
  */
+const SHIPMENT_LAST_ENTRY_KEY = "shipment-last-entry";
+
 export default function ShipmentDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const pathname = usePathname();
   const shipmentId = params.id as string;
 
   const [shipment, setShipment] = useState<ShipmentDetail | null>(null);
@@ -61,6 +64,11 @@ export default function ShipmentDetailPage() {
   const [isOwner, setIsOwner] = useState(false);
   const [isReceiver, setIsReceiver] = useState(false);
   const [isFromExternal, setIsFromExternal] = useState(false);
+
+  // Remember this page for sidebar navigation
+  useEffect(() => {
+    sessionStorage.setItem(SHIPMENT_LAST_ENTRY_KEY, pathname);
+  }, [pathname]);
 
   const fetchShipment = useCallback(async () => {
     const result = await getOrgShipmentDetail(shipmentId);
@@ -131,9 +139,10 @@ export default function ShipmentDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Back Link - same style as production */}
+      {/* Back Link - clears remembered page so list shows normally */}
       <Link
-        href={isDraft ? "/shipments" : "/shipments?tab=completed"}
+        href="/shipments"
+        onClick={() => sessionStorage.removeItem(SHIPMENT_LAST_ENTRY_KEY)}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />

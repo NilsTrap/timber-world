@@ -15,6 +15,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
   Button,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from "@timber/ui";
 import { deleteProductionEntry } from "../actions";
 
@@ -22,6 +26,10 @@ interface DeleteDraftButtonProps {
   entryId: string;
   /** If true, shows different messaging for validated entries (Super Admin only) */
   isValidated?: boolean;
+  /** Number of individually validated output packages (shown in warning) */
+  validatedOutputCount?: number;
+  /** Number of validated output packages that are used as inputs in other processes */
+  usedOutputCount?: number;
 }
 
 /**
@@ -31,21 +39,47 @@ interface DeleteDraftButtonProps {
  * For drafts: available to entry owner
  * For validated: available to Super Admin only
  */
-export function DeleteDraftButton({ entryId, isValidated = false }: DeleteDraftButtonProps) {
+export function DeleteDraftButton({ entryId, isValidated = false, validatedOutputCount = 0, usedOutputCount = 0 }: DeleteDraftButtonProps) {
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
+
+  const isBlocked = usedOutputCount > 0;
 
   const handleDelete = async () => {
     setIsPending(true);
     const result = await deleteProductionEntry(entryId);
     if (result.success) {
       toast.success(isValidated ? "Production entry deleted" : "Draft entry deleted");
+      sessionStorage.removeItem("production-last-entry");
       router.push("/production?tab=active");
     } else {
       toast.error(result.error);
       setIsPending(false);
     }
   };
+
+  // When validated outputs are used as inputs elsewhere, block deletion entirely
+  if (isBlocked) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span tabIndex={0}>
+              <Button variant="outline" size="sm" disabled>
+                <Trash2 className="h-4 w-4 mr-1" />
+                Delete
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs">
+            <p className="text-sm">
+              Cannot delete: {usedOutputCount} validated output package{usedOutputCount > 1 ? "s are" : " is"} used as input in another production entry.
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <AlertDialog>
@@ -63,7 +97,9 @@ export function DeleteDraftButton({ entryId, isValidated = false }: DeleteDraftB
           <AlertDialogDescription>
             {isValidated
               ? "This will permanently delete this validated production entry and all its inputs and outputs. This action cannot be undone."
-              : "This will permanently delete this draft production entry and all its inputs and outputs. This action cannot be undone."}
+              : validatedOutputCount > 0
+                ? `This draft has ${validatedOutputCount} package${validatedOutputCount > 1 ? "s" : ""} already validated to inventory. Deleting will also remove ${validatedOutputCount > 1 ? "them" : "it"} from inventory. This action cannot be undone.`
+                : "This will permanently delete this draft production entry and all its inputs and outputs. This action cannot be undone."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

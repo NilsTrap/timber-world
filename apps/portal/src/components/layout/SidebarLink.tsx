@@ -1,7 +1,8 @@
 "use client";
 
+import { useCallback } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Package,
@@ -68,9 +69,16 @@ interface SidebarLinkProps {
  * Displays an icon (always) and label (when expanded).
  * Highlights when the current route matches.
  */
+/** sessionStorage keys that store the last-visited sub-page for a route */
+const LAST_ENTRY_KEYS: Record<string, string> = {
+  "/production": "production-last-entry",
+  "/shipments": "shipment-last-entry",
+};
+
 export function SidebarLink({ href, label, iconName, isCollapsed, badge }: SidebarLinkProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const router = useRouter();
   // Match exact path OR child routes (e.g., /shipments/[id] highlights /shipments)
   const isActive = pathname === href || pathname.startsWith(href + "/");
   const Icon = ICON_MAP[iconName] || LayoutDashboard;
@@ -79,9 +87,27 @@ export function SidebarLink({ href, label, iconName, isCollapsed, badge }: Sideb
   const orgParam = searchParams.get("org");
   const finalHref = orgParam ? `${href}?org=${orgParam}` : href;
 
+  // If this route has a "last entry" stored, navigate directly there
+  // (only when navigating from a DIFFERENT section, not when already on this section)
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      const storageKey = LAST_ENTRY_KEYS[href];
+      if (storageKey && !pathname.startsWith(href)) {
+        const lastEntry = sessionStorage.getItem(storageKey);
+        if (lastEntry && lastEntry !== href) {
+          e.preventDefault();
+          router.push(lastEntry);
+          return;
+        }
+      }
+    },
+    [href, router, pathname]
+  );
+
   return (
     <Link
       href={finalHref}
+      onClick={handleClick}
       aria-label={isCollapsed ? label : undefined}
       aria-current={isActive ? "page" : undefined}
       title={isCollapsed ? label : undefined}

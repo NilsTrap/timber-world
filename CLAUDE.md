@@ -311,6 +311,41 @@ Every portal detail page should follow this structure:
 </div>
 ```
 
+### Navigation State Persistence
+
+All portal pages must preserve navigation state across page switches and refreshes.
+
+#### Tab Persistence
+
+Every tabbed page must remember its active tab in `sessionStorage` so that:
+- Switching between sidebar pages (e.g. Production → Inventory → Production) returns to the same tab
+- Page refresh stays on the same tab
+- Clicking "Back" from a detail page returns to the correct tab
+
+**Hook:** `import { usePersistedTab } from "@/hooks/usePersistedTab";`
+
+```tsx
+const [activeTab, setActiveTab] = usePersistedTab("page-name-tab", "default-tab");
+<Tabs value={activeTab} onValueChange={setActiveTab}>
+```
+
+Use a unique `storageKey` per page (e.g. `"shipments-tab"`, `"production-tab"`, `"inventory-tab"`). If a URL query param also drives the tab, pass it as the third argument (`urlDefault`).
+
+#### Detail Page Persistence
+
+When a user views a detail page (e.g. `/production/[id]`, `/shipments/[id]`), save the URL to `sessionStorage` so clicking the sidebar link returns directly to that detail page instead of the list.
+
+**Pattern:**
+1. On the detail page, save `pathname` to `sessionStorage` on mount
+2. On the "Back" link, clear the stored URL (so the list page loads normally)
+3. In `SidebarLink`, the `LAST_ENTRY_KEYS` map intercepts the click and navigates to the stored URL
+
+**Storage keys:** `"production-last-entry"`, `"shipment-last-entry"` (add more as needed in `SidebarLink.tsx`)
+
+#### Back Links
+
+Back links from detail pages should navigate to the base list URL (e.g. `/production`, `/shipments`) without hardcoding a tab query param. The tab persistence via `sessionStorage` handles returning to the correct tab automatically.
+
 ## Working with BMad
 
 1. **Check status**: Use `/bmad:bmm:workflows:workflow-status` to see where the project is

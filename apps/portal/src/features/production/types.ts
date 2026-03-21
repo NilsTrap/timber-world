@@ -122,6 +122,8 @@ export interface ProductionOutput {
   volumeM3: number;
   notes: string | null;
   createdAt: string;
+  /** Non-null if this output has been individually validated to inventory */
+  inventoryPackageId: string | null;
 }
 
 export interface OutputRow {
@@ -143,6 +145,8 @@ export interface OutputRow {
   volumeM3: string;
   volumeIsCalculated: boolean;
   notes: string;
+  /** Non-null if this output has been individually validated to inventory */
+  inventoryPackageId: string | null;
 }
 
 export interface ReferenceOption {

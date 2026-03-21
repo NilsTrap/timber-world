@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { MessageSquare } from "lucide-react";
+import { CheckCircle, MessageSquare } from "lucide-react";
 import {
   Input,
   DataEntryTable,
@@ -39,6 +39,10 @@ interface ProductionOutputsTableProps {
   createRow?: (index: number) => OutputRow;
   /** Package numbers that are used in other processes (read-only even in edit mode) */
   usedPackageNumbers?: string[];
+  /** Handler to validate a single output row to inventory */
+  onValidateSingleOutput?: (clientId: string) => void;
+  /** Handler to unvalidate a single output row from inventory */
+  onUnvalidateSingleOutput?: (clientId: string) => void;
 }
 
 /** Dropdown column configuration */
@@ -173,6 +177,8 @@ export function ProductionOutputsTable({
   onPackageNumberChange,
   createRow: createRowProp,
   usedPackageNumbers = [],
+  onValidateSingleOutput,
+  onUnvalidateSingleOutput,
 }: ProductionOutputsTableProps) {
   // Create a Set for fast lookup of used package numbers
   const usedPackageNumbersSet = useMemo(
@@ -185,6 +191,10 @@ export function ProductionOutputsTable({
     (row: OutputRow): boolean => Boolean(row.packageNumber && usedPackageNumbersSet.has(row.packageNumber)),
     [usedPackageNumbersSet]
   );
+
+  // Confirmation state for single output validation / unvalidation
+  const [confirmingValidation, setConfirmingValidation] = useState<string | null>(null);
+  const [confirmingUnvalidation, setConfirmingUnvalidation] = useState<string | null>(null);
   const columns: ColumnDef<OutputRow>[] = useMemo(() => {
     const cols: ColumnDef<OutputRow>[] = [
       // Shipment code (readonly, only populated for validated outputs that have been shipped)
@@ -210,6 +220,8 @@ export function ProductionOutputsTable({
           const hasNote = !!row.notes;
           const isUsedElsewhere = isRowUsedElsewhere(row);
 
+          const isValidated = Boolean(row.inventoryPackageId);
+
           // Read-only mode OR package is used elsewhere: show the value and note icon
           if (readOnly || isUsedElsewhere) {
             return (
@@ -231,6 +243,18 @@ export function ProductionOutputsTable({
                 ) : (
                   <span className="text-xs md:text-sm">{row.packageNumber || "-"}</span>
                 )}
+                {isValidated && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        <p className="text-sm">Validated to inventory</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
                 {hasNote && (
                   <TooltipProvider>
                     <Tooltip>
@@ -243,6 +267,66 @@ export function ProductionOutputsTable({
                     </Tooltip>
                   </TooltipProvider>
                 )}
+              </div>
+            );
+          }
+
+          // Validated but editable (not used elsewhere): show green check + allow unvalidation
+          if (isValidated) {
+            // Show unvalidation confirmation inline
+            if (confirmingUnvalidation === row.clientId) {
+              return (
+                <div className="flex items-center gap-1 whitespace-nowrap">
+                  <span className="text-xs">{row.packageNumber}</span>
+                  <span className="text-xs text-muted-foreground">Remove from inventory?</span>
+                  <button
+                    type="button"
+                    className="text-xs text-destructive hover:text-destructive/80 font-medium px-1"
+                    onClick={() => {
+                      setConfirmingUnvalidation(null);
+                      onUnvalidateSingleOutput?.(row.clientId);
+                    }}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground px-1"
+                    onClick={() => setConfirmingUnvalidation(null)}
+                  >
+                    No
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <div className="flex items-center gap-1 whitespace-nowrap">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="text-xs md:text-sm text-green-600 hover:text-green-700 flex items-center gap-1 cursor-pointer"
+                        onClick={() => setConfirmingUnvalidation(row.clientId)}
+                      >
+                        <CheckCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                        {row.packageNumber || "-"}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs bg-green-50 text-green-800 border-green-200">
+                      <p className="text-sm font-medium">In inventory</p>
+                      <p className="text-xs">Click to remove from inventory. Edits will sync to inventory.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <NotePopover
+                  note={row.notes}
+                  hasNote={hasNote}
+                  onSave={(newNote) => {
+                    onNoteChange?.(row.clientId, newNote);
+                  }}
+                />
               </div>
             );
           }
@@ -270,6 +354,33 @@ export function ProductionOutputsTable({
             }
           }
 
+          // Show confirm inline when this row is being confirmed
+          if (confirmingValidation === row.clientId) {
+            return (
+              <div className="flex items-center gap-1 whitespace-nowrap">
+                <span className="text-xs">{row.packageNumber}</span>
+                <span className="text-xs text-muted-foreground">Validate?</span>
+                <button
+                  type="button"
+                  className="text-xs text-green-600 hover:text-green-700 font-medium px-1"
+                  onClick={() => {
+                    setConfirmingValidation(null);
+                    onValidateSingleOutput?.(row.clientId);
+                  }}
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground px-1"
+                  onClick={() => setConfirmingValidation(null)}
+                >
+                  No
+                </button>
+              </div>
+            );
+          }
+
           return (
             <div className="flex items-center gap-1 whitespace-nowrap">
               <select
@@ -286,6 +397,24 @@ export function ProductionOutputsTable({
                   </option>
                 ))}
               </select>
+              {onValidateSingleOutput && row.dbId && row.packageNumber && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="p-0.5 rounded hover:bg-green-50 text-muted-foreground/40 hover:text-green-600 transition-colors flex-shrink-0"
+                        onClick={() => setConfirmingValidation(row.clientId)}
+                      >
+                        <CheckCircle className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <p className="text-sm">Validate this package to inventory</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               <NotePopover
                 note={row.notes}
                 hasNote={hasNote}
@@ -390,7 +519,7 @@ export function ProductionOutputsTable({
       },
     ];
     return cols;
-  }, [dropdowns, readOnly, onNoteChange, availablePackageNumbers, onPackageNumberChange]);
+  }, [dropdowns, readOnly, onNoteChange, availablePackageNumbers, onPackageNumberChange, onValidateSingleOutput, onUnvalidateSingleOutput, confirmingValidation, confirmingUnvalidation, isRowUsedElsewhere, usedPackageNumbersSet]);
 
   const handleCellChange = useCallback(
     (row: OutputRow, columnKey: string, value: string): OutputRow => {
@@ -425,6 +554,7 @@ export function ProductionOutputsTable({
       dbId: null,
       packageNumber: "",
       shipmentCode: "",
+      inventoryPackageId: null,
     }),
     []
   );

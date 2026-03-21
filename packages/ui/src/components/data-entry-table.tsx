@@ -897,9 +897,9 @@ function DataEntryTableInner<TRow>(
         </div>
       )}
 
-      <div ref={scrollContainerRef} className="rounded-lg border overflow-x-auto w-fit max-w-full">
+      <div ref={scrollContainerRef} className="rounded-lg border overflow-auto max-h-[80vh] w-fit max-w-full">
         <Table ref={tableRef} className="mb-3">
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-card">
             <TableRow>
               {columns.map((col) => {
                 const isCollapsed = col.collapsible && collapsedColumns.has(col.key);
@@ -1063,8 +1063,9 @@ function DataEntryTableInner<TRow>(
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => handleCopyRow(originalIndex)}
+                        disabled={rowDisabled}
                         aria-label="Copy row"
-                        title="Copy row"
+                        title={disabledTooltip || "Copy row"}
                       >
                         <Copy className="h-3 w-3" />
                       </Button>
@@ -1072,9 +1073,9 @@ function DataEntryTableInner<TRow>(
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => handleRemoveRow(originalIndex)}
-                        disabled={!allowEmpty && rows.length <= 1}
+                        disabled={rowDisabled || (!allowEmpty && rows.length <= 1)}
                         aria-label="Remove row"
-                        title="Remove row"
+                        title={disabledTooltip || "Remove row"}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { ClipboardPaste, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@timber/ui";
-import { saveProductionOutputs, getNextPackageNumbers } from "../actions";
+import { saveProductionOutputs, getNextPackageNumbers, validateSingleOutput, unvalidateSingleOutput } from "../actions";
 import type { NextPackageNumber } from "../actions";
 import { ProductionOutputsTable } from "./ProductionOutputsTable";
 import { OutputPasteImportModal, type PartialOutputRow } from "./OutputPasteImportModal";
@@ -34,6 +34,8 @@ interface ProductionOutputsSectionProps {
   productionDate?: string;
   /** Package numbers that are used in other processes (read-only even in edit mode) */
   usedPackageNumbers?: string[];
+  /** Called when a single output is validated or unvalidated (to refresh available packages) */
+  onOutputValidationChange?: () => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -58,6 +60,7 @@ function dbOutputToRow(output: ProductionOutput, index: number, code: string): O
     volumeM3: output.volumeM3 ? output.volumeM3.toFixed(3) : "",
     volumeIsCalculated: false,
     notes: output.notes || "",
+    inventoryPackageId: output.inventoryPackageId || null,
   };
 }
 
@@ -84,6 +87,7 @@ export function ProductionOutputsSection({
   processName,
   productionDate,
   usedPackageNumbers = [],
+  onOutputValidationChange,
 }: ProductionOutputsSectionProps) {
   const [rows, setRows] = useState<OutputRow[]>(() =>
     initialOutputs.map((o, i) => dbOutputToRow(o, i, processCode))
@@ -449,6 +453,7 @@ export function ProductionOutputsSection({
         volumeM3: "",
         volumeIsCalculated: false,
         notes: "",
+        inventoryPackageId: null,
       };
 
       if (shouldAutoCalculate(tempRow)) {
@@ -512,6 +517,7 @@ export function ProductionOutputsSection({
         volumeM3: "",
         volumeIsCalculated: false,
         notes: "",
+        inventoryPackageId: null,
       };
 
       if (shouldAutoCalculate(tempRow)) {
@@ -635,6 +641,76 @@ export function ProductionOutputsSection({
     return () => document.removeEventListener("keydown", handler);
   }, [handleAddRow, readOnly]);
 
+  // ─── Validate Single Output Handler ──────────────────────────────────────────
+
+  const handleValidateSingleOutput = useCallback(
+    async (clientId: string) => {
+      const row = latestRowsRef.current.find((r) => r.clientId === clientId);
+      if (!row || !row.dbId) {
+        toast.error("Please save the row first before validating");
+        return;
+      }
+
+      // Flush any pending saves first
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      if (pendingRowsRef.current) {
+        await performSaveAsync(latestRowsRef.current);
+      }
+
+      const result = await validateSingleOutput(productionEntryId, row.dbId);
+      if (result.success) {
+        // Update local state with the inventory package ID
+        setRows((prev) => {
+          const updated = prev.map((r) =>
+            r.clientId === clientId
+              ? { ...r, inventoryPackageId: result.data.inventoryPackageId }
+              : r
+          );
+          latestRowsRef.current = updated;
+          return updated;
+        });
+        toast.success(`Package ${row.packageNumber} validated to inventory`);
+        onOutputValidationChange?.();
+      } else {
+        toast.error(result.error);
+      }
+    },
+    [productionEntryId, performSaveAsync, onOutputValidationChange]
+  );
+
+  // ─── Unvalidate Single Output Handler ────────────────────────────────────────
+
+  const handleUnvalidateSingleOutput = useCallback(
+    async (clientId: string) => {
+      const row = latestRowsRef.current.find((r) => r.clientId === clientId);
+      if (!row || !row.dbId || !row.inventoryPackageId) {
+        toast.error("This output is not validated");
+        return;
+      }
+
+      const result = await unvalidateSingleOutput(productionEntryId, row.dbId);
+      if (result.success) {
+        setRows((prev) => {
+          const updated = prev.map((r) =>
+            r.clientId === clientId
+              ? { ...r, inventoryPackageId: null }
+              : r
+          );
+          latestRowsRef.current = updated;
+          return updated;
+        });
+        toast.success(`Package ${row.packageNumber} removed from inventory`);
+        onOutputValidationChange?.();
+      } else {
+        toast.error(result.error);
+      }
+    },
+    [productionEntryId, onOutputValidationChange]
+  );
+
   // Cleanup on unmount: save any pending changes immediately (fire-and-forget)
   useEffect(() => {
     const entryId = productionEntryId; // Capture for closure
@@ -736,6 +812,8 @@ export function ProductionOutputsSection({
         onPackageNumberChange={handlePackageNumberChange}
         createRow={createRowWithPackageNumber}
         usedPackageNumbers={usedPackageNumbers}
+        onValidateSingleOutput={handleValidateSingleOutput}
+        onUnvalidateSingleOutput={handleUnvalidateSingleOutput}
       />
 
       {!readOnly && (

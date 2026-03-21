@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Package } from "lucide-react";
 import { getSession, isAdmin } from "@/lib/auth";
 import { getProducerPackages } from "@/features/inventory/actions";
+import { getAuditPackages } from "@/features/inventory/actions/getAuditPackages";
 import { getPackagesInDrafts } from "@/features/production/actions";
 import { getPackagesInShipmentDrafts } from "@/features/shipments/actions";
 import { getProducerConsolidatedInventory } from "@/features/dashboard/actions";
@@ -48,11 +49,12 @@ export default async function InventoryPage({
   }
 
   // Producer flow
-  const [result, draftsResult, shipmentDraftsResult, consolidatedResult] = await Promise.all([
+  const [result, draftsResult, shipmentDraftsResult, consolidatedResult, auditResult] = await Promise.all([
     getProducerPackages(),
     getPackagesInDrafts(),
     getPackagesInShipmentDrafts(),
     getProducerConsolidatedInventory(),
+    getAuditPackages(),
   ]);
 
   if (!result.success) {
@@ -117,6 +119,7 @@ export default async function InventoryPage({
   if (params.quality) initialFilters.quality = [params.quality];
 
   const consolidated = consolidatedResult.success ? consolidatedResult.data : [];
+  const auditPackages = auditResult.success ? auditResult.data : [];
 
   return (
     <div className="space-y-6">
@@ -132,6 +135,7 @@ export default async function InventoryPage({
         packagesInDrafts={draftsResult.success ? draftsResult.data : []}
         packagesInShipmentDrafts={shipmentDraftsResult.success ? shipmentDraftsResult.data : []}
         consolidated={consolidated}
+        auditPackages={auditPackages}
         initialFilters={Object.keys(initialFilters).length > 0 ? initialFilters : undefined}
       />
     </div>

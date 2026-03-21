@@ -83,6 +83,7 @@ export function ProductionEntryClient({
   const [isPending, startTransition] = useTransition();
   const [currentPlannedWork, setCurrentPlannedWork] = useState<number | null>(initialPlannedWork ?? null);
   const [currentActualWork, setCurrentActualWork] = useState<number | null>(initialActualWork ?? null);
+  const [packagesRefreshKey, setPackagesRefreshKey] = useState(0);
 
   // Track if validation was successful (to avoid restore on unmount after successful validation)
   const validationSucceededRef = useRef(false);
@@ -217,6 +218,10 @@ export function ProductionEntryClient({
     });
   }, [productionEntryId, router]);
 
+  const handleOutputValidationChange = useCallback(() => {
+    setPackagesRefreshKey((k) => k + 1);
+  }, []);
+
   const handleWorkAmountsChange = useCallback((plannedWork: number | null, actualWork: number | null) => {
     setCurrentPlannedWork(plannedWork);
     setCurrentActualWork(actualWork);
@@ -248,6 +253,7 @@ export function ProductionEntryClient({
         isAdminEdit={isAdminEdit}
         processName={processName}
         productionDate={productionDate}
+        refreshKey={packagesRefreshKey}
       />
 
       <ProductionOutputsSection
@@ -263,6 +269,7 @@ export function ProductionEntryClient({
         processName={processName}
         productionDate={productionDate}
         usedPackageNumbers={usedPackageNumbers}
+        onOutputValidationChange={handleOutputValidationChange}
       />
 
       <WorkAmountsSection

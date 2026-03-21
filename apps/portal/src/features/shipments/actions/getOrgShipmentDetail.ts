@@ -130,6 +130,29 @@ export async function getOrgShipmentDetail(
     return { success: false, error: `Failed to fetch packages: ${packagesError.message}`, code: "QUERY_FAILED" };
   }
 
+  // Recover original shipment values: current DB values may have been
+  // decremented by production consumption. Original = current + sum of deductions.
+  const allPackageIds = (packages as { id: string }[]).map((p) => p.id);
+
+  const deductionsMap = new Map<string, { pieces: number; volumeM3: number }>();
+  if (allPackageIds.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: inputsData } = await (supabase as any)
+      .from("portal_production_inputs")
+      .select("package_id, pieces_used, volume_m3")
+      .in("package_id", allPackageIds);
+
+    if (inputsData) {
+      for (const input of inputsData as { package_id: string; pieces_used: number | null; volume_m3: number | null }[]) {
+        const existing = deductionsMap.get(input.package_id);
+        deductionsMap.set(input.package_id, {
+          pieces: (existing?.pieces ?? 0) + (input.pieces_used ?? 0),
+          volumeM3: (existing?.volumeM3 ?? 0) + (Number(input.volume_m3) || 0),
+        });
+      }
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const packageDetails: PackageDetail[] = (packages as any[]).map((pkg: any) => ({
     id: pkg.id,
@@ -152,8 +175,18 @@ export async function getOrgShipmentDetail(
     thickness: pkg.thickness,
     width: pkg.width,
     length: pkg.length,
-    pieces: pkg.pieces,
-    volumeM3: pkg.volume_m3 != null ? Number(pkg.volume_m3) : null,
+    pieces: (() => {
+      const deduction = deductionsMap.get(pkg.id);
+      if (!deduction) return pkg.pieces;
+      const currentPieces = pkg.pieces != null ? Number(pkg.pieces) : 0;
+      return String(currentPieces + deduction.pieces);
+    })(),
+    volumeM3: (() => {
+      const deduction = deductionsMap.get(pkg.id);
+      if (!deduction) return pkg.volume_m3 != null ? Number(pkg.volume_m3) : null;
+      const currentVol = pkg.volume_m3 != null ? Number(pkg.volume_m3) : 0;
+      return currentVol + deduction.volumeM3;
+    })(),
     volumeIsCalculated: pkg.volume_is_calculated ?? false,
     palletId: pkg.pallet_id ?? null,
   }));

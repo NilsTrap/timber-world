@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@timber/ui";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { FileDown, Loader2, Plus, Trash2 } from "lucide-react";
 import { getStockPrices, updateStockPrice, addStockPriceRow, deleteStockPriceRow, reorderStockPrices } from "../actions";
 import type { StockPriceRow } from "../actions";
 
@@ -186,6 +186,59 @@ export function StockPricesTable() {
     await deleteStockPriceRow(id);
   }
 
+  const exportPdf = useCallback(async () => {
+    const { default: jsPDF } = await import("jspdf");
+    const autoTable = (await import("jspdf-autotable")).default;
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFontSize(14);
+    doc.text("Stock Prices", 14, 15);
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text(`${prices.length} items | ${new Date().toLocaleDateString("de-DE")}`, 14, 21);
+    doc.setTextColor(0);
+
+    const head = [["Species", "Type", "Quality", "Thickness", "Length (mm)", "Order €/m³", "Stock €/m³"]];
+    const body = prices.map((row) => [
+      row.species,
+      row.panel_type,
+      row.quality,
+      row.thickness,
+      row.length_range || "—",
+      formatEur(Number(row.order_price)),
+      formatEur(Number(row.stock_price)),
+    ]);
+
+    autoTable(doc, {
+      head,
+      body,
+      startY: 25,
+      theme: "grid",
+      styles: { fontSize: 9, cellPadding: 2 },
+      headStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold", fontSize: 9 },
+      columnStyles: {
+        5: { halign: "right" },
+        6: { halign: "right" },
+      },
+      margin: { left: 14, right: 14 },
+      didDrawPage: (data: { pageNumber: number }) => {
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        doc.setFontSize(7);
+        doc.setTextColor(150);
+        doc.text(
+          `Page ${data.pageNumber} of ${pageCount}`,
+          pageWidth - 14,
+          doc.internal.pageSize.getHeight() - 8,
+          { align: "right" }
+        );
+      },
+    });
+
+    doc.save(`stock-prices-${new Date().toISOString().slice(0, 10)}.pdf`);
+  }, [prices]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -200,12 +253,20 @@ export function StockPricesTable() {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">Click any cell to edit. Click + to insert a row below. Changes are saved automatically.</p>
-        <button
-          onClick={handleAddToEnd}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" /> Add row
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={exportPdf}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <FileDown className="h-3.5 w-3.5" /> Export PDF
+          </button>
+          <button
+            onClick={handleAddToEnd}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add row
+          </button>
+        </div>
       </div>
       <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
         <Table>

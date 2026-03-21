@@ -35,7 +35,7 @@ export async function getProductionOutputs(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("portal_production_outputs")
-    .select("id, production_entry_id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes, sort_order, created_at")
+    .select("id, production_entry_id, package_number, product_name_id, wood_species_id, humidity_id, type_id, processing_id, fsc_id, quality_id, thickness, width, length, pieces, volume_m3, notes, sort_order, created_at, inventory_package_id")
     .eq("production_entry_id", productionEntryId)
     .order("sort_order", { ascending: true });
 
@@ -84,6 +84,7 @@ export async function getProductionOutputs(
     volumeM3: parseFloat(row.volume_m3) || 0,
     notes: row.notes || null,
     createdAt: row.created_at,
+    inventoryPackageId: row.inventory_package_id || null,
   }));
 
   return { success: true, data: outputs };
