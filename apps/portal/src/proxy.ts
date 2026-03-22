@@ -2,20 +2,6 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Admin-only routes that require admin role
- */
-const ADMIN_ONLY_ROUTES = ["/products", "/admin"];
-
-/**
- * Check if a route requires admin role
- */
-function isAdminOnlyRoute(pathname: string): boolean {
-  return ADMIN_ONLY_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`)
-  );
-}
-
-/**
  * Auth Middleware
  *
  * Protects routes by checking Supabase session:
@@ -103,11 +89,11 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // Admin route protection - check role for admin-only routes
-  if (user && isAdminOnlyRoute(pathname)) {
+  // Admin route protection - only block /products (deprecated)
+  // /admin/* routes handle their own access control via orgHasFeature checks
+  if (user && pathname.startsWith("/products")) {
     const role = user.user_metadata?.role;
     if (role !== "admin") {
-      // Non-admin accessing admin route → redirect to dashboard with access_denied flag
       const redirectUrl = new URL("/dashboard", request.url);
       redirectUrl.searchParams.set("access_denied", "true");
       return NextResponse.redirect(redirectUrl);
