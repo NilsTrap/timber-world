@@ -44,6 +44,8 @@ type FieldKey = (typeof MAPPABLE_FIELDS)[number]["key"];
 function autoDetectMapping(header: string): FieldKey {
   const h = header.toLowerCase().trim();
 
+  // Check pieces BEFORE package — "Pieces/ package" contains both words
+  if (h.includes("piece") || h.includes("pcs") || h === "qty" || h.includes("amount")) return "pieces";
   if (h.includes("package") || h.includes("pkg") || h === "nr" || h === "no") return "packageNumber";
   if (h.includes("shipment") || h === "ship") return "shipmentCode";
   if (h.includes("org") || h.includes("company") || h.includes("client")) return "organisation";
@@ -57,7 +59,6 @@ function autoDetectMapping(header: string): FieldKey {
   if (h.includes("thick") || h === "th") return "thickness";
   if (h.includes("width") || h === "w") return "width";
   if (h.includes("length") || h.includes("len") || h === "l") return "length";
-  if (h.includes("piece") || h.includes("pcs") || h === "qty" || h.includes("amount")) return "pieces";
   if (h.includes("volume") || h.includes("vol") || h === "m3" || h === "m³" || h.includes("cubic")) return "volumeM3";
 
   return "skip";

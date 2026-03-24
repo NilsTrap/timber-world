@@ -133,7 +133,7 @@ export function OrganisationDetailTabs({
                 </Label>
                 <p className="text-sm text-muted-foreground">
                   External organisations are suppliers or customers that don&apos;t use the platform.
-                  They can only be sources for incoming shipments.
+                  They can only be used for incoming or outgoing shipments.
                 </p>
               </div>
             </div>

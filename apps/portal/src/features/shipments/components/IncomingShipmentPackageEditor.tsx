@@ -3,10 +3,12 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { DataEntryTable, Button, type ColumnDef } from "@timber/ui";
-import { Save, Loader2 } from "lucide-react";
+import { Save, Loader2, FileSpreadsheet } from "lucide-react";
 import { getReferenceDropdowns } from "../actions";
 import { saveIncomingShipmentPackages } from "../actions/saveIncomingShipmentPackages";
+import { PasteImportModal } from "@/features/inventory/components/PasteImportModal";
 import type { PackageDetail, ReferenceDropdowns } from "../types";
+import type { EditablePackageItem } from "../types";
 
 // ─── Volume Helpers ───────────────────────────────────────────────────────────
 
@@ -149,6 +151,7 @@ export function IncomingShipmentPackageEditor({
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   // Sync local state when packages prop changes
   useEffect(() => {
@@ -516,7 +519,11 @@ export function IncomingShipmentPackageEditor({
         label: "Vol m\u00b3",
         type: "text",
         width: "w-[4.5rem]",
-        getValue: (row) => formatVolume(row.volumeM3),
+        getValue: (row) => {
+          const vol = typeof row.volumeM3 === "number" ? row.volumeM3 : parseFloat(String(row.volumeM3 ?? ""));
+          return !isNaN(vol) && vol > 0 ? vol.toFixed(3) : "";
+        },
+        getDisplayValue: (row) => formatVolume(row.volumeM3),
         isNumeric: true,
         totalType: "sum",
         formatTotal: (val) => (val > 0 ? formatVolume(val) : ""),
@@ -527,6 +534,45 @@ export function IncomingShipmentPackageEditor({
 
   // Calculate totals for display
   const totalVolume = localPackages.reduce((sum, p) => sum + (p.volumeM3 ?? 0), 0);
+
+  // Handle import from spreadsheet
+  const handleImport = useCallback(
+    (importedPackages: EditablePackageItem[]) => {
+      // Convert EditablePackageItem to PackageRow
+      const newRows: PackageRow[] = importedPackages.map((pkg, index) => {
+        const seq = localPackages.length + index + 1;
+        return {
+          id: pkg.id,
+          isNew: true,
+          packageNumber: pkg.packageNumber || `${shipmentCode}-${String(seq).padStart(3, "0")}`,
+          productNameId: pkg.productNameId,
+          productName: pkg.productName,
+          woodSpeciesId: pkg.woodSpeciesId,
+          woodSpecies: pkg.woodSpecies,
+          humidityId: pkg.humidityId,
+          humidity: pkg.humidity,
+          typeId: pkg.typeId,
+          typeName: pkg.typeName,
+          processingId: pkg.processingId,
+          processing: pkg.processing,
+          fscId: pkg.fscId,
+          fsc: pkg.fsc,
+          qualityId: pkg.qualityId,
+          quality: pkg.quality,
+          thickness: pkg.thickness,
+          width: pkg.width,
+          length: pkg.length,
+          pieces: pkg.pieces,
+          volumeM3: pkg.volumeM3,
+          volumeIsCalculated: pkg.volumeIsCalculated,
+          palletId: null,
+        };
+      });
+      setLocalPackages((prev) => [...prev, ...newRows]);
+      toast.success(`Imported ${newRows.length} package(s)`);
+    },
+    [localPackages.length, shipmentCode]
+  );
 
   return (
     <div className="space-y-4">
@@ -542,23 +588,29 @@ export function IncomingShipmentPackageEditor({
             </p>
           )}
         </div>
-        <Button
-          onClick={handleSave}
-          disabled={!isDirty || isSaving}
-          variant={isDirty ? "default" : "outline"}
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4 mr-2" />
-              Save Changes
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImportModalOpen(true)}>
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            Import from Spreadsheet
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={!isDirty || isSaving}
+            variant={isDirty ? "default" : "outline"}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Data Entry Table */}
@@ -575,6 +627,17 @@ export function IncomingShipmentPackageEditor({
         allowEmpty
         addRowLabel="Add Package"
       />
+
+      {/* Import from Spreadsheet Modal */}
+      {dropdowns && (
+        <PasteImportModal
+          open={importModalOpen}
+          onOpenChange={setImportModalOpen}
+          dropdowns={dropdowns}
+          organisations={[]}
+          onImport={handleImport}
+        />
+      )}
     </div>
   );
 }
