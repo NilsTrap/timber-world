@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isOrganisationUser } from "@/lib/auth";
 import type { ActionResult } from "../types";
+import { logProductionActivity } from "./logProductionActivity";
 
 interface SaveWorkAmountsInput {
   productionEntryId: string;
@@ -54,6 +55,8 @@ export async function saveWorkAmounts(
   if (error) {
     return { success: false, error: error.message };
   }
+
+  await logProductionActivity(supabase, input.productionEntryId, "work_updated", session.id, session.email, { plannedWork: input.plannedWork, actualWork: input.actualWork });
 
   return { success: true, data: { id: data.id } };
 }

@@ -12,7 +12,7 @@ import { getShipmentDestinations, getReferenceDropdowns, createOrgShipment, getS
 import type { ShipmentAvailablePackage } from "../actions";
 import type { OrganisationOption, ReferenceDropdowns, PackageRow, PackageInput } from "../types";
 
-interface ProducerNewShipmentFormProps {
+interface OrgUserNewShipmentFormProps {
   /** The current user's organization (locked as From) */
   userOrganisation: OrganisationOption;
   /** Optional callback when Cancel is clicked (hides the form) */
@@ -78,12 +78,12 @@ function clearDraft() {
 }
 
 /**
- * Producer New Shipment Form
+ * Org User New Shipment Form
  *
- * Client component for producers to create shipments.
+ * Client component for org users to create shipments.
  * The "From" organisation is locked to the user's organisation.
  */
-export function ProducerNewShipmentForm({ userOrganisation, onCancel }: ProducerNewShipmentFormProps) {
+export function OrgUserNewShipmentForm({ userOrganisation, onCancel }: OrgUserNewShipmentFormProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);

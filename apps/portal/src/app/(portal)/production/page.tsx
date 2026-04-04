@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, isSuperAdmin, orgHasFeature } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin, orgHasModule } from "@/lib/auth";
 import {
   getProcesses,
   getProcessesWithNotes,
@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 /**
  * Production Page
  *
- * Producer page for creating and managing production entries.
+ * Org user page for creating and managing production entries.
  * Shows tabs: Active (new production form + drafts) and History (validated entries).
  *
  * TODO [i18n]: Replace hardcoded text with useTranslations()
@@ -43,8 +43,8 @@ export default async function ProductionPage({
   // Check org feature access for non-admin users
   if (!userIsAdmin) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasFeature = await orgHasFeature(orgId, "production.view");
-    if (!hasFeature) {
+    const hasModule = await orgHasModule(orgId, "production.view");
+    if (!hasModule) {
       notFound();
     }
   }

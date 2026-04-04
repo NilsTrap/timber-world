@@ -5,23 +5,23 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@timber/ui";
 import { usePersistedTab } from "@/hooks/usePersistedTab";
 import { StartShipmentForm } from "./StartShipmentForm";
 import { StartIncomingShipmentForm } from "./StartIncomingShipmentForm";
-import { ProducerShipmentsDraftsTable } from "./ProducerShipmentsDraftsTable";
-import { ProducerShipmentsCompletedTable } from "./ProducerShipmentsCompletedTable";
+import { OrgUserShipmentsDraftsTable } from "./OrgUserShipmentsDraftsTable";
+import { OrgUserShipmentsCompletedTable } from "./OrgUserShipmentsCompletedTable";
 import { getExternalTradingPartners } from "../actions";
 import type { OrganisationOption } from "../types";
 import type { OrgShipmentListItem } from "../actions";
 
-interface ProducerShipmentsPageContentProps {
+interface OrgUserShipmentsPageContentProps {
   userOrganisation: OrganisationOption;
   shipments: OrgShipmentListItem[];
   defaultTab?: string;
 }
 
-function ProducerShipmentsPageContentInner({
+function OrgUserShipmentsPageContentInner({
   userOrganisation,
   shipments,
   defaultTab,
-}: ProducerShipmentsPageContentProps) {
+}: OrgUserShipmentsPageContentProps) {
   const [hasExternalPartners, setHasExternalPartners] = useState<boolean | null>(null);
 
   // Check if there are external partners available
@@ -104,7 +104,7 @@ function ProducerShipmentsPageContentInner({
             {draftShipments.length > 0 && (
               <div className="space-y-3">
                 <h2 className="text-lg font-semibold">Shipment Drafts</h2>
-                <ProducerShipmentsDraftsTable shipments={draftShipments} />
+                <OrgUserShipmentsDraftsTable shipments={draftShipments} />
               </div>
             )}
           </div>
@@ -116,7 +116,7 @@ function ProducerShipmentsPageContentInner({
               No completed shipments yet
             </div>
           ) : (
-            <ProducerShipmentsCompletedTable shipments={incomingCompleted} />
+            <OrgUserShipmentsCompletedTable shipments={incomingCompleted} />
           )}
         </TabsContent>
 
@@ -126,7 +126,7 @@ function ProducerShipmentsPageContentInner({
               No completed shipments yet
             </div>
           ) : (
-            <ProducerShipmentsCompletedTable shipments={outgoingCompleted} />
+            <OrgUserShipmentsCompletedTable shipments={outgoingCompleted} />
           )}
         </TabsContent>
       </Tabs>
@@ -134,10 +134,10 @@ function ProducerShipmentsPageContentInner({
   );
 }
 
-export function ProducerShipmentsPageContent(props: ProducerShipmentsPageContentProps) {
+export function OrgUserShipmentsPageContent(props: OrgUserShipmentsPageContentProps) {
   return (
     <Suspense fallback={<div className="animate-pulse h-64 bg-muted rounded-lg" />}>
-      <ProducerShipmentsPageContentInner {...props} />
+      <OrgUserShipmentsPageContentInner {...props} />
     </Suspense>
   );
 }

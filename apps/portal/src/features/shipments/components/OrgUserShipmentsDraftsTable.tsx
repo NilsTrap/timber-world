@@ -21,11 +21,11 @@ import { formatDate } from "@/lib/utils";
 import { deleteShipment } from "../actions";
 import type { OrgShipmentListItem } from "../actions";
 
-interface ProducerShipmentsDraftsTableProps {
+interface OrgUserShipmentsDraftsTableProps {
   shipments: OrgShipmentListItem[];
 }
 
-export function ProducerShipmentsDraftsTable({ shipments }: ProducerShipmentsDraftsTableProps) {
+export function OrgUserShipmentsDraftsTable({ shipments }: OrgUserShipmentsDraftsTableProps) {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 

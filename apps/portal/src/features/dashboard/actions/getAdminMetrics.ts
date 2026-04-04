@@ -7,7 +7,7 @@ import type { ActionResult, AdminMetrics, DateRange } from "../types";
 /**
  * Get Admin Dashboard Metrics
  *
- * Aggregates production data across ALL producers (admin view):
+ * Aggregates production data across all organisations (admin view):
  * 1. Total production volume (all-time output m3 from validated entries)
  * 2. Overall weighted outcome % and waste %
  * 3. Entry count for the period

@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { formatDate } from "@/lib/utils";
-import { getSession, isSuperAdmin, isProducer } from "@/lib/auth";
+import { getSession, isSuperAdmin, isOrgUser } from "@/lib/auth";
 import {
   getProductionEntry,
   getAvailablePackages,
   getProductionInputs,
-  getReferenceDropdownsForProducer,
+  getReferenceDropdownsForOrgUser,
   getProductionOutputs,
   checkOutputPackageUsage,
 } from "@/features/production/actions";
@@ -18,6 +18,7 @@ import { ProductionBackLink } from "@/features/production/components/ProductionB
 import { ProductionEntryMemory } from "@/features/production/components/ProductionEntryMemory";
 import type { PackageListItem } from "@/features/shipments/types";
 import type { ProductionInput, ProductionOutput, ReferenceDropdowns } from "@/features/production/types";
+import { ProductionActivityLog } from "@/features/production/components/ProductionActivityLog";
 
 export const metadata: Metadata = {
   title: "Production Entry",
@@ -48,7 +49,7 @@ export default async function ProductionEntryPage({
   const { edit } = await searchParams;
   const session = await getSession();
   const isUserSuperAdmin = isSuperAdmin(session);
-  const isUserProducer = isProducer(session);
+  const isUserOrgUser = isOrgUser(session);
 
   const result = await getProductionEntry(id);
 
@@ -64,7 +65,7 @@ export default async function ProductionEntryPage({
 
   // Edit mode: only for validated entries when ?edit=true and user has permission
   const wantsEdit = edit === "true";
-  const canEdit = isValidated && !isCorrection && (isUserSuperAdmin || isUserProducer);
+  const canEdit = isValidated && !isCorrection && (isUserSuperAdmin || isUserOrgUser);
   const isEditMode = wantsEdit && canEdit;
 
   // Redirect away from edit mode if not allowed
@@ -88,7 +89,7 @@ export default async function ProductionEntryPage({
   const [inputResult, outputResult, dropdownResult, packageUsageResult] = await Promise.all([
     getProductionInputs(id),
     getProductionOutputs(id),
-    getReferenceDropdownsForProducer(),
+    getReferenceDropdownsForOrgUser(),
     checkOutputPackageUsage(id),
   ]);
   if (inputResult.success) initialInputs = inputResult.data;
@@ -130,9 +131,10 @@ export default async function ProductionEntryPage({
           <h1 className="text-3xl font-semibold tracking-tight">
             {processName}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mb-2">
             Production date: {productionDate}
           </p>
+          <ProductionActivityLog productionEntryId={id} />
           {isCorrection && correctsEntryId && originalEntryInfo && (
             <p className="text-sm text-muted-foreground mt-1">
               Corrects:{" "}

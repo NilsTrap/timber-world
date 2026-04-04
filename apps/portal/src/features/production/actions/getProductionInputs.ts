@@ -1,14 +1,14 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer, isSuperAdmin } from "@/lib/auth";
+import { getSession, isOrgUser, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult, ProductionInput } from "../types";
 
 /**
  * Get Production Inputs
  *
  * Fetches all input lines for a production entry with joined package data.
- * Accessible by producers (own organisation) and Super Admin (any organisation).
+ * Accessible by org users (own organisation) and Super Admin (any organisation).
  */
 export async function getProductionInputs(
   productionEntryId: string
@@ -18,8 +18,8 @@ export async function getProductionInputs(
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  // Allow producers and Super Admin
-  if (!isProducer(session) && !isSuperAdmin(session)) {
+  // Allow org users and Super Admin
+  if (!isOrgUser(session) && !isSuperAdmin(session)) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 

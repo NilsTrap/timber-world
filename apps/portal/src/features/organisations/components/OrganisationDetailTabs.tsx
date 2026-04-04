@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { Building2, Users, Settings2, Handshake, Database, Pencil, Check, X } from "lucide-react";
 import type { Organisation } from "../types";
 import { OrganisationUsersTable } from "./OrganisationUsersTable";
-import { OrganisationFeaturesTab } from "./OrganisationFeaturesTab";
+import { OrganisationModulesTab } from "./OrganisationModulesTab";
 import { TradingPartnersTab } from "./TradingPartnersTab";
 import { ReferenceDataManager } from "@/features/reference-data";
 import { toggleOrganisationExternal, updateOrganisation } from "../actions";
@@ -316,7 +316,7 @@ export function OrganisationDetailTabs({
             <CardTitle>Modules</CardTitle>
           </CardHeader>
           <CardContent>
-            <OrganisationFeaturesTab organisationId={organisation.id} />
+            <OrganisationModulesTab organisationId={organisation.id} />
           </CardContent>
         </Card>
       </TabsContent>

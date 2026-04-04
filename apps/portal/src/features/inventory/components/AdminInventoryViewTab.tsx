@@ -17,7 +17,7 @@ interface AdminInventoryViewTabProps {
  * Admin Inventory View Tab
  *
  * Read-only view of all inventory packages with organisation info.
- * Similar to ProducerInventory but shows organisation column for admin.
+ * Similar to OrgUserInventory but shows organisation column for admin.
  */
 export function AdminInventoryViewTab({ packages, initialFilters }: AdminInventoryViewTabProps) {
   const tableRef = useRef<DataEntryTableHandle>(null);

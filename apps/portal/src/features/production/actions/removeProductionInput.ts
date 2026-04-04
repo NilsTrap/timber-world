@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer, isSuperAdmin, isOrganisationUser } from "@/lib/auth";
+import { getSession, isOrgUser, isSuperAdmin, isOrganisationUser } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { recalculateEntryMetrics } from "./recalculateEntryMetrics";
+import { logProductionActivity } from "./logProductionActivity";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -23,7 +24,7 @@ export async function removeProductionInput(
   }
 
   const isAdmin = isSuperAdmin(session);
-  if (!isProducer(session) && !isAdmin) {
+  if (!isOrgUser(session) && !isAdmin) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -58,7 +59,7 @@ export async function removeProductionInput(
 
   // Permission check:
   // - Admins can edit any entry
-  // - Producers can edit entries from their organization (drafts they created, or any validated)
+  // - Org users can edit entries from their organization (drafts they created, or any validated)
   const isOwnEntry = entry.created_by === session.id;
   const isOrgEntry = isOrganisationUser(session) && entry.organisation_id === session.organisationId;
   if (!isAdmin && !isOwnEntry && !isOrgEntry) {
@@ -67,8 +68,8 @@ export async function removeProductionInput(
 
   // Check if user can modify this entry:
   // - Drafts: entry owner or admin
-  // - Validated: admin OR producer from same organization (for edit mode)
-  const canModifyValidated = isAdmin || (isProducer(session) && entry.status === "validated");
+  // - Validated: admin OR org user from same organization (for edit mode)
+  const canModifyValidated = isAdmin || (isOrgUser(session) && entry.status === "validated");
   if (!canModifyValidated && entry.status !== "draft") {
     return { success: false, error: "Cannot modify a validated production entry", code: "VALIDATION_FAILED" };
   }
@@ -90,6 +91,8 @@ export async function removeProductionInput(
 
   // Recalculate totals and planned work
   await recalculateEntryMetrics(supabase, input.production_entry_id);
+
+  await logProductionActivity(supabase, input.production_entry_id, "input_removed", session.id, session.email, { packageId: input.package_id, volumeM3: input.volume_m3 });
 
   // Invalidate caches so changes show when navigating back
   revalidatePath("/production");

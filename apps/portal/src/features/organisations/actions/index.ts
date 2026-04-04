@@ -33,9 +33,9 @@ export type { UserRoleAssignment } from "./getUserRoles";
 export { getUserPermissions, updateUserPermissions } from "./getUserPermissions";
 export type { UserPermission, OverrideState } from "./getUserPermissions";
 
-// Organisation features (Story 10.12)
-export { getOrganisationFeatures, updateOrganisationFeatures } from "./getOrganisationFeatures";
-export type { OrganisationFeature } from "./getOrganisationFeatures";
+// Organisation modules (Story 10.12)
+export { getOrganisationModules, updateOrganisationModules } from "./getOrganisationModules";
+export type { OrganisationModule } from "./getOrganisationModules";
 
 // Trading partners
 export { getTradingPartners } from "./getTradingPartners";

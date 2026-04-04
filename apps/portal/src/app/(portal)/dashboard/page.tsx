@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, isSuperAdmin, orgHasFeature } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin, orgHasModule } from "@/lib/auth";
 import { AccessDeniedHandler } from "@/components/AccessDeniedHandler";
-import { getProducerMetrics, getAdminMetrics } from "@/features/dashboard/actions";
-import { ProducerDashboardMetrics } from "@/features/dashboard/components/ProducerDashboardMetrics";
+import { getOrgUserMetrics, getAdminMetrics } from "@/features/dashboard/actions";
+import { OrgUserDashboardMetrics } from "@/features/dashboard/components/OrgUserDashboardMetrics";
 import { AdminDashboardContent } from "@/features/dashboard/components/AdminDashboardContent";
 
 export const metadata: Metadata = {
@@ -49,14 +49,14 @@ async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
 }
 
 /**
- * Producer Dashboard Content
+ * Org User Dashboard Content
  *
  * Fetches real metrics.
  * Shows metric cards only - process breakdown moved to Production > Consolidated tab.
  * TODO [i18n]: Replace hardcoded text with useTranslations()
  */
-async function ProducerDashboardContent() {
-  const metricsResult = await getProducerMetrics();
+async function OrgUserDashboardContent() {
+  const metricsResult = await getOrgUserMetrics();
 
   // Handle errors - show user-friendly message instead of silently failing
   if (!metricsResult.success) {
@@ -70,7 +70,7 @@ async function ProducerDashboardContent() {
     );
   }
 
-  return <ProducerDashboardMetrics metrics={metricsResult.data} />;
+  return <OrgUserDashboardMetrics metrics={metricsResult.data} />;
 }
 
 /**
@@ -78,7 +78,7 @@ async function ProducerDashboardContent() {
  *
  * Server Component that renders role-specific dashboard content.
  * - Admin sees: "Admin Overview" with inventory/product/efficiency metrics
- * - Producer sees: "Production Dashboard" with production-focused metrics
+ * - Org user sees: "Production Dashboard" with production-focused metrics
  */
 export default async function DashboardPage({
   searchParams,
@@ -97,8 +97,8 @@ export default async function DashboardPage({
   // Check org feature access for non-admin users
   if (!userIsAdmin) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasFeature = await orgHasFeature(orgId, "dashboard.view");
-    if (!hasFeature) {
+    const hasModule = await orgHasModule(orgId, "dashboard.view");
+    if (!hasModule) {
       notFound();
     }
   }
@@ -121,12 +121,12 @@ export default async function DashboardPage({
         </h1>
         <p className="text-muted-foreground">
           {userIsAdmin
-            ? "Manage inventory, products, and view producer efficiency"
+            ? "Manage inventory, products, and view organisation efficiency"
             : "Welcome to the Timber World Production Portal"}
         </p>
       </div>
 
-      {userIsAdmin ? <AdminDashboardLoader orgIds={orgIds} /> : <ProducerDashboardContent />}
+      {userIsAdmin ? <AdminDashboardLoader orgIds={orgIds} /> : <OrgUserDashboardContent />}
     </div>
   );
 }

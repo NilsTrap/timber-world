@@ -1,8 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer, isSuperAdmin } from "@/lib/auth";
+import { getSession, isOrgUser, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
+import { logProductionActivity } from "./logProductionActivity";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -23,7 +24,7 @@ export async function revertFailedValidation(
   }
 
   const isAdmin = isSuperAdmin(session);
-  if (!isProducer(session) && !isAdmin) {
+  if (!isOrgUser(session) && !isAdmin) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -161,6 +162,8 @@ export async function revertFailedValidation(
   if (updateEntryError) {
     return { success: false, error: `Failed to reset entry status: ${updateEntryError.message}`, code: "UPDATE_FAILED" };
   }
+
+  await logProductionActivity(supabase, productionEntryId, "reverted", session.id, session.email, { restoredCount, deletedCount });
 
   return {
     success: true,

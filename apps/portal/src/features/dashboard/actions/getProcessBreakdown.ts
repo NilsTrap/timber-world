@@ -1,11 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer } from "@/lib/auth";
+import { getSession, isOrgUser } from "@/lib/auth";
 import type { ActionResult, ProcessBreakdownItem } from "../types";
 
 /**
- * Get Process Breakdown for Producer Dashboard
+ * Get Process Breakdown for Org User Dashboard
  *
  * Groups validated production entries by process, computing per-process:
  * - Total entries count
@@ -19,7 +19,7 @@ export async function getProcessBreakdown(): Promise<ActionResult<ProcessBreakdo
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
-  if (!isProducer(session)) {
+  if (!isOrgUser(session)) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 

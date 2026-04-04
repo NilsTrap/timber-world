@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 
 interface UsePermissionsResult {
   permissions: string[];
-  hasPermission: (featureCode: string) => boolean;
+  hasPermission: (moduleCode: string) => boolean;
   isLoading: boolean;
   isPlatformAdmin: boolean;
 }
@@ -40,9 +40,9 @@ export function usePermissions(): UsePermissionsResult {
     fetchPermissions();
   }, []);
 
-  const hasPermission = (featureCode: string): boolean => {
+  const hasPermission = (moduleCode: string): boolean => {
     if (isPlatformAdmin) return true;
-    return permissions.includes(featureCode);
+    return permissions.includes(moduleCode);
   };
 
   return {

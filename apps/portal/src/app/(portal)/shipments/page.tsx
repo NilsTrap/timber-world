@@ -1,10 +1,10 @@
 import { Suspense } from "react";
 import { redirect, notFound } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { getSession, isAdmin, isSuperAdmin, orgHasFeature } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin, orgHasModule } from "@/lib/auth";
 import { getUserOrganisation, getAllOrgShipments, getActiveOrganisations } from "@/features/shipments/actions";
 import { getAllPendingShipmentCount } from "@/features/shipments/actions/getAllShipments";
-import { ProducerShipmentsPageContent, AllShipmentsTab } from "@/features/shipments/components";
+import { OrgUserShipmentsPageContent, AllShipmentsTab } from "@/features/shipments/components";
 
 // Disable caching to always show fresh shipments list when navigating back
 export const dynamic = "force-dynamic";
@@ -22,8 +22,8 @@ export default async function ShipmentsPage({
   // Check org feature access for non-admin users
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasFeature = await orgHasFeature(orgId, "shipments.view");
-    if (!hasFeature) {
+    const hasModule = await orgHasModule(orgId, "shipments.view");
+    if (!hasModule) {
       notFound();
     }
   }
@@ -57,7 +57,7 @@ export default async function ShipmentsPage({
     );
   }
 
-  // Organisation user - show the producer shipments page
+  // Organisation user - show the org user shipments page
   if (!isOrgUser) {
     redirect("/dashboard");
   }
@@ -82,7 +82,7 @@ export default async function ShipmentsPage({
         </div>
       }
     >
-      <ProducerShipmentsPageContent
+      <OrgUserShipmentsPageContent
         userOrganisation={userOrgResult.data}
         shipments={shipments}
         defaultTab={tab}

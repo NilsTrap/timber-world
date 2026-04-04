@@ -1,14 +1,14 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer } from "@/lib/auth";
+import { getSession, isOrgUser } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import type { PackageListItem } from "@/features/shipments/types";
 
 /**
  * Get Available Packages for Production Input
  *
- * Fetches inventory packages at the producer's facility,
+ * Fetches inventory packages at the organisation's facility,
  * excluding packages already added as inputs to the given production entry.
  */
 export async function getAvailablePackages(
@@ -19,7 +19,7 @@ export async function getAvailablePackages(
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  if (!isProducer(session)) {
+  if (!isOrgUser(session)) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -59,7 +59,7 @@ export async function getAvailablePackages(
     ref_quality!inventory_packages_quality_id_fkey(value)
   `;
 
-  // Query 1: Shipment-sourced packages at producer's facility (exclude consumed and zero-pieces, allow null pieces)
+  // Query 1: Shipment-sourced packages at organisation's facility (exclude consumed and zero-pieces, allow null pieces)
   // Only include packages from shipments that have been accepted or completed
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let shipmentQuery = (supabase as any)
@@ -79,7 +79,7 @@ export async function getAvailablePackages(
     shipmentQuery = shipmentQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
   }
 
-  // Query 2: Production-sourced packages owned by this producer's organisation (status: produced, non-zero pieces, allow null, or has volume)
+  // Query 2: Production-sourced packages owned by this user's organisation (status: produced, non-zero pieces, allow null, or has volume)
   // Filter by organisation_id for proper multi-tenant isolation (not created_by)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let productionQuery = (supabase as any)
@@ -224,7 +224,7 @@ export async function getAvailablePackages(
     length: pkg.length,
     pieces: pkg.pieces,
     volumeM3: pkg.volume_m3 != null ? Number(pkg.volume_m3) : null,
-    // Producer only sees their own org's packages, so use session org info
+    // Org user only sees their own org's packages, so use session org info
     organisationName: session.organisationName,
     organisationCode: session.organisationCode,
     notes: pkg.notes ?? null,

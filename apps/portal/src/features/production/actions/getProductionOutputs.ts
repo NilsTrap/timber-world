@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer, isSuperAdmin } from "@/lib/auth";
+import { getSession, isOrgUser, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult, ProductionOutput } from "../types";
 
 const UUID_REGEX =
@@ -11,7 +11,7 @@ const UUID_REGEX =
  * Get Production Outputs
  *
  * Fetches all output rows for a given production entry.
- * Accessible by producers (own organisation) and Super Admin (any organisation).
+ * Accessible by org users (own organisation) and Super Admin (any organisation).
  */
 export async function getProductionOutputs(
   productionEntryId: string
@@ -21,8 +21,8 @@ export async function getProductionOutputs(
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  // Allow producers and Super Admin
-  if (!isProducer(session) && !isSuperAdmin(session)) {
+  // Allow org users and Super Admin
+  if (!isOrgUser(session) && !isSuperAdmin(session)) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 

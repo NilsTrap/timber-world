@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin, orgHasFeature } from "@/lib/auth";
+import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import type { Order, ActionResult } from "../types";
 
 /**
@@ -9,7 +9,7 @@ import type { Order, ActionResult } from "../types";
  *
  * Fetches all orders with organisation details.
  * - Admins see all orders
- * - Producers see only orders for their organisation (if orders.view is enabled)
+ * - Org users see only orders for their organisation (if orders.view is enabled)
  *
  * @param options.includeCompleted - If false, excludes completed orders. Default: true
  */
@@ -29,8 +29,8 @@ export async function getOrders(options?: {
   // 2. For non-admin users, check if their org has orders feature enabled
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasOrdersFeature = await orgHasFeature(orgId, "orders.view");
-    if (!hasOrdersFeature) {
+    const hasOrdersModule = await orgHasModule(orgId, "orders.view");
+    if (!hasOrdersModule) {
       return {
         success: false,
         error: "Orders feature not enabled for your organisation",

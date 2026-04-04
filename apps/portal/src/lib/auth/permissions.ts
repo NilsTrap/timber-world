@@ -5,11 +5,11 @@ import { SessionUser } from "./getSession";
  * Permission Checking Infrastructure (Story 10.8)
  *
  * Three-layer permission model:
- * 1. Organization Features - what the org has access to
+ * 1. Organization Modules - what the org has access to
  * 2. Roles - bundles of permissions assigned to users
  * 3. User Overrides - per-user permission additions/removals
  *
- * Effective permission = (org has feature) AND (role grants OR override grants) AND NOT (override denies)
+ * Effective permission = (org has module) AND (role grants OR override grants) AND NOT (override denies)
  */
 
 export interface PermissionContext {
@@ -23,13 +23,13 @@ export interface PermissionContext {
  *
  * @param userId - Portal user ID (not auth user ID)
  * @param organizationId - Organization ID to check permissions for
- * @param featureCode - Feature code to check (e.g., 'production.create')
+ * @param moduleCode - Module code to check (e.g., 'production.create')
  * @returns true if user has the permission
  */
 export async function hasPermission(
   userId: string,
   organizationId: string | null,
-  featureCode: string
+  moduleCode: string
 ): Promise<boolean> {
   const supabase = await createClient();
 
@@ -50,17 +50,17 @@ export async function hasPermission(
     return false;
   }
 
-  // Layer 1: Check if organization has this feature enabled
+  // Layer 1: Check if organization has this module enabled
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: orgFeature } = await (supabase as any)
-    .from("organization_features")
+  const { data: orgModule } = await (supabase as any)
+    .from("organization_modules")
     .select("enabled")
     .eq("organization_id", organizationId)
-    .eq("feature_code", featureCode)
+    .eq("module_code", moduleCode)
     .single();
 
-  // If feature is explicitly disabled or not set, deny
-  if (!orgFeature || !orgFeature.enabled) {
+  // If module is explicitly disabled or not set, deny
+  if (!orgModule || !orgModule.enabled) {
     return false;
   }
 
@@ -71,7 +71,7 @@ export async function hasPermission(
     .select("granted")
     .eq("user_id", userId)
     .eq("organization_id", organizationId)
-    .eq("feature_code", featureCode)
+    .eq("module_code", moduleCode)
     .single();
 
   if (override) {
@@ -96,10 +96,10 @@ export async function hasPermission(
     const permissions = ur.roles?.permissions || [];
     return (
       permissions.includes("*") ||
-      permissions.includes(featureCode) ||
+      permissions.includes(moduleCode) ||
       permissions.some(
         (p: string) =>
-          p.endsWith("*") && featureCode.startsWith(p.replace("*", ""))
+          p.endsWith("*") && moduleCode.startsWith(p.replace("*", ""))
       )
     );
   });
@@ -112,7 +112,7 @@ export async function hasPermission(
  *
  * @param userId - Portal user ID
  * @param organizationId - Organization ID
- * @returns Array of feature codes the user has access to
+ * @returns Array of module codes the user has access to
  */
 export async function getEffectivePermissions(
   userId: string,
@@ -129,12 +129,12 @@ export async function getEffectivePermissions(
     .single();
 
   if (user?.is_platform_admin) {
-    // Platform admin has all features
+    // Platform admin has all modules
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: allFeatures } = await (supabase as any)
+    const { data: allModules } = await (supabase as any)
       .from("features")
       .select("code");
-    return allFeatures?.map((f: { code: string }) => f.code) || [];
+    return allModules?.map((f: { code: string }) => f.code) || [];
   }
 
   if (!organizationId) {
@@ -143,23 +143,23 @@ export async function getEffectivePermissions(
 
   // Get all features
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: allFeatures } = await (supabase as any)
+  const { data: allModules } = await (supabase as any)
     .from("features")
     .select("code");
 
-  const featureCodes = allFeatures?.map((f: { code: string }) => f.code) || [];
+  const moduleCodes = allModules?.map((f: { code: string }) => f.code) || [];
   const effectivePermissions: string[] = [];
 
-  // Get organization's enabled features
+  // Get organization's enabled modules
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: orgFeatures } = await (supabase as any)
-    .from("organization_features")
-    .select("feature_code, enabled")
+  const { data: orgModules } = await (supabase as any)
+    .from("organization_modules")
+    .select("module_code, enabled")
     .eq("organization_id", organizationId);
 
-  const orgFeatureMap = new Map(
+  const orgModuleMap = new Map(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    orgFeatures?.map((f: any) => [f.feature_code, f.enabled]) || []
+    orgModules?.map((m: any) => [m.module_code, m.enabled]) || []
   );
 
   // Get user's role permissions
@@ -175,12 +175,12 @@ export async function getEffectivePermissions(
   userRoles?.forEach((ur: any) => {
     ur.roles?.permissions?.forEach((p: string) => {
       if (p === "*") {
-        featureCodes.forEach((fc: string) => rolePermissions.add(fc));
+        moduleCodes.forEach((mc: string) => rolePermissions.add(mc));
       } else if (p.endsWith("*")) {
         const prefix = p.replace("*", "");
-        featureCodes
-          .filter((fc: string) => fc.startsWith(prefix))
-          .forEach((fc: string) => rolePermissions.add(fc));
+        moduleCodes
+          .filter((mc: string) => mc.startsWith(prefix))
+          .forEach((mc: string) => rolePermissions.add(mc));
       } else {
         rolePermissions.add(p);
       }
@@ -191,7 +191,7 @@ export async function getEffectivePermissions(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: overrides } = await (supabase as any)
     .from("user_permission_overrides")
-    .select("feature_code, granted")
+    .select("module_code, granted")
     .eq("user_id", userId)
     .eq("organization_id", organizationId);
 
@@ -200,25 +200,25 @@ export async function getEffectivePermissions(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   overrides?.forEach((o: any) => {
     if (o.granted) {
-      grantOverrides.add(o.feature_code);
+      grantOverrides.add(o.module_code);
     } else {
-      denyOverrides.add(o.feature_code);
+      denyOverrides.add(o.module_code);
     }
   });
 
   // Calculate effective permissions
-  for (const featureCode of featureCodes) {
-    // Check if org has feature explicitly enabled
-    const orgHasFeature = orgFeatureMap.get(featureCode) === true;
+  for (const moduleCode of moduleCodes) {
+    // Check if org has module explicitly enabled
+    const orgHasModule = orgModuleMap.get(moduleCode) === true;
 
-    if (!orgHasFeature) continue;
+    if (!orgHasModule) continue;
 
     // Check if denied by override
-    if (denyOverrides.has(featureCode)) continue;
+    if (denyOverrides.has(moduleCode)) continue;
 
     // Check if granted by override or role
-    if (grantOverrides.has(featureCode) || rolePermissions.has(featureCode)) {
-      effectivePermissions.push(featureCode);
+    if (grantOverrides.has(moduleCode) || rolePermissions.has(moduleCode)) {
+      effectivePermissions.push(moduleCode);
     }
   }
 
@@ -230,7 +230,7 @@ export async function getEffectivePermissions(
  */
 export interface AuthContext {
   session: SessionUser;
-  hasPermission: (featureCode: string) => Promise<boolean>;
+  hasPermission: (moduleCode: string) => Promise<boolean>;
   permissions: string[];
 }
 
@@ -268,10 +268,10 @@ export async function getAuthContext(): Promise<AuthContext | null> {
 
   return {
     session,
-    hasPermission: async (featureCode: string) => {
+    hasPermission: async (moduleCode: string) => {
       // Platform admins have all permissions
       if (session.isPlatformAdmin) return true;
-      return permissions.includes(featureCode);
+      return permissions.includes(moduleCode);
     },
     permissions,
   };
@@ -281,15 +281,15 @@ export async function getAuthContext(): Promise<AuthContext | null> {
  * Check permission and throw if denied
  * Use in server actions for clean permission enforcement
  */
-export async function requirePermission(featureCode: string): Promise<void> {
+export async function requirePermission(moduleCode: string): Promise<void> {
   const ctx = await getAuthContext();
 
   if (!ctx) {
     throw new Error("Not authenticated");
   }
 
-  const hasAccess = await ctx.hasPermission(featureCode);
+  const hasAccess = await ctx.hasPermission(moduleCode);
   if (!hasAccess) {
-    throw new Error(`Permission denied: ${featureCode}`);
+    throw new Error(`Permission denied: ${moduleCode}`);
   }
 }

@@ -25,7 +25,7 @@ interface AdminInventoryPageContentProps {
  * Admin Inventory Page Content
  *
  * Three tabs:
- * - Inventory: Read-only view of all packages (same as producer view but with org column)
+ * - Inventory: Read-only view of all packages (same as org user view but with org column)
  * - Consolidated: Grouped view by product attributes
  * - Edit: Full editing capabilities (add, edit, delete, import)
  */

@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer, isSuperAdmin, isOrganisationUser } from "@/lib/auth";
+import { getSession, isOrgUser, isSuperAdmin, isOrganisationUser } from "@/lib/auth";
 import type { ActionResult } from "../types";
+import { logProductionActivity } from "./logProductionActivity";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -29,7 +30,7 @@ export async function validateProduction(
   }
 
   const isAdmin = isSuperAdmin(session);
-  if (!isProducer(session) && !isAdmin) {
+  if (!isOrgUser(session) && !isAdmin) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -53,7 +54,7 @@ export async function validateProduction(
 
   // Permission check:
   // - Admins can validate any entry
-  // - Producers can validate entries from their organization
+  // - Org users can validate entries from their organization
   const isOwnEntry = entry.created_by === session.id;
   const isOrgEntry = isOrganisationUser(session) && entry.organisation_id === session.organisationId;
   if (!isAdmin && !isOwnEntry && !isOrgEntry) {
@@ -61,9 +62,9 @@ export async function validateProduction(
   }
 
   // Drafts: anyone with access can validate
-  // Validated: admins or producers from same org can re-validate (edit mode)
+  // Validated: admins or org users from same org can re-validate (edit mode)
   const isRevalidation = entry.status === "validated";
-  const canRevalidate = isAdmin || (isProducer(session) && isOrgEntry);
+  const canRevalidate = isAdmin || (isOrgUser(session) && isOrgEntry);
   if (entry.status !== "draft" && !(canRevalidate && isRevalidation)) {
     return { success: false, error: "Entry is already validated", code: "VALIDATION_FAILED" };
   }
@@ -857,6 +858,8 @@ export async function validateProduction(
     await revertChanges();
     return { success: false, error: `Failed to update entry: ${updateEntryError.message}`, code: "UPDATE_FAILED" };
   }
+
+  await logProductionActivity(supabase, productionEntryId, isRevalidation ? "revalidated" : "validated", session.id, session.email, { totalInputM3, totalOutputM3, outcomePercentage, wastePercentage });
 
   revalidatePath("/production");
   revalidatePath("/inventory");

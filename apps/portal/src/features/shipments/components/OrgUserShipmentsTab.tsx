@@ -16,7 +16,7 @@ import { ArrowUpDown, ArrowUp, ArrowDown, Plus, ArrowRight, ArrowLeft } from "lu
 import { formatDate } from "@/lib/utils";
 import type { OrgShipmentListItem } from "../actions";
 
-interface ProducerShipmentsTabProps {
+interface OrgUserShipmentsTabProps {
   shipments: OrgShipmentListItem[];
 }
 
@@ -80,7 +80,7 @@ function DirectionBadge({ direction }: { direction: "outgoing" | "incoming" }) {
   );
 }
 
-export function ProducerShipmentsTab({ shipments }: ProducerShipmentsTabProps) {
+export function OrgUserShipmentsTab({ shipments }: OrgUserShipmentsTabProps) {
   const router = useRouter();
   const [directionFilter, setDirectionFilter] = useState<"all" | "outgoing" | "incoming">("all");
   const [sortConfig, setSortConfig] = useState<{

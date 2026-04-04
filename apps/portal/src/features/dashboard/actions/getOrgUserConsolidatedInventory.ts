@@ -1,13 +1,13 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer } from "@/lib/auth";
+import { getSession, isOrgUser } from "@/lib/auth";
 import type { ActionResult, ConsolidatedInventoryItem } from "../types";
 
 /**
- * Get Producer Consolidated Inventory
+ * Get Org User Consolidated Inventory
  *
- * Groups the producer's inventory packages by 6 attributes:
+ * Groups the organisation's inventory packages by 6 attributes:
  * - Product Name
  * - Wood Species
  * - Humidity
@@ -16,14 +16,14 @@ import type { ActionResult, ConsolidatedInventoryItem } from "../types";
  * - Quality
  *
  * Returns totals (package count, pieces, volume) for each unique combination.
- * Uses the same query logic as getProducerPackages to determine ownership.
+ * Uses the same query logic as getOrgUserPackages to determine ownership.
  */
-export async function getProducerConsolidatedInventory(): Promise<ActionResult<ConsolidatedInventoryItem[]>> {
+export async function getOrgUserConsolidatedInventory(): Promise<ActionResult<ConsolidatedInventoryItem[]>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
-  if (!isProducer(session)) {
+  if (!isOrgUser(session)) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 

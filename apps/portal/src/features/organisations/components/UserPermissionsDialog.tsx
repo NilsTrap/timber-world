@@ -48,16 +48,16 @@ function PermissionRow({
     <div className="flex items-center justify-between py-2 px-3 rounded hover:bg-accent/30 transition-colors">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{permission.featureName}</span>
+          <span className="text-sm font-medium">{permission.moduleName}</span>
           {permission.fromRoles && override === "inherit" && (
             <Badge variant="outline" className="text-xs">
               From Role
             </Badge>
           )}
         </div>
-        {permission.featureDescription && (
+        {permission.moduleDescription && (
           <p className="text-xs text-muted-foreground truncate">
-            {permission.featureDescription}
+            {permission.moduleDescription}
           </p>
         )}
       </div>
@@ -150,7 +150,7 @@ export function UserPermissionsDialog({
       // Initialize overrides from current state
       const initialOverrides = new Map<string, OverrideState>();
       result.data.forEach((p) => {
-        initialOverrides.set(p.featureCode, p.override);
+        initialOverrides.set(p.moduleCode, p.override);
       });
       setOverrides(initialOverrides);
       // Expand all categories by default
@@ -174,10 +174,10 @@ export function UserPermissionsDialog({
     return groups;
   }, [permissions]);
 
-  const handleOverrideChange = (featureCode: string, state: OverrideState) => {
+  const handleOverrideChange = (moduleCode: string, state: OverrideState) => {
     setOverrides((prev) => {
       const next = new Map(prev);
-      next.set(featureCode, state);
+      next.set(moduleCode, state);
       return next;
     });
   };
@@ -199,7 +199,7 @@ export function UserPermissionsDialog({
 
     setIsSaving(true);
     const overridesArray = Array.from(overrides.entries()).map(
-      ([featureCode, state]) => ({ featureCode, state })
+      ([moduleCode, state]) => ({ moduleCode, state })
     );
 
     const result = await updateUserPermissions(user.id, organisationId, overridesArray);
@@ -217,7 +217,7 @@ export function UserPermissionsDialog({
 
   const hasChanges = () => {
     for (const p of permissions) {
-      const currentOverride = overrides.get(p.featureCode) || "inherit";
+      const currentOverride = overrides.get(p.moduleCode) || "inherit";
       if (currentOverride !== p.override) return true;
     }
     return false;
@@ -268,11 +268,11 @@ export function UserPermissionsDialog({
                   <div className="border-t divide-y">
                     {perms.map((permission) => (
                       <PermissionRow
-                        key={permission.featureCode}
+                        key={permission.moduleCode}
                         permission={permission}
-                        override={overrides.get(permission.featureCode) || "inherit"}
+                        override={overrides.get(permission.moduleCode) || "inherit"}
                         onOverrideChange={(state) =>
-                          handleOverrideChange(permission.featureCode, state)
+                          handleOverrideChange(permission.moduleCode, state)
                         }
                         disabled={isSaving}
                       />

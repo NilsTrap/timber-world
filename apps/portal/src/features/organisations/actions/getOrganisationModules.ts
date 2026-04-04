@@ -5,22 +5,22 @@ import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 /**
- * Organization Feature Configuration
+ * Organization Module Configuration
  */
-export interface OrganisationFeature {
-  featureCode: string;
-  featureName: string;
-  featureDescription: string | null;
+export interface OrganisationModule {
+  moduleCode: string;
+  moduleName: string;
+  moduleDescription: string | null;
   category: string;
   enabled: boolean;
 }
 
 /**
- * Get organization's feature configuration
+ * Get organization's module configuration
  */
-export async function getOrganisationFeatures(
+export async function getOrganisationModules(
   organisationId: string
-): Promise<ActionResult<OrganisationFeature[]>> {
+): Promise<ActionResult<OrganisationModule[]>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
@@ -32,7 +32,7 @@ export async function getOrganisationFeatures(
 
   const supabase = await createClient();
 
-  // Get all features
+  // Get all features (master list)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: featuresData, error: featuresError } = await (supabase as any)
     .from("features")
@@ -41,48 +41,48 @@ export async function getOrganisationFeatures(
     .order("sort_order");
 
   if (featuresError) {
-    console.error("Failed to fetch features:", featuresError);
-    return { success: false, error: "Failed to fetch features", code: "QUERY_FAILED" };
+    console.error("Failed to fetch modules:", featuresError);
+    return { success: false, error: "Failed to fetch modules", code: "QUERY_FAILED" };
   }
 
-  // Get organization's enabled features
+  // Get organization's enabled modules
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: orgFeaturesData, error: orgFeaturesError } = await (supabase as any)
-    .from("organization_features")
-    .select("feature_code, enabled")
+  const { data: orgModulesData, error: orgModulesError } = await (supabase as any)
+    .from("organization_modules")
+    .select("module_code, enabled")
     .eq("organization_id", organisationId);
 
-  if (orgFeaturesError) {
-    console.error("Failed to fetch org features:", orgFeaturesError);
-    return { success: false, error: "Failed to fetch organization features", code: "QUERY_FAILED" };
+  if (orgModulesError) {
+    console.error("Failed to fetch org modules:", orgModulesError);
+    return { success: false, error: "Failed to fetch organization modules", code: "QUERY_FAILED" };
   }
 
-  // Create map of enabled features
+  // Create map of enabled modules
   const enabledMap = new Map<string, boolean>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (orgFeaturesData || []).forEach((of: any) => {
-    enabledMap.set(of.feature_code, of.enabled);
+  (orgModulesData || []).forEach((om: any) => {
+    enabledMap.set(om.module_code, om.enabled);
   });
 
-  // Merge features with enabled status
+  // Merge with enabled status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const features: OrganisationFeature[] = (featuresData || []).map((f: any) => ({
-    featureCode: f.code,
-    featureName: f.name,
-    featureDescription: f.description,
+  const modules: OrganisationModule[] = (featuresData || []).map((f: any) => ({
+    moduleCode: f.code,
+    moduleName: f.name,
+    moduleDescription: f.description,
     category: f.category || "Other",
     enabled: enabledMap.get(f.code) ?? false,
   }));
 
-  return { success: true, data: features };
+  return { success: true, data: modules };
 }
 
 /**
- * Update organization's feature configuration
+ * Update organization's module configuration
  */
-export async function updateOrganisationFeatures(
+export async function updateOrganisationModules(
   organisationId: string,
-  featureCodes: string[]
+  moduleCodes: string[]
 ): Promise<ActionResult<void>> {
   const session = await getSession();
   if (!session) {
@@ -95,34 +95,34 @@ export async function updateOrganisationFeatures(
 
   const supabase = await createClient();
 
-  // Delete existing feature configuration
+  // Delete existing module configuration
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: deleteError } = await (supabase as any)
-    .from("organization_features")
+    .from("organization_modules")
     .delete()
     .eq("organization_id", organisationId);
 
   if (deleteError) {
-    console.error("Failed to delete org features:", deleteError);
-    return { success: false, error: "Failed to update features", code: "DELETE_FAILED" };
+    console.error("Failed to delete org modules:", deleteError);
+    return { success: false, error: "Failed to update modules", code: "DELETE_FAILED" };
   }
 
-  // Insert new feature configuration
-  if (featureCodes.length > 0) {
-    const features = featureCodes.map((code) => ({
+  // Insert new module configuration
+  if (moduleCodes.length > 0) {
+    const modules = moduleCodes.map((code) => ({
       organization_id: organisationId,
-      feature_code: code,
+      module_code: code,
       enabled: true,
     }));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: insertError } = await (supabase as any)
-      .from("organization_features")
-      .insert(features);
+      .from("organization_modules")
+      .insert(modules);
 
     if (insertError) {
-      console.error("Failed to insert org features:", insertError);
-      return { success: false, error: "Failed to update features", code: "INSERT_FAILED" };
+      console.error("Failed to insert org modules:", insertError);
+      return { success: false, error: "Failed to update modules", code: "INSERT_FAILED" };
     }
   }
 

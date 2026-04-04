@@ -225,9 +225,8 @@ export function isAdmin(session: SessionUser | null): boolean {
 
 /**
  * Check if user has regular user role (not admin)
- * Note: kept as isProducer for backward compatibility across codebase
  */
-export function isProducer(session: SessionUser | null): boolean {
+export function isOrgUser(session: SessionUser | null): boolean {
   return session?.role === "user";
 }
 

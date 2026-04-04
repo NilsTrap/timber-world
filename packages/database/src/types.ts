@@ -87,7 +87,7 @@ export type Database = {
           auth_user_id: string | null
           email: string
           name: string
-          role: 'admin' | 'producer'
+          role: 'admin' | 'user'
           created_at: string
           updated_at: string
         }

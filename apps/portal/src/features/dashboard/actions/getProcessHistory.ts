@@ -13,7 +13,7 @@ import type {
 /**
  * Get Process History for Detail View
  *
- * Fetches production entries for a specific process across all producers.
+ * Fetches production entries for a specific process across all organisations.
  * Includes:
  * - List of recent entries (date, input, output, outcome %)
  * - Chart data (outcome % over time)

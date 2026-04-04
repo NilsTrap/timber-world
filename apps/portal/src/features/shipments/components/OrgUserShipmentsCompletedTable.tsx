@@ -15,7 +15,7 @@ import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { OrgShipmentListItem } from "../actions";
 
-interface ProducerShipmentsCompletedTableProps {
+interface OrgUserShipmentsCompletedTableProps {
   shipments: OrgShipmentListItem[];
 }
 
@@ -60,7 +60,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function ProducerShipmentsCompletedTable({ shipments }: ProducerShipmentsCompletedTableProps) {
+export function OrgUserShipmentsCompletedTable({ shipments }: OrgUserShipmentsCompletedTableProps) {
   const router = useRouter();
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;

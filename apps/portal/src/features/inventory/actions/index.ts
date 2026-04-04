@@ -1,4 +1,4 @@
-export { getProducerPackages } from "./getProducerPackages";
+export { getOrgUserPackages } from "./getOrgUserPackages";
 export { deleteInventoryPackage } from "./deleteInventoryPackage";
 export { createAdminInventory } from "./createAdminInventory";
 export { getEditablePackages } from "./getEditablePackages";

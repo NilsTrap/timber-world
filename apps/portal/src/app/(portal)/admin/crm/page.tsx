@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, orgHasFeature } from "@/lib/auth";
+import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import {
   getCompanies,
   getAllContacts,
@@ -28,8 +28,8 @@ export default async function CrmPage() {
 
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasFeature = await orgHasFeature(orgId, "crm.view");
-    if (!hasFeature) {
+    const hasModule = await orgHasModule(orgId, "crm.view");
+    if (!hasModule) {
       notFound();
     }
   }

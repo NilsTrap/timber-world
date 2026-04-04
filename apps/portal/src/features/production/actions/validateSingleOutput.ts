@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer, isSuperAdmin, isOrganisationUser } from "@/lib/auth";
+import { getSession, isOrgUser, isSuperAdmin, isOrganisationUser } from "@/lib/auth";
 import type { ActionResult } from "../types";
+import { logProductionActivity } from "./logProductionActivity";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,7 +28,7 @@ export async function validateSingleOutput(
   }
 
   const isAdmin = isSuperAdmin(session);
-  if (!isProducer(session) && !isAdmin) {
+  if (!isOrgUser(session) && !isAdmin) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -194,6 +195,8 @@ export async function validateSingleOutput(
       code: "UPDATE_FAILED",
     };
   }
+
+  await logProductionActivity(supabase, productionEntryId, "output_validated", session.id, session.email, { outputId, inventoryPackageId: inventoryPkg.id });
 
   revalidatePath("/production");
   revalidatePath("/inventory");

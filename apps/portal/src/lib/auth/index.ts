@@ -1,7 +1,7 @@
 export {
   getSession,
   isAdmin,
-  isProducer,
+  isOrgUser,
   isSuperAdmin,
   isPlatformAdmin,
   isOrganisationUser,
@@ -21,6 +21,6 @@ export {
 } from "./permissions";
 export type { PermissionContext, AuthContext } from "./permissions";
 
-export { getOrgEnabledFeatures, orgHasFeature } from "./getOrgFeatures";
+export { getOrgEnabledModules, orgHasModule } from "./getOrgModules";
 
 export { usePermissions } from "./usePermissions";

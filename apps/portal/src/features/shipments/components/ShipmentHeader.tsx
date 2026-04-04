@@ -18,7 +18,7 @@ interface ShipmentHeaderProps {
   onToOrganisationChange: (id: string) => void;
   onDateChange: (date: string) => void;
   onTransportCostChange: (value: string) => void;
-  /** Lock the From organisation (for producer mode) */
+  /** Lock the From organisation (for org user mode) */
   lockedFromOrganisation?: OrganisationOption | null;
 }
 

@@ -1,12 +1,12 @@
 import { formatVolume, formatPercent } from "@/lib/utils";
-import type { ProducerMetrics } from "../types";
+import type { OrgUserMetrics } from "../types";
 
-interface ProducerDashboardMetricsProps {
-  metrics: ProducerMetrics | null;
+interface OrgUserDashboardMetricsProps {
+  metrics: OrgUserMetrics | null;
 }
 
 /**
- * Producer Dashboard Metric Cards
+ * Org User Dashboard Metric Cards
  *
  * Displays 4 metric cards in a grid:
  * - Total Inventory (m3)
@@ -16,7 +16,7 @@ interface ProducerDashboardMetricsProps {
  *
  * Shows "--" for zero/empty values.
  */
-export function ProducerDashboardMetrics({ metrics }: ProducerDashboardMetricsProps) {
+export function OrgUserDashboardMetrics({ metrics }: OrgUserDashboardMetricsProps) {
   const hasData = metrics && (metrics.totalInventoryM3 > 0 || metrics.totalProductionVolumeM3 > 0);
 
   const cards = [

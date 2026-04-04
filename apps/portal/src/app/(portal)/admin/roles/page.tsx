@@ -1,5 +1,5 @@
 import { redirect, notFound } from "next/navigation";
-import { getSession, isSuperAdmin, isAdmin, orgHasFeature } from "@/lib/auth";
+import { getSession, isSuperAdmin, isAdmin, orgHasModule } from "@/lib/auth";
 import { getRoles, getFeaturesByCategory } from "@/features/roles/actions";
 import { RolesTable } from "@/features/roles/components";
 
@@ -17,8 +17,8 @@ export default async function RolesPage() {
   // Super admins and admins always have access; org users need roles.view feature
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasFeature = await orgHasFeature(orgId, "roles.view");
-    if (!hasFeature) {
+    const hasModule = await orgHasModule(orgId, "roles.view");
+    if (!hasModule) {
       notFound();
     }
   }

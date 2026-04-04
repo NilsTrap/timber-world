@@ -9,25 +9,25 @@ import {
   Badge,
 } from "@timber/ui";
 import {
-  getOrganisationFeatures,
-  updateOrganisationFeatures,
+  getOrganisationModules,
+  updateOrganisationModules,
 } from "../actions";
-import type { OrganisationFeature } from "../actions";
+import type { OrganisationModule } from "../actions";
 
-interface OrganisationFeaturesTabProps {
+interface OrganisationModulesTabProps {
   organisationId: string;
 }
 
 /**
- * OrganisationFeaturesTab — Modules management
+ * OrganisationModulesTab — Modules management
  *
  * Shows all modules with a toggle to enable/disable each one.
  */
-export function OrganisationFeaturesTab({
+export function OrganisationModulesTab({
   organisationId,
-}: OrganisationFeaturesTabProps) {
-  const [features, setFeatures] = useState<OrganisationFeature[]>([]);
-  const [enabledFeatures, setEnabledFeatures] = useState<Set<string>>(new Set());
+}: OrganisationModulesTabProps) {
+  const [modules, setModules] = useState<OrganisationModule[]>([]);
+  const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -38,28 +38,28 @@ export function OrganisationFeaturesTab({
   const loadData = async () => {
     setIsLoading(true);
 
-    const featuresResult = await getOrganisationFeatures(organisationId);
+    const modulesResult = await getOrganisationModules(organisationId);
 
-    if (featuresResult.success) {
-      setFeatures(featuresResult.data);
+    if (modulesResult.success) {
+      setModules(modulesResult.data);
       const enabled = new Set(
-        featuresResult.data.filter((f) => f.enabled).map((f) => f.featureCode)
+        modulesResult.data.filter((m) => m.enabled).map((m) => m.moduleCode)
       );
-      setEnabledFeatures(enabled);
+      setEnabledModules(enabled);
     } else {
-      toast.error(featuresResult.error);
+      toast.error(modulesResult.error);
     }
 
     setIsLoading(false);
   };
 
-  const toggleFeature = (featureCode: string) => {
-    setEnabledFeatures((prev) => {
+  const toggleModule = (moduleCode: string) => {
+    setEnabledModules((prev) => {
       const next = new Set(prev);
-      if (next.has(featureCode)) {
-        next.delete(featureCode);
+      if (next.has(moduleCode)) {
+        next.delete(moduleCode);
       } else {
-        next.add(featureCode);
+        next.add(moduleCode);
       }
       return next;
     });
@@ -67,9 +67,9 @@ export function OrganisationFeaturesTab({
 
   const handleSave = async () => {
     setIsSaving(true);
-    const result = await updateOrganisationFeatures(
+    const result = await updateOrganisationModules(
       organisationId,
-      Array.from(enabledFeatures)
+      Array.from(enabledModules)
     );
 
     if (result.success) {
@@ -84,10 +84,10 @@ export function OrganisationFeaturesTab({
 
   const hasChanges = () => {
     const originalEnabled = new Set(
-      features.filter((f) => f.enabled).map((f) => f.featureCode)
+      modules.filter((m) => m.enabled).map((m) => m.moduleCode)
     );
-    if (originalEnabled.size !== enabledFeatures.size) return true;
-    for (const code of enabledFeatures) {
+    if (originalEnabled.size !== enabledModules.size) return true;
+    for (const code of enabledModules) {
       if (!originalEnabled.has(code)) return true;
     }
     return false;
@@ -101,7 +101,7 @@ export function OrganisationFeaturesTab({
     );
   }
 
-  if (features.length === 0) {
+  if (modules.length === 0) {
     return (
       <div className="py-12 text-center text-muted-foreground">
         <Settings2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -133,22 +133,22 @@ export function OrganisationFeaturesTab({
       </div>
 
       <div className="space-y-2">
-        {features.map((feature) => {
-          const isEnabled = enabledFeatures.has(feature.featureCode);
+        {modules.map((mod) => {
+          const isEnabled = enabledModules.has(mod.moduleCode);
 
           return (
-            <div key={feature.featureCode} className="flex items-center gap-3 p-3 border rounded-lg">
+            <div key={mod.moduleCode} className="flex items-center gap-3 p-3 border rounded-lg">
               <Checkbox
-                id={`module-${feature.featureCode}`}
+                id={`module-${mod.moduleCode}`}
                 checked={isEnabled}
-                onCheckedChange={() => toggleFeature(feature.featureCode)}
+                onCheckedChange={() => toggleModule(mod.moduleCode)}
                 disabled={isSaving}
               />
               <label
-                htmlFor={`module-${feature.featureCode}`}
+                htmlFor={`module-${mod.moduleCode}`}
                 className="flex-1 font-medium cursor-pointer"
               >
-                {feature.category}
+                {mod.category}
               </label>
               {isEnabled && (
                 <Badge variant="default" className="text-xs">

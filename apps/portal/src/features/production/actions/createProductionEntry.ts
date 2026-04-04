@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import type { ActionResult } from "../types";
+import { logProductionActivity } from "./logProductionActivity";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -41,6 +42,8 @@ export async function createProductionEntry(
   if (error) {
     return { success: false, error: error.message, code: "INSERT_FAILED" };
   }
+
+  await logProductionActivity(supabase, data.id, "created", session.id, session.email, { processId });
 
   // Invalidate the production page cache so the new draft shows when navigating back
   revalidatePath("/production");

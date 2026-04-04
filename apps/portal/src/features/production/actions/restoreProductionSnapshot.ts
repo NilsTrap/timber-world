@@ -1,8 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer, isSuperAdmin, isOrganisationUser } from "@/lib/auth";
+import { getSession, isOrgUser, isSuperAdmin, isOrganisationUser } from "@/lib/auth";
 import type { ActionResult } from "../types";
+import { logProductionActivity } from "./logProductionActivity";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -53,7 +54,7 @@ export async function restoreProductionSnapshot(
   }
 
   const isAdmin = isSuperAdmin(session);
-  if (!isProducer(session) && !isAdmin) {
+  if (!isOrgUser(session) && !isAdmin) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -78,8 +79,8 @@ export async function restoreProductionSnapshot(
   }
 
   // Permission check
-  const isOrgUser = isOrganisationUser(session) && entry.organisation_id === session.organisationId;
-  if (!isAdmin && !isOrgUser) {
+  const isOrgMember = isOrganisationUser(session) && entry.organisation_id === session.organisationId;
+  if (!isAdmin && !isOrgMember) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -174,6 +175,8 @@ export async function restoreProductionSnapshot(
 
   const { recalculateEntryMetrics } = await import("./recalculateEntryMetrics");
   await recalculateEntryMetrics(supabase, productionEntryId);
+
+  await logProductionActivity(supabase, productionEntryId, "edit_cancelled", session.id, session.email);
 
   return { success: true, data: null };
 }

@@ -13,9 +13,9 @@ export type OverrideState = "inherit" | "grant" | "deny";
  * User Permission with Override
  */
 export interface UserPermission {
-  featureCode: string;
-  featureName: string;
-  featureDescription: string | null;
+  moduleCode: string;
+  moduleName: string;
+  moduleDescription: string | null;
   category: string;
   fromRoles: boolean;
   override: OverrideState;
@@ -39,7 +39,7 @@ export async function getUserPermissions(
 
   const supabase = await createClient();
 
-  // Get all features
+  // Get all features (master list)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: featuresData, error: featuresError } = await (supabase as any)
     .from("features")
@@ -48,8 +48,8 @@ export async function getUserPermissions(
     .order("sort_order");
 
   if (featuresError) {
-    console.error("Failed to fetch features:", featuresError);
-    return { success: false, error: "Failed to fetch features", code: "QUERY_FAILED" };
+    console.error("Failed to fetch modules:", featuresError);
+    return { success: false, error: "Failed to fetch modules", code: "QUERY_FAILED" };
   }
 
   // Get user's roles and their permissions
@@ -72,11 +72,9 @@ export async function getUserPermissions(
     const perms = ur.roles?.permissions || [];
     perms.forEach((p: string) => {
       if (p === "*") {
-        // Wildcard - add all features
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (featuresData || []).forEach((f: any) => rolePermissions.add(f.code));
       } else if (p.endsWith(".*")) {
-        // Category wildcard
         const category = p.replace(".*", "");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (featuresData || []).forEach((f: any) => {
@@ -94,7 +92,7 @@ export async function getUserPermissions(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: overridesData, error: overridesError } = await (supabase as any)
     .from("user_permission_overrides")
-    .select("feature_code, granted")
+    .select("module_code, granted")
     .eq("user_id", userId)
     .eq("organization_id", organisationId);
 
@@ -107,10 +105,10 @@ export async function getUserPermissions(
   const overridesMap = new Map<string, boolean>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (overridesData || []).forEach((o: any) => {
-    overridesMap.set(o.feature_code, o.granted);
+    overridesMap.set(o.module_code, o.granted);
   });
 
-  // Merge features with permissions and overrides
+  // Merge with permissions and overrides
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const permissions: UserPermission[] = (featuresData || []).map((f: any) => {
     let override: OverrideState = "inherit";
@@ -119,9 +117,9 @@ export async function getUserPermissions(
     }
 
     return {
-      featureCode: f.code,
-      featureName: f.name,
-      featureDescription: f.description,
+      moduleCode: f.code,
+      moduleName: f.name,
+      moduleDescription: f.description,
       category: f.category || "Other",
       fromRoles: rolePermissions.has(f.code),
       override,
@@ -137,7 +135,7 @@ export async function getUserPermissions(
 export async function updateUserPermissions(
   userId: string,
   organisationId: string,
-  overrides: Array<{ featureCode: string; state: OverrideState }>
+  overrides: Array<{ moduleCode: string; state: OverrideState }>
 ): Promise<ActionResult<void>> {
   const session = await getSession();
   if (!session) {
@@ -169,7 +167,7 @@ export async function updateUserPermissions(
     .map((o) => ({
       user_id: userId,
       organization_id: organisationId,
-      feature_code: o.featureCode,
+      module_code: o.moduleCode,
       granted: o.state === "grant",
     }));
 

@@ -9,7 +9,8 @@ import type { Order, ActionResult } from "../types";
  * Create Order
  *
  * Creates a new order with auto-generated code.
- * Admin only endpoint.
+ * - Admins/salespersons can create orders for any organisation
+ * - Non-admin users can create orders for their own organisation only
  */
 export async function createOrder(input: {
   name: string;
@@ -30,13 +31,31 @@ export async function createOrder(input: {
     };
   }
 
-  // 2. Check admin role
+  // 2. Non-admin users: check if they can create for other orgs (salesperson types)
   if (!isAdmin(session)) {
-    return {
-      success: false,
-      error: "Permission denied",
-      code: "FORBIDDEN",
-    };
+    const userOrgId = session.currentOrganizationId || session.organisationId;
+    if (input.organisationId !== userOrgId) {
+      // Check if user's org is a salesperson type (principal/trader)
+      const supabaseCheck = await createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: typeData } = await (supabaseCheck as any)
+        .from("organization_type_assignments")
+        .select("organization_types(name)")
+        .eq("organization_id", userOrgId)
+        .limit(1)
+        .single();
+
+      const orgTypeName = typeData?.organization_types?.name;
+      const isSalesperson = orgTypeName === "principal" || orgTypeName === "trader";
+
+      if (!isSalesperson) {
+        return {
+          success: false,
+          error: "Permission denied",
+          code: "FORBIDDEN",
+        };
+      }
+    }
   }
 
   // 3. Validate input with Zod

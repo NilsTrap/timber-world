@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer, isSuperAdmin, isOrganisationUser } from "@/lib/auth";
+import { getSession, isOrgUser, isSuperAdmin, isOrganisationUser } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { recalculateEntryMetrics } from "./recalculateEntryMetrics";
+import { logProductionActivity } from "./logProductionActivity";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -71,7 +72,7 @@ export async function applyProductionEdits(
   }
 
   const isAdmin = isSuperAdmin(session);
-  if (!isProducer(session) && !isAdmin) {
+  if (!isOrgUser(session) && !isAdmin) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -95,9 +96,9 @@ export async function applyProductionEdits(
     return { success: false, error: "Production entry not found", code: "NOT_FOUND" };
   }
 
-  // Permission check: must be admin or producer from same organization
-  const isOrgUser = isOrganisationUser(session) && entry.organisation_id === session.organisationId;
-  if (!isAdmin && !isOrgUser) {
+  // Permission check: must be admin or org user from same organization
+  const isOrgMember = isOrganisationUser(session) && entry.organisation_id === session.organisationId;
+  if (!isAdmin && !isOrgMember) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -250,6 +251,8 @@ export async function applyProductionEdits(
   if (!validateResult.success) {
     return { success: false, error: validateResult.error, code: validateResult.code };
   }
+
+  await logProductionActivity(supabase, productionEntryId, "edits_applied", session.id, session.email);
 
   revalidatePath("/production");
   revalidatePath("/inventory");

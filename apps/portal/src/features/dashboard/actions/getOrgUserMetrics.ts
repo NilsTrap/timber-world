@@ -1,23 +1,23 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer } from "@/lib/auth";
-import type { ActionResult, ProducerMetrics } from "../types";
+import { getSession, isOrgUser } from "@/lib/auth";
+import type { ActionResult, OrgUserMetrics } from "../types";
 
 /**
- * Get Producer Dashboard Metrics
+ * Get Org User Dashboard Metrics
  *
  * Aggregates:
- * 1. Total available inventory (m3) from inventory_packages (non-consumed, at producer's facility)
+ * 1. Total available inventory (m3) from inventory_packages (non-consumed, at organisation's facility)
  * 2. Total production volume (all-time output m3 from validated entries)
  * 3. Overall weighted outcome % and waste %
  */
-export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics>> {
+export async function getOrgUserMetrics(): Promise<ActionResult<OrgUserMetrics>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
-  if (!isProducer(session)) {
+  if (!isOrgUser(session)) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -27,11 +27,11 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
   const orgId = session.currentOrganizationId || session.organisationId;
 
   // Query 1: Total available inventory volume
-  // Uses same pattern as getProducerPackages: shipment packages + production packages
+  // Uses same pattern as getOrgUserPackages: shipment packages + production packages
   // IMPORTANT: Must deduplicate by package ID to avoid double-counting
   const allPackages: { id: string; volume_m3: number }[] = [];
 
-  // 1a. Shipment-sourced packages (shipped to this producer's facility, not consumed)
+  // 1a. Shipment-sourced packages (shipped to this organisation's facility, not consumed)
   // Only include packages from shipments that have been accepted or completed
   if (orgId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,13 +43,13 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
       .neq("status", "consumed");
 
     if (shipmentError) {
-      console.error("[getProducerMetrics] Failed to fetch shipment packages:", shipmentError.message);
+      console.error("[getOrgUserMetrics] Failed to fetch shipment packages:", shipmentError.message);
     } else if (shipmentPkgs) {
       allPackages.push(...shipmentPkgs);
     }
   }
 
-  // 1b. Production-sourced packages (from this producer's organisation, status = produced)
+  // 1b. Production-sourced packages (from this organisation, status = produced)
   // Also verify package still belongs to this org (shipped packages have org_id updated)
   if (orgId) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,7 +61,7 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
       .eq("status", "produced");
 
     if (productionError) {
-      console.error("[getProducerMetrics] Failed to fetch production packages:", productionError.message);
+      console.error("[getOrgUserMetrics] Failed to fetch production packages:", productionError.message);
     } else if (productionPkgs) {
       allPackages.push(...productionPkgs);
     }
@@ -79,7 +79,7 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
       .neq("status", "consumed");
 
     if (directError) {
-      console.error("[getProducerMetrics] Failed to fetch direct packages:", directError.message);
+      console.error("[getOrgUserMetrics] Failed to fetch direct packages:", directError.message);
     } else if (directPkgs) {
       allPackages.push(...directPkgs);
     }
@@ -96,7 +96,7 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
       .neq("status", "consumed");
 
     if (outgoingDraftError) {
-      console.error("[getProducerMetrics] Failed to fetch outgoing draft packages:", outgoingDraftError.message);
+      console.error("[getOrgUserMetrics] Failed to fetch outgoing draft packages:", outgoingDraftError.message);
     } else if (outgoingDraftPkgs) {
       allPackages.push(...outgoingDraftPkgs);
     }
@@ -113,7 +113,7 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
       .neq("status", "consumed");
 
     if (onTheWayError) {
-      console.error("[getProducerMetrics] Failed to fetch on-the-way packages:", onTheWayError.message);
+      console.error("[getOrgUserMetrics] Failed to fetch on-the-way packages:", onTheWayError.message);
     } else if (onTheWayPkgs) {
       allPackages.push(...onTheWayPkgs);
     }
@@ -143,7 +143,7 @@ export async function getProducerMetrics(): Promise<ActionResult<ProducerMetrics
       .eq("status", "validated");
 
     if (entriesError) {
-      console.error("[getProducerMetrics] Failed to fetch production entries:", entriesError.message);
+      console.error("[getOrgUserMetrics] Failed to fetch production entries:", entriesError.message);
     } else if (entries) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const entry of entries as any[]) {

@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer } from "@/lib/auth";
+import { getSession, isOrgUser } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 /** Package with IDs for creating shipment rows */
@@ -36,10 +36,10 @@ export interface ShipmentAvailablePackage {
 /**
  * Get Shipment Available Packages
  *
- * Fetches all inventory packages available for shipping from the producer's facility.
+ * Fetches all inventory packages available for shipping from the organisation's facility.
  * Returns packages with both IDs and display values for populating shipment form.
  * Only includes packages with status 'available' or 'produced' (not consumed/shipped).
- * Producer only.
+ * Org user only.
  */
 export async function getShipmentAvailablePackages(): Promise<ActionResult<ShipmentAvailablePackage[]>> {
   const session = await getSession();
@@ -47,7 +47,7 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  if (!isProducer(session)) {
+  if (!isOrgUser(session)) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -75,7 +75,7 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
     (draftInputs ?? []).map((row: any) => row.package_id)
   );
 
-  // Query 1: Shipment-sourced packages (shipped to this producer's facility)
+  // Query 1: Shipment-sourced packages (shipped to this organisation's facility)
   // Only include packages from shipments that have been accepted or completed
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: shipmentData, error: shipmentError } = await (supabase as any)
@@ -117,7 +117,7 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
     return { success: false, error: `Failed to fetch packages: ${shipmentError.message}`, code: "QUERY_FAILED" };
   }
 
-  // Query 2: Production-sourced packages (from this producer's organisation)
+  // Query 2: Production-sourced packages (from this organisation)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: productionData, error: productionError } = await (supabase as any)
     .from("inventory_packages")

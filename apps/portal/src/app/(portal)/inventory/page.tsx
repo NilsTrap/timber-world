@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 import { Package } from "lucide-react";
-import { getSession, isAdmin, orgHasFeature } from "@/lib/auth";
-import { getProducerPackages } from "@/features/inventory/actions";
+import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getOrgUserPackages } from "@/features/inventory/actions";
 import { getAuditPackages } from "@/features/inventory/actions/getAuditPackages";
 import { getPackagesInDrafts } from "@/features/production/actions";
 import { getPackagesInShipmentDrafts } from "@/features/shipments/actions";
-import { getProducerConsolidatedInventory } from "@/features/dashboard/actions";
-import { ProducerInventoryPageContent } from "@/features/inventory/components/ProducerInventoryPageContent";
+import { getOrgUserConsolidatedInventory } from "@/features/dashboard/actions";
+import { OrgUserInventoryPageContent } from "@/features/inventory/components/OrgUserInventoryPageContent";
 
 export const metadata: Metadata = {
   title: "Inventory",
@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
  *
  * Shows inventory based on user role:
  * - Admin: Redirects to /admin/inventory (full management view)
- * - Producer: Read-only view of facility inventory (Epic 3)
+ * - Org User: Read-only view of facility inventory (Epic 3)
  *
  * TODO [i18n]: Replace hardcoded text with useTranslations()
  */
@@ -50,22 +50,22 @@ export default async function InventoryPage({
 
   // Check org feature access for non-admin users
   const orgId = session.currentOrganizationId || session.organisationId;
-  const hasFeature = await orgHasFeature(orgId, "inventory.view");
-  if (!hasFeature) {
+  const hasModule = await orgHasModule(orgId, "inventory.view");
+  if (!hasModule) {
     notFound();
   }
 
-  // Producer flow
+  // Org user flow
   const [result, draftsResult, shipmentDraftsResult, consolidatedResult, auditResult] = await Promise.all([
-    getProducerPackages(),
+    getOrgUserPackages(),
     getPackagesInDrafts(),
     getPackagesInShipmentDrafts(),
-    getProducerConsolidatedInventory(),
+    getOrgUserConsolidatedInventory(),
     getAuditPackages(),
   ]);
 
   if (!result.success) {
-    // Handle error state (e.g., producer not linked to facility)
+    // Handle error state (e.g., org user not linked to facility)
     return (
       <div className="space-y-6">
         <div>
@@ -137,7 +137,7 @@ export default async function InventoryPage({
         </p>
       </div>
 
-      <ProducerInventoryPageContent
+      <OrgUserInventoryPageContent
         packages={packages}
         packagesInDrafts={draftsResult.success ? draftsResult.data : []}
         packagesInShipmentDrafts={shipmentDraftsResult.success ? shipmentDraftsResult.data : []}

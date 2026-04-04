@@ -2,7 +2,7 @@
  * Dashboard Feature Types
  */
 
-export interface ProducerMetrics {
+export interface OrgUserMetrics {
   totalInventoryM3: number;
   totalProductionVolumeM3: number;
   overallOutcomePercent: number;

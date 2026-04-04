@@ -1,26 +1,26 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer } from "@/lib/auth";
+import { getSession, isOrgUser } from "@/lib/auth";
 import type { ActionResult, PackageListItem } from "../types";
 
 /**
- * Get Producer Packages
+ * Get Org User Packages
  *
- * Fetches all inventory packages for the producer's linked facility.
+ * Fetches all inventory packages for the organisation user's linked facility.
  * Includes packages from:
  * 1. Shipments to this organisation
  * 2. Production entries from this organisation
  * 3. Direct inventory (admin-added) for this organisation
- * Producer only.
+ * Org user only.
  */
-export async function getProducerPackages(): Promise<ActionResult<PackageListItem[]>> {
+export async function getOrgUserPackages(): Promise<ActionResult<PackageListItem[]>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  if (!isProducer(session)) {
+  if (!isOrgUser(session)) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
@@ -33,7 +33,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
 
   const supabase = await createClient();
 
-  // Query 1: Shipment-sourced packages (shipped to this producer's facility)
+  // Query 1: Shipment-sourced packages (shipped to this organisation's facility)
   // Only include packages from shipments that have been accepted or completed
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: shipmentData, error: shipmentError } = await (supabase as any)
@@ -68,7 +68,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
     return { success: false, error: `Failed to fetch packages: ${shipmentError.message}`, code: "QUERY_FAILED" };
   }
 
-  // Query 2: Production-sourced packages (from this producer's organisation)
+  // Query 2: Production-sourced packages (from this organisation)
   // Filter by organisation_id on production entries AND verify package still belongs to this org
   // (packages shipped to another org have their organisation_id updated)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -259,7 +259,7 @@ export async function getProducerPackages(): Promise<ActionResult<PackageListIte
       length: pkg.length,
       pieces: pkg.pieces,
       volumeM3: pkg.volume_m3 != null ? Number(pkg.volume_m3) : null,
-      // Producer only sees their own org's packages, so use current org info
+      // Org user only sees their own org's packages, so use current org info
       organisationName: session.currentOrganizationName || session.organisationName,
       organisationCode: session.currentOrganizationCode || session.organisationCode,
       notes: pkg.notes ?? null,

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isOrganisationUser, isProducer, isSuperAdmin } from "@/lib/auth";
+import { getSession, isOrganisationUser, isOrgUser, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 const UUID_REGEX =
@@ -58,7 +58,7 @@ export async function deleteProductionEntry(
 
   // Deleting validated entries requires user role (or super admin)
   const isAdmin = isSuperAdmin(session);
-  if (entry.status === "validated" && !isAdmin && !isProducer(session)) {
+  if (entry.status === "validated" && !isAdmin && !isOrgUser(session)) {
     return { success: false, error: "Only organization users can delete validated entries", code: "FORBIDDEN" };
   }
 

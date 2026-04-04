@@ -121,3 +121,4 @@ export const ORDER_STATUSES: OrderStatus[] = [
  */
 export const CURRENCIES = ["EUR", "GBP", "USD"] as const;
 export type Currency = (typeof CURRENCIES)[number];
+

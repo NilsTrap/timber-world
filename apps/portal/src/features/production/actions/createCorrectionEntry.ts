@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isOrganisationUser } from "@/lib/auth";
 import type { ActionResult } from "../types";
+import { logProductionActivity } from "./logProductionActivity";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -106,6 +107,8 @@ export async function createCorrectionEntry(
       console.error("Failed to auto-populate correction inputs:", inputsError.message);
     }
   }
+
+  await logProductionActivity(supabase, data.id, "correction_created", session.id, session.email, { originalEntryId });
 
   return { success: true, data: { id: data.id } };
 }

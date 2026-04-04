@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isSuperAdmin, isProducer } from "@/lib/auth";
+import { getSession, isSuperAdmin, isOrgUser } from "@/lib/auth";
 import type { ActionResult } from "@/features/shipments/types";
 
 export interface AuditPackageItem {
@@ -44,8 +44,8 @@ export async function getAuditPackages(orgId?: string): Promise<ActionResult<Aud
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  // Producers can only audit their own org; super admins can audit any/all
-  if (isProducer(session)) {
+  // Org users can only audit their own org; super admins can audit any/all
+  if (isOrgUser(session)) {
     const sessionOrgId = session.currentOrganizationId || session.organisationId;
     if (!sessionOrgId) {
       return { success: false, error: "Your account is not linked to a facility.", code: "NO_ORGANISATION_LINK" };

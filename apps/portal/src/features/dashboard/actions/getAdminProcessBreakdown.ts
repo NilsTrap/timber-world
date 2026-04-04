@@ -129,7 +129,7 @@ async function fetchProcessStats(
 /**
  * Get Admin Process Breakdown with Trend Indicators
  *
- * Groups validated production entries by process across ALL producers.
+ * Groups validated production entries by process across all organisations.
  * Computes per-process stats and trend compared to previous period.
  *
  * @param dateRange - Optional date range filter

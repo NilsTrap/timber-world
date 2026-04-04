@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isProducer, isSuperAdmin } from "@/lib/auth";
+import { getSession, isOrgUser, isSuperAdmin } from "@/lib/auth";
 import { getOrgExcludedRefValues } from "@/lib/auth/getOrgRefExclusions";
 import type { ActionResult, ReferenceDropdowns, ReferenceOption } from "../types";
 
@@ -16,20 +16,20 @@ const REFERENCE_TABLES = [
 ] as const;
 
 /**
- * Get Reference Dropdowns for Producer
+ * Get Reference Dropdowns for Org User
  *
  * Fetches all 7 reference table active options for the production output form.
  * Filters out values excluded for the user's organisation.
- * Accessible by producers and Super Admin.
+ * Accessible by org users and Super Admin.
  */
-export async function getReferenceDropdownsForProducer(): Promise<ActionResult<ReferenceDropdowns>> {
+export async function getReferenceDropdownsForOrgUser(): Promise<ActionResult<ReferenceDropdowns>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  // Allow producers and Super Admin
-  if (!isProducer(session) && !isSuperAdmin(session)) {
+  // Allow org users and Super Admin
+  if (!isOrgUser(session) && !isSuperAdmin(session)) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 

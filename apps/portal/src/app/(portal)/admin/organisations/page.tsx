@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, orgHasFeature } from "@/lib/auth";
+import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import { UsersPageTabs } from "@/features/organisations/components/UsersPageTabs";
 
 export const metadata: Metadata = {
@@ -21,8 +21,8 @@ export default async function UsersPage() {
 
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasFeature = await orgHasFeature(orgId, "organizations.view");
-    if (!hasFeature) {
+    const hasModule = await orgHasModule(orgId, "organizations.view");
+    if (!hasModule) {
       notFound();
     }
   }

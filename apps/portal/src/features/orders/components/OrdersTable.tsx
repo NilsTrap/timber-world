@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowUp,
@@ -79,6 +80,10 @@ function formatVolume(m3: number | null): string {
 
 interface OrdersTableProps {
   isAdmin: boolean;
+  /** Whether the user can pick which customer the order is for (salesperson/admin) */
+  canSelectCustomer: boolean;
+  userOrganisationId?: string | null;
+  userOrganisationName?: string | null;
 }
 
 /**
@@ -86,7 +91,8 @@ interface OrdersTableProps {
  *
  * Displays all orders with sortable columns and CRUD actions.
  */
-export function OrdersTable({ isAdmin }: OrdersTableProps) {
+export function OrdersTable({ isAdmin, canSelectCustomer, userOrganisationId, userOrganisationName }: OrdersTableProps) {
+  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -229,24 +235,20 @@ export function OrdersTable({ isAdmin }: OrdersTableProps) {
 
   return (
     <div className="space-y-4">
-      {isAdmin && (
-        <div className="flex justify-end">
-          <Button onClick={handleAdd}>
-            <Plus className="h-4 w-4" />
-            Add Order
-          </Button>
-        </div>
-      )}
+      <div className="flex justify-end">
+        <Button onClick={handleAdd}>
+          <Plus className="h-4 w-4" />
+          Add Order
+        </Button>
+      </div>
 
       {orders.length === 0 ? (
         <div className="rounded-lg border bg-card p-12 text-center">
           <p className="text-muted-foreground">No orders yet</p>
-          {isAdmin && (
-            <Button onClick={handleAdd} variant="outline" className="mt-4">
-              <Plus className="h-4 w-4" />
-              Add First Order
-            </Button>
-          )}
+          <Button onClick={handleAdd} variant="outline" className="mt-4">
+            <Plus className="h-4 w-4" />
+            Add First Order
+          </Button>
         </div>
       ) : (
         <div className="rounded-lg border">
@@ -313,7 +315,11 @@ export function OrdersTable({ isAdmin }: OrdersTableProps) {
             </TableHeader>
             <TableBody>
               {sortedOrders.map((order) => (
-                <TableRow key={order.id} className="hover:bg-accent/50 transition-colors">
+                <TableRow
+                  key={order.id}
+                  className="hover:bg-accent/50 transition-colors cursor-pointer"
+                  onClick={() => router.push(`/orders/${order.id}`)}
+                >
                   <TableCell className="font-mono font-medium">{order.code}</TableCell>
                   <TableCell>{order.name}</TableCell>
                   <TableCell>
@@ -345,7 +351,7 @@ export function OrdersTable({ isAdmin }: OrdersTableProps) {
                     )}
                   </TableCell>
                   {isAdmin && (
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
@@ -380,6 +386,10 @@ export function OrdersTable({ isAdmin }: OrdersTableProps) {
         open={isFormOpen}
         onOpenChange={setIsFormOpen}
         onSuccess={handleFormSuccess}
+        isAdmin={isAdmin}
+        canSelectCustomer={canSelectCustomer}
+        userOrganisationId={userOrganisationId}
+        userOrganisationName={userOrganisationName}
       />
 
       {/* Delete Confirmation Dialog */}

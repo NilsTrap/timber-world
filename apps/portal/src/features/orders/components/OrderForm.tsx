@@ -32,6 +32,12 @@ interface OrderFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  isAdmin: boolean;
+  /** Whether user can pick which customer the order is for (salesperson/admin) */
+  canSelectCustomer: boolean;
+  /** For users who can't select customer: their organisation ID (auto-filled) */
+  userOrganisationId?: string | null;
+  userOrganisationName?: string | null;
 }
 
 // Form schema
@@ -61,11 +67,18 @@ export function OrderForm({
   open,
   onOpenChange,
   onSuccess,
+  isAdmin,
+  canSelectCustomer,
+  userOrganisationId,
+  userOrganisationName,
 }: OrderFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [organisations, setOrganisations] = useState<OrganisationOption[]>([]);
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
   const isEditing = !!order;
+
+  // For users who can't select customer, default org to their own
+  const defaultOrgId = order?.organisationId ?? (canSelectCustomer ? "" : (userOrganisationId ?? ""));
 
   const {
     register,
@@ -76,7 +89,7 @@ export function OrderForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: order?.name ?? "",
-      organisationId: order?.organisationId ?? "",
+      organisationId: defaultOrgId,
       orderDate: order?.orderDate ?? new Date().toISOString().split("T")[0],
       volumeM3: order?.volumeM3?.toString() ?? "",
       valueCents: order?.valueCents ? (order.valueCents / 100).toString() : "",
@@ -85,9 +98,9 @@ export function OrderForm({
     },
   });
 
-  // Load organisations on open
+  // Load organisations on open (only for users who can select customer)
   useEffect(() => {
-    if (open) {
+    if (open && canSelectCustomer) {
       setIsLoadingOrgs(true);
       getActiveOrganisations().then((result) => {
         if (result.success) {
@@ -98,14 +111,14 @@ export function OrderForm({
         setIsLoadingOrgs(false);
       });
     }
-  }, [open]);
+  }, [open, canSelectCustomer]);
 
   // Reset form when order changes or dialog opens
   useEffect(() => {
     if (open) {
       reset({
         name: order?.name ?? "",
-        organisationId: order?.organisationId ?? "",
+        organisationId: order?.organisationId ?? (canSelectCustomer ? "" : (userOrganisationId ?? "")),
         orderDate: order?.orderDate ?? new Date().toISOString().split("T")[0],
         volumeM3: order?.volumeM3?.toString() ?? "",
         valueCents: order?.valueCents ? (order.valueCents / 100).toString() : "",
@@ -113,7 +126,7 @@ export function OrderForm({
         notes: order?.notes ?? "",
       });
     }
-  }, [open, order, reset]);
+  }, [open, order, reset, canSelectCustomer, userOrganisationId]);
 
   const onSubmit = async (data: FormInput) => {
     setIsSubmitting(true);
@@ -200,29 +213,37 @@ export function OrderForm({
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="organisationId">
-              Customer <span className="text-destructive">*</span>
-            </Label>
-            <select
-              id="organisationId"
-              {...register("organisationId")}
-              disabled={isLoadingOrgs}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="">{isLoadingOrgs ? "Loading..." : "Select customer..."}</option>
-              {organisations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.code} - {org.name}
-                </option>
-              ))}
-            </select>
-            {errors.organisationId && (
-              <p className="text-sm text-destructive" role="alert">
-                {errors.organisationId.message}
-              </p>
-            )}
-          </div>
+          {canSelectCustomer ? (
+            <div className="space-y-2">
+              <Label htmlFor="organisationId">
+                Customer <span className="text-destructive">*</span>
+              </Label>
+              <select
+                id="organisationId"
+                {...register("organisationId")}
+                disabled={isLoadingOrgs}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">{isLoadingOrgs ? "Loading..." : "Select customer..."}</option>
+                {organisations.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.code} - {org.name}
+                  </option>
+                ))}
+              </select>
+              {errors.organisationId && (
+                <p className="text-sm text-destructive" role="alert">
+                  {errors.organisationId.message}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label>Customer</Label>
+              <p className="text-sm py-2">{userOrganisationName || "Your organisation"}</p>
+              <input type="hidden" {...register("organisationId")} />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="orderDate">

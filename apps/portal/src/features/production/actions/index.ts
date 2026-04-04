@@ -11,7 +11,7 @@ export { getProductionInputs } from "./getProductionInputs";
 export { addProductionInput } from "./addProductionInput";
 export { removeProductionInput } from "./removeProductionInput";
 export { updateProductionInput } from "./updateProductionInput";
-export { getReferenceDropdownsForProducer } from "./getReferenceDropdownsForProducer";
+export { getReferenceDropdownsForOrgUser } from "./getReferenceDropdownsForOrgUser";
 export { getProductionOutputs } from "./getProductionOutputs";
 export { saveProductionOutputs } from "./saveProductionOutputs";
 export { validateProduction } from "./validateProduction";
@@ -33,6 +33,9 @@ export { restoreProductionSnapshot } from "./restoreProductionSnapshot";
 export { saveInvoiceNumber } from "./saveInvoiceNumber";
 export { validateSingleOutput } from "./validateSingleOutput";
 export { unvalidateSingleOutput } from "./unvalidateSingleOutput";
+export { getProductionActivityLog } from "./getProductionActivityLog";
+export type { ActivityLogEntry } from "./getProductionActivityLog";
+export { logProductionActivity } from "./logProductionActivity";
 
 // Tracking
 export * from "./tracking";

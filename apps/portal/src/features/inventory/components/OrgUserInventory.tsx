@@ -9,7 +9,7 @@ import type { PackageListItem } from "../types";
 import type { DraftPackageInfo } from "@/features/production/actions";
 import type { ShipmentDraftPackageInfo } from "@/features/shipments/actions";
 
-interface ProducerInventoryProps {
+interface OrgUserInventoryProps {
   packages: PackageListItem[];
   packagesInDrafts?: DraftPackageInfo[];
   packagesInShipmentDrafts?: ShipmentDraftPackageInfo[];
@@ -17,7 +17,7 @@ interface ProducerInventoryProps {
   initialFilters?: Record<string, string[]>;
 }
 
-export function ProducerInventory({ packages, packagesInDrafts = [], packagesInShipmentDrafts = [], initialFilters }: ProducerInventoryProps) {
+export function OrgUserInventory({ packages, packagesInDrafts = [], packagesInShipmentDrafts = [], initialFilters }: OrgUserInventoryProps) {
   const tableRef = useRef<DataEntryTableHandle>(null);
   const [hasActiveFilters, setHasActiveFilters] = useState(
     () => initialFilters !== undefined && Object.keys(initialFilters).length > 0
