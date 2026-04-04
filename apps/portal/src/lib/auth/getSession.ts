@@ -4,13 +4,12 @@ import { cookies } from "next/headers";
 const CURRENT_ORG_COOKIE = "timber-current-org";
 
 /**
- * User Role Types (Legacy - kept for backward compatibility)
+ * User Role Types
  *
- * MVP supports two simple roles:
- * - admin: Timber World staff with full access
- * - producer: Factory managers with production access
+ * - admin: Super Admin (platform owner, full access)
+ * - user: Regular organisation member (access based on org modules)
  */
-export type UserRole = "admin" | "producer";
+export type UserRole = "admin" | "user";
 
 /**
  * Organization Membership
@@ -75,7 +74,7 @@ export async function getSession(): Promise<SessionUser | null> {
   }
 
   // Get role from user metadata (set during registration)
-  const role = (user.user_metadata?.role as UserRole) || "producer";
+  const role = (user.user_metadata?.role as UserRole) || "user";
   const name = (user.user_metadata?.name as string) || user.email || "User";
 
   // Query portal_users for user details
@@ -222,10 +221,11 @@ export function isAdmin(session: SessionUser | null): boolean {
 }
 
 /**
- * Check if user has producer role (legacy check)
+ * Check if user has regular user role (not admin)
+ * Note: kept as isProducer for backward compatibility across codebase
  */
 export function isProducer(session: SessionUser | null): boolean {
-  return session?.role === "producer";
+  return session?.role === "user";
 }
 
 /**

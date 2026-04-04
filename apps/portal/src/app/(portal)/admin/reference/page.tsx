@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, isSuperAdmin, orgHasFeature } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
 import { ReferenceDataManager } from "@/features/reference-data";
 
 export const metadata: Metadata = {
@@ -20,11 +20,7 @@ export default async function ReferenceDataPage() {
   }
 
   if (!isAdmin(session)) {
-    const orgId = session.currentOrganizationId || session.organisationId;
-    const hasFeature = await orgHasFeature(orgId, "reference.view");
-    if (!hasFeature) {
-      notFound();
-    }
+    notFound();
   }
 
   return (

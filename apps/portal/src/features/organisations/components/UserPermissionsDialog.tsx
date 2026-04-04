@@ -243,7 +243,7 @@ export function UserPermissionsDialog({
           </div>
         ) : permissions.length === 0 ? (
           <div className="py-8 text-center text-muted-foreground">
-            No features available
+            No modules available
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto space-y-2 py-2">

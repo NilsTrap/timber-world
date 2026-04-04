@@ -37,14 +37,6 @@ export type { UserPermission, OverrideState } from "./getUserPermissions";
 export { getOrganisationFeatures, updateOrganisationFeatures } from "./getOrganisationFeatures";
 export type { OrganisationFeature } from "./getOrganisationFeatures";
 
-// Organisation types (Story 10.13)
-export {
-  getOrganisationTypes,
-  getOrganisationAssignedTypes,
-  updateOrganisationTypes,
-} from "./getOrganisationTypes";
-export type { OrganizationType } from "./getOrganisationTypes";
-
 // Trading partners
 export { getTradingPartners } from "./getTradingPartners";
 export { addTradingPartner } from "./addTradingPartner";

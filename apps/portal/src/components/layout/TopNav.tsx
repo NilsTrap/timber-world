@@ -20,14 +20,13 @@ interface NavItem {
 const ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
   { href: "/inventory", label: "Inventory", iconName: "Package" },
-  { href: "/admin/reference", label: "Reference Data", iconName: "Settings" },
 ];
 
 /**
- * Navigation items for Producer users
+ * Navigation items for Organization users
  * TODO [i18n]: Replace labels with useTranslations()
  */
-const PRODUCER_NAV_ITEMS: NavItem[] = [
+const USER_NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
   { href: "/inventory", label: "Inventory", iconName: "Package" },
   { href: "/production", label: "Production", iconName: "Factory" },
@@ -38,7 +37,7 @@ const PRODUCER_NAV_ITEMS: NavItem[] = [
  * Get navigation items based on user role
  */
 function getNavItems(role: UserRole): NavItem[] {
-  return role === "admin" ? ADMIN_NAV_ITEMS : PRODUCER_NAV_ITEMS;
+  return role === "admin" ? ADMIN_NAV_ITEMS : USER_NAV_ITEMS;
 }
 
 /**
@@ -50,7 +49,7 @@ function getNavItems(role: UserRole): NavItem[] {
  */
 export async function TopNav() {
   const session = await getSession();
-  const navItems = getNavItems(session?.role || "producer");
+  const navItems = getNavItems(session?.role || "user");
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">

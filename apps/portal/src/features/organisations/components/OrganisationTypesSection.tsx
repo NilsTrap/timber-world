@@ -34,18 +34,19 @@ import {
   getOrganisationTypes,
   getOrganisationAssignedTypes,
   updateOrganisationTypes,
-} from "../actions";
-import type { OrganizationType } from "../actions";
+} from "../actions/getOrganisationTypes";
+import type { OrganizationType } from "../actions/getOrganisationTypes";
 
 interface OrganisationTypesSectionProps {
   organisationId: string;
 }
 
 /**
- * OrganisationTypesSection (Story 10.13)
+ * OrganisationTypesSection
  *
  * Section for managing organization type assignments (tags).
- * Organizations can have multiple types (e.g., Producer, Client).
+ * Types categorize the organisation (e.g., Producer, Client).
+ * Module configuration is managed in the Modules tab.
  */
 export function OrganisationTypesSection({
   organisationId,
@@ -63,7 +64,6 @@ export function OrganisationTypesSection({
   const loadData = async () => {
     setIsLoading(true);
 
-    // Load types and assignments in parallel
     const [typesResult, assignedResult] = await Promise.all([
       getOrganisationTypes(),
       getOrganisationAssignedTypes(organisationId),
@@ -148,7 +148,7 @@ export function OrganisationTypesSection({
             Organization Types
           </label>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Assign types to categorize this organization
+            Categorize this organisation. Modules are configured in the Modules tab.
           </p>
         </div>
         {hasChanges() && (
@@ -169,53 +169,33 @@ export function OrganisationTypesSection({
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {types.map((type) => (
-          <div
-            key={type.id}
-            className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-          >
-            <Checkbox
-              id={`type-${type.id}`}
-              checked={assignedTypeIds.has(type.id)}
-              onCheckedChange={() => toggleType(type.id)}
-              disabled={isSaving}
-            />
-            <div className="flex-1 min-w-0">
-              <Label
-                htmlFor={`type-${type.id}`}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                {(() => {
-                  const IconComponent = type.icon ? iconMap[type.icon] : null;
-                  return IconComponent ? (
-                    <IconComponent className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <Building className="h-4 w-4 text-muted-foreground" />
-                  );
-                })()}
-                <span className="font-medium">{type.name}</span>
-              </Label>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {type.description}
-              </p>
-              {type.defaultFeatures.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {type.defaultFeatures.slice(0, 3).map((feature) => (
-                    <Badge key={feature} variant="outline" className="text-xs">
-                      {feature}
-                    </Badge>
-                  ))}
-                  {type.defaultFeatures.length > 3 && (
-                    <Badge variant="outline" className="text-xs">
-                      +{type.defaultFeatures.length - 3} more
-                    </Badge>
-                  )}
-                </div>
-              )}
+      <div className="flex flex-wrap gap-2">
+        {types.map((type) => {
+          const isAssigned = assignedTypeIds.has(type.id);
+          const IconComponent = type.icon ? iconMap[type.icon] : null;
+          const Icon = IconComponent || Building;
+
+          return (
+            <div
+              key={type.id}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                isAssigned
+                  ? "border-primary bg-primary/5"
+                  : "bg-card hover:bg-accent/50"
+              }`}
+              onClick={() => !isSaving && toggleType(type.id)}
+            >
+              <Checkbox
+                id={`type-${type.id}`}
+                checked={isAssigned}
+                onCheckedChange={() => toggleType(type.id)}
+                disabled={isSaving}
+              />
+              <Icon className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">{type.name}</span>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -10,7 +10,7 @@ export interface Person {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "producer";
+  role: "admin" | "user";
   organisationId: string | null;
   organisationName: string;
   organisationCode: string;

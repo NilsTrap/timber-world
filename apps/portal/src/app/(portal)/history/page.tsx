@@ -10,8 +10,8 @@ export const metadata: Metadata = {
 /**
  * Production History Page
  *
- * Producer page for viewing and editing past production entries.
- * Accessible to both admin and producer roles.
+ * User page for viewing and editing past production entries.
+ * Accessible to both admin and user roles.
  *
  * TODO [i18n]: Replace hardcoded text with useTranslations()
  */

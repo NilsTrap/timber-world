@@ -56,10 +56,10 @@ export async function deleteProductionEntry(
     return { success: false, error: "Cannot delete entry in this status", code: "VALIDATION_FAILED" };
   }
 
-  // Deleting validated entries requires producer role (or super admin)
+  // Deleting validated entries requires user role (or super admin)
   const isAdmin = isSuperAdmin(session);
   if (entry.status === "validated" && !isAdmin && !isProducer(session)) {
-    return { success: false, error: "Only producers can delete validated entries", code: "FORBIDDEN" };
+    return { success: false, error: "Only organization users can delete validated entries", code: "FORBIDDEN" };
   }
 
   // Check if any correction entries reference this entry

@@ -77,7 +77,14 @@ export function PeopleTable() {
         <TableBody>
           {people.map((person) => (
             <TableRow key={person.id}>
-              <TableCell className="font-medium">{person.name}</TableCell>
+              <TableCell className="font-medium">
+                <Link
+                  href={`/admin/people/${person.id}`}
+                  className="text-primary hover:underline"
+                >
+                  {person.name}
+                </Link>
+              </TableCell>
               <TableCell>{person.email}</TableCell>
               <TableCell>
                 <Link
@@ -89,7 +96,7 @@ export function PeopleTable() {
               </TableCell>
               <TableCell>
                 <Badge variant={person.role === "admin" ? "default" : "secondary"}>
-                  {person.role}
+                  {person.role === "admin" ? "Super Admin" : "User"}
                 </Badge>
               </TableCell>
               <TableCell>

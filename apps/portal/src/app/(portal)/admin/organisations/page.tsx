@@ -6,15 +6,15 @@ import { PeopleTable } from "@/features/organisations/components/PeopleTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@timber/ui";
 
 export const metadata: Metadata = {
-  title: "Contacts",
+  title: "Users",
 };
 
 /**
- * Contacts Management Page (Admin Only)
+ * Users Management Page (Admin Only)
  *
  * Allows admins to manage organisations and people.
  */
-export default async function ContactsPage() {
+export default async function UsersPage() {
   const session = await getSession();
 
   if (!session) {
@@ -32,7 +32,7 @@ export default async function ContactsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Contacts</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Users</h1>
         <p className="text-muted-foreground">
           Manage organisations and people
         </p>

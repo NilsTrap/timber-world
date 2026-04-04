@@ -27,55 +27,12 @@ export async function getOrgEnabledFeatures(
     .eq("organization_id", organizationId);
 
   const enabledFeatures = new Set<string>();
-  const explicitlySet = new Map<string, boolean>();
 
-  // Track explicitly set features
+  // Track explicitly enabled features
   (orgFeatures || []).forEach((f: { feature_code: string; enabled: boolean }) => {
-    explicitlySet.set(f.feature_code, f.enabled);
     if (f.enabled) {
       enabledFeatures.add(f.feature_code);
     }
-  });
-
-  // Get org type default features for features not explicitly set
-  const { data: orgTypes } = await client
-    .from("organization_type_assignments")
-    .select("organization_types(default_features)")
-    .eq("organization_id", organizationId);
-
-  // Get all available features for wildcard expansion
-  const { data: allFeatures } = await client.from("features").select("code");
-  const allFeatureCodes = allFeatures?.map((f: { code: string }) => f.code) || [];
-
-  // Add default features from org types (if not explicitly disabled)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  orgTypes?.forEach((ot: any) => {
-    const defaultFeatures = ot.organization_types?.default_features || [];
-    defaultFeatures.forEach((f: string) => {
-      if (f === "*") {
-        // Wildcard - add all features not explicitly disabled
-        allFeatureCodes.forEach((fc: string) => {
-          if (!explicitlySet.has(fc) || explicitlySet.get(fc) === true) {
-            enabledFeatures.add(fc);
-          }
-        });
-      } else if (f.endsWith("*")) {
-        // Prefix wildcard (e.g., "production.*")
-        const prefix = f.replace("*", "");
-        allFeatureCodes
-          .filter((fc: string) => fc.startsWith(prefix))
-          .forEach((fc: string) => {
-            if (!explicitlySet.has(fc) || explicitlySet.get(fc) === true) {
-              enabledFeatures.add(fc);
-            }
-          });
-      } else {
-        // Specific feature
-        if (!explicitlySet.has(f) || explicitlySet.get(f) === true) {
-          enabledFeatures.add(f);
-        }
-      }
-    });
   });
 
   return enabledFeatures;

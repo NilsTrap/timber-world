@@ -59,31 +59,9 @@ export async function hasPermission(
     .eq("feature_code", featureCode)
     .single();
 
-  // If feature is explicitly disabled, deny
-  if (orgFeature && !orgFeature.enabled) {
+  // If feature is explicitly disabled or not set, deny
+  if (!orgFeature || !orgFeature.enabled) {
     return false;
-  }
-
-  // If feature doesn't exist in org_features, check if it's in org type defaults
-  if (!orgFeature) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: orgTypes } = await (supabase as any)
-      .from("organization_type_assignments")
-      .select("organization_types(default_features)")
-      .eq("organization_id", organizationId);
-
-    const hasDefaultFeature = orgTypes?.some(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (ot: any) =>
-        ot.organization_types?.default_features?.includes(featureCode) ||
-        ot.organization_types?.default_features?.some(
-          (f: string) => f === "*" || featureCode.startsWith(f.replace("*", ""))
-        )
-    );
-
-    if (!hasDefaultFeature) {
-      return false;
-    }
   }
 
   // Layer 3: Check user overrides first (they take precedence)
@@ -184,30 +162,6 @@ export async function getEffectivePermissions(
     orgFeatures?.map((f: any) => [f.feature_code, f.enabled]) || []
   );
 
-  // Get org type default features
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: orgTypes } = await (supabase as any)
-    .from("organization_type_assignments")
-    .select("organization_types(default_features)")
-    .eq("organization_id", organizationId);
-
-  const defaultFeatures = new Set<string>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  orgTypes?.forEach((ot: any) => {
-    ot.organization_types?.default_features?.forEach((f: string) => {
-      if (f === "*") {
-        featureCodes.forEach((fc: string) => defaultFeatures.add(fc));
-      } else if (f.endsWith("*")) {
-        const prefix = f.replace("*", "");
-        featureCodes
-          .filter((fc: string) => fc.startsWith(prefix))
-          .forEach((fc: string) => defaultFeatures.add(fc));
-      } else {
-        defaultFeatures.add(f);
-      }
-    });
-  });
-
   // Get user's role permissions
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: userRoles } = await (supabase as any)
@@ -254,11 +208,8 @@ export async function getEffectivePermissions(
 
   // Calculate effective permissions
   for (const featureCode of featureCodes) {
-    // Check if org has feature (explicit or default)
-    const orgHasFeature =
-      orgFeatureMap.get(featureCode) === true ||
-      (orgFeatureMap.get(featureCode) === undefined &&
-        defaultFeatures.has(featureCode));
+    // Check if org has feature explicitly enabled
+    const orgHasFeature = orgFeatureMap.get(featureCode) === true;
 
     if (!orgHasFeature) continue;
 

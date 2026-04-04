@@ -32,7 +32,7 @@ export function RegisterForm() {
       email: "",
       password: "",
       confirmPassword: "",
-      role: "producer",
+      role: "user",
     },
   });
 
@@ -130,8 +130,8 @@ export function RegisterForm() {
           disabled={isLoading}
           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
         >
-          <option value="producer">Producer (Factory Manager)</option>
-          <option value="admin">Admin (Timber World Staff)</option>
+          <option value="user">User</option>
+          <option value="admin">Super Admin</option>
         </select>
         {errors.role && (
           <p className="text-sm text-destructive">{errors.role.message}</p>

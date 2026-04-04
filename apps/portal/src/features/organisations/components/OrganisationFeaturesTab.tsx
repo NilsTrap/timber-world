@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Loader2, Settings2, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2, Settings2 } from "lucide-react";
 import {
   Button,
   Checkbox,
   Badge,
 } from "@timber/ui";
-import { getOrganisationFeatures, updateOrganisationFeatures } from "../actions";
+import {
+  getOrganisationFeatures,
+  updateOrganisationFeatures,
+} from "../actions";
 import type { OrganisationFeature } from "../actions";
 
 interface OrganisationFeaturesTabProps {
@@ -16,10 +19,9 @@ interface OrganisationFeaturesTabProps {
 }
 
 /**
- * OrganisationFeaturesTab (Story 10.12)
+ * OrganisationFeaturesTab — Modules management
  *
- * Tab content for managing organization feature configuration.
- * Shows all features grouped by category with checkboxes to enable/disable.
+ * Shows all modules with a toggle to enable/disable each one.
  */
 export function OrganisationFeaturesTab({
   organisationId,
@@ -28,43 +30,28 @@ export function OrganisationFeaturesTab({
   const [enabledFeatures, setEnabledFeatures] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    loadFeatures();
+    loadData();
   }, [organisationId]);
 
-  const loadFeatures = async () => {
+  const loadData = async () => {
     setIsLoading(true);
-    const result = await getOrganisationFeatures(organisationId);
 
-    if (result.success) {
-      setFeatures(result.data);
-      // Initialize enabled features
+    const featuresResult = await getOrganisationFeatures(organisationId);
+
+    if (featuresResult.success) {
+      setFeatures(featuresResult.data);
       const enabled = new Set(
-        result.data.filter((f) => f.enabled).map((f) => f.featureCode)
+        featuresResult.data.filter((f) => f.enabled).map((f) => f.featureCode)
       );
       setEnabledFeatures(enabled);
-      // Expand all categories by default
-      const categories = new Set(result.data.map((f) => f.category));
-      setExpandedCategories(categories);
     } else {
-      toast.error(result.error);
+      toast.error(featuresResult.error);
     }
 
     setIsLoading(false);
   };
-
-  // Group features by category
-  const groupedFeatures = useMemo(() => {
-    const groups = new Map<string, OrganisationFeature[]>();
-    features.forEach((f) => {
-      const existing = groups.get(f.category) || [];
-      existing.push(f);
-      groups.set(f.category, existing);
-    });
-    return groups;
-  }, [features]);
 
   const toggleFeature = (featureCode: string) => {
     setEnabledFeatures((prev) => {
@@ -78,41 +65,6 @@ export function OrganisationFeaturesTab({
     });
   };
 
-  const toggleCategory = (category: string) => {
-    setExpandedCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(category)) {
-        next.delete(category);
-      } else {
-        next.add(category);
-      }
-      return next;
-    });
-  };
-
-  const toggleAllInCategory = (category: string, enable: boolean) => {
-    const categoryFeatures = groupedFeatures.get(category) || [];
-    setEnabledFeatures((prev) => {
-      const next = new Set(prev);
-      categoryFeatures.forEach((f) => {
-        if (enable) {
-          next.add(f.featureCode);
-        } else {
-          next.delete(f.featureCode);
-        }
-      });
-      return next;
-    });
-  };
-
-  const getCategoryStatus = (category: string) => {
-    const categoryFeatures = groupedFeatures.get(category) || [];
-    const enabledCount = categoryFeatures.filter((f) =>
-      enabledFeatures.has(f.featureCode)
-    ).length;
-    return { enabled: enabledCount, total: categoryFeatures.length };
-  };
-
   const handleSave = async () => {
     setIsSaving(true);
     const result = await updateOrganisationFeatures(
@@ -121,8 +73,8 @@ export function OrganisationFeaturesTab({
     );
 
     if (result.success) {
-      toast.success("Organization features updated");
-      loadFeatures(); // Reload to get fresh state
+      toast.success("Modules updated");
+      loadData();
     } else {
       toast.error(result.error);
     }
@@ -153,7 +105,7 @@ export function OrganisationFeaturesTab({
     return (
       <div className="py-12 text-center text-muted-foreground">
         <Settings2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-        <p>No features available to configure</p>
+        <p>No modules available to configure</p>
       </div>
     );
   }
@@ -162,8 +114,7 @@ export function OrganisationFeaturesTab({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Enable or disable features for this organization. Disabled features
-          will not be available to any users.
+          Toggle modules on or off to control which pages this organisation sees in the sidebar.
         </p>
         <Button
           onClick={handleSave}
@@ -182,71 +133,27 @@ export function OrganisationFeaturesTab({
       </div>
 
       <div className="space-y-2">
-        {Array.from(groupedFeatures.entries()).map(([category, categoryFeatures]) => {
-          const status = getCategoryStatus(category);
-          const allEnabled = status.enabled === status.total;
-          const noneEnabled = status.enabled === 0;
+        {features.map((feature) => {
+          const isEnabled = enabledFeatures.has(feature.featureCode);
 
           return (
-            <div key={category} className="border rounded-lg">
-              <div className="flex items-center p-3 hover:bg-accent/50 transition-colors">
-                <button
-                  type="button"
-                  onClick={() => toggleCategory(category)}
-                  className="flex items-center gap-2 flex-1 text-left font-medium"
-                >
-                  {expandedCategories.has(category) ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                  {category}
-                </button>
-                <Badge variant="secondary" className="mr-3 text-xs">
-                  {status.enabled}/{status.total}
+            <div key={feature.featureCode} className="flex items-center gap-3 p-3 border rounded-lg">
+              <Checkbox
+                id={`module-${feature.featureCode}`}
+                checked={isEnabled}
+                onCheckedChange={() => toggleFeature(feature.featureCode)}
+                disabled={isSaving}
+              />
+              <label
+                htmlFor={`module-${feature.featureCode}`}
+                className="flex-1 font-medium cursor-pointer"
+              >
+                {feature.category}
+              </label>
+              {isEnabled && (
+                <Badge variant="default" className="text-xs">
+                  Active
                 </Badge>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleAllInCategory(category, !allEnabled)}
-                  disabled={isSaving}
-                  className="text-xs"
-                >
-                  {allEnabled ? "Disable All" : noneEnabled ? "Enable All" : "Enable All"}
-                </Button>
-              </div>
-              {expandedCategories.has(category) && (
-                <div className="border-t divide-y">
-                  {categoryFeatures.map((feature) => (
-                    <div
-                      key={feature.featureCode}
-                      className="flex items-center gap-3 py-2 px-3 hover:bg-accent/30 transition-colors"
-                    >
-                      <Checkbox
-                        id={`feature-${feature.featureCode}`}
-                        checked={enabledFeatures.has(feature.featureCode)}
-                        onCheckedChange={() => toggleFeature(feature.featureCode)}
-                        disabled={isSaving}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <label
-                          htmlFor={`feature-${feature.featureCode}`}
-                          className="text-sm font-medium cursor-pointer"
-                        >
-                          {feature.featureName}
-                        </label>
-                        {feature.featureDescription && (
-                          <p className="text-xs text-muted-foreground">
-                            {feature.featureDescription}
-                          </p>
-                        )}
-                      </div>
-                      <code className="text-xs text-muted-foreground font-mono">
-                        {feature.featureCode}
-                      </code>
-                    </div>
-                  ))}
-                </div>
               )}
             </div>
           );

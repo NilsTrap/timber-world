@@ -128,7 +128,7 @@ export async function updateOrganisationUser(
     id: data.id as string,
     email: data.email as string,
     name: data.name as string,
-    role: data.role as "admin" | "producer",
+    role: data.role as "admin" | "user",
     organisationId: data.organisation_id as string,
     authUserId: data.auth_user_id as string | null,
     isActive: data.is_active as boolean,

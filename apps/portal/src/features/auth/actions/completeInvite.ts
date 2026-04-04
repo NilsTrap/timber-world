@@ -83,9 +83,9 @@ export async function completeInvite(
   // 5. Determine redirect based on role
   let redirectTo = "/dashboard";
 
-  if (portalUser.role === "super_admin" || portalUser.role === "admin") {
+  if (portalUser.role === "admin") {
     redirectTo = "/admin/organisations";
-  } else if (portalUser.role === "producer") {
+  } else if (portalUser.role === "user") {
     redirectTo = "/production";
   }
 

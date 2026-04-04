@@ -35,7 +35,7 @@ export interface OrganisationUser {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "producer";
+  role: "admin" | "user";
   organisationId: string;
   authUserId: string | null;
   isActive: boolean;

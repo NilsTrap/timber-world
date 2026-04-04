@@ -24,19 +24,17 @@ interface FeatureNavItem extends NavItem {
  * Admin users see all items - feature filtering is for org-level access
  */
 const ADMIN_NAV_ITEMS: FeatureNavItem[] = [
+  { href: "/admin/marketing", label: "CMS", iconName: "Image" },
+  { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp" },
+  { href: "/admin/crm", label: "CRM", iconName: "Users" },
   { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
   { href: "/admin/inventory", label: "Inventory", iconName: "Package" },
-  { href: "/admin/shipments", label: "Shipments", iconName: "Truck" },
   { href: "/orders", label: "Orders", iconName: "ShoppingCart" },
   { href: "/production", label: "Production", iconName: "Factory" },
   { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText" },
-  { href: "/admin/crm", label: "CRM", iconName: "Users" },
+  { href: "/admin/shipments", label: "Shipments", iconName: "Truck" },
   { href: "/admin/uk-staircase-pricing", label: "UK Staircase Pricing", iconName: "PoundSterling" },
-  { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp" },
-  { href: "/admin/marketing", label: "CMS", iconName: "Image" },
-  { href: "/admin/reference", label: "Reference Data", iconName: "Settings" },
-  { href: "/admin/organisations", label: "Contacts", iconName: "Contact" },
-  { href: "/admin/roles", label: "Roles", iconName: "Shield" },
+  { href: "/admin/organisations", label: "Users", iconName: "Users2" },
 ];
 
 /**
@@ -45,17 +43,17 @@ const ADMIN_NAV_ITEMS: FeatureNavItem[] = [
  */
 function getProducerNavItems(pendingShipmentCount: number = 0): FeatureNavItem[] {
   return [
+    { href: "/admin/marketing", label: "CMS", iconName: "Image", requiresFeature: "marketing.view" },
+    { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp", requiresFeature: "competitor-pricing.view" },
+    { href: "/admin/crm", label: "CRM", iconName: "Users", requiresFeature: "crm.view" },
     { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard", requiresFeature: "dashboard.view" },
     { href: "/inventory", label: "Inventory", iconName: "Package", requiresFeature: "inventory.view" },
-    { href: "/shipments", label: "Shipments", iconName: "Truck", badge: pendingShipmentCount, requiresFeature: "shipments.view" },
     { href: "/orders", label: "Orders", iconName: "ShoppingCart", requiresFeature: "orders.view" },
     { href: "/production", label: "Production", iconName: "Factory", requiresFeature: "production.view" },
     { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText", requiresFeature: "quotes.view" },
-    { href: "/admin/crm", label: "CRM", iconName: "Users", requiresFeature: "crm.view" },
-    { href: "/admin/marketing", label: "CMS", iconName: "Image", requiresFeature: "marketing.view" },
-    { href: "/admin/reference", label: "Reference Data", iconName: "Settings", requiresFeature: "reference.view" },
-    { href: "/admin/organisations", label: "Contacts", iconName: "Contact", requiresFeature: "organizations.view" },
-    { href: "/admin/roles", label: "Roles", iconName: "Shield", requiresFeature: "roles.view" },
+    { href: "/shipments", label: "Shipments", iconName: "Truck", badge: pendingShipmentCount, requiresFeature: "shipments.view" },
+    { href: "/admin/uk-staircase-pricing", label: "UK Staircase Pricing", iconName: "PoundSterling", requiresFeature: "uk-staircase-pricing.view" },
+    { href: "/admin/organisations", label: "Users", iconName: "Users2", requiresFeature: "organizations.view" },
   ];
 }
 
@@ -92,7 +90,7 @@ export async function SidebarWrapper() {
 
   // Fetch pending shipment count for producer users
   let pendingShipmentCount = 0;
-  if (session?.role === "producer" && (session.currentOrganizationId || session.organisationId)) {
+  if (session?.role === "user" && (session.currentOrganizationId || session.organisationId)) {
     const countResult = await getPendingShipmentCount();
     if (countResult.success) {
       pendingShipmentCount = countResult.data;

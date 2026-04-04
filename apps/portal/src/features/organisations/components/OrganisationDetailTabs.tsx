@@ -15,12 +15,12 @@ import {
   Label,
 } from "@timber/ui";
 import { toast } from "sonner";
-import { Building2, Users, Settings2, Handshake } from "lucide-react";
+import { Building2, Users, Settings2, Handshake, Database } from "lucide-react";
 import type { Organisation } from "../types";
 import { OrganisationUsersTable } from "./OrganisationUsersTable";
 import { OrganisationFeaturesTab } from "./OrganisationFeaturesTab";
-import { OrganisationTypesSection } from "./OrganisationTypesSection";
 import { TradingPartnersTab } from "./TradingPartnersTab";
+import { ReferenceDataManager } from "@/features/reference-data";
 import { toggleOrganisationExternal } from "../actions";
 
 interface OrganisationDetailTabsProps {
@@ -57,6 +57,7 @@ export function OrganisationDetailTabs({
   const getDefaultTab = () => {
     if (defaultTab === "users") return "users";
     if (defaultTab === "features") return "features";
+    if (defaultTab === "reference") return "reference";
     if (defaultTab === "partners") return "partners";
     return "details";
   };
@@ -74,7 +75,11 @@ export function OrganisationDetailTabs({
         </TabsTrigger>
         <TabsTrigger value="features">
           <Settings2 className="h-4 w-4 mr-2" />
-          Features
+          Modules
+        </TabsTrigger>
+        <TabsTrigger value="reference">
+          <Database className="h-4 w-4 mr-2" />
+          Reference Data
         </TabsTrigger>
         <TabsTrigger value="partners">
           <Handshake className="h-4 w-4 mr-2" />
@@ -173,9 +178,6 @@ export function OrganisationDetailTabs({
                 </p>
               </div>
             </div>
-            <div className="pt-4 border-t">
-              <OrganisationTypesSection organisationId={organisation.id} />
-            </div>
           </CardContent>
         </Card>
       </TabsContent>
@@ -194,10 +196,21 @@ export function OrganisationDetailTabs({
       <TabsContent value="features">
         <Card>
           <CardHeader>
-            <CardTitle>Feature Configuration</CardTitle>
+            <CardTitle>Modules</CardTitle>
           </CardHeader>
           <CardContent>
             <OrganisationFeaturesTab organisationId={organisation.id} />
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="reference">
+        <Card>
+          <CardHeader>
+            <CardTitle>Reference Data</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ReferenceDataManager canDelete={false} />
           </CardContent>
         </Card>
       </TabsContent>

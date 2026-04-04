@@ -401,26 +401,26 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {/* Roles button - manage user role assignments */}
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setRolesUser(user)}
-                          aria-label={`Manage roles for ${user.name}`}
-                          title="Manage roles"
-                        >
-                          <Shield className="h-4 w-4" />
-                        </Button>
-                        {/* Permissions button - manage permission overrides */}
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setPermissionsUser(user)}
-                          aria-label={`Manage permissions for ${user.name}`}
-                          title="Permission overrides"
-                        >
-                          <Lock className="h-4 w-4" />
-                        </Button>
+                        {/* Roles button - manage user role assignments (not yet active) */}
+                        <span title="Roles — coming soon">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            disabled
+                          >
+                            <Shield className="h-4 w-4" />
+                          </Button>
+                        </span>
+                        {/* Permissions button - manage permission overrides (not yet active) */}
+                        <span title="Permissions — coming soon">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            disabled
+                          >
+                            <Lock className="h-4 w-4" />
+                          </Button>
+                        </span>
                         {/* Send Credentials button - for created users (no auth_user_id yet) */}
                         {user.status === "created" && !user.authUserId && user.isActive && (
                           <Button

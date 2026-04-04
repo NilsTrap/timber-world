@@ -30,7 +30,7 @@ export type CreateUserInput = z.infer<typeof createUserSchema>;
  *
  * Creates a new user within an organisation.
  * The user is created with:
- * - role = 'producer' (default)
+ * - role = 'user' (default)
  * - status = 'created' (no auth credentials yet)
  * - is_active = true
  *
@@ -132,7 +132,7 @@ export async function createOrganisationUser(
     .insert({
       email,
       name,
-      role: "producer",
+      role: "user",
       organisation_id: organisationId,
       is_active: true,
       status: "created",
@@ -156,7 +156,7 @@ export async function createOrganisationUser(
     id: data.id as string,
     email: data.email as string,
     name: data.name as string,
-    role: data.role as "admin" | "producer",
+    role: data.role as "admin" | "user",
     organisationId: data.organisation_id as string,
     authUserId: data.auth_user_id as string | null,
     isActive: data.is_active as boolean,
