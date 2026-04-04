@@ -8,6 +8,7 @@ import {
   getValidatedProductions,
 } from "@/features/production/actions";
 import { getProcessBreakdown, getAdminProcessBreakdown } from "@/features/dashboard/actions";
+import { getTrackingSets } from "@/features/production/actions/tracking";
 import { ProductionPageTabs } from "@/features/production/components/ProductionPageTabs";
 
 export const metadata: Metadata = {
@@ -56,12 +57,13 @@ export default async function ProductionPage({
   // Determine which org to use for processes with notes (single org - use first selected or user's org)
   const processNotesOrgId = orgIds?.[0] || session.organisationId || undefined;
 
-  const [processesResult, processesWithNotesResult, draftsResult, historyResult, breakdownResult] = await Promise.all([
+  const [processesResult, processesWithNotesResult, draftsResult, historyResult, breakdownResult, trackingResult] = await Promise.all([
     getProcesses(),
     getProcessesWithNotes(processNotesOrgId),
     getDraftProductions(orgIds),
     getValidatedProductions(orgIds),
     userIsAdmin ? getAdminProcessBreakdown(undefined, orgIds) : getProcessBreakdown(),
+    getTrackingSets(),
   ]);
 
   const processes = processesResult.success ? processesResult.data : [];
@@ -69,6 +71,7 @@ export default async function ProductionPage({
   const drafts = draftsResult.success ? draftsResult.data : [];
   const history = historyResult.success ? historyResult.data : [];
   const breakdown = breakdownResult.success ? breakdownResult.data : [];
+  const trackingSets = trackingResult.success ? trackingResult.data : [];
 
   return (
     <div className="space-y-6">
@@ -85,6 +88,7 @@ export default async function ProductionPage({
         drafts={drafts}
         history={history}
         breakdown={breakdown}
+        trackingSets={trackingSets}
         defaultTab={tab}
         defaultProcess={process}
         showOrganisation={isSuperAdmin(session)}

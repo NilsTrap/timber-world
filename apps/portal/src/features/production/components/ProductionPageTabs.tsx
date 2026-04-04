@@ -5,10 +5,12 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@timber/ui";
 import type { Process, ProcessWithNotes, ProductionListItem, ProductionHistoryItem } from "../types";
 import type { ProcessBreakdownItem, AdminProcessBreakdownItem } from "@/features/dashboard/types";
+import type { TrackingSetListItem } from "../actions/tracking";
 import { NewProductionForm } from "./NewProductionForm";
 import { DraftProductionTable } from "./DraftProductionTable";
 import { ProductionHistoryTable } from "./ProductionHistoryTable";
 import { ProcessesTab } from "./ProcessesTab";
+import { TrackingTab } from "./TrackingTab";
 import { ProcessBreakdownTable } from "@/features/dashboard/components/ProcessBreakdownTable";
 import { AdminProcessBreakdownTable } from "@/features/dashboard/components/AdminProcessBreakdownTable";
 
@@ -18,6 +20,7 @@ interface ProductionPageTabsProps {
   drafts: ProductionListItem[];
   history: ProductionHistoryItem[];
   breakdown: ProcessBreakdownItem[] | AdminProcessBreakdownItem[];
+  trackingSets: TrackingSetListItem[];
   defaultTab?: string;
   defaultProcess?: string;
   showOrganisation?: boolean;
@@ -45,6 +48,7 @@ export function ProductionPageTabs({
   drafts,
   history,
   breakdown,
+  trackingSets,
   defaultTab,
   defaultProcess,
   showOrganisation = false,
@@ -86,6 +90,7 @@ export function ProductionPageTabs({
     if (defaultTab === "history") return "history";
     if (defaultTab === "processes") return "processes";
     if (defaultTab === "consolidated") return "consolidated";
+    if (defaultTab === "tracking") return "tracking";
     if (defaultTab) return defaultTab;
     // Then check sessionStorage
     if (typeof window !== "undefined") {
@@ -121,6 +126,7 @@ export function ProductionPageTabs({
         <TabsTrigger value="active">Drafts</TabsTrigger>
         <TabsTrigger value="history">Completed</TabsTrigger>
         <TabsTrigger value="consolidated">Consolidated</TabsTrigger>
+        <TabsTrigger value="tracking">Tracking</TabsTrigger>
         <TabsTrigger value="processes">Process List</TabsTrigger>
       </TabsList>
 
@@ -156,6 +162,10 @@ export function ProductionPageTabs({
             onProcessClick={handleProcessClick}
           />
         )}
+      </TabsContent>
+
+      <TabsContent value="tracking">
+        <TrackingTab trackingSets={trackingSets} />
       </TabsContent>
 
       <TabsContent value="processes">
