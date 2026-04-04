@@ -21,3 +21,4 @@ export type { ShipmentAvailablePackage } from "./getShipmentAvailablePackages";
 export { getPackagesInShipmentDrafts } from "./getPackagesInShipmentDrafts";
 export type { ShipmentDraftPackageInfo } from "./getPackagesInShipmentDrafts";
 export { saveIncomingShipmentPackages } from "./saveIncomingShipmentPackages";
+export { updateShipmentDate } from "./updateShipmentDate";

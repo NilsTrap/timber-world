@@ -45,7 +45,8 @@ export function calculateVolume(
   if (isNaN(t) || isNaN(w) || isNaN(l) || isNaN(p)) return null;
   if (t <= 0 || w <= 0 || l <= 0 || p <= 0) return null;
 
-  return (t * w * l * p) / 1_000_000_000;
+  // Round to 3 decimal places so totals are consistent everywhere
+  return Math.round(((t * w * l * p) / 1_000_000_000) * 1000) / 1000;
 }
 
 export function createEmptyOutputRow(index: number, code: string = "OUT"): OutputRow {

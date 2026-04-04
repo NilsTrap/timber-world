@@ -862,7 +862,7 @@ function DataEntryTableInner<TRow>(
       id={`${idPrefix}-${renderIndex}-${col.key}`}
       className={`h-7 text-sm px-1 ${col.width ?? "w-[4.5rem]"} ${col.isNumeric ? "text-right" : ""}`}
       placeholder={col.placeholder}
-      value={col.getValue(row)}
+      value={col.getDisplayValue ? col.getDisplayValue(row) : col.getValue(row)}
       onChange={(e) => updateCell(originalIndex, col.key, e.target.value)}
       onKeyDown={(e) =>
         handleFieldKeyDown(e, renderIndex, col.key, displayRows.length)

@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef, useTransition } from "react";
 import { toast } from "sonner";
 import { DataEntryTable, Button, type ColumnDef } from "@timber/ui";
-import { Save, Loader2, FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet } from "lucide-react";
 import { getReferenceDropdowns } from "../actions";
 import { saveIncomingShipmentPackages } from "../actions/saveIncomingShipmentPackages";
 import { PasteImportModal } from "@/features/inventory/components/PasteImportModal";
@@ -37,7 +37,8 @@ function calculateVolume(
   if (isNaN(t) || isNaN(w) || isNaN(l) || isNaN(p)) return null;
   if (t <= 0 || w <= 0 || l <= 0 || p <= 0) return null;
 
-  return (t * w * l * p) / 1_000_000_000;
+  // Round to 3 decimal places so totals are consistent everywhere
+  return Math.round(((t * w * l * p) / 1_000_000_000) * 1000) / 1000;
 }
 
 /** Determine if volume should be auto-calculated */
@@ -103,87 +104,88 @@ interface PackageRow {
 interface IncomingShipmentPackageEditorProps {
   shipmentId: string;
   shipmentCode: string;
+  /** Receiving org code, e.g. "TVG" */
+  toOrgCode: string;
+  /** Sequence number among all incoming shipments to this org */
+  incomingSeq: number | null;
   packages: PackageDetail[];
   onRefresh: () => void;
+  onTotalChange?: (volume: number, count: number) => void;
+  /** Expose save function so parent can trigger save before submit */
+  onSaveRef?: (saveFn: (() => Promise<boolean>) | null) => void;
+}
+
+function packageDetailToRow(pkg: PackageDetail): PackageRow {
+  return {
+    id: pkg.id,
+    isNew: false,
+    packageNumber: pkg.packageNumber,
+    productNameId: pkg.productNameId,
+    productName: pkg.productName,
+    woodSpeciesId: pkg.woodSpeciesId,
+    woodSpecies: pkg.woodSpecies,
+    humidityId: pkg.humidityId,
+    humidity: pkg.humidity,
+    typeId: pkg.typeId,
+    typeName: pkg.typeName,
+    processingId: pkg.processingId,
+    processing: pkg.processing,
+    fscId: pkg.fscId,
+    fsc: pkg.fsc,
+    qualityId: pkg.qualityId,
+    quality: pkg.quality,
+    thickness: pkg.thickness,
+    width: pkg.width,
+    length: pkg.length,
+    pieces: pkg.pieces,
+    volumeM3: pkg.volumeM3,
+    volumeIsCalculated: pkg.volumeIsCalculated,
+    palletId: pkg.palletId,
+  };
 }
 
 export function IncomingShipmentPackageEditor({
   shipmentId,
   shipmentCode,
+  toOrgCode,
+  incomingSeq,
   packages,
   onRefresh,
+  onTotalChange,
+  onSaveRef,
 }: IncomingShipmentPackageEditorProps) {
-  // Convert PackageDetail to PackageRow
-  const initialRows = useMemo(
-    () =>
-      packages.map((pkg) => ({
-        id: pkg.id,
-        isNew: false,
-        packageNumber: pkg.packageNumber,
-        productNameId: pkg.productNameId,
-        productName: pkg.productName,
-        woodSpeciesId: pkg.woodSpeciesId,
-        woodSpecies: pkg.woodSpecies,
-        humidityId: pkg.humidityId,
-        humidity: pkg.humidity,
-        typeId: pkg.typeId,
-        typeName: pkg.typeName,
-        processingId: pkg.processingId,
-        processing: pkg.processing,
-        fscId: pkg.fscId,
-        fsc: pkg.fsc,
-        qualityId: pkg.qualityId,
-        quality: pkg.quality,
-        thickness: pkg.thickness,
-        width: pkg.width,
-        length: pkg.length,
-        pieces: pkg.pieces,
-        volumeM3: pkg.volumeM3,
-        volumeIsCalculated: pkg.volumeIsCalculated,
-        palletId: pkg.palletId,
-      })),
-    [packages]
-  );
+  const initialRows = useMemo(() => packages.map(packageDetailToRow), [packages]);
 
   const [localPackages, setLocalPackages] = useState<PackageRow[]>(initialRows);
-  const [originalPackages, setOriginalPackages] = useState<PackageRow[]>(initialRows);
   const [dropdowns, setDropdowns] = useState<ReferenceDropdowns | null>(null);
-  const [isDirty, setIsDirty] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [, startTransition] = useTransition();
 
-  // Sync local state when packages prop changes
+  // ─── Auto-save refs ──────────────────────────────────────────────────────────
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasPendingChangesRef = useRef<boolean>(false);
+  const latestRowsRef = useRef<PackageRow[]>(localPackages);
+  const latestDeletedRef = useRef<Set<string>>(deletedIds);
+  const saveInProgressRef = useRef<boolean>(false);
+  const saveQueuedRef = useRef<boolean>(false);
+
+  // Keep refs in sync with state
   useEffect(() => {
-    const newRows = packages.map((pkg) => ({
-      id: pkg.id,
-      isNew: false,
-      packageNumber: pkg.packageNumber,
-      productNameId: pkg.productNameId,
-      productName: pkg.productName,
-      woodSpeciesId: pkg.woodSpeciesId,
-      woodSpecies: pkg.woodSpecies,
-      humidityId: pkg.humidityId,
-      humidity: pkg.humidity,
-      typeId: pkg.typeId,
-      typeName: pkg.typeName,
-      processingId: pkg.processingId,
-      processing: pkg.processing,
-      fscId: pkg.fscId,
-      fsc: pkg.fsc,
-      qualityId: pkg.qualityId,
-      quality: pkg.quality,
-      thickness: pkg.thickness,
-      width: pkg.width,
-      length: pkg.length,
-      pieces: pkg.pieces,
-      volumeM3: pkg.volumeM3,
-      volumeIsCalculated: pkg.volumeIsCalculated,
-      palletId: pkg.palletId,
-    }));
+    latestRowsRef.current = localPackages;
+  }, [localPackages]);
+  useEffect(() => {
+    latestDeletedRef.current = deletedIds;
+  }, [deletedIds]);
+
+  // Sync local state when packages prop changes (after server refresh)
+  useEffect(() => {
+    const newRows = packages.map(packageDetailToRow);
     setLocalPackages(newRows);
-    setOriginalPackages(newRows);
     setDeletedIds(new Set());
+    latestRowsRef.current = newRows;
+    latestDeletedRef.current = new Set();
+    hasPendingChangesRef.current = false;
   }, [packages]);
 
   // Load dropdowns on mount
@@ -199,34 +201,247 @@ export function IncomingShipmentPackageEditor({
     loadDropdowns();
   }, []);
 
-  // Check for dirty state
-  useEffect(() => {
-    const hasChanges =
-      JSON.stringify(localPackages) !== JSON.stringify(originalPackages) ||
-      deletedIds.size > 0;
-    setIsDirty(hasChanges);
-  }, [localPackages, originalPackages, deletedIds]);
+  // ─── Save Logic ────────────────────────────────────────────────────────────
 
-  // Track deleted rows
+  const performSaveAsync = useCallback(
+    async (currentRows: PackageRow[], currentDeleted: Set<string>): Promise<boolean> => {
+      if (saveInProgressRef.current) {
+        saveQueuedRef.current = true;
+        hasPendingChangesRef.current = true;
+        return true;
+      }
+
+      // Nothing to save
+      if (currentRows.length === 0 && currentDeleted.size === 0) {
+        return true;
+      }
+
+      saveInProgressRef.current = true;
+
+      const packagesToSave = currentRows.map((pkg) => ({
+        id: pkg.id,
+        isNew: pkg.isNew,
+        packageNumber: pkg.packageNumber,
+        productNameId: pkg.productNameId,
+        woodSpeciesId: pkg.woodSpeciesId,
+        humidityId: pkg.humidityId,
+        typeId: pkg.typeId,
+        processingId: pkg.processingId,
+        fscId: pkg.fscId,
+        qualityId: pkg.qualityId,
+        thickness: pkg.thickness,
+        width: pkg.width,
+        length: pkg.length,
+        pieces: pkg.pieces,
+        volumeM3: pkg.volumeM3,
+        volumeIsCalculated: pkg.volumeIsCalculated,
+        palletId: pkg.palletId,
+      }));
+
+      const result = await saveIncomingShipmentPackages(
+        shipmentId,
+        packagesToSave,
+        Array.from(currentDeleted)
+      );
+
+      if (!result.success) {
+        toast.error(result.error);
+        saveInProgressRef.current = false;
+        if (saveQueuedRef.current) {
+          saveQueuedRef.current = false;
+          setTimeout(() => {
+            performSaveAsync(latestRowsRef.current, latestDeletedRef.current);
+          }, 50);
+        }
+        return false;
+      }
+
+      // Update rows with server-assigned IDs for newly created packages
+      const { insertedIds } = result.data;
+      if (Object.keys(insertedIds).length > 0) {
+        setLocalPackages((prev) => {
+          const updated = prev.map((row) => {
+            const dbId = insertedIds[row.id];
+            if (dbId) {
+              return { ...row, id: dbId, isNew: false };
+            }
+            return row;
+          });
+          latestRowsRef.current = updated;
+          return updated;
+        });
+      }
+
+      // Clear deleted IDs after successful save
+      setDeletedIds(new Set());
+      latestDeletedRef.current = new Set();
+
+      saveInProgressRef.current = false;
+
+      if (saveQueuedRef.current) {
+        saveQueuedRef.current = false;
+        setTimeout(() => {
+          performSaveAsync(latestRowsRef.current, latestDeletedRef.current);
+        }, 50);
+      }
+
+      return true;
+    },
+    [shipmentId]
+  );
+
+  const performSave = useCallback(
+    (currentRows: PackageRow[], currentDeleted: Set<string>) => {
+      startTransition(() => {
+        performSaveAsync(currentRows, currentDeleted);
+      });
+    },
+    [performSaveAsync]
+  );
+
+  const debouncedSave = useCallback(
+    (rowsToSave?: PackageRow[], deletedToSave?: Set<string>) => {
+      if (rowsToSave) {
+        latestRowsRef.current = rowsToSave;
+      }
+      if (deletedToSave) {
+        latestDeletedRef.current = deletedToSave;
+      }
+      hasPendingChangesRef.current = true;
+
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      saveTimeoutRef.current = setTimeout(() => {
+        hasPendingChangesRef.current = false;
+        performSave(latestRowsRef.current, latestDeletedRef.current);
+      }, 800);
+    },
+    [performSave]
+  );
+
+  // Flush pending save immediately and return success — used by parent before submit
+  const flushSave = useCallback(async (): Promise<boolean> => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    // Wait for any in-progress save to finish first
+    if (saveInProgressRef.current) {
+      for (let i = 0; i < 50; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        if (!saveInProgressRef.current) break;
+      }
+    }
+    // Now save any pending changes with latest data
+    if (hasPendingChangesRef.current) {
+      hasPendingChangesRef.current = false;
+      return performSaveAsync(latestRowsRef.current, latestDeletedRef.current);
+    }
+    return true;
+  }, [performSaveAsync]);
+
+  // Register flush function with parent
+  useEffect(() => {
+    onSaveRef?.(flushSave);
+    return () => onSaveRef?.(null);
+  }, [flushSave, onSaveRef]);
+
+  // Cleanup on unmount: save pending changes immediately (fire-and-forget)
+  useEffect(() => {
+    const entryShipmentId = shipmentId;
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      // Only fire unmount save if there are pending changes AND no save already in flight
+      // (an in-flight save will complete on its own)
+      if (hasPendingChangesRef.current && !saveInProgressRef.current) {
+        const currentRows = latestRowsRef.current;
+        const currentDeleted = latestDeletedRef.current;
+        const packagesToSave = currentRows.map((pkg) => ({
+          id: pkg.id,
+          isNew: pkg.isNew,
+          packageNumber: pkg.packageNumber,
+          productNameId: pkg.productNameId,
+          woodSpeciesId: pkg.woodSpeciesId,
+          humidityId: pkg.humidityId,
+          typeId: pkg.typeId,
+          processingId: pkg.processingId,
+          fscId: pkg.fscId,
+          qualityId: pkg.qualityId,
+          thickness: pkg.thickness,
+          width: pkg.width,
+          length: pkg.length,
+          pieces: pkg.pieces,
+          volumeM3: pkg.volumeM3,
+          volumeIsCalculated: pkg.volumeIsCalculated,
+          palletId: pkg.palletId,
+        }));
+        saveIncomingShipmentPackages(
+          entryShipmentId,
+          packagesToSave,
+          Array.from(currentDeleted)
+        ).catch((err) => {
+          console.error("Failed to save on unmount:", err);
+        });
+        hasPendingChangesRef.current = false;
+      }
+    };
+  }, [shipmentId]);
+
+  // Immediate save (no debounce) — used for structural changes (add/delete/copy)
+  const immediateSave = useCallback(
+    (rowsToSave: PackageRow[], deletedToSave: Set<string>) => {
+      latestRowsRef.current = rowsToSave;
+      latestDeletedRef.current = deletedToSave;
+      // Cancel any pending debounced save
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      hasPendingChangesRef.current = false;
+      performSave(rowsToSave, deletedToSave);
+    },
+    [performSave]
+  );
+
+  // ─── Row Change Handler ──────────────────────────────────────────────────────
+
   const handleRowsChange = useCallback(
     (rows: PackageRow[]) => {
-      // Find deleted rows
+      // Find deleted rows (existing DB rows that are no longer present)
       const currentIds = new Set(rows.map((r) => r.id));
-      for (const pkg of localPackages) {
+      const newDeleted = new Set(latestDeletedRef.current);
+      for (const pkg of latestRowsRef.current) {
         if (!currentIds.has(pkg.id) && !pkg.isNew && !pkg.id.startsWith("new-")) {
-          setDeletedIds((prev) => new Set(prev).add(pkg.id));
+          newDeleted.add(pkg.id);
         }
       }
+      setDeletedIds(newDeleted);
       setLocalPackages(rows);
+
+      // Structural change (add/delete/copy) → save immediately
+      // Cell edit (same row count) → debounce
+      if (rows.length !== latestRowsRef.current.length || newDeleted.size > latestDeletedRef.current.size) {
+        immediateSave(rows, newDeleted);
+      } else {
+        debouncedSave(rows, newDeleted);
+      }
     },
-    [localPackages]
+    [debouncedSave, immediateSave]
   );
+
+  // Package number prefix: {toOrgCode}{incomingSeq} e.g. "TVG002"
+  const packagePrefix = incomingSeq
+    ? `${toOrgCode}${String(incomingSeq).padStart(3, "0")}`
+    : shipmentCode;
 
   // Create a new empty row
   const createRow = useCallback(
     (index: number): PackageRow => {
       const clientId = `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const pkgNum = `${shipmentCode}-${String(index + 1).padStart(3, "0")}`;
+      const pkgNum = `${packagePrefix}-${String(index + 1).padStart(3, "0")}`;
       return {
         id: clientId,
         isNew: true,
@@ -254,7 +469,7 @@ export function IncomingShipmentPackageEditor({
         palletId: null,
       };
     },
-    [shipmentCode]
+    [packagePrefix]
   );
 
   // Copy a row
@@ -274,7 +489,7 @@ export function IncomingShipmentPackageEditor({
       let seq = 1;
       return rows.map((row) => {
         if (row.isNew && !row.packageNumber) {
-          const pkgNum = `${shipmentCode}-${String(seq).padStart(3, "0")}`;
+          const pkgNum = `${packagePrefix}-${String(seq).padStart(3, "0")}`;
           seq++;
           return { ...row, packageNumber: pkgNum };
         }
@@ -282,7 +497,7 @@ export function IncomingShipmentPackageEditor({
         return row;
       });
     },
-    [shipmentCode]
+    [packagePrefix]
   );
 
   // Handle cell change - returns updated row
@@ -346,66 +561,6 @@ export function IncomingShipmentPackageEditor({
     },
     [dropdowns]
   );
-
-  // Handle save
-  const handleSave = useCallback(async () => {
-    // Allow saving empty list (just deletions)
-    if (localPackages.length === 0 && deletedIds.size === 0) {
-      toast.info("No changes to save");
-      return;
-    }
-
-    setIsSaving(true);
-
-    const packagesToSave = localPackages.map((pkg) => ({
-      id: pkg.id,
-      isNew: pkg.isNew,
-      packageNumber: pkg.packageNumber,
-      productNameId: pkg.productNameId,
-      woodSpeciesId: pkg.woodSpeciesId,
-      humidityId: pkg.humidityId,
-      typeId: pkg.typeId,
-      processingId: pkg.processingId,
-      fscId: pkg.fscId,
-      qualityId: pkg.qualityId,
-      thickness: pkg.thickness,
-      width: pkg.width,
-      length: pkg.length,
-      pieces: pkg.pieces,
-      volumeM3: pkg.volumeM3,
-      volumeIsCalculated: pkg.volumeIsCalculated,
-      palletId: pkg.palletId,
-    }));
-
-    const result = await saveIncomingShipmentPackages(
-      shipmentId,
-      packagesToSave,
-      Array.from(deletedIds)
-    );
-
-    setIsSaving(false);
-
-    if (result.success) {
-      const { created, updated, deleted, errors } = result.data;
-      const parts: string[] = [];
-      if (created > 0) parts.push(`${created} created`);
-      if (updated > 0) parts.push(`${updated} updated`);
-      if (deleted > 0) parts.push(`${deleted} deleted`);
-
-      if (parts.length > 0) {
-        toast.success(`Packages saved: ${parts.join(", ")}`);
-      } else if (errors.length > 0) {
-        toast.warning(errors.join("; "));
-      } else {
-        toast.success("Saved");
-      }
-
-      setDeletedIds(new Set());
-      onRefresh();
-    } else {
-      toast.error(result.error);
-    }
-  }, [localPackages, deletedIds, shipmentId, onRefresh]);
 
   // Build column definitions
   const columns = useMemo((): ColumnDef<PackageRow>[] => {
@@ -533,18 +688,22 @@ export function IncomingShipmentPackageEditor({
   }, [dropdowns]);
 
   // Calculate totals for display
-  const totalVolume = localPackages.reduce((sum, p) => sum + (p.volumeM3 ?? 0), 0);
+  const totalVolume = localPackages.reduce((sum, p) => sum + Math.round((p.volumeM3 ?? 0) * 1000) / 1000, 0);
+
+  // Notify parent of live totals
+  useEffect(() => {
+    onTotalChange?.(totalVolume, localPackages.length);
+  }, [totalVolume, localPackages.length, onTotalChange]);
 
   // Handle import from spreadsheet
   const handleImport = useCallback(
     (importedPackages: EditablePackageItem[]) => {
-      // Convert EditablePackageItem to PackageRow
       const newRows: PackageRow[] = importedPackages.map((pkg, index) => {
-        const seq = localPackages.length + index + 1;
+        const seq = latestRowsRef.current.length + index + 1;
         return {
           id: pkg.id,
           isNew: true,
-          packageNumber: pkg.packageNumber || `${shipmentCode}-${String(seq).padStart(3, "0")}`,
+          packageNumber: pkg.packageNumber || `${packagePrefix}-${String(seq).padStart(3, "0")}`,
           productNameId: pkg.productNameId,
           productName: pkg.productName,
           woodSpeciesId: pkg.woodSpeciesId,
@@ -568,15 +727,17 @@ export function IncomingShipmentPackageEditor({
           palletId: null,
         };
       });
-      setLocalPackages((prev) => [...prev, ...newRows]);
+      const updated = [...latestRowsRef.current, ...newRows];
+      setLocalPackages(updated);
+      immediateSave(updated, latestDeletedRef.current);
       toast.success(`Imported ${newRows.length} package(s)`);
     },
-    [localPackages.length, shipmentCode]
+    [packagePrefix, immediateSave]
   );
 
   return (
     <div className="space-y-4">
-      {/* Header with save button */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
@@ -588,29 +749,10 @@ export function IncomingShipmentPackageEditor({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setImportModalOpen(true)}>
-            <FileSpreadsheet className="h-4 w-4 mr-2" />
-            Import from Spreadsheet
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={!isDirty || isSaving}
-            variant={isDirty ? "default" : "outline"}
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Save Changes
-              </>
-            )}
-          </Button>
-        </div>
+        <Button variant="outline" onClick={() => setImportModalOpen(true)}>
+          <FileSpreadsheet className="h-4 w-4 mr-2" />
+          Import from Spreadsheet
+        </Button>
       </div>
 
       {/* Data Entry Table */}

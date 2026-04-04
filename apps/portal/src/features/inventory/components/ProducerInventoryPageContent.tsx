@@ -43,7 +43,7 @@ export function ProducerInventoryPageContent({
       <TabsList>
         <TabsTrigger value="inventory">Inventory</TabsTrigger>
         <TabsTrigger value="consolidated">Consolidated</TabsTrigger>
-        <TabsTrigger value="audit">Audit</TabsTrigger>
+        <TabsTrigger value="audit">History</TabsTrigger>
       </TabsList>
 
       <TabsContent value="inventory">

@@ -30,6 +30,8 @@ interface SaveResult {
   created: number;
   deleted: number;
   errors: string[];
+  /** Maps client-side ID → server-assigned DB ID for new packages */
+  insertedIds: Record<string, string>;
 }
 
 /**
@@ -98,6 +100,7 @@ export async function saveIncomingShipmentPackages(
   let updated = 0;
   let created = 0;
   let deleted = 0;
+  const insertedIds: Record<string, string> = {};
 
   // Separate new and existing packages
   const newPackages = packages.filter((p) => p.isNew || p.id.startsWith("new-"));
@@ -191,7 +194,7 @@ export async function saveIncomingShipmentPackages(
       `${shipment.shipment_code}-${String(nextSequence).padStart(3, "0")}`;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: insertError } = await (supabase as any)
+    const { data: insertedPkg, error: insertError } = await (supabase as any)
       .from("inventory_packages")
       .insert({
         shipment_id: shipmentId,
@@ -214,12 +217,15 @@ export async function saveIncomingShipmentPackages(
         volume_is_calculated: pkg.volumeIsCalculated,
         pallet_id: pkg.palletId || null,
         status: "available",
-      });
+      })
+      .select("id")
+      .single();
 
     if (insertError) {
       errors.push(`Failed to create ${packageNumber}: ${insertError.message}`);
     } else {
       created++;
+      insertedIds[pkg.id] = insertedPkg.id;
       nextSequence++;
     }
   }
@@ -231,5 +237,5 @@ export async function saveIncomingShipmentPackages(
   revalidatePath("/shipments");
   revalidatePath(`/shipments/${shipmentId}`);
 
-  return { success: true, data: { updated, created, deleted, errors } };
+  return { success: true, data: { updated, created, deleted, errors, insertedIds } };
 }

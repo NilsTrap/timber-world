@@ -94,8 +94,9 @@ function calculatePlannedWork(
   let total = 0;
   for (const input of inputs) {
     const pieces = input.pieces_used ? Number(input.pieces_used) : 0;
-    const length = input.inventory_packages?.length ? Number(input.inventory_packages.length) : 0;
-    const width = input.inventory_packages?.width ? Number(input.inventory_packages.width) : 0;
+    // Strip spaces from dimension strings (e.g., "1 350" → "1350") before parsing
+    const length = input.inventory_packages?.length ? Number(String(input.inventory_packages.length).replace(/\s/g, "")) : 0;
+    const width = input.inventory_packages?.width ? Number(String(input.inventory_packages.width).replace(/\s/g, "")) : 0;
     const volume = Number(input.volume_m3);
 
     switch (formula) {

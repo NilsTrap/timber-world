@@ -55,6 +55,10 @@ export function OrganizationSwitcher({
       return;
     }
 
+    // Clear stored detail-page entries so stale links don't cause access errors
+    sessionStorage.removeItem("shipment-last-entry");
+    sessionStorage.removeItem("production-last-entry");
+
     // Call server action to update current org
     try {
       const response = await fetch("/api/auth/switch-organization", {

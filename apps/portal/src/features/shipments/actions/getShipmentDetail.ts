@@ -152,6 +152,7 @@ export async function getShipmentDetail(
     fromOrganisationName: `${shipment.from_organisation?.code ?? ""} - ${shipment.from_organisation?.name ?? ""}`,
     toOrganisationId: shipment.to_organisation_id,
     toOrganisationName: `${shipment.to_organisation?.code ?? ""} - ${shipment.to_organisation?.name ?? ""}`,
+    toOrganisationCode: shipment.to_organisation?.code ?? "",
     shipmentDate: shipment.shipment_date,
     transportCostEur: shipment.transport_cost_eur != null ? Number(shipment.transport_cost_eur) : null,
     notes: shipment.notes ?? null,

@@ -38,7 +38,7 @@ export function AdminInventoryPageContent({ packages, consolidated, auditPackage
         <TabsTrigger value="inventory">Inventory</TabsTrigger>
         <TabsTrigger value="consolidated">Consolidated</TabsTrigger>
         <TabsTrigger value="edit">Edit</TabsTrigger>
-        <TabsTrigger value="audit">Audit</TabsTrigger>
+        <TabsTrigger value="audit">History</TabsTrigger>
       </TabsList>
 
       <TabsContent value="inventory">

@@ -164,6 +164,7 @@ export interface ShipmentDetail {
   fromOrganisationName: string;
   toOrganisationId: string;
   toOrganisationName: string;
+  toOrganisationCode: string;
   shipmentDate: string;
   transportCostEur: number | null;
   notes: string | null;

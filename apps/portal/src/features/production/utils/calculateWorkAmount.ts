@@ -36,7 +36,7 @@ export function calculatePlannedWork(
       // Length is in mm, convert to meters
       let total = 0;
       for (const input of inputs) {
-        const length = parseFloat(input.length || "0");
+        const length = parseFloat((input.length || "0").replace(/\s/g, ""));
         const pieces = input.piecesUsed ?? 0;
         if (length > 0 && pieces > 0) {
           // Length is stored in mm, convert to meters
@@ -51,8 +51,8 @@ export function calculatePlannedWork(
       // Length and width are in mm, convert to m²
       let total = 0;
       for (const input of inputs) {
-        const length = parseFloat(input.length || "0");
-        const width = parseFloat(input.width || "0");
+        const length = parseFloat((input.length || "0").replace(/\s/g, ""));
+        const width = parseFloat((input.width || "0").replace(/\s/g, ""));
         const pieces = input.piecesUsed ?? 0;
         if (length > 0 && width > 0 && pieces > 0) {
           // Convert mm² to m²: divide by 1,000,000

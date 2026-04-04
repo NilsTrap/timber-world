@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@timber/ui";
@@ -17,6 +17,7 @@ import { DeleteShipmentDraftButton } from "@/features/shipments/components/Delet
 import { ShipmentPalletTable } from "@/features/shipments/components/ShipmentPalletTable";
 import { IncomingShipmentPackageEditor } from "@/features/shipments/components/IncomingShipmentPackageEditor";
 import { PrintShipmentButton } from "@/features/shipments/components/PrintShipmentButton";
+import { updateShipmentDate } from "@/features/shipments/actions/updateShipmentDate";
 
 const statusColors: Record<ShipmentStatus, string> = {
   draft: "bg-yellow-100 text-yellow-800",
@@ -63,7 +64,11 @@ export default function ShipmentDetailPage() {
   const [canceling, setCanceling] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [isReceiver, setIsReceiver] = useState(false);
+  const [liveVolume, setLiveVolume] = useState<number | null>(null);
+  const [livePackageCount, setLivePackageCount] = useState<number | null>(null);
   const [isFromExternal, setIsFromExternal] = useState(false);
+  const [incomingSeq, setIncomingSeq] = useState<number | null>(null);
+  const editorSaveRef = useRef<(() => Promise<boolean>) | null>(null);
 
   // Remember this page for sidebar navigation
   useEffect(() => {
@@ -77,7 +82,12 @@ export default function ShipmentDetailPage() {
       setIsOwner(result.data.isOwner);
       setIsReceiver(result.data.isReceiver);
       setIsFromExternal(result.data.isFromExternal);
+      setIncomingSeq(result.data.incomingSeq);
+      setLiveVolume(null);
+      setLivePackageCount(null);
     } else {
+      // Clear stored entry so sidebar doesn't redirect here again
+      sessionStorage.removeItem(SHIPMENT_LAST_ENTRY_KEY);
       toast.error(result.error);
       router.push("/shipments");
     }
@@ -111,10 +121,17 @@ export default function ShipmentDetailPage() {
     setCanceling(false);
   };
 
-  const totalVolume = shipment?.packages.reduce(
-    (sum, pkg) => sum + (pkg.volumeM3 ?? 0),
+  const serverVolume = shipment?.packages.reduce(
+    (sum, pkg) => sum + Math.round((pkg.volumeM3 ?? 0) * 1000) / 1000,
     0
   ) ?? 0;
+  const totalVolume = liveVolume ?? serverVolume;
+  const packageCount = livePackageCount ?? (shipment?.packages.length ?? 0);
+
+  const handleTotalChange = useCallback((volume: number, count: number) => {
+    setLiveVolume(volume);
+    setLivePackageCount(count);
+  }, []);
 
   if (loading) {
     return (
@@ -133,7 +150,7 @@ export default function ShipmentDetailPage() {
   // For incoming shipments from external orgs, the receiver can edit the draft
   const isIncomingFromExternal = isFromExternal && isReceiver;
   const canEdit = isDraft && (isOwner || isIncomingFromExternal);
-  const canSubmit = isDraft && (isOwner || isIncomingFromExternal) && shipment.packages.length > 0;
+  const canSubmit = isDraft && (isOwner || isIncomingFromExternal) && packageCount > 0;
   const canReview = isPending && isReceiver;
   const canCancel = isPending && isOwner;
 
@@ -162,7 +179,14 @@ export default function ShipmentDetailPage() {
             />
           )}
           {canSubmit && (
-            <Button onClick={() => setShowSubmitDialog(true)}>
+            <Button onClick={async () => {
+              // Auto-save unsaved packages before showing submit dialog
+              if (editorSaveRef.current) {
+                const saved = await editorSaveRef.current();
+                if (!saved) return;
+              }
+              setShowSubmitDialog(true);
+            }}>
               <Truck className="h-4 w-4 mr-2" />
               On The Way
             </Button>
@@ -220,7 +244,25 @@ export default function ShipmentDetailPage() {
         </div>
         <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Date</p>
-          <p className="text-xl font-semibold">{formatDate(shipment.shipmentDate)}</p>
+          {canEdit ? (
+            <input
+              type="date"
+              className="text-xl font-semibold bg-transparent border-none outline-none cursor-pointer w-full"
+              value={shipment.shipmentDate}
+              onChange={async (e) => {
+                const newDate = e.target.value;
+                if (!newDate) return;
+                const result = await updateShipmentDate(shipment.id, newDate);
+                if (result.success) {
+                  setShipment((prev) => prev ? { ...prev, shipmentDate: newDate } : prev);
+                } else {
+                  toast.error(result.error);
+                }
+              }}
+            />
+          ) : (
+            <p className="text-xl font-semibold">{formatDate(shipment.shipmentDate)}</p>
+          )}
         </div>
         <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Total Volume</p>
@@ -255,8 +297,12 @@ export default function ShipmentDetailPage() {
           <IncomingShipmentPackageEditor
             shipmentId={shipment.id}
             shipmentCode={shipment.shipmentCode}
+            toOrgCode={shipment.toOrganisationCode}
+            incomingSeq={incomingSeq}
             packages={shipment.packages}
             onRefresh={fetchShipment}
+            onTotalChange={handleTotalChange}
+            onSaveRef={(fn) => { editorSaveRef.current = fn; }}
           />
         ) : (
           <>
@@ -316,7 +362,7 @@ export default function ShipmentDetailPage() {
         <SubmitShipmentDialog
           shipmentId={shipment.id}
           toOrgName={shipment.toOrganisationName}
-          packageCount={shipment.packages.length}
+          packageCount={packageCount}
           totalVolume={totalVolume}
           onClose={() => setShowSubmitDialog(false)}
           onSuccess={handleSubmitSuccess}

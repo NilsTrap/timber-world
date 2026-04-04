@@ -9,6 +9,8 @@ interface OrgShipmentDetailResult {
   isOwner: boolean;
   isReceiver: boolean;
   isFromExternal: boolean;
+  /** Sequence number of this incoming shipment among all incoming shipments to the receiving org */
+  incomingSeq: number | null;
 }
 
 /**
@@ -35,6 +37,7 @@ export async function getOrgShipmentDetail(
       id,
       shipment_code,
       shipment_number,
+      created_at,
       from_organisation_id,
       to_organisation_id,
       shipment_date,
@@ -68,6 +71,34 @@ export async function getOrgShipmentDetail(
 
   if (!isOwner && !isReceiver && !isSuperAdmin) {
     return { success: false, error: "Access denied", code: "FORBIDDEN" };
+  }
+
+  // Compute incoming shipment sequence (position among all incoming shipments to this org from external sources)
+  let incomingSeq: number | null = null;
+  if (shipment.from_organisation?.is_external) {
+    // Get all external org IDs that are trading partners
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: extOrgs } = await (supabase as any)
+      .from("organisations")
+      .select("id")
+      .eq("is_external", true);
+
+    const extOrgIds = (extOrgs ?? []).map((o: { id: string }) => o.id);
+
+    if (extOrgIds.length > 0) {
+      // Count incoming shipments to this org from external sources with lower shipment_number
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { count: incomingCount } = await (supabase as any)
+        .from("shipments")
+        .select("id", { count: "exact", head: true })
+        .eq("to_organisation_id", shipment.to_organisation_id)
+        .in("from_organisation_id", extOrgIds)
+        .lt("shipment_number", shipment.shipment_number);
+
+      incomingSeq = (incomingCount ?? 0) + 1;
+    } else {
+      incomingSeq = 1;
+    }
   }
 
   // Fetch pallets for this shipment
@@ -199,6 +230,7 @@ export async function getOrgShipmentDetail(
     fromOrganisationName: shipment.from_organisation?.name ?? "",
     toOrganisationId: shipment.to_organisation_id,
     toOrganisationName: shipment.to_organisation?.name ?? "",
+    toOrganisationCode: shipment.to_organisation?.code ?? "",
     shipmentDate: shipment.shipment_date,
     transportCostEur: shipment.transport_cost_eur != null ? Number(shipment.transport_cost_eur) : null,
     notes: shipment.notes ?? null,
@@ -222,6 +254,7 @@ export async function getOrgShipmentDetail(
       isOwner,
       isReceiver,
       isFromExternal,
+      incomingSeq,
     },
   };
 }
