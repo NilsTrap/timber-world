@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 import { getSession, isAdmin, orgHasFeature } from "@/lib/auth";
-import { OrganisationsTable } from "@/features/organisations";
-import { PeopleTable } from "@/features/organisations/components/PeopleTable";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@timber/ui";
+import { UsersPageTabs } from "@/features/organisations/components/UsersPageTabs";
 
 export const metadata: Metadata = {
   title: "Users",
@@ -38,20 +36,7 @@ export default async function UsersPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="organisations">
-        <TabsList>
-          <TabsTrigger value="organisations">Organisations</TabsTrigger>
-          <TabsTrigger value="people">People</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="organisations" className="mt-4">
-          <OrganisationsTable />
-        </TabsContent>
-
-        <TabsContent value="people" className="mt-4">
-          <PeopleTable />
-        </TabsContent>
-      </Tabs>
+      <UsersPageTabs />
     </div>
   );
 }

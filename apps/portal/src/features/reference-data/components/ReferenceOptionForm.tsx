@@ -16,6 +16,7 @@ import {
 } from "@timber/ui";
 import { referenceOptionSchema } from "../schemas";
 import { createReferenceOption, updateReferenceOption } from "../actions";
+import { excludeRefValueFromOtherOrgs } from "@/features/organisations/actions/excludeRefValueFromOtherOrgs";
 import type { ReferenceTableName, ReferenceOption } from "../types";
 
 interface ReferenceOptionFormProps {
@@ -24,12 +25,15 @@ interface ReferenceOptionFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  /** When set, shows option to enable only for this organisation */
+  organisationId?: string;
 }
 
 /**
  * Reference Option Form
  *
  * Dialog form for adding or editing a reference option.
+ * When organisationId is provided, shows a choice to enable for all or only this organisation.
  */
 export function ReferenceOptionForm({
   tableName,
@@ -37,8 +41,10 @@ export function ReferenceOptionForm({
   open,
   onOpenChange,
   onSuccess,
+  organisationId,
 }: ReferenceOptionFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [enableScope, setEnableScope] = useState<"all" | "this">("all");
   const isEditing = !!option;
   const isProcesses = tableName === "ref_processes";
 
@@ -73,6 +79,7 @@ export function ReferenceOptionForm({
   // Reset form when option changes or dialog opens
   useEffect(() => {
     if (open) {
+      setEnableScope("all");
       reset({
         value: option?.value ?? "",
         ...(isProcesses ? {
@@ -110,6 +117,18 @@ export function ReferenceOptionForm({
         : await createReferenceOption(tableName, payload);
 
       if (result.success) {
+        // If adding and "only this org" selected, exclude from all other orgs
+        if (!isEditing && organisationId && enableScope === "this") {
+          const excludeResult = await excludeRefValueFromOtherOrgs(
+            organisationId,
+            tableName,
+            result.data.id
+          );
+          if (!excludeResult.success) {
+            toast.error("Option added but failed to restrict to this organisation");
+          }
+        }
+
         toast.success(isEditing ? "Option updated" : "Option added");
         reset();
         onOpenChange(false);
@@ -232,6 +251,37 @@ export function ReferenceOptionForm({
               {errors.price && (
                 <p className="text-sm text-destructive">{errors.price.message}</p>
               )}
+            </div>
+          )}
+
+          {/* Scope selector: only shown when adding from an org tab */}
+          {!isEditing && organisationId && (
+            <div className="space-y-2 rounded-lg border p-3">
+              <Label>Enable for</Label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="enableScope"
+                    value="all"
+                    checked={enableScope === "all"}
+                    onChange={() => setEnableScope("all")}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm">All organisations</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="enableScope"
+                    value="this"
+                    checked={enableScope === "this"}
+                    onChange={() => setEnableScope("this")}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-sm">Only this organisation</span>
+                </label>
+              </div>
             </div>
           )}
 

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isProducer, isSuperAdmin } from "@/lib/auth";
+import { getOrgExcludedRefValues } from "@/lib/auth/getOrgRefExclusions";
 import type { ActionResult, ReferenceDropdowns, ReferenceOption } from "../types";
 
 const REFERENCE_TABLES = [
@@ -18,6 +19,7 @@ const REFERENCE_TABLES = [
  * Get Reference Dropdowns for Producer
  *
  * Fetches all 7 reference table active options for the production output form.
+ * Filters out values excluded for the user's organisation.
  * Accessible by producers and Super Admin.
  */
 export async function getReferenceDropdownsForProducer(): Promise<ActionResult<ReferenceDropdowns>> {
@@ -32,6 +34,8 @@ export async function getReferenceDropdownsForProducer(): Promise<ActionResult<R
   }
 
   const supabase = await createClient();
+  const orgId = session.currentOrganizationId || session.organisationId || null;
+  const exclusions = await getOrgExcludedRefValues(orgId);
 
   // Fetch all 7 tables in parallel
   const results = await Promise.all(
@@ -49,7 +53,13 @@ export async function getReferenceDropdownsForProducer(): Promise<ActionResult<R
         return { error: table };
       }
 
-      return { data: data as ReferenceOption[] };
+      // Filter out excluded values for this org
+      const excluded = exclusions.get(table);
+      const filtered = excluded
+        ? (data as ReferenceOption[]).filter((d) => !excluded.has(d.id))
+        : (data as ReferenceOption[]);
+
+      return { data: filtered };
     })
   );
 

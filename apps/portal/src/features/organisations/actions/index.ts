@@ -46,3 +46,7 @@ export { getAvailablePartners } from "./getAvailablePartners";
 // People (all users across organisations)
 export { getAllPeople } from "./getAllPeople";
 export type { Person } from "./getAllPeople";
+
+// Per-org reference data exclusions
+export { getOrgRefExclusions } from "./getOrgRefExclusions";
+export { updateOrgRefExclusions } from "./updateOrgRefExclusions";

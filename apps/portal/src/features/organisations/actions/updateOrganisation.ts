@@ -9,12 +9,12 @@ import type { Organisation, ActionResult } from "../types";
 /**
  * Update Organisation
  *
- * Updates an existing organisation's name. Code is immutable.
+ * Updates an existing organisation's name and optionally code.
  * Admin only endpoint.
  */
 export async function updateOrganisation(
   id: string,
-  input: { name: string }
+  input: { name: string; code?: string }
 ): Promise<ActionResult<Organisation>> {
   // 1. Check authentication
   const session = await getSession();
@@ -54,14 +54,19 @@ export async function updateOrganisation(
     };
   }
 
-  const { name } = parsed.data;
+  const { name, code: newCode } = parsed.data;
   const supabase = await createClient();
 
   // 5. Update organisation
+  const updatePayload: Record<string, unknown> = { name };
+  if (newCode) {
+    updatePayload.code = newCode;
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("organisations")
-    .update({ name })
+    .update(updatePayload)
     .eq("id", id)
     .select("id, code, name, is_active, is_external, created_at, updated_at")
     .single();

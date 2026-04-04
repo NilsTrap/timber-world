@@ -84,6 +84,7 @@ export async function getSession(): Promise<SessionUser | null> {
     .from("portal_users")
     .select(`
       id,
+      role,
       organisation_id,
       is_platform_admin,
       organisations!portal_users_party_id_fkey(code, name)
@@ -113,6 +114,8 @@ export async function getSession(): Promise<SessionUser | null> {
     };
   }
 
+  // Use role from portal_users table (source of truth) over auth metadata
+  const dbRole = (portalUser.role as UserRole) || role;
   const isPlatformAdmin = portalUser.is_platform_admin ?? false;
   const portalUserId = portalUser.id;
 
@@ -200,7 +203,7 @@ export async function getSession(): Promise<SessionUser | null> {
     id: user.id,
     email: user.email || "",
     name,
-    role,
+    role: dbRole,
     isPlatformAdmin,
     currentOrganizationId,
     currentOrganizationCode,

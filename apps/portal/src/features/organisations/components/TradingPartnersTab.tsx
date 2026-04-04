@@ -10,9 +10,14 @@ import {
   TableHeader,
   TableRow,
   Checkbox,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@timber/ui";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, Check } from "lucide-react";
+import { Plus, Trash2, Loader2 } from "lucide-react";
 import {
   getTradingPartners,
   addTradingPartner,
@@ -38,6 +43,7 @@ export function TradingPartnersTab({ organisationId }: TradingPartnersTabProps) 
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -91,6 +97,7 @@ export function TradingPartnersTab({ organisationId }: TradingPartnersTabProps) 
       }
 
       setSelectedPartnerIds(new Set());
+      setDialogOpen(false);
       loadData();
     } finally {
       setIsAdding(false);
@@ -134,6 +141,11 @@ export function TradingPartnersTab({ organisationId }: TradingPartnersTabProps) 
     }
   };
 
+  const openDialog = () => {
+    setSelectedPartnerIds(new Set());
+    setDialogOpen(true);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -143,58 +155,18 @@ export function TradingPartnersTab({ organisationId }: TradingPartnersTabProps) 
   }
 
   return (
-    <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">
-        Trading partners are organisations that can appear in shipment dropdowns.
-        When you add a partner, both organisations will be able to see each other.
-      </p>
-
-      {/* Add partner form */}
-      {availablePartners.length > 0 ? (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium">Select organisations to add:</label>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleSelectAll}
-              className="text-xs"
-            >
-              {isAllSelected ? "Deselect All" : "Select All"}
-            </Button>
-          </div>
-          <div className="rounded-md border max-h-48 overflow-y-auto">
-            {availablePartners.map((org) => (
-              <label
-                key={org.id}
-                className="flex items-center gap-3 px-3 py-2 hover:bg-accent cursor-pointer border-b last:border-b-0"
-              >
-                <Checkbox
-                  checked={selectedPartnerIds.has(org.id)}
-                  onCheckedChange={() => togglePartnerSelection(org.id)}
-                />
-                <span className="font-mono text-sm">{org.code}</span>
-                <span className="text-sm text-muted-foreground">{org.name}</span>
-              </label>
-            ))}
-          </div>
-          <Button
-            onClick={handleAddPartners}
-            disabled={selectedPartnerIds.size === 0 || isAdding}
-          >
-            {isAdding ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <Plus className="h-4 w-4 mr-2" />
-            )}
-            Add {selectedPartnerIds.size > 0 ? `${selectedPartnerIds.size} ` : ""}Partner{selectedPartnerIds.size !== 1 ? "s" : ""}
-          </Button>
-        </div>
-      ) : partners.length > 0 ? (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          All organisations are already trading partners.
+          Trading partners are organisations that can appear in shipment dropdowns.
         </p>
-      ) : null}
+        {availablePartners.length > 0 && (
+          <Button onClick={openDialog} size="sm">
+            <Plus className="h-4 w-4 mr-1" />
+            Add Partner
+          </Button>
+        )}
+      </div>
 
       {/* Partners table */}
       {partners.length === 0 ? (
@@ -202,6 +174,12 @@ export function TradingPartnersTab({ organisationId }: TradingPartnersTabProps) 
           <p className="text-muted-foreground">
             No trading partners configured. This organisation cannot create shipments until partners are added.
           </p>
+          {availablePartners.length > 0 && (
+            <Button onClick={openDialog} variant="outline" className="mt-4">
+              <Plus className="h-4 w-4 mr-1" />
+              Add Partner
+            </Button>
+          )}
         </div>
       ) : (
         <Table>
@@ -229,7 +207,7 @@ export function TradingPartnersTab({ organisationId }: TradingPartnersTabProps) 
                     {removingId === partner.partnerId ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-4 w-4" />
                     )}
                   </Button>
                 </TableCell>
@@ -238,6 +216,61 @@ export function TradingPartnersTab({ organisationId }: TradingPartnersTabProps) 
           </TableBody>
         </Table>
       )}
+
+      {/* Add Partner Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Trading Partners</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Select organisations to add as trading partners.
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleSelectAll}
+                className="text-xs"
+              >
+                {isAllSelected ? "Deselect All" : "Select All"}
+              </Button>
+            </div>
+            <div className="rounded-md border max-h-64 overflow-y-auto">
+              {availablePartners.map((org) => (
+                <label
+                  key={org.id}
+                  className="flex items-center gap-3 px-3 py-2 hover:bg-accent cursor-pointer border-b last:border-b-0"
+                >
+                  <Checkbox
+                    checked={selectedPartnerIds.has(org.id)}
+                    onCheckedChange={() => togglePartnerSelection(org.id)}
+                  />
+                  <span className="font-mono text-sm">{org.code}</span>
+                  <span className="text-sm text-muted-foreground">{org.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddPartners}
+              disabled={selectedPartnerIds.size === 0 || isAdding}
+            >
+              {isAdding ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <Plus className="h-4 w-4 mr-1" />
+              )}
+              Add {selectedPartnerIds.size > 0 ? `${selectedPartnerIds.size} ` : ""}Partner{selectedPartnerIds.size !== 1 ? "s" : ""}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -36,7 +36,7 @@ export type CreateOrgInput = z.infer<typeof createOrgSchema>;
 /**
  * Update Organisation Schema
  *
- * Validates input for updating an organisation (name only, code is immutable).
+ * Validates input for updating an organisation name and optionally code.
  */
 export const updateOrgSchema = z.object({
   name: z
@@ -44,6 +44,7 @@ export const updateOrgSchema = z.object({
     .min(1, "Name is required")
     .max(100, "Name must be 100 characters or less")
     .trim(),
+  code: orgCodeSchema.optional(),
 });
 
 export type UpdateOrgInput = z.infer<typeof updateOrgSchema>;

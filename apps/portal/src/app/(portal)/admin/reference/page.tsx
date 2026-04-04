@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
 import { ReferenceDataManager } from "@/features/reference-data";
+import { Card, CardContent } from "@timber/ui";
 
 export const metadata: Metadata = {
   title: "Reference Data",
@@ -32,7 +33,11 @@ export default async function ReferenceDataPage() {
         </p>
       </div>
 
-      <ReferenceDataManager canDelete={isSuperAdmin(session)} />
+      <Card>
+        <CardContent className="pt-6">
+          <ReferenceDataManager canDelete={isSuperAdmin(session)} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

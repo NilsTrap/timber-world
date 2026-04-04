@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
+import { getOrgExcludedRefValues } from "@/lib/auth/getOrgRefExclusions";
 import type { ActionResult, ReferenceDropdowns, ReferenceOption } from "../types";
 
 const REFERENCE_TABLES = [
@@ -18,7 +19,7 @@ const REFERENCE_TABLES = [
  * Get Reference Dropdowns
  *
  * Fetches all 7 reference table active options for the package entry form.
- * Returns combined result with all dropdown options.
+ * Filters out values excluded for the user's organisation.
  * Available to any authenticated user (admins and org users).
  */
 export async function getReferenceDropdowns(): Promise<ActionResult<ReferenceDropdowns>> {
@@ -27,9 +28,9 @@ export async function getReferenceDropdowns(): Promise<ActionResult<ReferenceDro
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  // Reference data is read-only and available to all authenticated users
-
   const supabase = await createClient();
+  const orgId = session.currentOrganizationId || session.organisationId || null;
+  const exclusions = await getOrgExcludedRefValues(orgId);
 
   // Fetch all 7 tables in parallel
   const results = await Promise.all(
@@ -47,7 +48,13 @@ export async function getReferenceDropdowns(): Promise<ActionResult<ReferenceDro
         return { error: table };
       }
 
-      return { data: data as ReferenceOption[] };
+      // Filter out excluded values for this org
+      const excluded = exclusions.get(table);
+      const filtered = excluded
+        ? (data as ReferenceOption[]).filter((d) => !excluded.has(d.id))
+        : (data as ReferenceOption[]);
+
+      return { data: filtered };
     })
   );
 

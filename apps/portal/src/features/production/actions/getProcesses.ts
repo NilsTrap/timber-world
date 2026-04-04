@@ -2,10 +2,12 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isSuperAdmin } from "@/lib/auth";
+import { getOrgExcludedRefValues } from "@/lib/auth/getOrgRefExclusions";
 import type { Process, ProcessWithNotes, ActionResult } from "../types";
 
 /**
  * Fetch all active processes ordered by sort_order.
+ * Filters out processes excluded for the user's organisation.
  * Used by the production form's process dropdown.
  */
 export async function getProcesses(): Promise<ActionResult<Process[]>> {
@@ -26,15 +28,22 @@ export async function getProcesses(): Promise<ActionResult<Process[]>> {
     return { success: false, error: error.message };
   }
 
-  const processes: Process[] = (data ?? []).map((row: any) => ({
-    id: row.id,
-    code: row.code,
-    value: row.value,
-    sortOrder: row.sort_order,
-    workUnit: row.work_unit,
-    workFormula: row.work_formula ?? null,
-    price: row.price != null ? Number(row.price) : null,
-  }));
+  // Filter out excluded processes for this org
+  const orgId = session.currentOrganizationId || session.organisationId || null;
+  const exclusions = await getOrgExcludedRefValues(orgId);
+  const excludedProcesses = exclusions.get("ref_processes");
+
+  const processes: Process[] = (data ?? [])
+    .filter((row: any) => !excludedProcesses || !excludedProcesses.has(row.id))
+    .map((row: any) => ({
+      id: row.id,
+      code: row.code,
+      value: row.value,
+      sortOrder: row.sort_order,
+      workUnit: row.work_unit,
+      workFormula: row.work_formula ?? null,
+      price: row.price != null ? Number(row.price) : null,
+    }));
 
   return { success: true, data: processes };
 }
@@ -88,8 +97,15 @@ export async function getProcessesWithNotes(
     }
   }
 
+  // Filter out excluded processes for this org
+  const exclusions = await getOrgExcludedRefValues(orgId || null);
+  const excludedProcesses = exclusions.get("ref_processes");
+  const filteredProcesses = excludedProcesses
+    ? (processesData ?? []).filter((row: any) => !excludedProcesses.has(row.id))
+    : (processesData ?? []);
+
   // Combine processes with notes
-  const processesWithNotes: ProcessWithNotes[] = (processesData ?? []).map((row: any) => {
+  const processesWithNotes: ProcessWithNotes[] = filteredProcesses.map((row: any) => {
     const noteData = notesMap.get(row.id);
     return {
       id: row.id,

@@ -76,7 +76,7 @@ function SortIndicator({
  *
  * Displays all organisations with sortable columns, CRUD actions, and delete.
  */
-export function OrganisationsTable() {
+export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean } = {}) {
   const router = useRouter();
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -269,12 +269,14 @@ export function OrganisationsTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={handleAdd}>
-          <Plus className="h-4 w-4" />
-          Add Organisation
-        </Button>
-      </div>
+      {!hideAddButton && (
+        <div className="flex justify-end">
+          <Button onClick={handleAdd}>
+            <Plus className="h-4 w-4" />
+            Add Organisation
+          </Button>
+        </div>
+      )}
 
       {organisations.length === 0 ? (
         <div className="rounded-lg border bg-card p-12 text-center">
