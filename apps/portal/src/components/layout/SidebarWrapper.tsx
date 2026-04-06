@@ -2,7 +2,7 @@ import {
   getSession,
   isSuperAdmin,
   hasMultipleOrganizations,
-  getOrgEnabledModules,
+  getUserEnabledModules,
   type UserRole,
 } from "@/lib/auth";
 import { Sidebar, type NavItem } from "./Sidebar";
@@ -104,10 +104,13 @@ export async function SidebarWrapper() {
     // Admin users see all items
     navItems = ADMIN_NAV_ITEMS;
   } else {
-    // Org users - filter by organization modules
+    // Org users - filter by user's effective modules (intersection of org + user modules)
     const orgUserItems = getOrgUserNavItems(pendingShipmentCount);
     const orgId = session?.currentOrganizationId || session?.organisationId || null;
-    const enabledModules = await getOrgEnabledModules(orgId);
+    const portalUserId = session?.portalUserId;
+    const enabledModules = portalUserId
+      ? await getUserEnabledModules(portalUserId, orgId)
+      : new Set<string>();
     navItems = filterNavItemsByModules(orgUserItems, enabledModules);
   }
 

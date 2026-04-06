@@ -1,14 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { getOrder } from "../actions/getOrder";
 import { getOrderPackages } from "../actions/getOrderPackages";
+import { getStaircaseCodes } from "../actions/getStaircaseCodes";
+import { getReferenceDropdowns } from "@/features/shipments/actions";
 import type { Order } from "../types";
 import type { OrderPackage } from "../actions/getOrderPackages";
+import type { StaircaseCode } from "../actions/getStaircaseCodes";
 import { getStatusLabel } from "../types";
+import { OrderProductsSection } from "./OrderProductsSection";
+import type { ProductColumnKey } from "./OrderProductsTable";
 import { OrderPackagesTable } from "./OrderPackagesTable";
 
 const ORDER_LAST_ENTRY_KEY = "order-last-entry";
@@ -22,26 +27,65 @@ const STATUS_COLORS: Record<string, string> = {
   completed: "bg-green-100 text-green-800",
 };
 
+interface ReferenceOption {
+  id: string;
+  value: string;
+}
+
+interface RefDropdowns {
+  productNames: ReferenceOption[];
+  woodSpecies: ReferenceOption[];
+  types: ReferenceOption[];
+  quality: ReferenceOption[];
+}
+
 interface OrderDetailClientProps {
   orderId: string;
 }
 
+/** Columns hidden in the "list" tab detail view */
+const LIST_TAB_HIDDEN_COLUMNS: ProductColumnKey[] = [
+  "volumeM3", "totalVolume", "kgPerPiece", "totalKg",
+  "eurPerM3", "eurPerPiece", "totalEurPerPiece",
+  "workPerPiece", "totalWork", "transportPerPiece", "totalTransport",
+];
+
+/** Columns hidden in the "sales" tab detail view */
+const SALES_TAB_HIDDEN_COLUMNS: ProductColumnKey[] = [
+  "volumeM3", "totalVolume", "eurPerM3", "eurPerPiece", "totalEurPerPiece",
+  "workPerPiece", "totalWork", "transportPerPiece", "totalTransport",
+];
+
+/** Columns hidden in the "production" tab detail view (all pricing) */
+const PRODUCTION_TAB_HIDDEN_COLUMNS: ProductColumnKey[] = [
+  "eurPerM3", "eurPerPiece", "totalEurPerPiece",
+  "unitPrice", "totalPrice",
+  "workPerPiece", "totalWork", "transportPerPiece", "totalTransport",
+];
+
 export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tab = searchParams.get("tab") || "list";
   const [order, setOrder] = useState<Order | null>(null);
   const [packages, setPackages] = useState<OrderPackage[]>([]);
+  const [dropdowns, setDropdowns] = useState<RefDropdowns | null>(null);
+  const [staircaseCodes, setStaircaseCodes] = useState<StaircaseCode[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    sessionStorage.setItem(ORDER_LAST_ENTRY_KEY, pathname);
-  }, [pathname]);
+    const search = searchParams.toString();
+    sessionStorage.setItem(ORDER_LAST_ENTRY_KEY, search ? `${pathname}?${search}` : pathname);
+  }, [pathname, searchParams]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
-    const [orderResult, pkgResult] = await Promise.all([
+    const [orderResult, pkgResult, refsResult, codesResult] = await Promise.all([
       getOrder(orderId),
       getOrderPackages(orderId),
+      getReferenceDropdowns(),
+      getStaircaseCodes(),
     ]);
 
     if (!orderResult.success) {
@@ -52,6 +96,18 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
     setOrder(orderResult.data);
     if (pkgResult.success) setPackages(pkgResult.data);
+    if (refsResult.success) {
+      const d = refsResult.data;
+      setDropdowns({
+        productNames: d.productNames,
+        woodSpecies: d.woodSpecies,
+        types: d.types,
+        quality: d.quality,
+      });
+    }
+    if (codesResult.success) {
+      setStaircaseCodes(codesResult.data ?? []);
+    }
     setIsLoading(false);
   }, [orderId, router]);
 
@@ -67,20 +123,14 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
     );
   }
 
-  if (!order) return null;
+  if (!order || !dropdowns) return null;
 
-  const isDraft = order.status === "draft";
+  const isEditable = order.status === "draft" || order.status === "confirmed";
 
   // Split packages by status
   const orderedPackages = packages.filter((p) => p.status === "ordered");
   const producedPackages = packages.filter((p) => p.status !== "ordered");
 
-  const totalOrderedPieces = orderedPackages.reduce(
-    (sum, p) => sum + (p.pieces ? parseInt(p.pieces, 10) || 0 : 0), 0
-  );
-  const totalOrderedVolume = orderedPackages.reduce(
-    (sum, p) => sum + (p.volumeM3 || 0), 0
-  );
   const totalProducedPieces = producedPackages.reduce(
     (sum, p) => sum + (p.pieces ? parseInt(p.pieces, 10) || 0 : 0), 0
   );
@@ -104,10 +154,13 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">
-            {order.code} — {order.name}
+            {order.name}
           </h1>
           <p className="text-muted-foreground">
-            {order.organisationName} · {order.orderDate}
+            {order.customerOrganisationName}
+            {order.sellerOrganisationName && <> · Seller: {order.sellerOrganisationName}</>}
+            {order.producerOrganisationName && <> · Producer: {order.producerOrganisationName}</>}
+            {" · Received: "}{order.dateReceived}{order.dateLoaded && <>{" · Loaded: "}{order.dateLoaded}</>}
           </p>
         </div>
         <span
@@ -117,39 +170,15 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
         </span>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Ordered Packages</p>
-          <p className="text-2xl font-semibold">{orderedPackages.length}</p>
-        </div>
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Ordered Volume</p>
-          <p className="text-2xl font-semibold">
-            {totalOrderedVolume.toFixed(4)} m³
-          </p>
-        </div>
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Produced Packages</p>
-          <p className="text-2xl font-semibold">{producedPackages.length}</p>
-        </div>
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Produced Volume</p>
-          <p className="text-2xl font-semibold">
-            {totalProducedVolume.toFixed(4)} m³
-          </p>
-        </div>
-      </div>
-
-      {/* Ordered Packages */}
-      <OrderPackagesTable
-        title="Ordered Packages"
-        subtitle={`${orderedPackages.length} packages · ${totalOrderedPieces} pcs · ${totalOrderedVolume.toFixed(4)} m³`}
-        packages={orderedPackages}
+      {/* Ordered Products - DataEntryTable */}
+      <OrderProductsSection
         orderId={orderId}
-        organisationId={order.organisationId}
-        editable={isDraft}
-        onChanged={loadData}
+        organisationId={order.customerOrganisationId}
+        initialPackages={orderedPackages}
+        dropdowns={dropdowns}
+        staircaseCodes={staircaseCodes}
+        readOnly={!isEditable}
+        hiddenColumns={tab === "list" ? LIST_TAB_HIDDEN_COLUMNS : tab === "sales" ? SALES_TAB_HIDDEN_COLUMNS : tab === "production" ? PRODUCTION_TAB_HIDDEN_COLUMNS : undefined}
       />
 
       {/* Produced Packages (shown only when there are any) */}
@@ -159,7 +188,7 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
           subtitle={`${producedPackages.length} packages · ${totalProducedPieces} pcs · ${totalProducedVolume.toFixed(4)} m³`}
           packages={producedPackages}
           orderId={orderId}
-          organisationId={order.organisationId}
+          organisationId={order.customerOrganisationId}
           editable={false}
           onChanged={loadData}
         />

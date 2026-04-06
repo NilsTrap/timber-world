@@ -61,6 +61,7 @@ interface InventoryPackage {
   unit_price_m3: number | null;
   wood_species: { value: string } | null;
   type: { value: string } | null;
+  quality: { value: string } | null;
 }
 
 // TI price data
@@ -113,15 +114,16 @@ function normalizeSpecies(species: string): string {
   return species.toLowerCase().replace(/european\s*/i, "").trim();
 }
 
-// Create product key for matching
+// Create product key for matching (includes quality to avoid cross-quality collisions)
 function makeKey(
   species: string,
   panelType: string,
+  quality: string,
   thickness: number,
   width: number,
   length: number
 ): string {
-  return `${normalizeSpecies(species)}-${panelType}-${thickness}x${width}x${length}`;
+  return `${normalizeSpecies(species)}-${panelType}-${quality.toLowerCase()}-${thickness}x${width}x${length}`;
 }
 
 // Fetch TI prices from inventory_packages
@@ -139,7 +141,8 @@ async function fetchTIPrices(
       unit_price_m2,
       unit_price_m3,
       wood_species:ref_wood_species(value),
-      type:ref_types(value)
+      type:ref_types(value),
+      quality:ref_quality(value)
     `
     )
     .not("unit_price_m2", "is", null);
@@ -170,7 +173,13 @@ async function fetchTIPrices(
 
     if (!panelType) continue;
 
-    const key = makeKey(p.wood_species.value, panelType, thickness, width, length);
+    // Map inventory quality names to scraper quality codes
+    const qualityValue = p.quality?.value || "";
+    const qualityCode = qualityValue.toUpperCase().includes("RUSTIC")
+      ? "Rustic"
+      : qualityValue.replace(/\s+/g, ""); // "A B" -> "AB", "B C" -> "BC"
+
+    const key = makeKey(p.wood_species.value, panelType, qualityCode, thickness, width, length);
     const pricePerPiece = p.unit_price_piece ? p.unit_price_piece / 100 : 0;
     const pricePerM2 = p.unit_price_m2 ? p.unit_price_m2 / 100 : 0;
     const pricePerM3 = p.unit_price_m3 ? p.unit_price_m3 / 100 : 0;
@@ -277,7 +286,8 @@ function transformProduct(
   tiPrices: Map<string, TIPrice>
 ): CompetitorPriceInsert {
   const panelType = getPanelType(product);
-  const key = makeKey(product.species, panelType, product.thickness, product.width, product.length);
+  const quality = product.quality || "AB";
+  const key = makeKey(product.species, panelType, quality, product.thickness, product.width, product.length);
   const tiPrice = tiPrices.get(key);
 
   // Calculate mass.ee price per m³ from dimensions
@@ -380,6 +390,26 @@ async function main() {
     process.exit(1);
   }
 
+  console.log(`Loaded ${products.length} products from file`);
+
+  // Deduplicate by dimensions — mass.ee lists some products under multiple URLs
+  // (lamella width variants, Estonian language URLs) with identical prices and stock.
+  // Keep the first entry for each unique species+type+quality+dimensions combo.
+  const seen = new Set<string>();
+  const deduped: PanelProduct[] = [];
+  for (const p of products) {
+    const dedupKey = `${normalizeSpecies(p.species)}-${getPanelType(p)}-${(p.quality || "").toLowerCase()}-${p.thickness}x${p.width}x${p.length}`;
+    if (!seen.has(dedupKey)) {
+      seen.add(dedupKey);
+      deduped.push(p);
+    }
+  }
+  const dupCount = products.length - deduped.length;
+  if (dupCount > 0) {
+    console.log(`Deduplicated: removed ${dupCount} duplicate entries (${products.length} → ${deduped.length})`);
+  }
+  products = deduped;
+
   console.log(`Found ${products.length} products to push`);
 
   // Connect to Supabase
@@ -430,9 +460,20 @@ async function main() {
     return;
   }
 
-  // Upsert records — updates existing entries (matched by source + product_url),
-  // inserts new ones, and leaves untouched products from previous scrapes intact.
-  console.log(`Upserting ${records.length} records...`);
+  // Delete all existing mass.ee entries and insert fresh
+  // (This ensures old duplicates and stale products are removed)
+  console.log("Deleting existing mass.ee entries...");
+  const { error: deleteError } = await supabase
+    .from("competitor_prices")
+    .delete()
+    .eq("source", "mass.ee");
+
+  if (deleteError) {
+    console.error("Error deleting old records:", deleteError.message);
+    process.exit(1);
+  }
+
+  console.log(`Inserting ${records.length} records...`);
 
   const { data, error } = await supabase
     .from("competitor_prices")

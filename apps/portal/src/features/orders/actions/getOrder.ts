@@ -25,10 +25,12 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
   const { data, error } = await client
     .from("orders")
     .select(`
-      id, code, name, organisation_id, order_date,
+      id, code, name, project_number, customer_organisation_id, seller_organisation_id, producer_organisation_id, planned_date, date_received, date_loaded,
       volume_m3, value_cents, currency, status, notes,
       created_by, created_at, updated_at,
-      organisations (code, name),
+      customer:organisations!orders_customer_organisation_id_fkey (code, name),
+      seller:organisations!orders_seller_organisation_id_fkey (code, name),
+      producer:organisations!orders_producer_organisation_id_fkey (code, name),
       portal_users (name)
     `)
     .eq("id", orderId)
@@ -38,10 +40,10 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
     return { success: false, error: "Order not found", code: "NOT_FOUND" };
   }
 
-  // Non-admin: check org match and feature
+  // Non-admin: check org match (buyer or seller) and feature
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    if (data.organisation_id !== orgId) {
+    if (data.customer_organisation_id !== orgId && data.seller_organisation_id !== orgId) {
       return { success: false, error: "Permission denied", code: "FORBIDDEN" };
     }
     const hasModule = await orgHasModule(orgId, "orders.view");
@@ -52,12 +54,49 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
 
   const order: Order = {
     id: data.id,
-    code: data.code,
     name: data.name,
-    organisationId: data.organisation_id,
-    organisationName: data.organisations?.name,
-    organisationCode: data.organisations?.code,
-    orderDate: data.order_date,
+    projectNumber: data.project_number ?? null,
+    typeSummary: null,
+    treads: 0,
+    winders: 0,
+    quarters: 0,
+    totalPieces: 0,
+    treadLength: null,
+    totalPricePence: 0,
+    totalKg: 0,
+    maxM3: 0, treadM3: 0, winderM3: 0, quarterM3: 0, totalProducedM3: 0,
+    usedMaterialM3: 0, wasteM3: 0, wastePercent: 0,
+    productionMaterial: 0, productionWork: 0, productionFinishing: 0, productionTotal: 0, productionInvoiceNumber: null, productionPaymentDate: null,
+    woodArt: 0, glowing: 0, woodArtCnc: 0, woodArtTotal: 0, woodArtInvoiceNumber: null, woodArtPaymentDate: null,
+    advanceInvoiceNumber: null,
+    eurPerM3: 0,
+    workPerPiece: 0,
+    invoicedWork: 0,
+    usedWork: 0,
+    plMaterialValue: 0,
+    plWorkValue: 0,
+    invoicedTransport: 0,
+    usedTransport: 0,
+    plTransportValue: 0,
+    plMaterialsValue: 0,
+    plTotalValue: 0,
+    plPercentFromInvoice: 0,
+    plannedDate: data.planned_date ?? null,
+    invoiceNumber: null,
+    packageNumber: null,
+    transportInvoiceNumber: null,
+    transportPrice: null,
+    customerOrganisationId: data.customer_organisation_id,
+    customerOrganisationName: data.customer?.name,
+    customerOrganisationCode: data.customer?.code,
+    sellerOrganisationId: data.seller_organisation_id,
+    sellerOrganisationName: data.seller?.name,
+    sellerOrganisationCode: data.seller?.code,
+    producerOrganisationId: data.producer_organisation_id,
+    producerOrganisationName: data.producer?.name,
+    producerOrganisationCode: data.producer?.code,
+    dateReceived: data.date_received,
+    dateLoaded: data.date_loaded ?? null,
     volumeM3: data.volume_m3,
     valueCents: data.value_cents,
     currency: data.currency,

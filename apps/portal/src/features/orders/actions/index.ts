@@ -7,3 +7,7 @@ export { deleteOrder } from "./deleteOrder";
 export { getOrderPackages } from "./getOrderPackages";
 export { addOrderPackage } from "./addOrderPackage";
 export { removeOrderPackage } from "./removeOrderPackage";
+export { getCustomerOptions } from "./getCustomerOptions";
+export { getStaircaseCodes } from "./getStaircaseCodes";
+export type { StaircaseCode } from "./getStaircaseCodes";
+export { saveOrderProducts } from "./saveOrderProducts";

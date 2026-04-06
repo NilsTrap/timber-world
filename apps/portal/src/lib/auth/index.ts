@@ -21,6 +21,6 @@ export {
 } from "./permissions";
 export type { PermissionContext, AuthContext } from "./permissions";
 
-export { getOrgEnabledModules, orgHasModule } from "./getOrgModules";
+export { getOrgEnabledModules, orgHasModule, getUserEnabledModules } from "./getOrgModules";
 
 export { usePermissions } from "./usePermissions";

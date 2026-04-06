@@ -25,17 +25,23 @@ export { sendUserCredentials } from "./sendUserCredentials";
 export { resendUserCredentials } from "./resendUserCredentials";
 export { resetUserPassword } from "./resetUserPassword";
 
-// User role management (Story 10.10)
-export { getUserRoles, updateUserRoles } from "./getUserRoles";
-export type { UserRoleAssignment } from "./getUserRoles";
+// User module management (replaces roles + overrides)
+export { getUserModules, updateUserModules } from "./getUserPermissions";
+export type { UserModule } from "./getUserPermissions";
 
-// User permission overrides (Story 10.11)
+// Legacy re-exports for backward compatibility
 export { getUserPermissions, updateUserPermissions } from "./getUserPermissions";
 export type { UserPermission, OverrideState } from "./getUserPermissions";
+export { getUserRoles, updateUserRoles } from "./getUserRoles";
+export type { UserRoleAssignment } from "./getUserRoles";
 
 // Organisation modules (Story 10.12)
 export { getOrganisationModules, updateOrganisationModules } from "./getOrganisationModules";
 export type { OrganisationModule } from "./getOrganisationModules";
+
+// Module presets
+export { getModulePresets, createModulePreset, deleteModulePreset } from "./modulePresets";
+export type { ModulePreset } from "./modulePresets";
 
 // Trading partners
 export { getTradingPartners } from "./getTradingPartners";

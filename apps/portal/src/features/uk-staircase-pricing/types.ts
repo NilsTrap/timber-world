@@ -48,6 +48,7 @@ export interface PricingRow {
   sortOrder: number;
   // Calculated fields (readonly display)
   m3PerPiece: string;
+  kgPerPiece: string;
   eurPerPiece: string;
   totalEurCents: string;
   priceGbpCents: string;
@@ -92,11 +93,13 @@ export type ActionResult<T> =
 export interface GlobalParams {
   gbpRate: string; // e.g., "0.90"
   transportRate: string; // EUR per m³, e.g., "300"
+  transportFlatEurCents: string; // flat EUR amount added per piece, in cents, e.g., "1100" = 11 EUR
 }
 
 export const DEFAULT_GLOBAL_PARAMS: GlobalParams = {
   gbpRate: "0.90",
   transportRate: "300",
+  transportFlatEurCents: "1100",
 };
 
 /**
@@ -105,10 +108,17 @@ export const DEFAULT_GLOBAL_PARAMS: GlobalParams = {
 export function calculateM3PerPiece(
   thicknessMm: number,
   widthMm: number,
-  lengthMm: number
+  lengthMm: number,
+  riserMm: number = 0,
+  name: string = ""
 ): number {
+  // Riser is added to width (e.g. step with riser = width + riser)
+  const effectiveWidthMm = widthMm + riserMm;
   // Convert mm³ to m³
-  return (thicknessMm * widthMm * lengthMm) / 1_000_000_000;
+  let m3 = (thicknessMm * effectiveWidthMm * lengthMm) / 1_000_000_000;
+  // Winders get 0.8 multiplier (irregular shape uses less material)
+  if (name.toLowerCase() === "winder") m3 *= 0.8;
+  return m3;
 }
 
 /**
@@ -172,10 +182,12 @@ export function recalculateRowWithParams(row: PricingRow, params: GlobalParams):
 
   // Parse global params
   const transportRateEur = parseFloat(params.transportRate) || 300;
+  const transportFlatCents = parseFloat(params.transportFlatEurCents) || 0;
   const gbpRateDecimal = parseFloat(params.gbpRate) || 0.9;
 
-  const m3PerPiece = calculateM3PerPiece(thicknessMm, widthMm, lengthMm);
-  const transportCostCents = calculateTransportCents(m3PerPiece, transportRateEur);
+  const riserMm = parseFloat(row.riserMm) || 0;
+  const m3PerPiece = calculateM3PerPiece(thicknessMm, widthMm, lengthMm, riserMm, row.name);
+  const transportCostCents = calculateTransportCents(m3PerPiece, transportRateEur) + transportFlatCents;
   const eurPerPieceCents = calculateEurPerPieceCents(m3PerPiece, eurPerM3Cents);
   const totalEurCents = calculateTotalEurCents(
     eurPerPieceCents,
@@ -189,6 +201,7 @@ export function recalculateRowWithParams(row: PricingRow, params: GlobalParams):
     code: generateCode(row),
     transportCostCents: String(transportCostCents),
     m3PerPiece: m3PerPiece.toFixed(6),
+    kgPerPiece: (m3PerPiece * 700).toFixed(2),
     eurPerPiece: String(eurPerPieceCents),
     totalEurCents: String(totalEurCents),
     priceGbpCents: String(priceGbpCents),
@@ -224,6 +237,7 @@ export function dbToClientRow(db: PricingItemDb, params: GlobalParams = DEFAULT_
     sortOrder: db.sort_order,
     // Calculated - will be filled by recalculateRowWithParams
     m3PerPiece: "",
+    kgPerPiece: "",
     eurPerPiece: "",
     totalEurCents: "",
     priceGbpCents: "",

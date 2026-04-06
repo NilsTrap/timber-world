@@ -75,6 +75,8 @@ interface SidebarLinkProps {
 const LAST_ENTRY_KEYS: Record<string, string> = {
   "/production": "production-last-entry",
   "/shipments": "shipment-last-entry",
+  "/admin/organisations": "organisation-last-entry",
+  "/orders": "order-last-entry",
 };
 
 export function SidebarLink({ href, label, iconName, isCollapsed, badge }: SidebarLinkProps) {

@@ -15,8 +15,7 @@ import {
   RefreshCw,
   KeyRound,
   Trash2,
-  Shield,
-  Lock,
+  Settings2,
 } from "lucide-react";
 import {
   Button,
@@ -47,8 +46,7 @@ import {
 import type { OrganisationUser } from "../types";
 import { AddUserDialog } from "./AddUserDialog";
 import { EditUserDialog } from "./EditUserDialog";
-import { UserRolesDialog } from "./UserRolesDialog";
-import { UserPermissionsDialog } from "./UserPermissionsDialog";
+import { UserModulesDialog } from "./UserModulesDialog";
 
 type SortColumn = "name" | "email" | "status" | "lastLoginAt";
 type SortDirection = "asc" | "desc";
@@ -141,9 +139,8 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
   const [resendingCredentialsFor, setResendingCredentialsFor] = useState<string | null>(null);
   const [resettingPasswordFor, setResettingPasswordFor] = useState<string | null>(null);
 
-  // Roles and permissions dialog state
-  const [rolesUser, setRolesUser] = useState<OrganisationUser | null>(null);
-  const [permissionsUser, setPermissionsUser] = useState<OrganisationUser | null>(null);
+  // User modules dialog state
+  const [modulesUser, setModulesUser] = useState<OrganisationUser | null>(null);
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -401,26 +398,16 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {/* Roles button - manage user role assignments (not yet active) */}
-                        <span title="Roles — coming soon">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            disabled
-                          >
-                            <Shield className="h-4 w-4" />
-                          </Button>
-                        </span>
-                        {/* Permissions button - manage permission overrides (not yet active) */}
-                        <span title="Permissions — coming soon">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            disabled
-                          >
-                            <Lock className="h-4 w-4" />
-                          </Button>
-                        </span>
+                        {/* Modules button - manage user module access */}
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setModulesUser(user)}
+                          aria-label={`Manage modules for ${user.name}`}
+                          title="Manage modules"
+                        >
+                          <Settings2 className="h-4 w-4" />
+                        </Button>
                         {/* Send Credentials button - for created users (no auth_user_id yet) */}
                         {user.status === "created" && !user.authUserId && user.isActive && (
                           <Button
@@ -621,21 +608,12 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* User Roles Dialog */}
-      <UserRolesDialog
-        user={rolesUser}
+      {/* User Modules Dialog */}
+      <UserModulesDialog
+        user={modulesUser}
         organisationId={organisationId}
-        open={!!rolesUser}
-        onOpenChange={(open) => !open && setRolesUser(null)}
-        onSuccess={handleSuccess}
-      />
-
-      {/* User Permissions Dialog */}
-      <UserPermissionsDialog
-        user={permissionsUser}
-        organisationId={organisationId}
-        open={!!permissionsUser}
-        onOpenChange={(open) => !open && setPermissionsUser(null)}
+        open={!!modulesUser}
+        onOpenChange={(open) => !open && setModulesUser(null)}
         onSuccess={handleSuccess}
       />
     </div>

@@ -31,6 +31,9 @@ export interface SessionUser {
   role: UserRole; // Legacy role (kept for backward compatibility)
   isPlatformAdmin: boolean;
 
+  // Portal user ID (from portal_users table, used for permission checks)
+  portalUserId: string | null;
+
   // Current organization context (switchable for multi-org users)
   currentOrganizationId: string | null;
   currentOrganizationCode: string | null;
@@ -104,6 +107,7 @@ export async function getSession(): Promise<SessionUser | null> {
       name,
       role,
       isPlatformAdmin: false,
+      portalUserId: null,
       currentOrganizationId: null,
       currentOrganizationCode: null,
       currentOrganizationName: null,
@@ -205,6 +209,7 @@ export async function getSession(): Promise<SessionUser | null> {
     name,
     role: dbRole,
     isPlatformAdmin,
+    portalUserId,
     currentOrganizationId,
     currentOrganizationCode,
     currentOrganizationName,

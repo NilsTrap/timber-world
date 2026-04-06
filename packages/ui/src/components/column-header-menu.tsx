@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { ListFilter, ArrowUpNarrowWide, ArrowDownWideNarrow, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Button } from "./button";
@@ -22,6 +22,22 @@ interface ColumnHeaderMenuProps {
   onFilterChange: (columnKey: string, values: Set<string>) => void;
 }
 
+const DATE_REGEX = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+
+/** Parse DD.MM.YYYY → YYYY-MM-DD for date input and comparison */
+function ddmmyyyyToIso(val: string): string {
+  const m = val.match(DATE_REGEX);
+  if (!m) return "";
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
+/** Parse DD.MM.YYYY → sortable YYYYMMDD number */
+function ddmmyyyyToNum(val: string): number {
+  const m = val.match(DATE_REGEX);
+  if (!m) return 0;
+  return parseInt(`${m[3]}${m[2]}${m[1]}`, 10);
+}
+
 function ColumnHeaderMenu({
   columnKey,
   isNumeric = false,
@@ -34,11 +50,22 @@ function ColumnHeaderMenu({
   const isActive =
     (activeSort?.column === columnKey) || activeFilter.size > 0;
 
+  // Detect if values are DD.MM.YYYY dates
+  const isDate = useMemo(
+    () => uniqueValues.length > 0 && uniqueValues.every((v) => DATE_REGEX.test(v)),
+    [uniqueValues]
+  );
+
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+
   const sortedUniqueValues = useMemo(
-    () =>
-      [...uniqueValues].sort((a, b) => {
+    () => {
+      return [...uniqueValues].sort((a, b) => {
+        if (isDate) {
+          return ddmmyyyyToNum(b) - ddmmyyyyToNum(a);
+        }
         if (isNumeric) {
-          // Parse leading number (handles ranges like "20-24" by sorting on first number)
           const aNum = parseFloat(a);
           const bNum = parseFloat(b);
           const aValid = !isNaN(aNum);
@@ -56,12 +83,13 @@ function ColumnHeaderMenu({
         const bTrail = parseInt(b.match(/\d+$/)?.[0] || "0", 10);
         if (aTrail !== bTrail) return aTrail - bTrail;
         return a.localeCompare(b);
-      }),
-    [uniqueValues, isNumeric]
+      });
+    },
+    [uniqueValues, isNumeric, isDate]
   );
 
-  const ascLabel = isNumeric ? "Small → Large" : "A → Z";
-  const descLabel = isNumeric ? "Large → Small" : "Z → A";
+  const ascLabel = isDate ? "Oldest → Newest" : isNumeric ? "Small → Large" : "A → Z";
+  const descLabel = isDate ? "Newest → Oldest" : isNumeric ? "Large → Small" : "Z → A";
 
   const handleSort = (direction: SortDirection) => {
     if (activeSort?.column === columnKey && activeSort.direction === direction) {
@@ -91,7 +119,24 @@ function ColumnHeaderMenu({
 
   const handleClearFilter = () => {
     onFilterChange(columnKey, new Set());
+    setRangeFrom("");
+    setRangeTo("");
   };
+
+  // Apply date range: select all dates within from-to
+  const handleApplyRange = useCallback(() => {
+    if (!rangeFrom && !rangeTo) return;
+    const fromNum = rangeFrom ? parseInt(rangeFrom.replace(/-/g, ""), 10) : 0;
+    const toNum = rangeTo ? parseInt(rangeTo.replace(/-/g, ""), 10) : 99999999;
+    const matching = new Set<string>();
+    for (const val of uniqueValues) {
+      const num = ddmmyyyyToNum(val);
+      if (num >= fromNum && num <= toNum) {
+        matching.add(val);
+      }
+    }
+    onFilterChange(columnKey, matching);
+  }, [rangeFrom, rangeTo, uniqueValues, columnKey, onFilterChange]);
 
   return (
     <Popover>
@@ -156,6 +201,43 @@ function ColumnHeaderMenu({
 
         {/* Divider */}
         <div className="border-t my-2" />
+
+        {/* Date Range Filter (only for date columns) */}
+        {isDate && (
+          <>
+            <div className="space-y-1.5 px-1">
+              <p className="text-xs font-medium text-muted-foreground">Date Range</p>
+              <div className="flex items-center gap-1">
+                <input
+                  type="date"
+                  value={rangeFrom}
+                  onChange={(e) => setRangeFrom(e.target.value)}
+                  className="h-6 w-full rounded border border-input bg-transparent px-1 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  placeholder="From"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <input
+                  type="date"
+                  value={rangeTo}
+                  onChange={(e) => setRangeTo(e.target.value)}
+                  className="h-6 w-full rounded border border-input bg-transparent px-1 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  placeholder="To"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 w-full text-[11px]"
+                onClick={handleApplyRange}
+                disabled={!rangeFrom && !rangeTo}
+              >
+                Apply Range
+              </Button>
+            </div>
+            <div className="border-t my-2" />
+          </>
+        )}
 
         {/* Filter Section */}
         <div className="space-y-1">

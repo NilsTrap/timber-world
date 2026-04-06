@@ -17,13 +17,18 @@ export interface OrderPackage {
   quality: string | null;
   thickness: string | null;
   width: string | null;
+  riser: string | null;
   length: string | null;
   pieces: string | null;
   volumeM3: number | null;
   status: string;
+  staircaseCodeId: string | null;
   unitPricePiece: number | null;
   unitPriceM3: number | null;
   unitPriceM2: number | null;
+  workPerPiece: number | null;
+  transportPerPiece: number | null;
+  eurPerM3: number | null;
   notes: string | null;
   productionEntryId: string | null;
 }
@@ -51,9 +56,10 @@ export async function getOrderPackages(
   const { data, error } = await client
     .from("inventory_packages")
     .select(`
-      id, package_number, status, thickness, width, length, pieces,
-      volume_m3, notes, production_entry_id,
+      id, package_number, status, thickness, width, riser, length, pieces,
+      volume_m3, notes, production_entry_id, staircase_code_id,
       unit_price_piece, unit_price_m3, unit_price_m2,
+      work_per_piece, transport_per_piece, eur_per_m3,
       ref_product_names (value),
       ref_wood_species (value),
       ref_humidity (value),
@@ -83,13 +89,18 @@ export async function getOrderPackages(
     quality: row.ref_quality?.value ?? null,
     thickness: row.thickness,
     width: row.width,
+    riser: row.riser,
     length: row.length,
     pieces: row.pieces,
     volumeM3: row.volume_m3,
+    staircaseCodeId: row.staircase_code_id ?? null,
     status: row.status,
     unitPricePiece: row.unit_price_piece,
     unitPriceM3: row.unit_price_m3,
     unitPriceM2: row.unit_price_m2,
+    workPerPiece: row.work_per_piece != null ? parseFloat(row.work_per_piece) : null,
+    transportPerPiece: row.transport_per_piece != null ? parseFloat(row.transport_per_piece) : null,
+    eurPerM3: row.eur_per_m3 != null ? parseFloat(row.eur_per_m3) : null,
     notes: row.notes,
     productionEntryId: row.production_entry_id,
   }));

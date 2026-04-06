@@ -1,14 +1,10 @@
 import { redirect, notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
-import { OrdersTable } from "@/features/orders/components";
+import { OrdersPageClient } from "@/features/orders/components";
 
 export const metadata = {
   title: "Orders | Timber World",
 };
-
-// Org types that act as salesperson (can pick customer org)
-const SALESPERSON_ORG_TYPES = ["principal", "trader"];
 
 export default async function OrdersPage() {
   const session = await getSession();
@@ -20,7 +16,7 @@ export default async function OrdersPage() {
   const userIsAdmin = isAdmin(session);
   const userOrgId = session.currentOrganizationId || session.organisationId || null;
 
-  // For non-admin users, check if their organization has the orders feature enabled
+  // For non-admin users, check if their organization has the orders module enabled
   if (!userIsAdmin) {
     const hasOrdersModule = await orgHasModule(userOrgId, "orders.view");
     if (!hasOrdersModule) {
@@ -30,25 +26,31 @@ export default async function OrdersPage() {
 
   const userOrgName = session.currentOrganizationName || session.organisationName || null;
 
-  // Determine if user's org is a salesperson type (can pick customer)
+  // Determine if user can select a customer organisation for orders
   let canSelectCustomer = userIsAdmin;
   if (!userIsAdmin && userOrgId) {
-    const supabase = await createClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: typeAssignment } = await (supabase as any)
-      .from("organization_type_assignments")
-      .select("organization_types(name)")
-      .eq("organization_id", userOrgId)
-      .limit(1)
-      .single();
+    canSelectCustomer = await orgHasModule(userOrgId, "orders.customer-select");
+  }
 
-    if (typeAssignment?.organization_types?.name) {
-      canSelectCustomer = SALESPERSON_ORG_TYPES.includes(typeAssignment.organization_types.name);
-    }
+  // Determine which tabs the user can see (admins see all)
+  const allTabs = ["list", "prices", "sales", "production", "analytics"] as const;
+  let visibleTabs: string[];
+  if (userIsAdmin) {
+    visibleTabs = [...allTabs];
+  } else {
+    const tabChecks = await Promise.all(
+      allTabs.map(async (tab) => ({
+        tab,
+        allowed: await orgHasModule(userOrgId, `orders.tab.${tab}`),
+      }))
+    );
+    visibleTabs = tabChecks.filter((t) => t.allowed).map((t) => t.tab);
+    // If no tabs explicitly enabled, default to list
+    if (visibleTabs.length === 0) visibleTabs = ["list"];
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Orders</h1>
         <p className="text-muted-foreground">
@@ -58,11 +60,12 @@ export default async function OrdersPage() {
         </p>
       </div>
 
-      <OrdersTable
+      <OrdersPageClient
         isAdmin={userIsAdmin}
         canSelectCustomer={canSelectCustomer}
         userOrganisationId={userOrgId}
         userOrganisationName={userOrgName}
+        visibleTabs={visibleTabs}
       />
     </div>
   );

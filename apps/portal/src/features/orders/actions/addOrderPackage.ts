@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
 
@@ -22,13 +22,11 @@ interface AddOrderPackageInput {
   pieces?: string | null;
   volumeM3?: number | null;
   unitPricePiece?: number | null;
-  unitPriceM3?: number | null;
-  unitPriceM2?: number | null;
   notes?: string | null;
 }
 
 /**
- * Add a new package to an order.
+ * Add a new product to an order.
  * Creates an inventory_packages record with status "ordered" and linked to the order.
  */
 export async function addOrderPackage(
@@ -40,7 +38,11 @@ export async function addOrderPackage(
   }
 
   if (!isAdmin(session)) {
-    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    const userOrgId = session.currentOrganizationId || session.organisationId;
+    const canCreate = await orgHasModule(userOrgId, "orders.create");
+    if (!canCreate) {
+      return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    }
   }
 
   if (!isValidUUID(input.orderId)) {
@@ -71,8 +73,6 @@ export async function addOrderPackage(
       pieces: input.pieces ?? null,
       volume_m3: input.volumeM3 ?? null,
       unit_price_piece: input.unitPricePiece ?? null,
-      unit_price_m3: input.unitPriceM3 ?? null,
-      unit_price_m2: input.unitPriceM2 ?? null,
       notes: input.notes ?? null,
     })
     .select("id")
@@ -80,7 +80,8 @@ export async function addOrderPackage(
 
   if (error) {
     console.error("[addOrderPackage] Failed:", error);
-    return { success: false, error: "Failed to add package", code: "INSERT_FAILED" };
+    console.error("[addOrderPackage] Input:", JSON.stringify(input, null, 2));
+    return { success: false, error: `Failed to add package: ${error.message}`, code: "INSERT_FAILED" };
   }
 
   return { success: true, data: { id: data.id } };

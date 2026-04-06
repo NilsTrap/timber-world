@@ -1,57 +1,13 @@
-import { redirect, notFound } from "next/navigation";
-import { getSession, isSuperAdmin, isAdmin, orgHasModule } from "@/lib/auth";
-import { getRoles, getFeaturesByCategory } from "@/features/roles/actions";
-import { RolesTable } from "@/features/roles/components";
+import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "Role Management | Timber World Platform",
 };
 
-export default async function RolesPage() {
-  const session = await getSession();
-
-  if (!session) {
-    redirect("/login");
-  }
-
-  // Super admins and admins always have access; org users need roles.view feature
-  if (!isAdmin(session)) {
-    const orgId = session.currentOrganizationId || session.organisationId;
-    const hasModule = await orgHasModule(orgId, "roles.view");
-    if (!hasModule) {
-      notFound();
-    }
-  }
-
-  const [rolesResult, featuresResult] = await Promise.all([
-    getRoles(),
-    getFeaturesByCategory(),
-  ]);
-
-  if (!rolesResult.success || !featuresResult.success) {
-    return (
-      <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">Role Management</h1>
-        <div className="text-destructive">
-          Failed to load data. Please try again.
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Role Management</h1>
-        <p className="text-muted-foreground">
-          Manage roles and their permissions. System roles cannot be deleted.
-        </p>
-      </div>
-
-      <RolesTable
-        roles={rolesResult.data || []}
-        featuresByCategory={featuresResult.data || {}}
-      />
-    </div>
-  );
+/**
+ * Roles page — deprecated.
+ * User permissions are now managed via per-user modules on the organization detail page.
+ */
+export default function RolesPage() {
+  redirect("/admin/organisations");
 }

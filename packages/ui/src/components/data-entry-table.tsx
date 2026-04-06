@@ -27,8 +27,8 @@ export type ColumnType = "readonly" | "dropdown" | "text" | "numeric" | "custom"
 export interface ColumnDef<TRow> {
   /** Unique key for this column */
   key: string;
-  /** Column header label */
-  label: string;
+  /** Column header label. Use string[] for multi-line headers. */
+  label: string | string[];
   /** Column type determines rendering behavior */
   type: ColumnType;
 
@@ -152,6 +152,25 @@ export interface DataEntryTableProps<TRow> {
 function getOptionLabel(options: DropdownOption[], id: string): string {
   if (!id) return "";
   return options.find((o) => o.id === id)?.value ?? "";
+}
+
+/** Get label as flat string (for tooltips and collapsed abbreviations) */
+function getLabelText(label: string | string[]): string {
+  return Array.isArray(label) ? label.join(" ") : label;
+}
+
+/** Render label, supporting multi-line via string[] */
+function renderLabel(label: string | string[]): React.ReactNode {
+  if (Array.isArray(label)) {
+    return (
+      <span className="flex flex-col leading-tight">
+        {label.map((line, i) => (
+          <span key={i}>{line}</span>
+        ))}
+      </span>
+    );
+  }
+  return label;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -841,7 +860,7 @@ function DataEntryTableInner<TRow>(
   const renderCollapsedCell = (col: ColumnDef<TRow>, currentValue: string) => {
     const label = getOptionLabel(col.options ?? [], currentValue);
     const abbrev = label ? label.slice(0, 3) : "-";
-    const tooltip = label ? `${col.label}: ${label}` : `${col.label}: (empty)`;
+    const tooltip = label ? `${getLabelText(col.label)}: ${label}` : `${getLabelText(col.label)}: (empty)`;
     return (
       <span
         className="inline-flex items-center justify-center h-7 w-full text-sm text-muted-foreground cursor-default"
@@ -862,7 +881,7 @@ function DataEntryTableInner<TRow>(
       id={`${idPrefix}-${renderIndex}-${col.key}`}
       className={`h-7 text-sm px-1 ${col.width ?? "w-[4.5rem]"} ${col.isNumeric ? "text-right" : ""}`}
       placeholder={col.placeholder}
-      value={col.getDisplayValue ? col.getDisplayValue(row) : col.getValue(row)}
+      value={col.getValue(row) ?? ""}
       onChange={(e) => updateCell(originalIndex, col.key, e.target.value)}
       onKeyDown={(e) =>
         handleFieldKeyDown(e, renderIndex, col.key, displayRows.length)
@@ -913,13 +932,13 @@ function DataEntryTableInner<TRow>(
                       className={`px-0.5 text-sm cursor-pointer select-none hover:bg-accent/50 transition-colors whitespace-nowrap ${isCollapsed ? "w-[30px]" : ""}`}
                       style={!isCollapsed && lockedWidth ? { minWidth: lockedWidth } : undefined}
                       onClick={() => toggleColumn(col.key)}
-                      title={isCollapsed ? `Expand ${col.label}` : `Collapse ${col.label}`}
+                      title={isCollapsed ? `Expand ${getLabelText(col.label)}` : `Collapse ${getLabelText(col.label)}`}
                     >
                       <span className="flex items-center gap-0.5">
                         <span className="text-muted-foreground text-[10px]">
                           {isCollapsed ? "›" : "‹"}
                         </span>
-                        {isCollapsed ? col.label.slice(0, 3) : col.label}
+                        {isCollapsed ? getLabelText(col.label).slice(0, 3) : renderLabel(col.label)}
                         {!isCollapsed && showFilter && (
                           <ColumnHeaderMenu
                             columnKey={col.key}
@@ -945,7 +964,7 @@ function DataEntryTableInner<TRow>(
                   >
                     {showFilter ? (
                       <span className="flex items-center gap-0.5">
-                        {col.label}
+                        {renderLabel(col.label)}
                         <ColumnHeaderMenu
                           columnKey={col.key}
                           isNumeric={col.isNumeric || col.type === "numeric"}
@@ -957,7 +976,7 @@ function DataEntryTableInner<TRow>(
                         />
                       </span>
                     ) : (
-                      col.label
+                      renderLabel(col.label)
                     )}
                   </TableHead>
                 );
@@ -1007,7 +1026,7 @@ function DataEntryTableInner<TRow>(
                     if (effectiveReadOnly && col.collapsible && isCollapsed) {
                       const label = getColDisplayValue(row, col);
                       const abbrev = label ? label.slice(0, 3) : "-";
-                      const tooltip = label ? `${col.label}: ${label}` : `${col.label}: (empty)`;
+                      const tooltip = label ? `${getLabelText(col.label)}: ${label}` : `${getLabelText(col.label)}: (empty)`;
                       return (
                         <TableCell
                           key={col.key}
@@ -1105,7 +1124,7 @@ function DataEntryTableInner<TRow>(
                   return (
                     <TableCell
                       key={col.key}
-                      className="px-0.5 font-mono text-sm font-semibold whitespace-nowrap"
+                      className={`px-0.5 font-mono text-sm font-semibold whitespace-nowrap ${col.isNumeric ? "text-right" : ""}`}
                     >
                       {display}
                     </TableCell>

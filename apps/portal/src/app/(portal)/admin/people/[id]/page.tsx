@@ -6,7 +6,6 @@ import { Button } from "@timber/ui";
 import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import { getPersonById } from "@/features/organisations/actions/getPersonById";
 import { PersonDetailTabs } from "@/features/organisations/components/PersonDetailTabs";
-import { getRoles, getFeaturesByCategory } from "@/features/roles/actions";
 
 interface PersonDetailPageProps {
   params: Promise<{ id: string }>;
@@ -30,7 +29,6 @@ export async function generateMetadata({
 
 export default async function PersonDetailPage({
   params,
-  searchParams,
 }: PersonDetailPageProps) {
   const session = await getSession();
 
@@ -47,13 +45,8 @@ export default async function PersonDetailPage({
   }
 
   const { id } = await params;
-  const { tab } = await searchParams;
 
-  const [personResult, rolesResult, featuresResult] = await Promise.all([
-    getPersonById(id),
-    getRoles(),
-    getFeaturesByCategory(),
-  ]);
+  const personResult = await getPersonById(id);
 
   if (!personResult.success) {
     if (personResult.code === "NOT_FOUND") {
@@ -61,9 +54,6 @@ export default async function PersonDetailPage({
     }
     throw new Error(personResult.error);
   }
-
-  const roles = rolesResult.success ? rolesResult.data ?? [] : [];
-  const featuresByCategory = featuresResult.success ? featuresResult.data ?? {} : {};
 
   return (
     <div className="space-y-6">
@@ -82,12 +72,7 @@ export default async function PersonDetailPage({
         </div>
       </div>
 
-      <PersonDetailTabs
-        person={personResult.data}
-        roles={roles}
-        featuresByCategory={featuresByCategory}
-        defaultTab={tab}
-      />
+      <PersonDetailTabs person={personResult.data} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import { createOrderSchema } from "../schemas";
 import type { Order, ActionResult } from "../types";
 
@@ -14,8 +14,11 @@ import type { Order, ActionResult } from "../types";
  */
 export async function createOrder(input: {
   name: string;
-  organisationId: string;
-  orderDate: string;
+  projectNumber?: string | null;
+  customerOrganisationId: string | null;
+  sellerOrganisationId?: string | null;
+  dateReceived: string;
+  dateLoaded?: string | null;
   volumeM3?: number | null;
   valueCents?: number | null;
   currency?: "EUR" | "GBP" | "USD";
@@ -31,24 +34,22 @@ export async function createOrder(input: {
     };
   }
 
-  // 2. Non-admin users: check if they can create for other orgs (salesperson types)
+  // 2. Non-admin users: check orders.create module
   if (!isAdmin(session)) {
     const userOrgId = session.currentOrganizationId || session.organisationId;
-    if (input.organisationId !== userOrgId) {
-      // Check if user's org is a salesperson type (principal/trader)
-      const supabaseCheck = await createClient();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: typeData } = await (supabaseCheck as any)
-        .from("organization_type_assignments")
-        .select("organization_types(name)")
-        .eq("organization_id", userOrgId)
-        .limit(1)
-        .single();
+    const canCreate = await orgHasModule(userOrgId, "orders.create");
+    if (!canCreate) {
+      return {
+        success: false,
+        error: "Permission denied",
+        code: "FORBIDDEN",
+      };
+    }
 
-      const orgTypeName = typeData?.organization_types?.name;
-      const isSalesperson = orgTypeName === "principal" || orgTypeName === "trader";
-
-      if (!isSalesperson) {
+    // If creating for a different org, check customer-select module
+    if (input.customerOrganisationId !== userOrgId) {
+      const canSelectCustomer = await orgHasModule(userOrgId, "orders.customer-select");
+      if (!canSelectCustomer) {
         return {
           success: false,
           error: "Permission denied",
@@ -68,7 +69,7 @@ export async function createOrder(input: {
     };
   }
 
-  const { name, organisationId, orderDate, volumeM3, valueCents, currency, notes } =
+  const { name, projectNumber, customerOrganisationId, dateReceived, dateLoaded, volumeM3, valueCents, currency, notes } =
     parsed.data;
 
   const supabase = await createClient();
@@ -106,14 +107,25 @@ export async function createOrder(input: {
     }
   }
 
-  // 6. Insert new order
+  // 6. Determine seller org
+  // For non-admin users with customer-select, the seller is the user's own org
+  const userOrgId = session.currentOrganizationId || session.organisationId;
+  let sellerOrgId = input.sellerOrganisationId || null;
+  if (!sellerOrgId && !isAdmin(session) && customerOrganisationId !== userOrgId) {
+    sellerOrgId = userOrgId;
+  }
+
+  // 7. Insert new order
   const { data, error } = await client
     .from("orders")
     .insert({
       code,
       name,
-      organisation_id: organisationId,
-      order_date: orderDate,
+      project_number: projectNumber,
+      customer_organisation_id: customerOrganisationId,
+      seller_organisation_id: sellerOrgId,
+      date_received: dateReceived,
+      date_loaded: dateLoaded,
       volume_m3: volumeM3,
       value_cents: valueCents,
       currency: currency || "EUR",
@@ -126,8 +138,12 @@ export async function createOrder(input: {
       id,
       code,
       name,
-      organisation_id,
-      order_date,
+      project_number,
+      customer_organisation_id,
+      seller_organisation_id,
+      producer_organisation_id,
+      date_received,
+      date_loaded,
       volume_m3,
       value_cents,
       currency,
@@ -136,7 +152,15 @@ export async function createOrder(input: {
       created_by,
       created_at,
       updated_at,
-      organisations (
+      customer:organisations!orders_customer_organisation_id_fkey (
+        code,
+        name
+      ),
+      seller:organisations!orders_seller_organisation_id_fkey (
+        code,
+        name
+      ),
+      producer:organisations!orders_producer_organisation_id_fkey (
         code,
         name
       )
@@ -153,15 +177,52 @@ export async function createOrder(input: {
     };
   }
 
-  // 7. Transform and return
+  // 8. Transform and return
   const order: Order = {
     id: data.id as string,
-    code: data.code as string,
     name: data.name as string,
-    organisationId: data.organisation_id as string,
-    organisationName: data.organisations?.name as string | undefined,
-    organisationCode: data.organisations?.code as string | undefined,
-    orderDate: data.order_date as string,
+    projectNumber: data.project_number as string | null,
+    typeSummary: null,
+    treads: 0,
+    winders: 0,
+    quarters: 0,
+    totalPieces: 0,
+    treadLength: null,
+    totalPricePence: 0,
+    totalKg: 0,
+    maxM3: 0, treadM3: 0, winderM3: 0, quarterM3: 0, totalProducedM3: 0,
+    usedMaterialM3: 0, wasteM3: 0, wastePercent: 0,
+    productionMaterial: 0, productionWork: 0, productionFinishing: 0, productionTotal: 0, productionInvoiceNumber: null, productionPaymentDate: null,
+    woodArt: 0, glowing: 0, woodArtCnc: 0, woodArtTotal: 0, woodArtInvoiceNumber: null, woodArtPaymentDate: null,
+    advanceInvoiceNumber: null,
+    invoiceNumber: null,
+    packageNumber: null,
+    transportInvoiceNumber: null,
+    transportPrice: null,
+    eurPerM3: 0,
+    workPerPiece: 0,
+    invoicedWork: 0,
+    usedWork: 0,
+    plMaterialValue: 0,
+    plWorkValue: 0,
+    invoicedTransport: 0,
+    usedTransport: 0,
+    plTransportValue: 0,
+    plMaterialsValue: 0,
+    plTotalValue: 0,
+    plPercentFromInvoice: 0,
+    plannedDate: null,
+    customerOrganisationId: data.customer_organisation_id as string,
+    customerOrganisationName: data.customer?.name as string | undefined,
+    customerOrganisationCode: data.customer?.code as string | undefined,
+    sellerOrganisationId: data.seller_organisation_id as string | null,
+    sellerOrganisationName: data.seller?.name as string | undefined,
+    sellerOrganisationCode: data.seller?.code as string | undefined,
+    producerOrganisationId: data.producer_organisation_id as string | null,
+    producerOrganisationName: data.producer?.name as string | undefined,
+    producerOrganisationCode: data.producer?.code as string | undefined,
+    dateReceived: data.date_received as string,
+    dateLoaded: (data.date_loaded as string) ?? null,
     volumeM3: data.volume_m3 as number | null,
     valueCents: data.value_cents as number | null,
     currency: data.currency as "EUR" | "GBP" | "USD",

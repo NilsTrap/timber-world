@@ -24,8 +24,8 @@ export async function getFeatures(): Promise<{
     const supabase = await createClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: features, error } = await (supabase as any)
-      .from("features")
+    const { data: modules, error } = await (supabase as any)
+      .from("modules")
       .select("*")
       .order("sort_order");
 
@@ -33,7 +33,7 @@ export async function getFeatures(): Promise<{
       return { success: false, error: error.message };
     }
 
-    const formattedFeatures: Feature[] = features.map(
+    const formattedFeatures: Feature[] = modules.map(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (f: any) => ({
         id: f.id,
@@ -47,8 +47,8 @@ export async function getFeatures(): Promise<{
 
     return { success: true, data: formattedFeatures };
   } catch (error) {
-    console.error("Error fetching features:", error);
-    return { success: false, error: "Failed to fetch features" };
+    console.error("Error fetching modules:", error);
+    return { success: false, error: "Failed to fetch modules" };
   }
 }
 

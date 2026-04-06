@@ -16,6 +16,7 @@ import {
 } from "@timber/ui";
 import { toast } from "sonner";
 import { Building2, Users, Settings2, Handshake, Database, Pencil, Check, X } from "lucide-react";
+import { usePersistedTab } from "@/hooks/usePersistedTab";
 import type { Organisation } from "../types";
 import { OrganisationUsersTable } from "./OrganisationUsersTable";
 import { OrganisationModulesTab } from "./OrganisationModulesTab";
@@ -117,16 +118,19 @@ export function OrganisationDetailTabs({
     }
   };
 
-  const getDefaultTab = () => {
-    if (defaultTab === "users") return "users";
-    if (defaultTab === "features") return "features";
-    if (defaultTab === "reference") return "reference";
-    if (defaultTab === "partners") return "partners";
-    return "details";
-  };
+  const urlDefault =
+    defaultTab === "users" || defaultTab === "features" || defaultTab === "reference" || defaultTab === "partners"
+      ? defaultTab
+      : undefined;
+
+  const [activeTab, setActiveTab] = usePersistedTab(
+    "organisation-detail-tab",
+    "details",
+    urlDefault
+  );
 
   return (
-    <Tabs defaultValue={getDefaultTab()}>
+    <Tabs value={activeTab} onValueChange={setActiveTab}>
       <TabsList>
         <TabsTrigger value="details">
           <Building2 className="h-4 w-4" />

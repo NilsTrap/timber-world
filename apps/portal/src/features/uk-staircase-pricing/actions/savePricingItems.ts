@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@timber/database";
 import { getSession, isAdmin } from "@/lib/auth";
 import type { PricingItemUpsert, PricingItemDb, ActionResult } from "../types";
 
@@ -35,10 +35,9 @@ export async function savePricingItems(
     };
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
-  // Upsert all items
-  // Note: Using type assertion because uk_staircase_pricing isn't in generated Supabase types yet
+  // Upsert all items (using admin client to bypass RLS)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("uk_staircase_pricing")

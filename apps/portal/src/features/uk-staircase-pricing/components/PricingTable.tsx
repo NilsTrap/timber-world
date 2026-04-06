@@ -47,6 +47,7 @@ function createEmptyRow(index: number, params: GlobalParams): PricingRow {
     isActive: true,
     sortOrder: index,
     m3PerPiece: "",
+    kgPerPiece: "",
     eurPerPiece: "",
     totalEurCents: "",
     priceGbpCents: "",
@@ -137,15 +138,56 @@ export function PricingTable({ rows, onRowsChange, globalParams = DEFAULT_GLOBAL
         navigable: true,
         getValue: (row) => row.lengthMm,
       },
-      // m³/piece (calculated, readonly)
+      // m³/piece (calculated, readonly with formula tooltip)
       {
         key: "m3PerPiece",
         label: "m³/pc",
-        type: "readonly",
+        type: "custom",
         isNumeric: true,
         width: "w-[3.5rem]",
         getValue: (row) => row.m3PerPiece,
         getDisplayValue: (row) => formatDecimal(row.m3PerPiece, 4),
+        renderCell: (row) => {
+          const t = row.thicknessMm || "0";
+          const w = row.widthMm || "0";
+          const r = row.riserMm ? ` + ${row.riserMm}` : "";
+          const l = row.lengthMm || "0";
+          const isWinder = row.name.toLowerCase() === "winder";
+          let formula = `${t} × (${w}${r}) × ${l} / 1,000,000,000`;
+          if (isWinder) formula += ` × 0.8`;
+          formula += ` = ${formatDecimal(row.m3PerPiece, 6)} m³`;
+          return (
+            <span
+              className="inline-flex items-center h-7 w-full justify-end cursor-default"
+              title={formula}
+            >
+              {formatDecimal(row.m3PerPiece, 4) || "-"}
+            </span>
+          );
+        },
+      },
+      // kg/piece (calculated: m³ × 700 × 0.8, readonly with formula tooltip)
+      {
+        key: "kgPerPiece",
+        label: "kg/pc",
+        type: "custom",
+        isNumeric: true,
+        width: "w-[3.5rem]",
+        getValue: (row) => row.kgPerPiece,
+        getDisplayValue: (row) => formatDecimal(row.kgPerPiece, 2),
+        renderCell: (row) => {
+          const m3 = row.m3PerPiece || "0";
+          const kg = row.kgPerPiece || "0";
+          const formula = `${formatDecimal(m3, 6)} m³ × 700 = ${formatDecimal(kg, 2)} kg`;
+          return (
+            <span
+              className="inline-flex items-center h-7 w-full justify-end cursor-default"
+              title={formula}
+            >
+              {formatDecimal(row.kgPerPiece, 2) || "-"}
+            </span>
+          );
+        },
       },
       // EUR/m³ (input, stored in cents, displayed as whole EUR)
       {

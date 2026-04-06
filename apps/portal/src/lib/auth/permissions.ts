@@ -2,14 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { SessionUser } from "./getSession";
 
 /**
- * Permission Checking Infrastructure (Story 10.8)
+ * Permission Checking Infrastructure
  *
- * Three-layer permission model:
- * 1. Organization Modules - what the org has access to
- * 2. Roles - bundles of permissions assigned to users
- * 3. User Overrides - per-user permission additions/removals
+ * Two-layer permission model:
+ * 1. Organization Modules - what the org has access to (ceiling)
+ * 2. User Modules - what the individual user has access to within that org
  *
- * Effective permission = (org has module) AND (role grants OR override grants) AND NOT (override denies)
+ * Effective permission = org has module enabled AND user has module enabled
+ * Platform admin = all permissions granted (skip checks)
  */
 
 export interface PermissionContext {
@@ -20,11 +20,6 @@ export interface PermissionContext {
 
 /**
  * Check if a user has a specific permission in an organization
- *
- * @param userId - Portal user ID (not auth user ID)
- * @param organizationId - Organization ID to check permissions for
- * @param moduleCode - Module code to check (e.g., 'production.create')
- * @returns true if user has the permission
  */
 export async function hasPermission(
   userId: string,
@@ -59,60 +54,27 @@ export async function hasPermission(
     .eq("module_code", moduleCode)
     .single();
 
-  // If module is explicitly disabled or not set, deny
   if (!orgModule || !orgModule.enabled) {
     return false;
   }
 
-  // Layer 3: Check user overrides first (they take precedence)
+  // Layer 2: Check if user has this module enabled
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: override } = await (supabase as any)
-    .from("user_permission_overrides")
-    .select("granted")
+  const { data: userModule } = await (supabase as any)
+    .from("user_modules")
+    .select("enabled")
     .eq("user_id", userId)
     .eq("organization_id", organizationId)
     .eq("module_code", moduleCode)
     .single();
 
-  if (override) {
-    return override.granted;
-  }
-
-  // Layer 2: Check roles
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: userRoles } = await (supabase as any)
-    .from("user_roles")
-    .select("roles(permissions)")
-    .eq("user_id", userId)
-    .eq("organization_id", organizationId);
-
-  if (!userRoles || userRoles.length === 0) {
-    return false;
-  }
-
-  // Check if any role grants this permission
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const hasRolePermission = userRoles.some((ur: any) => {
-    const permissions = ur.roles?.permissions || [];
-    return (
-      permissions.includes("*") ||
-      permissions.includes(moduleCode) ||
-      permissions.some(
-        (p: string) =>
-          p.endsWith("*") && moduleCode.startsWith(p.replace("*", ""))
-      )
-    );
-  });
-
-  return hasRolePermission;
+  return userModule?.enabled === true;
 }
 
 /**
  * Get all effective permissions for a user in an organization
  *
- * @param userId - Portal user ID
- * @param organizationId - Organization ID
- * @returns Array of module codes the user has access to
+ * Returns the intersection of org modules and user modules.
  */
 export async function getEffectivePermissions(
   userId: string,
@@ -132,95 +94,43 @@ export async function getEffectivePermissions(
     // Platform admin has all modules
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: allModules } = await (supabase as any)
-      .from("features")
+      .from("modules")
       .select("code");
-    return allModules?.map((f: { code: string }) => f.code) || [];
+    return allModules?.map((m: { code: string }) => m.code) || [];
   }
 
   if (!organizationId) {
     return [];
   }
 
-  // Get all features
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: allModules } = await (supabase as any)
-    .from("features")
-    .select("code");
-
-  const moduleCodes = allModules?.map((f: { code: string }) => f.code) || [];
-  const effectivePermissions: string[] = [];
-
   // Get organization's enabled modules
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: orgModules } = await (supabase as any)
     .from("organization_modules")
-    .select("module_code, enabled")
-    .eq("organization_id", organizationId);
+    .select("module_code")
+    .eq("organization_id", organizationId)
+    .eq("enabled", true);
 
-  const orgModuleMap = new Map(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    orgModules?.map((m: any) => [m.module_code, m.enabled]) || []
+  const orgModuleSet = new Set(
+    orgModules?.map((m: { module_code: string }) => m.module_code) || []
   );
 
-  // Get user's role permissions
+  // Get user's enabled modules
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: userRoles } = await (supabase as any)
-    .from("user_roles")
-    .select("roles(permissions)")
+  const { data: userModules } = await (supabase as any)
+    .from("user_modules")
+    .select("module_code")
     .eq("user_id", userId)
-    .eq("organization_id", organizationId);
+    .eq("organization_id", organizationId)
+    .eq("enabled", true);
 
-  const rolePermissions = new Set<string>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  userRoles?.forEach((ur: any) => {
-    ur.roles?.permissions?.forEach((p: string) => {
-      if (p === "*") {
-        moduleCodes.forEach((mc: string) => rolePermissions.add(mc));
-      } else if (p.endsWith("*")) {
-        const prefix = p.replace("*", "");
-        moduleCodes
-          .filter((mc: string) => mc.startsWith(prefix))
-          .forEach((mc: string) => rolePermissions.add(mc));
-      } else {
-        rolePermissions.add(p);
-      }
-    });
-  });
-
-  // Get user overrides
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: overrides } = await (supabase as any)
-    .from("user_permission_overrides")
-    .select("module_code, granted")
-    .eq("user_id", userId)
-    .eq("organization_id", organizationId);
-
-  const grantOverrides = new Set<string>();
-  const denyOverrides = new Set<string>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  overrides?.forEach((o: any) => {
-    if (o.granted) {
-      grantOverrides.add(o.module_code);
-    } else {
-      denyOverrides.add(o.module_code);
+  // Intersection: user has module AND org has module
+  const effectivePermissions: string[] = [];
+  (userModules || []).forEach((um: { module_code: string }) => {
+    if (orgModuleSet.has(um.module_code)) {
+      effectivePermissions.push(um.module_code);
     }
   });
-
-  // Calculate effective permissions
-  for (const moduleCode of moduleCodes) {
-    // Check if org has module explicitly enabled
-    const orgHasModule = orgModuleMap.get(moduleCode) === true;
-
-    if (!orgHasModule) continue;
-
-    // Check if denied by override
-    if (denyOverrides.has(moduleCode)) continue;
-
-    // Check if granted by override or role
-    if (grantOverrides.has(moduleCode) || rolePermissions.has(moduleCode)) {
-      effectivePermissions.push(moduleCode);
-    }
-  }
 
   return effectivePermissions;
 }

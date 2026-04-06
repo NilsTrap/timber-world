@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@timber/database";
 import { getSession, isAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
@@ -35,9 +35,8 @@ export async function deletePricingItem(
     };
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
-  // Note: Using type assertion because uk_staircase_pricing isn't in generated Supabase types yet
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("uk_staircase_pricing")

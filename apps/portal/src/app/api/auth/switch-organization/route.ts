@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth/getSession";
+import { getUserEnabledModules } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+
+/** Module → first page href mapping (order matters — first match wins) */
+const MODULE_TO_PAGE: [string, string][] = [
+  ["dashboard.view", "/dashboard"],
+  ["orders.view", "/orders"],
+  ["production.view", "/production"],
+  ["inventory.view", "/inventory"],
+  ["shipments.view", "/shipments"],
+];
 
 const CURRENT_ORG_COOKIE = "timber-current-org";
 
@@ -84,7 +94,15 @@ export async function POST(request: NextRequest) {
       path: "/",
     });
 
-    return NextResponse.json({ success: true, organizationId });
+    // Determine first available page for the user in the new org
+    let redirectTo = "/dashboard";
+    if (!portalUser.is_platform_admin) {
+      const enabledModules = await getUserEnabledModules(portalUser.id, organizationId);
+      const firstPage = MODULE_TO_PAGE.find(([mod]) => enabledModules.has(mod));
+      redirectTo = firstPage ? firstPage[1] : "/dashboard";
+    }
+
+    return NextResponse.json({ success: true, organizationId, redirectTo });
   } catch (error) {
     console.error("Error switching organization:", error);
     return NextResponse.json(

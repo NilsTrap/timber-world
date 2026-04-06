@@ -68,7 +68,10 @@ export function OrganizationSwitcher({
       });
 
       if (response.ok) {
+        const data = await response.json();
         onSwitch?.(organizationId);
+        // Navigate to the first available page for the new org
+        router.push(data.redirectTo || "/dashboard");
         router.refresh();
       }
     } catch (error) {

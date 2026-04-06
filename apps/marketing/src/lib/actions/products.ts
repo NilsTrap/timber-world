@@ -81,7 +81,30 @@ export async function getProducts(
   try {
     const supabase = await createClient();
 
-    // Fetch inventory packages with resolved references
+    // Get internal, marketing-enabled org IDs
+    const { data: orgs } = await supabase
+      .from("organisations")
+      .select("id")
+      .eq("is_active", true)
+      .eq("marketing_enabled", true)
+      .eq("is_external", false);
+
+    const orgIds = ((orgs || []) as { id: string }[]).map((o) => o.id);
+
+    if (orgIds.length === 0) {
+      return {
+        success: true,
+        data: {
+          products: [],
+          total: 0,
+          page,
+          pageSize: PAGE_SIZE,
+          filterOptions: { products: [], species: [], widths: [], lengths: [], thicknesses: [], qualityGrades: [], types: [], humidities: [], processings: [] },
+        },
+      };
+    }
+
+    // Fetch inventory packages from marketing-enabled internal orgs only
     const { data: packagesData, error: packagesError } = await supabase
       .from("inventory_packages")
       .select(`
@@ -104,7 +127,8 @@ export async function getProducts(
         ref_quality!inventory_packages_quality_id_fkey(value),
         organisations!inventory_packages_organisation_id_fkey(code)
       `)
-      .eq("status", "available");
+      .eq("status", "available")
+      .in("organisation_id", orgIds);
 
     if (packagesError) {
       console.error("Failed to fetch inventory packages:", packagesError);
@@ -287,7 +311,24 @@ export async function getFilterOptions(): Promise<ActionResult<FilterOptions>> {
   try {
     const supabase = await createClient();
 
-    // Get inventory packages with resolved references
+    // Get internal, marketing-enabled org IDs
+    const { data: orgs } = await supabase
+      .from("organisations")
+      .select("id")
+      .eq("is_active", true)
+      .eq("marketing_enabled", true)
+      .eq("is_external", false);
+
+    const orgIds = ((orgs || []) as { id: string }[]).map((o) => o.id);
+
+    if (orgIds.length === 0) {
+      return {
+        success: true,
+        data: { products: [], species: [], widths: [], lengths: [], thicknesses: [], qualityGrades: [], types: [], humidities: [], processings: [] },
+      };
+    }
+
+    // Get inventory packages with resolved references from marketing-enabled internal orgs only
     const { data, error } = await supabase
       .from("inventory_packages")
       .select(`
@@ -301,7 +342,8 @@ export async function getFilterOptions(): Promise<ActionResult<FilterOptions>> {
         ref_processing!inventory_packages_processing_id_fkey(value),
         ref_quality!inventory_packages_quality_id_fkey(value)
       `)
-      .eq("status", "available");
+      .eq("status", "available")
+      .in("organisation_id", orgIds);
 
     if (error) {
       console.error("Failed to fetch filter options:", error);

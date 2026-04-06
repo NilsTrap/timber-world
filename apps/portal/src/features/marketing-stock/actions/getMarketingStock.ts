@@ -43,7 +43,8 @@ export async function getMarketingStock(): Promise<ActionResult<MarketingStockIt
     .from("organisations")
     .select("id")
     .eq("is_active", true)
-    .eq("marketing_enabled", true);
+    .eq("marketing_enabled", true)
+    .eq("is_external", false);
 
   if (orgsError) {
     return { success: false, error: orgsError.message };

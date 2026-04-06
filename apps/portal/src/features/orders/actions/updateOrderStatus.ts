@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import { updateOrderStatusSchema } from "../schemas";
 import type { Order, OrderStatus, ActionResult } from "../types";
 import { isValidUUID } from "../types";
@@ -26,13 +26,17 @@ export async function updateOrderStatus(
     };
   }
 
-  // 2. Check admin role
+  // 2. Check permission: admin or orders.create module
   if (!isAdmin(session)) {
-    return {
-      success: false,
-      error: "Permission denied",
-      code: "FORBIDDEN",
-    };
+    const userOrgId = session.currentOrganizationId || session.organisationId;
+    const canCreate = await orgHasModule(userOrgId, "orders.create");
+    if (!canCreate) {
+      return {
+        success: false,
+        error: "Permission denied",
+        code: "FORBIDDEN",
+      };
+    }
   }
 
   // 3. Validate order ID
@@ -68,8 +72,12 @@ export async function updateOrderStatus(
       id,
       code,
       name,
-      organisation_id,
-      order_date,
+      project_number,
+      customer_organisation_id,
+      seller_organisation_id,
+      producer_organisation_id,
+      date_received,
+      date_loaded,
       volume_m3,
       value_cents,
       currency,
@@ -78,7 +86,15 @@ export async function updateOrderStatus(
       created_by,
       created_at,
       updated_at,
-      organisations (
+      customer:organisations!orders_customer_organisation_id_fkey (
+        code,
+        name
+      ),
+      seller:organisations!orders_seller_organisation_id_fkey (
+        code,
+        name
+      ),
+      producer:organisations!orders_producer_organisation_id_fkey (
         code,
         name
       )
@@ -105,12 +121,49 @@ export async function updateOrderStatus(
   // 6. Transform and return
   const order: Order = {
     id: data.id as string,
-    code: data.code as string,
     name: data.name as string,
-    organisationId: data.organisation_id as string,
-    organisationName: data.organisations?.name as string | undefined,
-    organisationCode: data.organisations?.code as string | undefined,
-    orderDate: data.order_date as string,
+    projectNumber: (data.project_number as string) ?? null,
+    typeSummary: null,
+    treads: 0,
+    winders: 0,
+    quarters: 0,
+    totalPieces: 0,
+    treadLength: null,
+    advanceInvoiceNumber: null,
+    invoiceNumber: null,
+    packageNumber: null,
+    transportInvoiceNumber: null,
+    transportPrice: null,
+    totalPricePence: 0,
+    totalKg: 0,
+    maxM3: 0, treadM3: 0, winderM3: 0, quarterM3: 0, totalProducedM3: 0,
+    usedMaterialM3: 0, wasteM3: 0, wastePercent: 0,
+    productionMaterial: 0, productionWork: 0, productionFinishing: 0, productionTotal: 0, productionInvoiceNumber: null, productionPaymentDate: null,
+    woodArt: 0, glowing: 0, woodArtCnc: 0, woodArtTotal: 0, woodArtInvoiceNumber: null, woodArtPaymentDate: null,
+    eurPerM3: 0,
+    workPerPiece: 0,
+    invoicedWork: 0,
+    usedWork: 0,
+    plMaterialValue: 0,
+    plWorkValue: 0,
+    invoicedTransport: 0,
+    usedTransport: 0,
+    plTransportValue: 0,
+    plMaterialsValue: 0,
+    plTotalValue: 0,
+    plPercentFromInvoice: 0,
+    plannedDate: null,
+    customerOrganisationId: data.customer_organisation_id as string,
+    customerOrganisationName: data.customer?.name as string | undefined,
+    customerOrganisationCode: data.customer?.code as string | undefined,
+    sellerOrganisationId: data.seller_organisation_id as string | null,
+    sellerOrganisationName: data.seller?.name as string | undefined,
+    sellerOrganisationCode: data.seller?.code as string | undefined,
+    producerOrganisationId: data.producer_organisation_id as string | null,
+    producerOrganisationName: data.producer?.name as string | undefined,
+    producerOrganisationCode: data.producer?.code as string | undefined,
+    dateReceived: data.date_received as string,
+    dateLoaded: (data.date_loaded as string) ?? null,
     volumeM3: data.volume_m3 as number | null,
     valueCents: data.value_cents as number | null,
     currency: data.currency as "EUR" | "GBP" | "USD",

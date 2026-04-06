@@ -1,14 +1,14 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import type { ActionResult, OrganisationOption } from "../types";
 
 /**
  * Get Active Organisations
  *
- * Fetches all active organisations for use in shipment form dropdowns.
- * Admin only.
+ * Fetches all active organisations for use in form dropdowns.
+ * Allowed for admins and non-admin users with orders.customer-select module.
  */
 export async function getActiveOrganisations(): Promise<ActionResult<OrganisationOption[]>> {
   const session = await getSession();
@@ -17,7 +17,11 @@ export async function getActiveOrganisations(): Promise<ActionResult<Organisatio
   }
 
   if (!isAdmin(session)) {
-    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    const userOrgId = session.currentOrganizationId || session.organisationId;
+    const canSelectCustomer = await orgHasModule(userOrgId, "orders.customer-select");
+    if (!canSelectCustomer) {
+      return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    }
   }
 
   const supabase = await createClient();

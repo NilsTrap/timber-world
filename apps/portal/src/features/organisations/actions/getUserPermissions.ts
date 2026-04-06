@@ -5,29 +5,27 @@ import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 /**
- * Permission Override State
+ * User Module Configuration
  */
-export type OverrideState = "inherit" | "grant" | "deny";
-
-/**
- * User Permission with Override
- */
-export interface UserPermission {
+export interface UserModule {
   moduleCode: string;
   moduleName: string;
   moduleDescription: string | null;
   category: string;
-  fromRoles: boolean;
-  override: OverrideState;
+  orgEnabled: boolean;
+  userEnabled: boolean;
 }
 
 /**
- * Get user's permissions with override status
+ * Get user's module configuration within an organization
+ *
+ * Returns all modules with their org-level and user-level enabled status.
+ * A module is only effective if both org AND user have it enabled.
  */
-export async function getUserPermissions(
+export async function getUserModules(
   userId: string,
   organisationId: string
-): Promise<ActionResult<UserPermission[]>> {
+): Promise<ActionResult<UserModule[]>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
@@ -39,103 +37,69 @@ export async function getUserPermissions(
 
   const supabase = await createClient();
 
-  // Get all features (master list)
+  // Get all modules (master list)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: featuresData, error: featuresError } = await (supabase as any)
-    .from("features")
+  const { data: modulesData, error: modulesError } = await (supabase as any)
+    .from("modules")
     .select("code, name, description, category, sort_order")
     .order("category")
     .order("sort_order");
 
-  if (featuresError) {
-    console.error("Failed to fetch modules:", featuresError);
+  if (modulesError) {
+    console.error("Failed to fetch modules:", modulesError);
     return { success: false, error: "Failed to fetch modules", code: "QUERY_FAILED" };
   }
 
-  // Get user's roles and their permissions
+  // Get org's enabled modules
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: userRolesData, error: userRolesError } = await (supabase as any)
-    .from("user_roles")
-    .select("roles(permissions)")
+  const { data: orgModulesData } = await (supabase as any)
+    .from("organization_modules")
+    .select("module_code, enabled")
+    .eq("organization_id", organisationId);
+
+  const orgModuleMap = new Map<string, boolean>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (orgModulesData || []).forEach((m: any) => {
+    orgModuleMap.set(m.module_code, m.enabled);
+  });
+
+  // Get user's enabled modules
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: userModulesData } = await (supabase as any)
+    .from("user_modules")
+    .select("module_code, enabled")
     .eq("user_id", userId)
     .eq("organization_id", organisationId);
 
-  if (userRolesError) {
-    console.error("Failed to fetch user roles:", userRolesError);
-    return { success: false, error: "Failed to fetch user roles", code: "QUERY_FAILED" };
-  }
-
-  // Collect all permissions from roles
-  const rolePermissions = new Set<string>();
+  const userModuleMap = new Map<string, boolean>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (userRolesData || []).forEach((ur: any) => {
-    const perms = ur.roles?.permissions || [];
-    perms.forEach((p: string) => {
-      if (p === "*") {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (featuresData || []).forEach((f: any) => rolePermissions.add(f.code));
-      } else if (p.endsWith(".*")) {
-        const category = p.replace(".*", "");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (featuresData || []).forEach((f: any) => {
-          if (f.code.startsWith(category + ".")) {
-            rolePermissions.add(f.code);
-          }
-        });
-      } else {
-        rolePermissions.add(p);
-      }
-    });
+  (userModulesData || []).forEach((m: any) => {
+    userModuleMap.set(m.module_code, m.enabled);
   });
 
-  // Get user's permission overrides
+  // Merge into result
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: overridesData, error: overridesError } = await (supabase as any)
-    .from("user_permission_overrides")
-    .select("module_code, granted")
-    .eq("user_id", userId)
-    .eq("organization_id", organisationId);
+  const modules: UserModule[] = (modulesData || []).map((m: any) => ({
+    moduleCode: m.code,
+    moduleName: m.name,
+    moduleDescription: m.description,
+    category: m.category || "Other",
+    orgEnabled: orgModuleMap.get(m.code) ?? false,
+    userEnabled: userModuleMap.get(m.code) ?? false,
+  }));
 
-  if (overridesError) {
-    console.error("Failed to fetch overrides:", overridesError);
-    return { success: false, error: "Failed to fetch permission overrides", code: "QUERY_FAILED" };
-  }
-
-  // Create map of overrides
-  const overridesMap = new Map<string, boolean>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (overridesData || []).forEach((o: any) => {
-    overridesMap.set(o.module_code, o.granted);
-  });
-
-  // Merge with permissions and overrides
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const permissions: UserPermission[] = (featuresData || []).map((f: any) => {
-    let override: OverrideState = "inherit";
-    if (overridesMap.has(f.code)) {
-      override = overridesMap.get(f.code) ? "grant" : "deny";
-    }
-
-    return {
-      moduleCode: f.code,
-      moduleName: f.name,
-      moduleDescription: f.description,
-      category: f.category || "Other",
-      fromRoles: rolePermissions.has(f.code),
-      override,
-    };
-  });
-
-  return { success: true, data: permissions };
+  return { success: true, data: modules };
 }
 
 /**
- * Update user's permission overrides
+ * Update user's module configuration within an organization
+ *
+ * Sets which modules are enabled for this specific user.
  */
-export async function updateUserPermissions(
+export async function updateUserModules(
   userId: string,
   organisationId: string,
-  overrides: Array<{ moduleCode: string; state: OverrideState }>
+  moduleCodes: string[]
 ): Promise<ActionResult<void>> {
   const session = await getSession();
   if (!session) {
@@ -148,40 +112,51 @@ export async function updateUserPermissions(
 
   const supabase = await createClient();
 
-  // Delete existing overrides
+  // Delete existing user modules for this user+org
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: deleteError } = await (supabase as any)
-    .from("user_permission_overrides")
+    .from("user_modules")
     .delete()
     .eq("user_id", userId)
     .eq("organization_id", organisationId);
 
   if (deleteError) {
-    console.error("Failed to delete permission overrides:", deleteError);
-    return { success: false, error: "Failed to update permissions", code: "DELETE_FAILED" };
+    console.error("Failed to delete user modules:", deleteError);
+    return { success: false, error: "Failed to update user modules", code: "DELETE_FAILED" };
   }
 
-  // Insert new overrides (only non-inherit states)
-  const newOverrides = overrides
-    .filter((o) => o.state !== "inherit")
-    .map((o) => ({
+  // Insert new module configuration
+  if (moduleCodes.length > 0) {
+    const modules = moduleCodes.map((code) => ({
       user_id: userId,
       organization_id: organisationId,
-      module_code: o.moduleCode,
-      granted: o.state === "grant",
+      module_code: code,
+      enabled: true,
     }));
 
-  if (newOverrides.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: insertError } = await (supabase as any)
-      .from("user_permission_overrides")
-      .insert(newOverrides);
+      .from("user_modules")
+      .insert(modules);
 
     if (insertError) {
-      console.error("Failed to insert permission overrides:", insertError);
-      return { success: false, error: "Failed to update permissions", code: "INSERT_FAILED" };
+      console.error("Failed to insert user modules:", insertError);
+      return { success: false, error: "Failed to update user modules", code: "INSERT_FAILED" };
     }
   }
 
   return { success: true, data: undefined };
 }
+
+// Legacy exports for backward compatibility during transition
+export type OverrideState = "inherit" | "grant" | "deny";
+export interface UserPermission {
+  moduleCode: string;
+  moduleName: string;
+  moduleDescription: string | null;
+  category: string;
+  fromRoles: boolean;
+  override: OverrideState;
+}
+export const getUserPermissions = getUserModules;
+export const updateUserPermissions = updateUserModules;

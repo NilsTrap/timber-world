@@ -35,7 +35,7 @@ export async function getOrganisationModules(
   // Get all features (master list)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: featuresData, error: featuresError } = await (supabase as any)
-    .from("features")
+    .from("modules")
     .select("code, name, description, category, sort_order")
     .order("category")
     .order("sort_order");
