@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Loader2 } from "lucide-react";
 import {
   Table,
@@ -9,6 +9,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  ColumnHeaderMenu,
+  type ColumnSortState,
 } from "@timber/ui";
 import { getMarketingStock, type MarketingStockItem } from "../actions/getMarketingStock";
 
@@ -17,10 +19,23 @@ function formatPrice(cents: number | null): string {
   return (cents / 100).toFixed(2).replace(".", ",");
 }
 
+const NUMERIC_COLS = new Set([
+  "thickness", "width", "length", "pieces", "volume_m3",
+  "unit_price_piece", "unit_price_m3", "unit_price_m2",
+]);
+
+const ALL_COLUMNS = [
+  "organisation_code", "product_name", "species", "type", "quality",
+  "humidity", "processing", "fsc", "thickness", "width", "length",
+  "pieces", "volume_m3", "unit_price_piece", "unit_price_m3", "unit_price_m2",
+] as const;
+
 export function MarketingStockTable() {
   const [data, setData] = useState<MarketingStockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [columnSort, setColumnSort] = useState<ColumnSortState | null>(null);
+  const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
 
   useEffect(() => {
     getMarketingStock().then((result) => {
@@ -33,10 +48,107 @@ export function MarketingStockTable() {
     });
   }, []);
 
-  const totalPieces = useMemo(() => data.reduce((sum, d) => sum + d.pieces, 0), [data]);
+  const getDisplayValue = useCallback((item: MarketingStockItem, colKey: string): string => {
+    switch (colKey) {
+      case "organisation_code": return item.organisation_code || "";
+      case "product_name": return item.product_name || "";
+      case "species": return item.species || "";
+      case "type": return item.type || "";
+      case "quality": return item.quality || "";
+      case "humidity": return item.humidity || "";
+      case "processing": return item.processing || "";
+      case "fsc": return item.fsc || "";
+      case "thickness": return item.thickness || "";
+      case "width": return item.width || "";
+      case "length": return item.length || "";
+      case "pieces": return String(item.pieces);
+      case "volume_m3": return item.volume_m3 ? item.volume_m3.toFixed(3) : "";
+      case "unit_price_piece": return item.unit_price_piece ? formatPrice(item.unit_price_piece) : "";
+      case "unit_price_m3": return item.unit_price_m3 ? formatPrice(item.unit_price_m3) : "";
+      case "unit_price_m2": return item.unit_price_m2 ? formatPrice(item.unit_price_m2) : "";
+      default: return "";
+    }
+  }, []);
+
+  const handleFilterChange = useCallback(
+    (columnKey: string, values: Set<string>) => {
+      setColumnFilters((prev) => ({ ...prev, [columnKey]: values }));
+    },
+    []
+  );
+
+  const columnUniqueValues = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const colKey of ALL_COLUMNS) {
+      // Filter rows by all OTHER active filters (not this column)
+      const filteredRows = data.filter((item) => {
+        for (const [filterCol, allowedValues] of Object.entries(columnFilters)) {
+          if (filterCol === colKey || allowedValues.size === 0) continue;
+          const val = getDisplayValue(item, filterCol);
+          if (!allowedValues.has(val)) return false;
+        }
+        return true;
+      });
+      const valSet = new Set<string>();
+      for (const row of filteredRows) {
+        const val = getDisplayValue(row, colKey);
+        if (val) valSet.add(val);
+      }
+      map[colKey] = [...valSet];
+    }
+    return map;
+  }, [data, columnFilters, getDisplayValue]);
+
+  const displayRows = useMemo(() => {
+    // Apply filters
+    let result = data.filter((item) => {
+      for (const [colKey, allowedValues] of Object.entries(columnFilters)) {
+        if (allowedValues.size === 0) continue;
+        const val = getDisplayValue(item, colKey);
+        if (!allowedValues.has(val)) return false;
+      }
+      return true;
+    });
+
+    // Apply sort
+    if (columnSort) {
+      const { column: sortCol, direction } = columnSort;
+      const isNum = NUMERIC_COLS.has(sortCol);
+      result = [...result].sort((a, b) => {
+        const aVal = getDisplayValue(a, sortCol);
+        const bVal = getDisplayValue(b, sortCol);
+        if (isNum) {
+          const aNum = parseFloat(aVal.replace(",", ".")) || 0;
+          const bNum = parseFloat(bVal.replace(",", ".")) || 0;
+          return direction === "asc" ? aNum - bNum : bNum - aNum;
+        }
+        const cmp = aVal.localeCompare(bVal);
+        return direction === "asc" ? cmp : -cmp;
+      });
+    }
+
+    return result;
+  }, [data, columnFilters, columnSort, getDisplayValue]);
+
+  const totalPieces = useMemo(() => displayRows.reduce((sum, d) => sum + d.pieces, 0), [displayRows]);
   const totalVolume = useMemo(
-    () => data.reduce((sum, d) => sum + (d.volume_m3 || 0), 0),
-    [data]
+    () => displayRows.reduce((sum, d) => sum + (d.volume_m3 || 0), 0),
+    [displayRows]
+  );
+
+  const headerWithMenu = (colKey: string, label: string, isNumeric = false) => (
+    <span className="flex items-center gap-0.5">
+      {label}
+      <ColumnHeaderMenu
+        columnKey={colKey}
+        isNumeric={isNumeric}
+        uniqueValues={columnUniqueValues[colKey] ?? []}
+        activeSort={columnSort}
+        activeFilter={columnFilters[colKey] ?? new Set()}
+        onSortChange={setColumnSort}
+        onFilterChange={handleFilterChange}
+      />
+    </span>
   );
 
   if (loading) {
@@ -58,7 +170,7 @@ export function MarketingStockTable() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-        <span className="font-medium">{data.length}</span> packages |{" "}
+        <span className="font-medium">{displayRows.length}</span>{data.length !== displayRows.length ? ` / ${data.length}` : ""} packages |{" "}
         <span className="font-medium">{totalPieces.toLocaleString()}</span> pcs |{" "}
         <span className="font-medium">{totalVolume.toFixed(3).replace(".", ",")}</span> m³
       </div>
@@ -73,24 +185,24 @@ export function MarketingStockTable() {
             <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card [&_th]:border-b">
               <TableRow>
                 <TableHead className="w-10">#</TableHead>
-                <TableHead>Org</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead>Species</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Quality</TableHead>
-                <TableHead>Humidity</TableHead>
-                <TableHead className="text-right">Thick</TableHead>
-                <TableHead className="text-right">Width</TableHead>
-                <TableHead className="text-right">Length</TableHead>
-                <TableHead className="text-right">Pcs</TableHead>
-                <TableHead className="text-right">m³</TableHead>
-                <TableHead className="text-right">€/pc</TableHead>
-                <TableHead className="text-right">€/m³</TableHead>
-                <TableHead className="text-right">€/m²</TableHead>
+                <TableHead>{headerWithMenu("organisation_code", "Org")}</TableHead>
+                <TableHead>{headerWithMenu("product_name", "Product")}</TableHead>
+                <TableHead>{headerWithMenu("species", "Species")}</TableHead>
+                <TableHead>{headerWithMenu("type", "Type")}</TableHead>
+                <TableHead>{headerWithMenu("quality", "Quality")}</TableHead>
+                <TableHead>{headerWithMenu("humidity", "Humidity")}</TableHead>
+                <TableHead className="text-right">{headerWithMenu("thickness", "Thick", true)}</TableHead>
+                <TableHead className="text-right">{headerWithMenu("width", "Width", true)}</TableHead>
+                <TableHead className="text-right">{headerWithMenu("length", "Length", true)}</TableHead>
+                <TableHead className="text-right">{headerWithMenu("pieces", "Pcs", true)}</TableHead>
+                <TableHead className="text-right">{headerWithMenu("volume_m3", "m³", true)}</TableHead>
+                <TableHead className="text-right">{headerWithMenu("unit_price_piece", "€/pc", true)}</TableHead>
+                <TableHead className="text-right">{headerWithMenu("unit_price_m3", "€/m³", true)}</TableHead>
+                <TableHead className="text-right">{headerWithMenu("unit_price_m2", "€/m²", true)}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.map((item, idx) => (
+              {displayRows.map((item, idx) => (
                 <TableRow key={item.id}>
                   <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
                   <TableCell className="font-medium">{item.organisation_code}</TableCell>
