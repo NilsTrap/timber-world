@@ -6,16 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a **BMad Method Framework** installation (v6.0.0-alpha.22) for the **Timber World Platform** project. BMad (Business Model Architecture Development) is an AI-assisted product development methodology with specialized agents and structured workflows.
 
-### IMPORTANT: Architecture Shift (2026-01-20)
+### Architecture
 
-**Timber World has evolved from a single marketing website to a B2B Supply Chain Platform.**
+**Timber World is a B2B Supply Chain Platform** built as a Turborepo monorepo with two apps:
 
-The platform will include multiple apps serving different user types:
-- **Marketing Website** - Public-facing website (partially implemented)
-- **Client Portal** - B2B customers (orders, tracking, reorder)
-- **Producer Portal** - Factories (production tracking, efficiency, inventory)
-- **Admin Portal(s)** - Internal staff (quotes, orders, analytics)
-- **Supplier Portal** - Raw material suppliers (orders, invoices)
+- **Marketing Website** (`apps/marketing`) - Public-facing Next.js site with product catalog, stock display, quote requests, CMS-managed content
+- **Portal** (`apps/portal`) - Unified B2B portal serving all user types (admin, org users, producers) with module-gated access
 
 **Key Reference:** `_bmad-output/analysis/platform-vision-capture-2026-01-20.md`
 
@@ -25,38 +21,58 @@ The platform will include multiple apps serving different user types:
 |-----------|--------|
 | Turborepo monorepo structure | ✅ Implemented |
 | Shared packages (@timber/*) | ✅ Implemented |
-| Marketing Website (Epic 1-2) | ✅ Complete |
-| Marketing Website (Epic 3-8) | 📋 Backlog |
-| Platform Product Brief | ❌ Not yet created |
-| Platform PRD | ❌ Not yet created |
-| Platform Architecture | ❌ Not yet created |
-| Other Apps | ❌ Not yet created |
-
-### Documentation Status
-
-| Document | Scope | Notes |
-|----------|-------|-------|
-| `product-brief-*.md` | Marketing website only | Valid for marketing website |
-| `prd.md` | Marketing website only | Valid for marketing website |
-| `architecture.md` | Marketing website only | **Outdated** - code is now monorepo |
-| `epic-*.yaml` | Marketing website only | Valid for marketing website |
-| `platform-vision-capture-*.md` | Platform overview | **Start here** for platform planning |
+| Marketing Website | ✅ Complete (all epics) |
+| Portal - Auth & Multi-Org | ✅ Complete |
+| Portal - Inventory & Production | ✅ Complete |
+| Portal - Shipments | ✅ Complete |
+| Portal - Orders (Sales/Production/Analytics) | ✅ Complete |
+| Portal - Competitor Pricing | ✅ Complete |
+| Portal - Marketing CMS & Stock | ✅ Complete |
+| Portal - UK Staircase Pricing | ✅ Complete |
+| Portal - Module-Based Permissions | ✅ Complete |
+| Portal - CRM | ✅ In progress |
+| Stair Treads Production | 📋 Planning |
 
 ## Directory Structure
 
 ```
-├── apps/                     # Multiple frontend applications
-│   └── marketing/            # Public marketing website (Next.js)
-│   # Planned: client-portal/, producer-portal/, admin/, supplier-portal/
+├── apps/
+│   ├── marketing/            # Public marketing website (Next.js)
+│   └── portal/               # Unified B2B portal (Next.js)
+│       └── src/features/     # Feature modules:
+│           ├── auth/             # Login, register, invite
+│           ├── dashboard/        # Admin & org dashboards
+│           ├── orders/           # Order management (sales/production/analytics tabs)
+│           ├── shipments/        # Incoming/outgoing shipment tracking
+│           ├── production/       # Production tracking with inputs/outputs
+│           ├── inventory/        # Stock/package management
+│           ├── organisations/    # Org management, user modules
+│           ├── competitor-pricing/ # Scraper config & price comparison
+│           ├── marketing-cms/    # Website content management
+│           ├── marketing-stock/  # Marketing inventory & sources
+│           ├── uk-staircase-pricing/ # Staircase product pricing
+│           ├── quotes/           # Quote request tracking
+│           ├── analytics/        # Marketing analytics
+│           ├── reference-data/   # System reference data
+│           ├── roles/            # Legacy (stubbed out)
+│           ├── profile/          # User profile
+│           └── view-as/          # Admin impersonation
 │
 ├── packages/                 # Shared code across all apps
-│   ├── @timber/ui/           # Components + hooks
+│   ├── @timber/ui/           # Components + hooks (DataEntryTable, ColumnHeaderMenu, PageLayout)
 │   ├── @timber/auth/         # Authentication
 │   ├── @timber/database/     # Supabase clients + types
 │   ├── @timber/config/       # Configuration + i18n
 │   └── @timber/utils/        # Utilities
 │
-├── supabase/                 # Database (serves ALL apps)
+├── supabase/                 # Database migrations (serves ALL apps)
+│
+├── tools/                    # Scraper tools
+│   ├── mass-scraper/         # Mass.ee (Estonian e-commerce)
+│   ├── sl-hardwoods-scraper/ # SL Hardwoods UK
+│   ├── uk-timber-scraper/    # UK Timber
+│   ├── timbersource-scraper/ # Timber Source
+│   └── fiximer-scraper/      # Fiximer
 │
 ├── _bmad/                    # BMad Framework installation
 │   ├── core/                 # Core framework (task engine, brainstorming)
@@ -65,11 +81,52 @@ The platform will include multiple apps serving different user types:
 │
 ├── _bmad-output/             # Generated artifacts
 │   ├── analysis/             # Brainstorming + platform vision capture
-│   ├── planning-artifacts/   # Product Brief, PRD (currently marketing-only)
+│   ├── planning-artifacts/   # Product Brief, PRD, Architecture
 │   └── implementation-artifacts/  # Epics, stories, sprint status
 │
 └── .claude/commands/bmad/    # Claude Code slash command integration
 ```
+
+## Permissions Architecture
+
+**Two-layer module system (no roles):**
+
+1. **Organization modules** (`organization_modules`) - ceiling of what's available for the org
+2. **User modules** (`user_modules`) - per-user, per-org module access
+
+**Effective permission = org has module enabled AND user has module enabled.**
+
+Platform admins (super admins) skip all checks.
+
+### Key Tables
+- `modules` - Registry of all available modules (was `features`, renamed 2026-04-06)
+- `organization_modules` - Per-org module toggles
+- `user_modules` - Per-user, per-org module toggles
+- `module_presets` - Named presets for bulk module assignment
+
+### Sub-Module Pattern
+Each module has fine-grained capabilities: `orders.view`, `orders.create`, `orders.customer-select`, `orders.pricing`, `orders.production-status`
+
+### Code Pattern
+```typescript
+// Server action permission check
+const session = await getSession();
+if (!session || !isAdmin(session)) {
+  return { success: false, error: "Permission denied" };
+}
+
+// Sidebar navigation filtering
+const modules = await getUserEnabledModules(portalUserId, orgId);
+// Returns intersection of org-enabled AND user-enabled modules
+
+// Direct permission check
+await hasPermission(userId, orgId, "orders.pricing");
+```
+
+### What Was Removed (2026-04-06)
+- `roles` table, `user_roles` table, `user_permission_overrides` table - all deleted
+- `organization_types` / `organization_type_assignments` - deleted
+- `features` table renamed to `modules`
 
 ## Available Workflows (Slash Commands)
 
@@ -114,26 +171,6 @@ Agents are specialized AI personas with menus. Invoke via slash commands:
 - `/bmad:bmm:agents:tech-writer` - Technical Writer
 - `/bmad:bmm:agents:quick-flow-solo-dev` - Solo dev mode
 
-## Key Architecture Concepts
-
-### Workflow Execution
-Workflows follow a step-file architecture defined in YAML/markdown. The core task engine (`_bmad/core/tasks/workflow.xml`) processes workflows by:
-1. Loading workflow configuration from YAML
-2. Resolving variables from `_bmad/bmm/config.yaml`
-3. Executing steps in order with user checkpoints
-4. Writing output to template files
-
-### Agent Activation
-Agents load their persona from markdown files with embedded XML configuration. Each agent has:
-- A persona (role, communication style, principles)
-- A menu of available actions/workflows
-- Handlers that route menu selections to workflows
-
-### Output Artifacts
-All generated documents go to `_bmad-output/` following the pattern:
-- Planning artifacts: `_bmad-output/planning-artifacts/`
-- Implementation artifacts: `_bmad-output/implementation-artifacts/`
-
 ## Configuration
 
 Project configuration in `_bmad/bmm/config.yaml`:
@@ -177,6 +214,40 @@ All editable tables related to **inventory, production, and product data** must 
 **Usage pattern:** Create a thin wrapper component (e.g., `PackageEntryTable`) that defines `ColumnDef<TRow>[]` and domain-specific callbacks (`onCellChange`, `copyRow`, `renumberRows`, `createRow`).
 
 **Not required for:** Other tables in the system (e.g., admin listings, analytics dashboards, user management) may use different table patterns as appropriate.
+
+### ColumnHeaderMenu (Sort & Filter for Any Table)
+
+For non-DataEntryTable tables that need sort/filter (e.g., marketing stock, orders), use `ColumnHeaderMenu` directly from `@timber/ui`.
+
+**Import:** `import { ColumnHeaderMenu, type ColumnSortState } from "@timber/ui";`
+
+**Pattern:**
+```tsx
+const [columnSort, setColumnSort] = useState<ColumnSortState | null>(null);
+const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
+
+// Cascading unique values: each filter's options respect OTHER active filters
+const columnUniqueValues = useMemo(() => { /* ... */ }, [data, columnFilters]);
+
+// Apply filters then sort
+const displayRows = useMemo(() => { /* ... */ }, [data, columnFilters, columnSort]);
+
+// In table header
+<TableHead>
+  <span className="flex items-center gap-0.5">
+    Label
+    <ColumnHeaderMenu
+      columnKey="colKey"
+      isNumeric={false}
+      uniqueValues={columnUniqueValues["colKey"] ?? []}
+      activeSort={columnSort}
+      activeFilter={columnFilters["colKey"] ?? new Set()}
+      onSortChange={setColumnSort}
+      onFilterChange={handleFilterChange}
+    />
+  </span>
+</TableHead>
+```
 
 ### Page Layout Components (Portal Pages)
 

@@ -1,9 +1,9 @@
 ---
 project_name: 'Timber-World-Platform'
 user_name: 'Nils'
-date: '2026-03-17'
+date: '2026-04-06'
 status: 'complete'
-sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime', 'session_verification', 'print_functionality', 'shipment_workflow', 'pallet_grouping', 'draft_blocking', 'competitor_pricing', 'marketing_stock']
+sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime', 'session_verification', 'print_functionality', 'shipment_workflow', 'pallet_grouping', 'draft_blocking', 'competitor_pricing', 'marketing_stock', 'orders', 'modules_permissions', 'uk_staircase_pricing']
 architecture_ref: '_bmad-output/planning-artifacts/platform/architecture.md'
 ---
 
@@ -33,22 +33,28 @@ _Critical rules and patterns for implementing code in the Timber World Platform.
 
 ### Permission Checking (MANDATORY)
 
+**Two-layer module system (no roles, updated 2026-04-06):**
+- `organization_modules` — ceiling of what's available for the org
+- `user_modules` — per-user, per-org module access
+- Effective permission = org has module AND user has module
+- Platform admins (super admins) skip all checks
+- Key tables: `modules` (registry), `organization_modules`, `user_modules`, `module_presets`
+- Sub-module pattern: `orders.view`, `orders.create`, `orders.pricing`, etc.
+
 Every Server Action MUST check permissions at the start:
 
 ```typescript
 export async function updateOrder(orderId: string, data: UpdateOrderInput) {
-  const { user, hasFunction } = await getAuthContext()
-
-  if (!user) {
-    return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" }
+  const session = await getSession();
+  if (!session || !isAdmin(session)) {
+    return { success: false, error: "Permission denied" };
   }
-
-  if (!hasFunction("orders.edit")) {
-    return { success: false, error: "Permission denied", code: "FORBIDDEN" }
-  }
-
   // Only then proceed with business logic...
 }
+
+// Sidebar uses getUserEnabledModules (intersection of org + user modules)
+const modules = await getUserEnabledModules(portalUserId, orgId);
+
 ```
 
 ### Server Action Return Type (MANDATORY)
@@ -517,12 +523,47 @@ The competitor pricing feature scrapes UK timber competitor websites and compare
 ## Marketing Stock Management
 
 Located in CMS page → Stock tab. Two sub-tabs:
-- **Stock** — consolidated inventory table from marketing-enabled organisations
+- **Stock** — consolidated inventory table from marketing-enabled organisations (with ColumnHeaderMenu sort/filter on all columns)
 - **Sources** — toggle `marketing_enabled` per organisation
 
 ### Database
 - `organisations.marketing_enabled` (BOOLEAN) — controls which orgs appear on marketing website stock page
-- Marketing website query should filter by `marketing_enabled = true` (future: update marketing site query)
+- `organisations.is_external` (BOOLEAN) — external orgs are excluded from marketing stock display
+
+### Marketing Website Stock Filter (Updated 2026-04-06)
+Both `getProducts()` and `getFilterOptions()` in `apps/marketing/src/lib/actions/products.ts` now filter by:
+- `is_active = true`
+- `marketing_enabled = true`
+- `is_external = false`
+
+This ensures only internal marketing-enabled organisation packages appear on the public website.
+
+## Orders Feature
+
+Located in `apps/portal/src/features/orders/`. Three-tab interface:
+- **Sales** — order list with customer, dates, pricing, payment tracking
+- **Production** — production status, planned dates, costs
+- **Analytics** — order analytics and reporting
+
+### Key Patterns
+- Orders have three org references: `seller_org_id`, `customer_org_id`, `producer_org_id`
+- UK staircase orders link to `staircase_codes` for product pricing
+- Order products stored in `order_products` table with package-level detail
+- Each tab has its own `OrdersTable` instance with independent ColumnHeaderMenu filters
+- Clear filters button wired via `DataEntryTableHandle` refs
+
+### Module Sub-Permissions
+- `orders.view`, `orders.create`, `orders.customer-select`, `orders.pricing`, `orders.production-status`
+- `orders.sales-tab`, `orders.production-tab`, `orders.analytics-tab`
+
+## UK Staircase Pricing
+
+Located in `apps/portal/src/features/uk-staircase-pricing/`. Admin-managed pricing table for staircase products (treads, winders, quarters, platforms).
+
+### Key Tables
+- `staircase_codes` — product definitions with type, material, length
+- `uk_staircase_pricing` — prices per staircase code
+- `order_products.staircase_code_id` — links order products to pricing
 
 ## Architecture Reference
 

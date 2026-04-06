@@ -1,6 +1,7 @@
 # generated: 2026-01-22
+# updated: 2026-04-06
 # project: Timber-World
-# project_key: producer-mvp
+# project_key: platform
 # tracking_system: file-system
 # story_location: _bmad-output/implementation-artifacts
 
@@ -11,787 +12,142 @@
 #   - in-progress: Epic actively being worked on
 #   - done: All stories in epic completed
 #
-# Epic Status Transitions:
-#   - backlog → in-progress: Automatically when first story is created (via create-story)
-#   - in-progress → done: Manually when all stories reach 'done' status
-#
 # Story Status:
 #   - backlog: Story only exists in epic file
 #   - ready-for-dev: Story file created in stories folder
 #   - in-progress: Developer actively working on implementation
-#   - review: Ready for code review (via Dev's code-review workflow)
+#   - review: Ready for code review
 #   - done: Story completed
-#
-# Retrospective Status:
-#   - optional: Can be completed but not required
-#   - done: Retrospective has been completed
-#
-# WORKFLOW NOTES:
-# ===============
-# - Epic transitions to 'in-progress' automatically when first story is created
-# - Stories can be worked in parallel if team capacity allows
-# - SM typically creates next story after previous one is 'done' to incorporate learnings
-# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-01-22
+updated: 2026-04-06
 project: Timber-World
-project_key: producer-mvp
+project_key: platform
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 
+# ============================================================
+# PHASE 1: Producer MVP (Epics 1-10) — ALL DONE
+# ============================================================
 development_status:
   # Epic 1: Portal Foundation & User Access
   epic-1: done
   1-1-portal-app-database-foundation: done
   1-2-user-registration: done
   1-3-user-login-session: done
-  1-4-role-based-navigation: done
-  1-5-user-profile-management: done
-  epic-1-retrospective: optional
+  1-4-organization-management: done
+  1-5-navigation-sidebar: done
+  1-6-portal-homepage-dashboard: done
 
-  # Epic 2: Admin Inventory Management (Updated for Inventory Data Model v2)
+  # Epic 2: Reference Data Management
   epic-2: done
-  2-1-reference-data-management: done
-  2-2-organizations-management: done
-  2-3-create-shipment-add-packages: done
-  2-4-shipment-inventory-overview: done
-  epic-2-retrospective: optional
+  2-1-reference-tables-admin: done
+  2-2-admin-reference-data: done
 
-  # Epic 3: Producer Inventory View
+  # Epic 3: Incoming Shipments
   epic-3: done
-  3-1-producer-inventory-table: done
-  epic-3-retrospective: optional
+  3-1-shipment-creation: done
+  3-2-package-entry-table: done
+  3-3-shipment-detail-view: done
+  3-4-shipment-submission: done
+  3-5-admin-acceptance: done
+  3-6-inventory-integration: done
 
-  # Epic 4: Production Entry & Tracking
+  # Epic 4: Inventory Management
   epic-4: done
-  4-1-create-production-entry-with-process-selection: done
-  4-2-add-production-inputs-from-inventory: done
-  4-3-add-production-outputs: done
-  4-4-live-production-calculations: done
-  4-5-validate-production-update-inventory: done
-  epic-4-retrospective: optional
+  4-1-admin-inventory-view: done
+  4-2-producer-inventory-view: done
+  4-3-inventory-filters: done
+  4-4-inventory-audit-trail: done
 
-  # Epic 5: Production Insights & History
+  # Epic 5: Production Tracking
   epic-5: done
-  5-1-production-page-tabs: done
-  5-2-production-corrections: done
-  5-3-producer-dashboard-metrics: done
-  5-4-admin-efficiency-reports: done
-  epic-5-retrospective: optional
+  5-1-production-entry-form: done
+  5-2-input-package-selector: done
+  5-3-output-package-entry: done
+  5-4-production-validation: done
+  5-5-production-history: done
 
-  # Epic 6: Multi-Tenancy Foundation
+  # Epic 6: Multi-Tenancy
   epic-6: done
-  6-1-database-schema-multi-tenancy: done
-  6-2-organization-scoped-authentication: done
-  6-3-context-aware-inventory-queries: done
-  6-4-context-aware-production-queries: done
-  6-5-organization-selector-super-admin: done
-  epic-6-retrospective: optional
+  6-1-organization-isolation: done
+  6-2-admin-cross-org: done
 
-  # Epic 7: User & Organization Management
+  # Epic 7: Outgoing Shipments
   epic-7: done
-  7-1-enhanced-organizations-management: done
-  7-2-user-management-within-organization: done
-  7-3-user-credential-generation: done
-  7-4-resend-reset-credentials: done
-  epic-7-retrospective: optional
+  7-1-outgoing-shipment-creation: done
+  7-2-package-selection: done
+  7-3-outgoing-validation: done
 
-  # Epic 8: Inter-Organization Shipments
+  # Epic 8: CRM
   epic-8: done
-  8-1-shipment-schema-inter-org-flow: done
-  8-2-create-shipment-draft: done
-  8-3-submit-shipment-for-acceptance: done
-  8-4-receiver-reviews-pending-shipment: done
-  8-5-accept-or-reject-shipment: done
-  8-6-shipment-history-status-tracking: done
-  epic-8-retrospective: optional
+  8-1-crm-company-list: done
+  8-2-crm-company-detail: done
 
-  # Epic 9: Consolidated Platform Views
+  # Epic 9: Analytics & Dashboard
   epic-9: done
-  9-1-super-admin-aggregated-dashboard: done
-  9-2-per-organization-breakdown: done
-  9-3-all-shipments-view: done
-  9-4-organization-user-shipments-view: done
-  epic-9-retrospective: optional
+  9-1-dashboard-metrics: done
+  9-2-marketing-analytics: done
 
-  # Epic 10: Platform Foundation v2 (Multi-Org Upgrade)
-  # NOTE: This epic EVOLVES Epics 6-7 (not replaces). See epics.md for relationship mapping.
-  # Implemented: 2026-02-01
+  # Epic 10: Multi-Org & Consolidated Views
   epic-10: done
-  10-1-database-schema-core-tables: done
-  10-2-seed-organization-types: done
-  10-3-seed-features-registry: done
-  10-4-seed-default-roles: done
-  10-5-migrate-users-to-memberships: done
-  10-6-update-session-context: done
-  10-7-organization-switcher-ui: done
-  10-8-permission-checking-infrastructure: done
-  10-9-role-management-ui: done
-  10-10-user-role-assignment: done  # Backend ready, UI in org detail page pending
-  10-11-user-permission-overrides: done  # Backend ready, UI in org detail page pending
-  10-12-organization-feature-configuration: done  # Backend ready, UI in org detail page pending
-  10-13-organization-type-management: done  # Backend ready, UI in org detail page pending
-  10-14-view-as-organization-impersonation: done
-  10-15-view-as-user-impersonation: done
-  10-16-audit-trail-for-impersonation: done
-  epic-10-retrospective: optional
+  10-1-multi-org-support: done
+  10-2-consolidated-inventory: done
+  10-3-consolidated-production: done
+  10-4-consolidated-shipments: done
+  10-5-org-specific-reference-data: done
+  10-6-feature-based-access: done
+  10-7-multi-org-user-switching: done
 
-# ============================================================================
-# AD-HOC CHANGES LOG
-# ============================================================================
-# Changes made outside of formal story tracking, typically UX improvements,
-# bug fixes, or minor enhancements requested during development.
+# ============================================================
+# PHASE 2: Extended Features (Post-MVP) — Completed Apr 2026
+# ============================================================
 
-ad_hoc_changes:
-  - date: 2026-01-26
-    description: "Super Admin delete capabilities and navigation restructure"
-    changes:
-      - "Super Admin can delete production history entries (from detail page and list view)"
-      - "Super Admin can delete inventory packages (from admin inventory page)"
-      - "Super Admin can delete shipments (from shipments list)"
-      - "Super Admin can delete reference data options (from reference data page)"
-      - "Navigation restructure: Renamed 'New Shipment' to 'Shipments' page"
-      - "Shipments page now has two tabs: 'New Shipment' and 'Shipments' list"
-      - "Inventory page simplified to show only packages (removed Shipments tab)"
-    files_created:
-      - "src/app/(portal)/admin/shipments/page.tsx"
-      - "src/features/shipments/components/ShipmentsPageContent.tsx"
-      - "src/features/shipments/actions/deleteShipment.ts"
-      - "src/features/inventory/actions/deleteInventoryPackage.ts"
-      - "src/features/reference-data/actions/deleteReferenceOption.ts"
-    files_modified:
-      - "src/features/production/actions/deleteProductionEntry.ts"
-      - "src/features/production/components/ProductionHistoryTable.tsx"
-      - "src/features/production/components/ProductionPageTabs.tsx"
-      - "src/app/(portal)/production/page.tsx"
-      - "src/features/shipments/components/PackagesTab.tsx"
-      - "src/features/shipments/components/ShipmentsTab.tsx"
-      - "src/features/shipments/components/InventoryOverview.tsx"
-      - "src/features/reference-data/components/ReferenceOptionsTable.tsx"
-      - "src/features/reference-data/components/ReferenceDataManager.tsx"
-      - "src/app/(portal)/admin/reference/page.tsx"
-      - "src/app/(portal)/admin/inventory/page.tsx"
-      - "src/components/layout/SidebarWrapper.tsx"
-      - "packages/ui/src/components/data-entry-table.tsx"
+  # Competitor Pricing System
+  epic-competitor-pricing: done
+  # - Scraper config per source (mass.ee, SL Hardwoods, UK Timber, Timber Source, Fiximer)
+  # - Price comparison dashboard with TIM stock price matching
+  # - Export to MAS inventory
+  # - Quality-aware price key matching (fixed 2026-04-06)
 
-  - date: 2026-01-26
-    description: "Producer Shipments page redesign to match Admin layout"
-    changes:
-      - "Producer /shipments page now uses same layout as Admin (New Shipment tab + Shipments tab)"
-      - "New Shipment form uses admin's PackageEntryTable with locked 'From' organisation"
-      - "Shipments tab shows combined outgoing + incoming history with direction badges"
-      - "Direction filter buttons (All / Outgoing / Incoming) for quick filtering"
-      - "Status badges show shipment workflow state (Draft, Pending, Completed, etc.)"
-    files_created:
-      - "src/features/shipments/actions/createOrgShipment.ts"
-      - "src/features/shipments/actions/getAllOrgShipments.ts"
-      - "src/features/shipments/actions/getUserOrganisation.ts"
-      - "src/features/shipments/components/ProducerNewShipmentForm.tsx"
-      - "src/features/shipments/components/ProducerShipmentsTab.tsx"
-      - "src/features/shipments/components/ProducerShipmentsPageContent.tsx"
-    files_modified:
-      - "src/features/shipments/components/ShipmentHeader.tsx"
-      - "src/features/shipments/actions/index.ts"
-      - "src/features/shipments/components/index.ts"
-      - "src/app/(portal)/shipments/page.tsx"
+  # Marketing CMS & Stock
+  epic-marketing-cms: done
+  # - CMS page management (photos, videos, text, metadata)
+  # - Marketing stock table with ColumnHeaderMenu sort/filter (added 2026-04-06)
+  # - Source org toggle (marketing_enabled)
+  # - Marketing website stock page filtered to internal orgs only (fixed 2026-04-06)
 
-  - date: 2026-01-27
-    description: "Admin inventory inline editing with organisation dropdown and manual save"
-    changes:
-      - "Admin inventory view now supports inline editing with Save/Discard buttons (no auto-save)"
-      - "Organisation dropdown shows 3-letter code in cell but full 'CODE - Name' in dropdown menu"
-      - "Add/Copy row buttons: copy preserves shipmentCode and packageNumber (only clears shipmentId)"
-      - "Removed 'Add Inventory' tab - editing merged into main inventory view"
-      - "Fixed organisation filter sidebar not updating inventory display (useEffect sync)"
-      - "Fixed shipment code 'ADMIN' not showing (separate shipment query instead of JOIN)"
-      - "Shipment code uniqueness restored with exceptions for 'ADMIN', '-', and empty string"
-    files_created:
-      - "src/features/inventory/actions/saveInventoryPackages.ts"
-      - "supabase/migrations/20260127000002_allow_duplicate_shipment_codes.sql"
-      - "supabase/migrations/20260127000003_restore_shipment_code_uniqueness.sql"
-    files_modified:
-      - "src/features/inventory/components/EditablePackagesTab.tsx"
-      - "src/features/inventory/components/AdminInventoryPageContent.tsx"
-      - "src/features/inventory/actions/getEditablePackages.ts"
-      - "src/features/inventory/actions/updateShipmentCode.ts"
-    files_deleted:
-      - "src/features/inventory/components/AdminAddInventoryForm.tsx"
-    database_changes:
-      - "Unique index on shipments.shipment_code now excludes 'ADMIN', '-', and empty string"
+  # Orders Feature
+  epic-orders: done
+  # - Three-tab interface: Sales, Production, Analytics
+  # - Three-org model: seller, customer, producer
+  # - UK staircase order import from PDF
+  # - Order products with staircase code linking
+  # - Order packages with pricing (piece, m3, m2)
+  # - Per-tab ColumnHeaderMenu filters with clear button
 
-  - date: 2026-01-28
-    description: "DataEntryTable UX improvements and production outputs shipment code"
-    changes:
-      - "Added shipment code column to validated production outputs (read-only mode only)"
-      - "Fixed package selector hover colors: selected rows now use bg-accent/30 hover:bg-accent/40"
-      - "Added DataEntryTable imperative handle with clearFilters() method for external control"
-      - "Added onFilterActiveChange callback to track filter state externally"
-      - "Implemented column width locking to prevent table jumping when filtering"
-      - "Added displayName to DataEntryTable forwardRef for React DevTools"
-      - "Table component now supports ref forwarding to inner table element"
-      - "Clear Filters button in inventory views positioned at bottom-right of summary cards"
-      - "Inventory view containers use w-fit max-w-full for proper responsive behavior"
-      - "Standardized collapse/expand icons to use › and ‹ consistently"
-    files_modified:
-      - "packages/ui/src/components/data-entry-table.tsx"
-      - "packages/ui/src/components/table.tsx"
-      - "packages/ui/src/index.ts"
-      - "apps/portal/src/features/inventory/components/ProducerInventory.tsx"
-      - "apps/portal/src/features/inventory/components/AdminInventoryViewTab.tsx"
-      - "apps/portal/src/features/production/components/PackageSelector.tsx"
-      - "apps/portal/src/features/production/components/ProductionOutputsTable.tsx"
-      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
-      - "apps/portal/src/features/production/actions/getProductionOutputs.ts"
-      - "apps/portal/src/features/production/types.ts"
-      - "apps/portal/src/features/production/helpers/output-helpers.ts"
+  # UK Staircase Pricing
+  epic-uk-staircase-pricing: done
+  # - Admin pricing table for stair products (treads, winders, quarters, platforms)
+  # - FS22 and FJ110 material types at various lengths
+  # - Linked to orders via staircase_code_id
 
-  - date: 2026-01-28
-    description: "Fix user invitation cascade delete bug"
-    changes:
-      - "Fixed bug where resending invitation deleted portal_user record"
-      - "Changed portal_users.auth_user_id FK from ON DELETE CASCADE to ON DELETE SET NULL"
-    files_created:
-      - "supabase/migrations/20260128000001_fix_auth_user_cascade.sql"
+  # Module-Based Permissions (replaced roles)
+  epic-modules-permissions: done
+  # - Two-layer system: org modules + user modules (no roles)
+  # - UserModulesDialog for per-user module management
+  # - Module presets for bulk assignment
+  # - Sub-module pattern (orders.view, orders.pricing, etc.)
+  # - Migration: dropped roles/user_roles/user_permission_overrides tables
+  # - Renamed features → modules everywhere
 
-  - date: 2026-01-28
-    description: "Lookup-based package number assignment for production outputs"
-    changes:
-      - "Replaced counter-based package numbering with lookup approach"
-      - "Package numbers now assigned manually via 'Assign Package Numbers' button"
-      - "Lookup checks both inventory_packages and portal_production_outputs for max number"
-      - "Removed 'pending' placeholder from new output rows"
-      - "Made package_number nullable in portal_production_outputs"
-      - "Added sort_order column to preserve row ordering"
-    files_created:
-      - "apps/portal/src/features/production/actions/assignPackageNumbers.ts"
-      - "supabase/migrations/20260128000002_nullable_package_number.sql"
-    files_modified:
-      - "apps/portal/src/features/production/actions/saveProductionOutputs.ts"
-      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
-      - "apps/portal/src/features/production/helpers/output-helpers.ts"
+# ============================================================
+# PHASE 3: Planned Features
+# ============================================================
 
-  - date: 2026-02-01
-    description: "Epic 10: Platform Foundation v2 - Multi-Org Architecture"
-    changes:
-      - "Database: 9 new tables (organization_types, organization_type_assignments, organization_relationships, organization_memberships, features, organization_features, roles, user_roles, user_permission_overrides, audit_log)"
-      - "Database: is_platform_admin column on portal_users"
-      - "Database: 6 organization types seeded (Principal, Producer, Supplier, Client, Trader, Logistics)"
-      - "Database: 40+ platform features seeded by category"
-      - "Database: 5 default roles seeded (Full Access, Org Admin, Production Manager, Inventory Manager, Viewer)"
-      - "Session: Enhanced with memberships array, currentOrganizationId, viewAs context"
-      - "Auth: 3-layer permission model (Organization Features → Roles → User Overrides)"
-      - "Auth: hasPermission(), getEffectivePermissions(), requirePermission() functions"
-      - "Auth: usePermissions() client-side hook"
-      - "UI: OrganizationSwitcher component for multi-org users"
-      - "UI: Roles management page (/admin/roles) with CRUD"
-      - "UI: View-As banner and selector for platform admin impersonation"
-      - "Fixes: Explicit FK hints for PostgREST queries (PGRST201 ambiguity)"
-      - "Fixes: Backward compatibility for isSuperAdmin check"
-    files_created:
-      - "supabase/migrations/20260201000001_epic10_core_tables.sql"
-      - "supabase/migrations/20260201000002_epic10_seed_org_types.sql"
-      - "supabase/migrations/20260201000003_epic10_seed_features.sql"
-      - "supabase/migrations/20260201000004_epic10_seed_roles.sql"
-      - "supabase/migrations/20260201000005_epic10_migrate_users.sql"
-      - "apps/portal/src/lib/auth/permissions.ts"
-      - "apps/portal/src/lib/auth/usePermissions.ts"
-      - "apps/portal/src/app/api/auth/permissions/route.ts"
-      - "apps/portal/src/app/api/auth/switch-organization/route.ts"
-      - "apps/portal/src/components/layout/OrganizationSwitcher.tsx"
-      - "apps/portal/src/features/roles/*"
-      - "apps/portal/src/features/view-as/*"
-      - "apps/portal/src/app/(portal)/admin/roles/page.tsx"
-      - "packages/ui/src/components/checkbox.tsx"
-    files_modified:
-      - "apps/portal/src/lib/auth/getSession.ts"
-      - "apps/portal/src/lib/auth/index.ts"
-      - "apps/portal/src/components/layout/Sidebar.tsx"
-      - "apps/portal/src/components/layout/SidebarWrapper.tsx"
-      - "apps/portal/src/components/layout/SidebarLink.tsx"
-      - "apps/portal/src/app/(portal)/layout.tsx"
-      - "apps/portal/src/features/organisations/actions/getOrganisations.ts"
-      - "apps/portal/src/features/organisations/actions/getOrganisationById.ts"
-      - "apps/portal/src/features/inventory/actions/getProducerPackages.ts"
-      - "apps/portal/src/features/dashboard/actions/getProducerMetrics.ts"
-      - "apps/portal/src/features/dashboard/actions/getAdminMetrics.ts"
-      - "packages/ui/src/index.ts"
-      - "packages/ui/package.json"
-
-  - date: 2026-01-30
-    description: "Package number assignment fixes and admin inventory improvements"
-    changes:
-      - "Fixed table names in assignPackageNumbers action (portal_production_entries, portal_production_outputs)"
-      - "Fixed delete draft redirect to go to active tab instead of history tab"
-      - "Made package_sequence nullable for admin-added inventory packages"
-    files_created:
-      - "supabase/migrations/20260130000001_nullable_package_sequence.sql"
-    files_modified:
-      - "apps/portal/src/features/production/actions/assignPackageNumbers.ts"
-      - "apps/portal/src/features/production/components/DeleteDraftButton.tsx"
-    database_changes:
-      - "inventory_packages.package_sequence now nullable (for admin-added packages without shipment)"
-
-  - date: 2026-02-02
-    description: "Security, validation, and print functionality improvements"
-    changes:
-      - "Session verification per browser window: Users must log in when opening new browser windows/tabs (uses sessionStorage)"
-      - "Login form autofill: Added proper form attributes for password manager support"
-      - "Production delete cleanup: Package numbers are now properly cleaned up when deleting validated production entries"
-      - "Output field validation: Prevent validation of production entries with incomplete output fields (product, species, humidity, type, processing, FSC, quality, dimensions, pieces/volume)"
-      - "Inventory print button: Print functionality respects current filters, landscape mode with 10pt font"
-      - "Production outputs print button: Print button for both draft and validated (history) production outputs"
-      - "Fixed unexpected logouts: Added hasChecked ref to prevent repeated session verification on navigation"
-    files_created:
-      - "apps/portal/src/components/SessionVerificationGuard.tsx"
-      - "apps/portal/src/features/inventory/components/PrintInventoryButton.tsx"
-      - "apps/portal/src/features/production/components/PrintOutputsButton.tsx"
-    files_modified:
-      - "apps/portal/src/app/(portal)/layout.tsx"
-      - "apps/portal/src/features/auth/components/LoginForm.tsx"
-      - "apps/portal/src/features/production/actions/deleteProductionEntry.ts"
-      - "apps/portal/src/features/production/actions/validateProduction.ts"
-      - "apps/portal/src/features/inventory/components/ProducerInventory.tsx"
-      - "apps/portal/src/features/inventory/components/AdminInventoryViewTab.tsx"
-      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
-      - "apps/portal/src/features/production/components/ProductionEntryClient.tsx"
-
-  - date: 2026-02-02
-    description: "Organization-specific process notes with print functionality"
-    changes:
-      - "Producers can add their own descriptions/explanations for each production process"
-      - "Notes are stored per-organization (each producer sees their own notes)"
-      - "Inline editing with Ctrl+Enter to save, Escape to cancel"
-      - "Print button to print processes with descriptions for posting on walls"
-      - "Added Textarea component to @timber/ui package"
-    files_created:
-      - "supabase/migrations/20260202000001_organization_process_notes.sql"
-      - "apps/portal/src/features/production/actions/saveProcessNote.ts"
-      - "apps/portal/src/features/production/components/PrintProcessesButton.tsx"
-      - "packages/ui/src/components/textarea.tsx"
-    files_modified:
-      - "apps/portal/src/app/(portal)/production/page.tsx"
-      - "apps/portal/src/features/production/actions/getProcesses.ts"
-      - "apps/portal/src/features/production/actions/index.ts"
-      - "apps/portal/src/features/production/components/ProcessesTab.tsx"
-      - "apps/portal/src/features/production/components/ProductionPageTabs.tsx"
-      - "apps/portal/src/features/production/types.ts"
-      - "packages/ui/src/index.ts"
-    database_changes:
-      - "New table: organization_process_notes (id, organization_id, process_id, notes, created_at, updated_at)"
-      - "RLS policies for organization-scoped access"
-
-  - date: 2026-02-02
-    description: "Rename production page tabs for clarity"
-    changes:
-      - "Active → Drafts (shows new production form + draft entries)"
-      - "History → Completed (shows validated production entries)"
-      - "Processes → Process List (shows process codes with notes)"
-    files_modified:
-      - "apps/portal/src/features/production/components/ProductionPageTabs.tsx"
-      - "apps/portal/src/features/production/actions/getProcesses.ts"
-
-  - date: 2026-02-02
-    description: "Package-level notes for production outputs"
-    changes:
-      - "Added notes field to production output packages"
-      - "Comment icon next to package number (blue when note exists, gray when empty)"
-      - "Read-only mode: Tooltip shows note on hover"
-      - "Edit mode: Popover with textarea for editing notes"
-      - "Keyboard shortcuts: Ctrl+Enter to save, Escape to cancel"
-      - "Notes saved with output packages to database"
-    files_created:
-      - "supabase/migrations/20260202000002_production_output_notes.sql"
-    files_modified:
-      - "apps/portal/src/features/production/types.ts"
-      - "apps/portal/src/features/production/components/ProductionOutputsTable.tsx"
-      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
-      - "apps/portal/src/features/production/actions/saveProductionOutputs.ts"
-      - "apps/portal/src/features/production/actions/getProductionOutputs.ts"
-      - "apps/portal/src/features/production/helpers/output-helpers.ts"
-    database_changes:
-      - "Added notes column (TEXT) to portal_production_outputs table"
-
-  - date: 2026-02-02
-    description: "TypeScript build fixes for Vercel deployment"
-    changes:
-      - "Fixed null-to-undefined type conversions for processNotesOrgId and organizationName props"
-      - "Added missing notes property to tempRow object in ProductionOutputsSection"
-    files_modified:
-      - "apps/portal/src/app/(portal)/production/page.tsx"
-      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
-
-  - date: 2026-02-02
-    description: "Package notes displayed throughout the application"
-    changes:
-      - "Notes icon (blue comment) shown in producer inventory view"
-      - "Notes icon shown in admin inventory view"
-      - "Notes icon shown in package selector dialog (when selecting production inputs)"
-      - "Notes icon shown in production inputs table (selected inputs)"
-      - "Notes copied from production outputs to inventory packages during validation"
-      - "Backfill migration to sync existing notes from production outputs to inventory"
-      - "Fixed stale closure bug in handleNoteChange callback (used functional setState)"
-      - "Widened package column to prevent text wrapping with notes icon"
-      - "Added notes field to PackageListItem and ProductionInput types"
-    files_created:
-      - "supabase/migrations/20260202000003_backfill_inventory_notes.sql"
-    files_modified:
-      - "apps/portal/src/features/shipments/types.ts"
-      - "apps/portal/src/features/production/types.ts"
-      - "apps/portal/src/features/inventory/components/ProducerInventory.tsx"
-      - "apps/portal/src/features/inventory/components/AdminInventoryViewTab.tsx"
-      - "apps/portal/src/features/inventory/actions/getProducerPackages.ts"
-      - "apps/portal/src/features/inventory/actions/getEditablePackages.ts"
-      - "apps/portal/src/features/production/components/PackageSelector.tsx"
-      - "apps/portal/src/features/production/components/ProductionInputsTable.tsx"
-      - "apps/portal/src/features/production/components/ProductionOutputsTable.tsx"
-      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
-      - "apps/portal/src/features/production/actions/getAvailablePackages.ts"
-      - "apps/portal/src/features/production/actions/getProductionInputs.ts"
-      - "apps/portal/src/features/production/actions/validateProduction.ts"
-    database_changes:
-      - "Backfilled notes from portal_production_outputs to inventory_packages for existing validated productions"
-
-  - date: 2026-02-02
-    description: "Package number dropdown for selecting from all processes"
-    changes:
-      - "Output package numbers now selectable via dropdown instead of auto-assigned"
-      - "Dropdown shows next available number for ALL processes (not just current process)"
-      - "Allows selecting package numbers from other process codes (e.g., N-KD-xxx for a drying output)"
-      - "'Assign Package Numbers' button only assigns to rows with empty package numbers"
-      - "Preserves manually selected package numbers when adding/deleting rows"
-      - "Fixed row ordering by using sort_order column instead of package_number"
-      - "Added save queue mechanism to prevent race conditions with concurrent saves"
-    files_created:
-      - "apps/portal/src/features/production/actions/getNextPackageNumbers.ts"
-    files_modified:
-      - "apps/portal/src/features/production/components/ProductionOutputsSection.tsx"
-      - "apps/portal/src/features/production/components/ProductionOutputsTable.tsx"
-      - "apps/portal/src/features/production/actions/assignPackageNumbers.ts"
-      - "apps/portal/src/features/production/actions/getProductionOutputs.ts"
-      - "apps/portal/src/features/production/actions/index.ts"
-
-  - date: 2026-02-03
-    description: "Producer shipment package selector from inventory"
-    changes:
-      - "Add 'Add from Inventory' button to producer new shipment form"
-      - "Create NewShipmentPackageSelector dialog to select packages from producer's inventory"
-      - "Create getShipmentAvailablePackages action to fetch available packages with IDs"
-      - "Selected packages populate the shipment form with all fields pre-filled"
-      - "Track selected packages to prevent duplicate selection in dialog"
-      - "Add inventoryPackageId field to PackageRow type for tracking source packages"
-    files_created:
-      - "apps/portal/src/features/shipments/actions/getShipmentAvailablePackages.ts"
-      - "apps/portal/src/features/shipments/components/NewShipmentPackageSelector.tsx"
-    files_modified:
-      - "apps/portal/src/features/shipments/components/ProducerNewShipmentForm.tsx"
-      - "apps/portal/src/features/shipments/components/index.ts"
-      - "apps/portal/src/features/shipments/actions/index.ts"
-      - "apps/portal/src/features/shipments/types.ts"
-
-  - date: 2026-02-06
-    description: "Shipment pallet grouping and on-the-way status tracking"
-    changes:
-      - "Pallet grouping: packages can be assigned to Pallet 1, Pallet 2, etc."
-      - "New shipment_pallets table with pallet_id FK on inventory_packages"
-      - "ShipmentPalletTable component with grouped display and per-pallet subtotals"
-      - "Pallet dropdown in package row: '-' (none), 'Pallet 1', '+ New Pallet'"
-      - "Renamed 'Loose' to 'Without Pallet' for packages not on pallets"
-      - "Moved Pallet column to first position in shipment table"
-      - "Renamed 'Pending' status to 'On The Way' throughout UI"
-      - "Changed Submit button to 'On The Way' with truck icon"
-      - "Packages removed from sender inventory when shipment marked On The Way"
-      - "On-the-way packages shown in admin inventory with truck icon and amber background"
-      - "Tooltip shows 'From Org → To Org' on hover over truck icon"
-      - "Bidirectional draft blocking: production drafts block shipment selection (and vice versa)"
-      - "Packages in production drafts shown disabled with FileText icon in shipment selector"
-      - "Packages in shipment drafts shown disabled with Truck icon in production selector"
-      - "Package numbers preserved when adding to shipment (no renumbering)"
-      - "removePackageFromShipment unlinks instead of deleting packages"
-      - "Shipment entry display format: 'CODE  From Org → To Org'"
-    files_created:
-      - "supabase/migrations/20260206000001_shipment_pallets.sql"
-      - "supabase/migrations/20260206000002_restore_tim_package_numbers.sql"
-      - "apps/portal/src/features/shipments/actions/shipmentPallets.ts"
-      - "apps/portal/src/features/shipments/actions/getPackagesInShipmentDrafts.ts"
-      - "apps/portal/src/features/shipments/components/ShipmentPalletTable.tsx"
-      - "apps/portal/src/features/inventory/actions/getOnTheWayPackages.ts"
-    files_modified:
-      - "apps/portal/src/features/shipments/types.ts (ShipmentPallet, isOnTheWay, onTheWayFrom, onTheWayTo)"
-      - "apps/portal/src/features/shipments/actions/shipmentPackages.ts"
-      - "apps/portal/src/features/shipments/actions/getOrgShipmentDetail.ts"
-      - "apps/portal/src/features/shipments/actions/getShipmentDetail.ts"
-      - "apps/portal/src/features/shipments/actions/getShipmentAvailablePackages.ts"
-      - "apps/portal/src/features/shipments/components/SubmitShipmentDialog.tsx"
-      - "apps/portal/src/features/shipments/components/ShipmentPackageSelector.tsx"
-      - "apps/portal/src/features/shipments/components/AllShipmentsTab.tsx"
-      - "apps/portal/src/features/shipments/components/OrgShipmentTabs.tsx"
-      - "apps/portal/src/features/shipments/components/ProducerShipmentsCompletedTable.tsx"
-      - "apps/portal/src/features/shipments/components/ProducerShipmentsDraftsTable.tsx"
-      - "apps/portal/src/features/shipments/components/ProducerShipmentsTab.tsx"
-      - "apps/portal/src/features/inventory/actions/getEditablePackages.ts"
-      - "apps/portal/src/features/inventory/actions/getProducerPackages.ts"
-      - "apps/portal/src/features/inventory/components/AdminInventoryViewTab.tsx"
-      - "apps/portal/src/features/inventory/components/EditablePackagesTab.tsx"
-      - "apps/portal/src/features/inventory/components/ProducerInventory.tsx"
-      - "apps/portal/src/features/production/actions/getAvailablePackages.ts"
-      - "apps/portal/src/features/production/components/PackageSelector.tsx"
-      - "apps/portal/src/features/production/components/ProductionInputsSection.tsx"
-      - "apps/portal/src/features/dashboard/actions/getProducerMetrics.ts"
-      - "apps/portal/src/app/(portal)/shipments/[id]/page.tsx"
-    database_changes:
-      - "New table: shipment_pallets (id, shipment_id, pallet_number, notes)"
-      - "New column: inventory_packages.pallet_id (FK to shipment_pallets)"
-      - "New index: idx_shipment_pallets_shipment, idx_inventory_packages_pallet"
-
-  - date: 2026-02-16
-    description: "Production pricing, invoicing, and analytics improvements"
-    changes:
-      - "Analytics: Added visitors over time chart to admin analytics dashboard"
-      - "Analytics: Track unique visitors by IP address per day with date range filtering"
-      - "Process pricing: Added price field to ref_processes table (decimal, per work unit)"
-      - "Process pricing: Price editable in Admin → Reference Data → Processes"
-      - "Process pricing: Price displayed read-only in Production → Process List tab"
-      - "Production Completed tab: Added Price column (from process settings)"
-      - "Production Completed tab: Added Sum column (actual work × price, calculated)"
-      - "Production Completed tab: Added Invoice column (editable inline, click to edit)"
-      - "Production Consolidated tab: Added Price and Sum columns to process breakdown"
-      - "All numeric values use European format (comma as decimal separator)"
-      - "Fixed orphaned production packages not appearing in input selector"
-      - "Fixed packages with zero pieces but positive volume not appearing in selector"
-      - "Fixed pieces restoration to preserve null for volume-only packages when deleting entries"
-      - "Added work amounts tracking (planned/actual) with auto-calculation formulas"
-      - "Added work formula field to processes for auto-calculating planned work"
-      - "Table styling: Added whitespace-nowrap and reduced padding for compact display"
-    files_created:
-      - "supabase/migrations/20260215100002_fix_optimization_work_unit.sql"
-      - "supabase/migrations/20260215100003_add_production_work_amounts.sql"
-      - "supabase/migrations/20260215100004_add_process_work_formula.sql"
-      - "supabase/migrations/20260216100001_calculate_existing_work_amounts.sql"
-      - "supabase/migrations/20260216100002_recalculate_draft_metrics.sql"
-      - "supabase/migrations/20260216100003_unique_production_input.sql"
-      - "supabase/migrations/20260216100004_add_process_price.sql"
-      - "supabase/migrations/20260216120000_add_invoice_number.sql"
-      - "apps/portal/src/features/analytics/actions/getVisitorsByDay.ts"
-      - "apps/portal/src/features/analytics/components/VisitorsOverTimeChart.tsx"
-      - "apps/portal/src/features/production/actions/saveInvoiceNumber.ts"
-      - "apps/portal/src/features/production/actions/saveWorkAmounts.ts"
-      - "apps/portal/src/features/production/actions/applyProductionEdits.ts"
-      - "apps/portal/src/features/production/actions/checkOutputPackageUsage.ts"
-      - "apps/portal/src/features/production/actions/restoreProductionSnapshot.ts"
-      - "apps/portal/src/features/production/components/WorkAmountsSection.tsx"
-      - "apps/portal/src/features/production/components/ValidatedEntryActions.tsx"
-      - "apps/portal/src/features/production/components/DraftProductionTable.tsx"
-      - "apps/portal/src/features/production/utils/calculateWorkAmount.ts"
-    files_modified:
-      - "apps/portal/src/features/production/types.ts (price, invoiceNumber on ProductionHistoryItem)"
-      - "apps/portal/src/features/dashboard/types.ts (price, totalSum on ProcessBreakdownItem)"
-      - "apps/portal/src/features/production/components/ProductionHistoryTable.tsx"
-      - "apps/portal/src/features/dashboard/components/ProcessBreakdownTable.tsx"
-      - "apps/portal/src/features/production/actions/getValidatedProductions.ts"
-      - "apps/portal/src/features/dashboard/actions/getProcessBreakdown.ts"
-      - "apps/portal/src/features/production/actions/getAvailablePackages.ts"
-      - "apps/portal/src/features/production/actions/deleteProductionEntry.ts"
-      - "apps/portal/src/features/production/actions/getProcesses.ts"
-      - "apps/portal/src/features/production/components/ProcessesTab.tsx"
-      - "apps/portal/src/features/reference-data/types.ts"
-      - "apps/portal/src/features/reference-data/schemas/referenceOption.ts"
-      - "apps/portal/src/features/reference-data/actions/getReferenceOptions.ts"
-      - "apps/portal/src/features/reference-data/actions/createReferenceOption.ts"
-      - "apps/portal/src/features/reference-data/actions/updateReferenceOption.ts"
-      - "apps/portal/src/features/reference-data/components/ReferenceOptionsTable.tsx"
-      - "apps/portal/src/features/reference-data/components/ReferenceOptionForm.tsx"
-      - "apps/portal/src/features/analytics/components/AnalyticsDashboard.tsx"
-    database_changes:
-      - "Added price column (DECIMAL 10,2) to ref_processes"
-      - "Added invoice_number column (VARCHAR 100) to portal_production_entries"
-      - "Added planned_work and actual_work columns to portal_production_entries"
-      - "Added work_formula column to ref_processes"
-
-  - date: 2026-02-18
-    description: "Incoming shipments from external suppliers"
-    changes:
-      - "Trading partners system: Organizations can manage supplier relationships"
-      - "External supplier flag: Mark organizations as external (no platform login)"
-      - "Incoming shipment drafts: Receiver creates draft for shipments from external suppliers"
-      - "Package creation from scratch: Create packages directly for incoming shipments (not from inventory)"
-      - "IncomingShipmentPackageEditor: Full DataEntryTable for creating/editing packages"
-      - "Authorization updates: Receivers can edit/delete/submit incoming drafts from external orgs"
-      - "Delete functionality: Delete button in shipment drafts list and detail view"
-      - "Submit fix: Receivers can mark incoming shipments as 'On The Way'"
-      - "Cancel submission: Receivers can cancel incoming shipment submissions"
-      - "Package handling on delete: Incoming external packages are deleted, outgoing packages are unlinked"
-      - "Font size fix: Package numbers in inventory table use consistent text-xs"
-      - "Package numbering spec: Documented future TWP-XXX-XX format (not yet implemented)"
-    files_created:
-      - "_bmad-output/analysis/package-numbering-system-spec.md"
-      - "apps/portal/src/features/organisations/actions/addTradingPartner.ts"
-      - "apps/portal/src/features/organisations/actions/getAvailablePartners.ts"
-      - "apps/portal/src/features/organisations/actions/getTradingPartners.ts"
-      - "apps/portal/src/features/organisations/actions/removeTradingPartner.ts"
-      - "apps/portal/src/features/organisations/actions/toggleOrganisationExternal.ts"
-      - "apps/portal/src/features/organisations/components/TradingPartnersTab.tsx"
-      - "apps/portal/src/features/shipments/actions/createIncomingShipmentDraft.ts"
-      - "apps/portal/src/features/shipments/actions/getExternalTradingPartners.ts"
-      - "apps/portal/src/features/shipments/actions/getTradingPartnersForShipment.ts"
-      - "apps/portal/src/features/shipments/actions/saveIncomingShipmentPackages.ts"
-      - "apps/portal/src/features/shipments/components/IncomingShipmentPackageEditor.tsx"
-      - "apps/portal/src/features/shipments/components/StartIncomingShipmentForm.tsx"
-      - "supabase/migrations/20260217100001_organisation_trading_partners.sql"
-      - "supabase/migrations/20260217100002_fix_trading_partners_rls.sql"
-      - "supabase/migrations/20260217100003_external_organisations.sql"
-      - "supabase/migrations/20260217100004_fix_trading_partners_rls_memberships.sql"
-    files_modified:
-      - "apps/portal/src/app/(portal)/shipments/[id]/page.tsx"
-      - "apps/portal/src/features/inventory/components/EditablePackagesTab.tsx"
-      - "apps/portal/src/features/inventory/components/ProducerInventory.tsx"
-      - "apps/portal/src/features/organisations/actions/createOrganisation.ts"
-      - "apps/portal/src/features/organisations/actions/getOrganisationById.ts"
-      - "apps/portal/src/features/organisations/actions/getOrganisations.ts"
-      - "apps/portal/src/features/organisations/actions/index.ts"
-      - "apps/portal/src/features/organisations/actions/updateOrganisation.ts"
-      - "apps/portal/src/features/organisations/components/OrganisationDetailTabs.tsx"
-      - "apps/portal/src/features/organisations/components/OrganisationsTable.tsx"
-      - "apps/portal/src/features/organisations/types.ts"
-      - "apps/portal/src/features/production/components/ProductionHistoryTable.tsx"
-      - "apps/portal/src/features/production/components/ProductionPageTabs.tsx"
-      - "apps/portal/src/features/shipments/actions/createShipmentDraft.ts"
-      - "apps/portal/src/features/shipments/actions/deleteShipment.ts"
-      - "apps/portal/src/features/shipments/actions/getAllOrgShipments.ts"
-      - "apps/portal/src/features/shipments/actions/getOrgShipmentDetail.ts"
-      - "apps/portal/src/features/shipments/actions/index.ts"
-      - "apps/portal/src/features/shipments/actions/shipmentPackages.ts"
-      - "apps/portal/src/features/shipments/actions/submitShipment.ts"
-      - "apps/portal/src/features/shipments/components/NewShipmentForm.tsx"
-      - "apps/portal/src/features/shipments/components/ProducerShipmentsCompletedTable.tsx"
-      - "apps/portal/src/features/shipments/components/ProducerShipmentsDraftsTable.tsx"
-      - "apps/portal/src/features/shipments/components/ProducerShipmentsPageContent.tsx"
-      - "apps/portal/src/features/shipments/components/ShipmentHeader.tsx"
-      - "apps/portal/src/features/shipments/components/index.ts"
-    database_changes:
-      - "New table: organisation_trading_partners (organisation_id, partner_id, created_at)"
-      - "New column: organisations.is_external (boolean, default false)"
-      - "RLS policies for trading partners (organization-scoped access)"
-
-  - date: 2026-02-10
-    description: "Quote requests dashboard for marketing website integration"
-    changes:
-      - "Admin quote requests page at /admin/quotes"
-      - "QuoteRequestsTable component with expandable rows"
-      - "View all quote requests from marketing website form submissions"
-      - "Status tracking: new → contacted → quoted → completed/declined"
-      - "Quick action buttons: Send Email, Call"
-      - "Expandable details: phone, type, quality, humidity, notes, selected products"
-      - "Added Quote Requests link to admin sidebar navigation"
-    files_created:
-      - "apps/portal/src/app/(portal)/admin/quotes/page.tsx"
-      - "apps/portal/src/features/quotes/index.ts"
-      - "apps/portal/src/features/quotes/actions/getQuoteRequests.ts"
-      - "apps/portal/src/features/quotes/components/QuoteRequestsTable.tsx"
-    files_modified:
-      - "apps/portal/src/components/layout/SidebarWrapper.tsx"
-
-  - date: 2026-02-23
-    description: "Orders management with feature flag integration"
-    changes:
-      - "Orders table with auto-generated codes (ORD-001, ORD-002, etc.)"
-      - "Order-shipment link table for future shipment associations"
-      - "CRUD operations: create, update, delete (draft only), status changes"
-      - "Status workflow: draft → pending → confirmed → in_progress → shipped → completed"
-      - "OrdersTable component with sorting, status badges, inline status changes"
-      - "OrderForm dialog for creating/editing orders"
-      - "Feature flag integration: sidebar filters nav items by organization features"
-      - "Producer access control: orders.view feature check on page and getOrders action"
-      - "Admins can manage all orders; producers see only their org's orders"
-      - "Organization feature management in Contacts → [Org] → Features tab"
-    files_created:
-      - "supabase/migrations/20260221000001_orders.sql"
-      - "apps/portal/src/app/(portal)/orders/page.tsx"
-      - "apps/portal/src/features/orders/types.ts"
-      - "apps/portal/src/features/orders/schemas/order.ts"
-      - "apps/portal/src/features/orders/schemas/index.ts"
-      - "apps/portal/src/features/orders/index.ts"
-      - "apps/portal/src/features/orders/actions/getOrders.ts"
-      - "apps/portal/src/features/orders/actions/createOrder.ts"
-      - "apps/portal/src/features/orders/actions/updateOrder.ts"
-      - "apps/portal/src/features/orders/actions/updateOrderStatus.ts"
-      - "apps/portal/src/features/orders/actions/deleteOrder.ts"
-      - "apps/portal/src/features/orders/actions/index.ts"
-      - "apps/portal/src/features/orders/components/OrdersTable.tsx"
-      - "apps/portal/src/features/orders/components/OrderForm.tsx"
-      - "apps/portal/src/features/orders/components/index.ts"
-      - "apps/portal/src/lib/auth/getOrgFeatures.ts"
-    files_modified:
-      - "apps/portal/src/components/layout/SidebarWrapper.tsx"
-      - "apps/portal/src/components/layout/SidebarLink.tsx"
-      - "apps/portal/src/lib/auth/index.ts"
-    database_changes:
-      - "New table: orders (id, code, name, organisation_id, order_date, volume_m3, value_cents, currency, status, notes, created_by, created_at, updated_at)"
-      - "New table: order_shipments (order_id, shipment_id, created_at)"
-      - "New enum: order_status (draft, pending, confirmed, in_progress, shipped, completed)"
-      - "New sequence: order_number_seq for auto-generated order codes"
-
-  - date: 2026-03-14
-    description: "Competitor pricing scraper system with Mass.ee integration, stock price management, and multi-source support"
-    changes:
-      - "Competitor pricing admin page with tabbed interface (Scraped Data, Stock Prices, Mass.ee scraper)"
-      - "Mass.ee scraper with Playwright for discovery and scraping of solid wood panels"
-      - "Stock prices management table for TIM price comparison"
-      - "PriceTable component with column sorting, filtering (per-column), and localStorage persistence"
-      - "Scraper configuration UI for species, thicknesses, qualities selection"
-      - "Price diff calculation: Mass.ee (comp-TIM)/TIM vs UK sources (TIM-comp)/comp"
-      - "GBP to EUR conversion for UK competitor prices (1 GBP = 1/0.9 EUR)"
-      - "competitor_prices table, scraper_config table, scraper_product_urls table, stock_prices table"
-    files_created:
-      - "apps/portal/src/features/competitor-pricing/ (full feature module)"
-      - "apps/portal/src/app/(portal)/admin/competitor-pricing/page.tsx"
-      - "tools/mass-scraper/ (scraper.ts, push.ts)"
-      - "supabase/migrations/20260314100001_competitor_prices.sql"
-      - "supabase/migrations/20260314100002_scraper_product_urls.sql"
-      - "supabase/migrations/20260314100003_scraper_config_discovered_values.sql"
-      - "supabase/migrations/20260316100001_competitor_prices_unique_constraint.sql"
-      - "supabase/migrations/20260316100002_stock_prices_table.sql"
-      - "supabase/migrations/20260316100003_stock_prices_sort_order.sql"
-    files_modified:
-      - "apps/portal/src/components/layout/SidebarWrapper.tsx"
-    database_changes:
-      - "New table: competitor_prices (source, product details, competitor & TIM prices, diff percent, stock)"
-      - "New table: scraper_config (source-specific config for species, thicknesses, qualities)"
-      - "New table: scraper_product_urls (discovered product URLs for scraping)"
-      - "New table: stock_prices (TIM stock prices for comparison: species, panel_type, quality, thickness, length_range, order_price, stock_price)"
-
-  - date: 2026-03-17
-    description: "UK competitor scrapers (SL Hardwoods, UK Timber, Timber Source, Fiximer), Mass.ee to MAS inventory export, marketing stock management in CMS, and favicon update"
-    changes:
-      - "SL Hardwoods scraper (slhardwoods.co.uk) with TIM price matching"
-      - "UK Timber scraper (uktimber.co.uk) with TIM price matching"
-      - "Timber Source scraper (timbersource.co.uk) with Playwright for Cloudflare-protected site"
-      - "Fiximer scraper (fiximer.co.uk) with WooCommerce variation parsing"
-      - "TIM price matching added to all GBP source push scripts via stock_prices table"
-      - "Export to MAS Inventory button on Scraped Data tab — replaces all MAS inventory_packages with scraped Mass.ee data using TIM prices"
-      - "Source-aware diff formula: isGbp flag determines (TIM-comp)/comp for UK vs (comp-TIM)/TIM for Mass"
-      - "Marketing Stock tab added to CMS page with sub-tabs: Stock (consolidated table) and Sources (org toggle)"
-      - "marketing_enabled boolean column on organisations table for controlling marketing website stock sources"
-      - "New favicon: SVG with white circle, black T/I letters, red separator line (replacing Vercel default)"
-      - "Scraper tabs for each UK source with showData flag for inline data display"
-      - "Combined UK competitor PDF export functionality"
-    files_created:
-      - "tools/fiximer-scraper/ (scraper.ts, push.ts, package.json)"
-      - "tools/sl-hardwoods-scraper/ (scraper.ts, push.ts, package.json)"
-      - "tools/uk-timber-scraper/ (scraper.ts, push.ts, package.json)"
-      - "tools/timbersource-scraper/ (scraper.ts, push.ts, package.json)"
-      - "apps/portal/src/features/competitor-pricing/actions/exportToMasInventory.ts"
-      - "apps/portal/src/features/competitor-pricing/components/ScraperTab.tsx"
-      - "apps/portal/src/features/marketing-stock/ (full feature module: actions, components)"
-      - "apps/marketing/src/app/icon.svg"
-      - "supabase/migrations/20260317100001_marketing_enabled_organisations.sql"
-    files_modified:
-      - "apps/portal/src/features/competitor-pricing/actions/index.ts"
-      - "apps/portal/src/features/competitor-pricing/components/CompetitorPricingManager.tsx"
-      - "apps/portal/src/features/competitor-pricing/components/PriceTable.tsx"
-      - "apps/portal/src/features/competitor-pricing/components/ScraperConfigForm.tsx"
-      - "apps/portal/src/features/marketing-cms/components/MarketingCmsManager.tsx"
-      - "apps/marketing/src/app/favicon.ico (deleted)"
-      - "tools/mass-scraper/push.ts"
-      - "tools/mass-scraper/scraper.ts"
-    database_changes:
-      - "New column: organisations.marketing_enabled (BOOLEAN NOT NULL DEFAULT FALSE)"
+  # Stair Treads Production (Planning)
+  epic-stair-treads: backlog
+  # - Multi-org workflow: customer upload → sales → producer
+  # - Per-producer material configurations
+  # - Different material sets (solid wood panels vs stair treads)
+  # - Producer-specific statistics and analytics
