@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import {
   cn,
@@ -10,9 +11,10 @@ import {
   TableRow,
   TableCell,
   Checkbox,
+  ColumnHeaderMenu,
+  type ColumnSortState,
 } from "@timber/ui";
 import type { StockProduct } from "@/lib/actions/products";
-import { SortableHeader } from "./SortableHeader";
 
 interface ProductTableProps {
   products: StockProduct[];
@@ -25,28 +27,145 @@ interface ProductTableProps {
   isPending: boolean;
 }
 
+const NUMERIC_COLS = new Set([
+  "thickness", "width", "length", "stock_quantity", "volume_m3",
+  "unit_price_piece", "unit_price_m3", "unit_price_m2",
+]);
+
+const ALL_COLUMNS = [
+  "name", "species", "humidity", "type", "quality_grade",
+  "thickness", "width", "length", "stock_quantity", "volume_m3",
+  "unit_price_piece", "unit_price_m3", "unit_price_m2",
+] as const;
+
+function formatPrice(cents: number | null): string {
+  if (!cents) return "";
+  return (cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatPriceNoDecimals(cents: number | null): string {
+  if (!cents) return "";
+  return (cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 0, useGrouping: false });
+}
+
 export function ProductTable({
   products,
   selectedProducts,
-  sortBy,
-  sortOrder,
   onToggleSelect,
   onSelectAll,
-  onSortChange,
   isPending,
 }: ProductTableProps) {
   const t = useTranslations("catalog");
-  const allSelected = products.length > 0 && products.every(p => selectedProducts.has(p.id));
-  const someSelected = products.some(p => selectedProducts.has(p.id)) && !allSelected;
+  const [columnSort, setColumnSort] = useState<ColumnSortState | null>(null);
+  const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
+
+  const getDisplayValue = useCallback((item: StockProduct, colKey: string): string => {
+    switch (colKey) {
+      case "name": return item.name || "";
+      case "species": return item.species || "";
+      case "humidity": return item.humidity || "";
+      case "type": return item.type || "";
+      case "quality_grade": return item.quality_grade || "";
+      case "thickness": return item.thickness_display || String(item.thickness);
+      case "width": return item.width_display || String(item.width);
+      case "length": return item.length_display || String(item.length);
+      case "stock_quantity": return String(item.stock_quantity);
+      case "volume_m3": return item.volume_m3 != null ? item.volume_m3.toFixed(3) : "";
+      case "unit_price_piece": return item.unit_price_piece ? formatPrice(item.unit_price_piece) : "";
+      case "unit_price_m3": return item.unit_price_m3 ? formatPriceNoDecimals(item.unit_price_m3) : "";
+      case "unit_price_m2": return item.unit_price_m2 ? formatPrice(item.unit_price_m2) : "";
+      default: return "";
+    }
+  }, []);
+
+  const handleFilterChange = useCallback(
+    (columnKey: string, values: Set<string>) => {
+      setColumnFilters((prev) => ({ ...prev, [columnKey]: values }));
+    },
+    []
+  );
+
+  const columnUniqueValues = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const colKey of ALL_COLUMNS) {
+      const filteredRows = products.filter((item) => {
+        for (const [filterCol, allowedValues] of Object.entries(columnFilters)) {
+          if (filterCol === colKey || allowedValues.size === 0) continue;
+          const val = getDisplayValue(item, filterCol);
+          if (!allowedValues.has(val)) return false;
+        }
+        return true;
+      });
+      const valSet = new Set<string>();
+      for (const row of filteredRows) {
+        const val = getDisplayValue(row, colKey);
+        if (val) valSet.add(val);
+      }
+      map[colKey] = [...valSet];
+    }
+    return map;
+  }, [products, columnFilters, getDisplayValue]);
+
+  const displayRows = useMemo(() => {
+    let result = products.filter((item) => {
+      for (const [colKey, allowedValues] of Object.entries(columnFilters)) {
+        if (allowedValues.size === 0) continue;
+        const val = getDisplayValue(item, colKey);
+        if (!allowedValues.has(val)) return false;
+      }
+      return true;
+    });
+
+    if (columnSort) {
+      const { column: sortCol, direction } = columnSort;
+      const isNum = NUMERIC_COLS.has(sortCol);
+      result = [...result].sort((a, b) => {
+        if (isNum) {
+          const aNum = sortCol === "volume_m3" ? (a.volume_m3 || 0) :
+                       sortCol === "stock_quantity" ? a.stock_quantity :
+                       sortCol.startsWith("unit_price") ? ((a as unknown as Record<string, number>)[sortCol] || 0) :
+                       parseFloat(getDisplayValue(a, sortCol)) || 0;
+          const bNum = sortCol === "volume_m3" ? (b.volume_m3 || 0) :
+                       sortCol === "stock_quantity" ? b.stock_quantity :
+                       sortCol.startsWith("unit_price") ? ((b as unknown as Record<string, number>)[sortCol] || 0) :
+                       parseFloat(getDisplayValue(b, sortCol)) || 0;
+          return direction === "asc" ? aNum - bNum : bNum - aNum;
+        }
+        const aVal = getDisplayValue(a, sortCol);
+        const bVal = getDisplayValue(b, sortCol);
+        const cmp = aVal.localeCompare(bVal);
+        return direction === "asc" ? cmp : -cmp;
+      });
+    }
+
+    return result;
+  }, [products, columnFilters, columnSort, getDisplayValue]);
+
+  const allSelected = displayRows.length > 0 && displayRows.every(p => selectedProducts.has(p.id));
+  const someSelected = displayRows.some(p => selectedProducts.has(p.id)) && !allSelected;
 
   const handleSelectAllChange = () => {
     if (allSelected) {
-      // Clear all
-      products.forEach(p => onToggleSelect(p.id));
+      displayRows.forEach(p => onToggleSelect(p.id));
     } else {
       onSelectAll();
     }
   };
+
+  const headerWithMenu = (colKey: string, label: string, isNumeric = false) => (
+    <span className="flex items-center gap-0.5">
+      {label}
+      <ColumnHeaderMenu
+        columnKey={colKey}
+        isNumeric={isNumeric}
+        uniqueValues={columnUniqueValues[colKey] ?? []}
+        activeSort={columnSort}
+        activeFilter={columnFilters[colKey] ?? new Set()}
+        onSortChange={setColumnSort}
+        onFilterChange={handleFilterChange}
+      />
+    </span>
+  );
 
   return (
     <div className={cn(
@@ -63,148 +182,23 @@ export function ProductTable({
                   aria-label={t("selectAll")}
                 />
               </TableHead>
-              {/* 1. Product (name) */}
-              <TableHead className="bg-background">
-                <SortableHeader
-                  column="name"
-                  label={t("product")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                />
-              </TableHead>
-              {/* 2. Species */}
-              <TableHead className="bg-background">
-                <SortableHeader
-                  column="species"
-                  label={t("species")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                />
-              </TableHead>
-              {/* 3. Humidity */}
-              <TableHead className="bg-background">
-                <SortableHeader
-                  column="moisture_content"
-                  label={t("humidity")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                />
-              </TableHead>
-              {/* 4. Type */}
-              <TableHead className="bg-background">
-                <SortableHeader
-                  column="type"
-                  label={t("type")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                />
-              </TableHead>
-              {/* 7. Quality */}
-              <TableHead className="bg-background">
-                <SortableHeader
-                  column="quality_grade"
-                  label={t("quality")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                />
-              </TableHead>
-              {/* 8. Thickness */}
-              <TableHead className="text-right bg-background">
-                <SortableHeader
-                  column="thickness"
-                  label={t("thickness")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                  align="right"
-                />
-              </TableHead>
-              {/* 9. Width */}
-              <TableHead className="text-right bg-background">
-                <SortableHeader
-                  column="width"
-                  label={t("width")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                  align="right"
-                />
-              </TableHead>
-              {/* 10. Length */}
-              <TableHead className="text-right bg-background">
-                <SortableHeader
-                  column="length"
-                  label={t("length")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                  align="right"
-                />
-              </TableHead>
-              {/* 11. Pieces */}
-              <TableHead className="text-right bg-background">
-                <SortableHeader
-                  column="stock_quantity"
-                  label={t("pieces")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                  align="right"
-                />
-              </TableHead>
-              {/* 12. m³ */}
-              <TableHead className="text-right bg-background">
-                <SortableHeader
-                  column="volume_m3"
-                  label={t("cubicMeters")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                  align="right"
-                />
-              </TableHead>
-              {/* 13. EUR/piece */}
-              <TableHead className="text-right bg-background">
-                <SortableHeader
-                  column="unit_price_piece"
-                  label={t("priceEur")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                  align="right"
-                />
-              </TableHead>
-              {/* 14. EXW/m³ */}
-              <TableHead className="text-right bg-background">
-                <SortableHeader
-                  column="unit_price_m3"
-                  label={t("exwM3")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                  align="right"
-                />
-              </TableHead>
-              {/* 15. EXW/m² */}
-              <TableHead className="text-right bg-background pr-4">
-                <SortableHeader
-                  column="unit_price_m2"
-                  label={t("exwM2")}
-                  currentSort={sortBy}
-                  currentOrder={sortOrder}
-                  onSort={onSortChange}
-                  align="right"
-                />
-              </TableHead>
+              <TableHead className="bg-background">{headerWithMenu("name", t("product"))}</TableHead>
+              <TableHead className="bg-background">{headerWithMenu("species", t("species"))}</TableHead>
+              <TableHead className="bg-background">{headerWithMenu("humidity", t("humidity"))}</TableHead>
+              <TableHead className="bg-background">{headerWithMenu("type", t("type"))}</TableHead>
+              <TableHead className="bg-background">{headerWithMenu("quality_grade", t("quality"))}</TableHead>
+              <TableHead className="text-right bg-background">{headerWithMenu("thickness", t("thickness"), true)}</TableHead>
+              <TableHead className="text-right bg-background">{headerWithMenu("width", t("width"), true)}</TableHead>
+              <TableHead className="text-right bg-background">{headerWithMenu("length", t("length"), true)}</TableHead>
+              <TableHead className="text-right bg-background">{headerWithMenu("stock_quantity", t("pieces"), true)}</TableHead>
+              <TableHead className="text-right bg-background">{headerWithMenu("volume_m3", t("cubicMeters"), true)}</TableHead>
+              <TableHead className="text-right bg-background">{headerWithMenu("unit_price_piece", t("priceEur"), true)}</TableHead>
+              <TableHead className="text-right bg-background">{headerWithMenu("unit_price_m3", t("exwM3"), true)}</TableHead>
+              <TableHead className="text-right bg-background pr-4">{headerWithMenu("unit_price_m2", t("exwM2"), true)}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {products.map((product) => (
+            {displayRows.map((product) => (
               <TableRow
                 key={product.id}
                 data-state={selectedProducts.has(product.id) ? "selected" : undefined}
@@ -218,41 +212,28 @@ export function ProductTable({
                     aria-label={`Select ${product.sku}`}
                   />
                 </TableCell>
-                {/* 1. Product (name) */}
                 <TableCell className="font-medium">{product.name}</TableCell>
-                {/* 2. Species */}
                 <TableCell>{product.species}</TableCell>
-                {/* 3. Humidity */}
                 <TableCell>{product.humidity}</TableCell>
-                {/* 4. Type */}
                 <TableCell>
                   {product.type === "FJ" ? t("typeFJ") : t("typeFS")}
                 </TableCell>
-                {/* 7. Quality */}
                 <TableCell>{product.quality_grade}</TableCell>
-                {/* 8. Thickness */}
                 <TableCell className="text-right">{product.thickness_display || product.thickness}</TableCell>
-                {/* 9. Width */}
                 <TableCell className="text-right">{product.width_display || product.width}</TableCell>
-                {/* 10. Length */}
                 <TableCell className="text-right">{product.length_display || product.length}</TableCell>
-                {/* 11. Pieces */}
                 <TableCell className="text-right">{product.stock_quantity || "-"}</TableCell>
-                {/* 12. m³ */}
                 <TableCell className="text-right">
                   {product.volume_m3 != null && !isNaN(product.volume_m3)
                     ? product.volume_m3.toLocaleString('de-DE', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
                     : "-"}
                 </TableCell>
-                {/* 13. EUR/piece */}
                 <TableCell className="text-right">
                   {product.unit_price_piece ? (product.unit_price_piece / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : t("onRequest")}
                 </TableCell>
-                {/* 14. EXW/m³ */}
                 <TableCell className="text-right">
                   {product.unit_price_m3 ? (product.unit_price_m3 / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0, useGrouping: false }) : t("onRequest")}
                 </TableCell>
-                {/* 15. EXW/m² */}
                 <TableCell className="text-right pr-4">
                   {product.unit_price_m2 ? (product.unit_price_m2 / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : t("onRequest")}
                 </TableCell>
