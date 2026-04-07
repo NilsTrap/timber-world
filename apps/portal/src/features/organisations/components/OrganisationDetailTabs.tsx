@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Tabs,
   TabsList,
@@ -30,6 +30,7 @@ import {
   Plus,
   Trash2,
   ImageIcon,
+  Upload,
 } from "lucide-react";
 import { usePersistedTab } from "@/hooks/usePersistedTab";
 import type { Organisation, DeliveryAddress } from "../types";
@@ -43,6 +44,7 @@ import {
   getDeliveryAddresses,
   saveDeliveryAddress,
   deleteDeliveryAddress,
+  uploadOrgLogo,
 } from "../actions";
 
 interface OrganisationDetailTabsProps {
@@ -75,7 +77,15 @@ export function OrganisationDetailTabs({
   const [registrationNumber, setRegistrationNumber] = useState(organisation.registrationNumber ?? "");
   const [country, setCountry] = useState(organisation.country ?? "");
   const [logoUrl, setLogoUrl] = useState(organisation.logoUrl ?? "");
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [isSavingDetails, setIsSavingDetails] = useState(false);
+  const [savedDetails, setSavedDetails] = useState({
+    legalAddress: organisation.legalAddress ?? "",
+    vatNumber: organisation.vatNumber ?? "",
+    registrationNumber: organisation.registrationNumber ?? "",
+    country: organisation.country ?? "",
+  });
 
   // Delivery addresses
   const [addresses, setAddresses] = useState<DeliveryAddress[]>([]);
@@ -167,10 +177,10 @@ export function OrganisationDetailTabs({
 
   // --- Organisation details save ---
   const hasDetailsChanged =
-    legalAddress !== (organisation.legalAddress ?? "") ||
-    vatNumber !== (organisation.vatNumber ?? "") ||
-    registrationNumber !== (organisation.registrationNumber ?? "") ||
-    country !== (organisation.country ?? "");
+    legalAddress !== savedDetails.legalAddress ||
+    vatNumber !== savedDetails.vatNumber ||
+    registrationNumber !== savedDetails.registrationNumber ||
+    country !== savedDetails.country;
 
   const saveDetails = async () => {
     setIsSavingDetails(true);
@@ -182,11 +192,34 @@ export function OrganisationDetailTabs({
       country: country || null,
     });
     if (result.success) {
+      setSavedDetails({ legalAddress, vatNumber, registrationNumber, country });
       toast.success("Organisation details saved");
     } else {
       toast.error(result.error);
     }
     setIsSavingDetails(false);
+  };
+
+  // --- Logo upload ---
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingLogo(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const result = await uploadOrgLogo(organisation.id, formData);
+    if (result.success) {
+      setLogoUrl(result.data.logoUrl);
+      toast.success("Logo uploaded");
+    } else {
+      toast.error(result.error);
+    }
+    setIsUploadingLogo(false);
+
+    // Reset input so same file can be re-selected
+    if (logoInputRef.current) logoInputRef.current.value = "";
   };
 
   // --- Delivery addresses ---
@@ -196,7 +229,7 @@ export function OrganisationDetailTabs({
       address: "",
       contactName: "",
       contactPhone: "",
-      contactHours: "",
+      contactHours: "Mo-Fr 8:00-16:00",
       isDefault: false,
     });
   };
@@ -518,17 +551,22 @@ export function OrganisationDetailTabs({
                   <p className="text-sm text-muted-foreground">
                     {logoUrl ? "Logo is set" : "No logo uploaded yet"}
                   </p>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={logoUrl}
-                      onChange={(e) => setLogoUrl(e.target.value)}
-                      placeholder="Logo URL (upload coming soon)"
-                      className="max-w-sm text-sm"
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    File upload will be available in a future update.
-                  </p>
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={isUploadingLogo}
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    {isUploadingLogo ? "Uploading..." : logoUrl ? "Replace Logo" : "Upload Logo"}
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -560,6 +598,7 @@ export function OrganisationDetailTabs({
                         onSave={handleSaveAddress}
                         onCancel={cancelAddressEdit}
                         isSaving={isSavingAddress}
+                        legalAddress={legalAddress}
                       />
                     ) : (
                       <div
@@ -586,7 +625,7 @@ export function OrganisationDetailTabs({
                               size="icon-sm"
                               onClick={() => handleDeleteAddress(addr.id)}
                             >
-                              <Trash2 className="h-3 w-3 text-destructive" />
+                              <Trash2 className="h-3 w-3" />
                             </Button>
                           </div>
                         </div>
@@ -610,6 +649,7 @@ export function OrganisationDetailTabs({
                       onSave={handleSaveAddress}
                       onCancel={cancelAddressEdit}
                       isSaving={isSavingAddress}
+                      legalAddress={legalAddress}
                     />
                   )}
 
@@ -680,12 +720,14 @@ function DeliveryAddressForm({
   onSave,
   onCancel,
   isSaving,
+  legalAddress,
 }: {
   address: Partial<DeliveryAddress>;
   onChange: (addr: Partial<DeliveryAddress>) => void;
   onSave: () => void;
   onCancel: () => void;
   isSaving: boolean;
+  legalAddress?: string;
 }) {
   return (
     <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
@@ -712,7 +754,21 @@ function DeliveryAddressForm({
         </div>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="addr-address">Address *</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="addr-address">Address *</Label>
+          {legalAddress && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-auto py-0 px-1 text-xs text-muted-foreground"
+              onClick={() => onChange({ ...address, address: legalAddress })}
+              disabled={isSaving}
+            >
+              Same as legal address
+            </Button>
+          )}
+        </div>
         <Textarea
           id="addr-address"
           value={address.address ?? ""}

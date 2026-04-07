@@ -17,7 +17,11 @@ import { DeleteShipmentDraftButton } from "@/features/shipments/components/Delet
 import { ShipmentPalletTable } from "@/features/shipments/components/ShipmentPalletTable";
 import { IncomingShipmentPackageEditor } from "@/features/shipments/components/IncomingShipmentPackageEditor";
 import { PrintShipmentButton } from "@/features/shipments/components/PrintShipmentButton";
+import { PrintPackingListButton } from "@/features/shipments/components/PrintPackingListButton";
+import { PrintCmrButton } from "@/features/shipments/components/PrintCmrButton";
 import { updateShipmentDate } from "@/features/shipments/actions/updateShipmentDate";
+import { updateShipmentDelivery } from "@/features/shipments/actions/updateShipmentDelivery";
+import { getShipmentPrintData, type OrgPrintInfo } from "@/features/shipments/actions/getShipmentPrintData";
 
 const statusColors: Record<ShipmentStatus, string> = {
   draft: "bg-yellow-100 text-yellow-800",
@@ -69,6 +73,9 @@ export default function ShipmentDetailPage() {
   const [isFromExternal, setIsFromExternal] = useState(false);
   const [incomingSeq, setIncomingSeq] = useState<number | null>(null);
   const editorSaveRef = useRef<(() => Promise<boolean>) | null>(null);
+  const [deliveryFromText, setDeliveryFromText] = useState<string>("");
+  const [deliveryToText, setDeliveryToText] = useState<string>("");
+  const [orgPrintData, setOrgPrintData] = useState<{ from: OrgPrintInfo; to: OrgPrintInfo } | null>(null);
 
   // Remember this page for sidebar navigation
   useEffect(() => {
@@ -78,13 +85,20 @@ export default function ShipmentDetailPage() {
   const fetchShipment = useCallback(async () => {
     const result = await getOrgShipmentDetail(shipmentId);
     if (result.success) {
-      setShipment(result.data.shipment);
+      const s = result.data.shipment;
+      setShipment(s);
       setIsOwner(result.data.isOwner);
       setIsReceiver(result.data.isReceiver);
       setIsFromExternal(result.data.isFromExternal);
       setIncomingSeq(result.data.incomingSeq);
       setLiveVolume(null);
       setLivePackageCount(null);
+      setDeliveryFromText(s.deliveryFromText ?? "");
+      setDeliveryToText(s.deliveryToText ?? "");
+      // Load org print data for address presets
+      getShipmentPrintData(shipmentId).then((pd) => {
+        if (pd.success) setOrgPrintData(pd.data);
+      });
     } else {
       // Clear stored entry so sidebar doesn't redirect here again
       sessionStorage.removeItem(SHIPMENT_LAST_ENTRY_KEY);
@@ -216,13 +230,27 @@ export default function ShipmentDetailPage() {
             />
           )}
           {shipment.packages.length > 0 && (
-            <PrintShipmentButton
-              shipmentCode={shipment.shipmentCode}
-              fromOrgName={shipment.fromOrganisationName}
-              toOrgName={shipment.toOrganisationName}
-              shipmentDate={formatDate(shipment.shipmentDate)}
-              packages={shipment.packages}
-            />
+            <>
+              <PrintPackingListButton
+                shipmentId={shipment.id}
+                shipmentCode={shipment.shipmentCode}
+                shipmentDate={shipment.shipmentDate}
+                packages={shipment.packages}
+              />
+              <PrintCmrButton
+                shipmentId={shipment.id}
+                shipmentCode={shipment.shipmentCode}
+                shipmentDate={shipment.shipmentDate}
+                packages={shipment.packages}
+              />
+              <PrintShipmentButton
+                shipmentCode={shipment.shipmentCode}
+                fromOrgName={shipment.fromOrganisationName}
+                toOrgName={shipment.toOrganisationName}
+                shipmentDate={formatDate(shipment.shipmentDate)}
+                packages={shipment.packages}
+              />
+            </>
           )}
           <span
             className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[shipment.status]}`}
@@ -268,6 +296,28 @@ export default function ShipmentDetailPage() {
           <p className="text-sm text-muted-foreground">Total Volume</p>
           <p className="text-xl font-semibold">{formatVolume(totalVolume)} m³</p>
         </div>
+      </div>
+
+      {/* Delivery Addresses (for documents) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <DeliveryAddressCard
+          label="Delivery from"
+          value={deliveryFromText}
+          onChange={setDeliveryFromText}
+          onSave={(val) => updateShipmentDelivery(shipment.id, "delivery_from_text", val)}
+          addresses={orgPrintData?.from.deliveryAddresses ?? []}
+          orgLegalAddress={orgPrintData?.from.legalAddress}
+          orgName={shipment.fromOrganisationName}
+        />
+        <DeliveryAddressCard
+          label="Delivery to"
+          value={deliveryToText}
+          onChange={setDeliveryToText}
+          onSave={(val) => updateShipmentDelivery(shipment.id, "delivery_to_text", val)}
+          addresses={orgPrintData?.to.deliveryAddresses ?? []}
+          orgLegalAddress={orgPrintData?.to.legalAddress}
+          orgName={shipment.toOrganisationName}
+        />
       </div>
 
       {/* Notes & Rejection Reason */}
@@ -367,6 +417,110 @@ export default function ShipmentDetailPage() {
           onClose={() => setShowSubmitDialog(false)}
           onSuccess={handleSubmitSuccess}
         />
+      )}
+    </div>
+  );
+}
+
+/** Delivery address card with preset selector and editable textarea */
+function DeliveryAddressCard({
+  label,
+  value,
+  onChange,
+  onSave,
+  addresses,
+  orgLegalAddress,
+  orgName,
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  onSave: (val: string) => Promise<unknown>;
+  addresses: { id: string; label: string; address: string; contactName: string | null; contactPhone: string | null; contactHours: string | null }[];
+  orgLegalAddress?: string | null;
+  orgName: string;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [savedValue, setSavedValue] = useState(value);
+
+  // Sync savedValue when parent reloads
+  useEffect(() => { setSavedValue(value); }, [value]);
+
+  const isDirty = value !== savedValue;
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(value);
+    setSavedValue(value);
+    setSaving(false);
+  };
+
+  const handleSelectAddress = async (addrId: string) => {
+    let newVal: string;
+    if (addrId === "__legal__") {
+      newVal = orgLegalAddress ?? "";
+    } else {
+      const addr = addresses.find((a) => a.id === addrId);
+      if (!addr) return;
+      const parts = [addr.address];
+      if (addr.contactName) parts.push(`Contact: ${addr.contactName}`);
+      if (addr.contactPhone) parts.push(`Phone: ${addr.contactPhone}`);
+      if (addr.contactHours) parts.push(`Hours: ${addr.contactHours}`);
+      newVal = parts.join("\n");
+    }
+    onChange(newVal);
+    setSaving(true);
+    await onSave(newVal);
+    setSavedValue(newVal);
+    setSaving(false);
+  };
+
+  const handleBlur = async () => {
+    if (value !== savedValue) {
+      setSaving(true);
+      await onSave(value);
+      setSavedValue(value);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border bg-card p-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        {(addresses.length > 0 || orgLegalAddress) && (
+          <select
+            className="text-xs border rounded px-1.5 py-0.5 bg-background"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) handleSelectAddress(e.target.value);
+            }}
+          >
+            <option value="">Fill from...</option>
+            {addresses.map((a) => (
+              <option key={a.id} value={a.id}>{a.label}</option>
+            ))}
+            {orgLegalAddress && <option value="__legal__">Legal address</option>}
+          </select>
+        )}
+      </div>
+      <textarea
+        className="w-full min-h-[100px] text-sm bg-transparent border rounded px-2 py-1.5 resize-y"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={handleBlur}
+        placeholder={`${orgName} delivery address...`}
+      />
+      {isDirty && (
+        <div className="flex justify-end">
+          <button
+            className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
       )}
     </div>
   );

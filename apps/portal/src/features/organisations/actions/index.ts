@@ -59,3 +59,6 @@ export { updateOrgRefExclusions } from "./updateOrgRefExclusions";
 
 // Delivery addresses
 export { getDeliveryAddresses, saveDeliveryAddress, deleteDeliveryAddress } from "./deliveryAddresses";
+
+// Logo upload
+export { uploadOrgLogo } from "./uploadOrgLogo";

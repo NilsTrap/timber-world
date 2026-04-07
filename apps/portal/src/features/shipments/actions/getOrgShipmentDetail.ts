@@ -49,6 +49,8 @@ export async function getOrgShipmentDetail(
       reviewed_by,
       rejection_reason,
       completed_at,
+      delivery_from_text,
+      delivery_to_text,
       from_organisation:organisations!shipments_from_party_id_fkey(code, name, is_external),
       to_organisation:organisations!shipments_to_party_id_fkey(code, name),
       reviewer:portal_users!shipments_reviewed_by_fkey(name)
@@ -241,6 +243,8 @@ export async function getOrgShipmentDetail(
     reviewedByName: shipment.reviewer?.name ?? null,
     rejectionReason: shipment.rejection_reason ?? null,
     completedAt: shipment.completed_at ?? null,
+    deliveryFromText: shipment.delivery_from_text ?? null,
+    deliveryToText: shipment.delivery_to_text ?? null,
     packages: packageDetails,
     pallets: palletDetails,
   };

@@ -176,6 +176,10 @@ export interface ShipmentDetail {
   reviewedByName: string | null;
   rejectionReason: string | null;
   completedAt: string | null;
+  /** Free-text delivery-from address for print documents */
+  deliveryFromText: string | null;
+  /** Free-text delivery-to address for print documents */
+  deliveryToText: string | null;
   packages: PackageDetail[];
   pallets: ShipmentPallet[];
 }
