@@ -4,6 +4,7 @@ import {
   ProductionJourneyWithErrorBoundary,
   JourneyStageNav,
 } from "@/components/features/home";
+import { EuFundingBanner } from "@/components/layout/EuFundingBanner";
 
 type Props = {
   params: Promise<{ locale: string }>;
@@ -23,6 +24,10 @@ export default async function HomePage({ params }: Props) {
       </div>
       {/* Production Journey - 6 stages with stacking cards scroll effect */}
       <ProductionJourneyWithErrorBoundary />
+      {/* EU Funding - last snap page */}
+      <div className="journey-snap-page">
+        <EuFundingBanner />
+      </div>
     </div>
   );
 }

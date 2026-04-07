@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation";
 import { Footer } from "./Footer";
-import { EuFundingBanner } from "./EuFundingBanner";
 
 const HIDE_FOOTER_PATHS = ["/products", "/quote", "/privacy"];
 
@@ -17,13 +16,5 @@ export function ConditionalFooter() {
     return null;
   }
 
-  // Show EU funding banner only on the homepage
-  const isHomepage = pathWithoutLocale === "/";
-
-  return (
-    <>
-      <Footer />
-      {isHomepage && <EuFundingBanner />}
-    </>
-  );
+  return <Footer />;
 }
