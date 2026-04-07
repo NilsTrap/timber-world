@@ -110,6 +110,8 @@ export {
   SheetDescription,
 } from "./components/sheet";
 
+export { Skeleton } from "./components/skeleton";
+
 // Utils
 export { cn } from "./utils";
 

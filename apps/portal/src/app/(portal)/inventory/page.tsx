@@ -3,10 +3,8 @@ import { redirect, notFound } from "next/navigation";
 import { Package } from "lucide-react";
 import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import { getOrgUserPackages } from "@/features/inventory/actions";
-import { getAuditPackages } from "@/features/inventory/actions/getAuditPackages";
 import { getPackagesInDrafts } from "@/features/production/actions";
 import { getPackagesInShipmentDrafts } from "@/features/shipments/actions";
-import { getOrgUserConsolidatedInventory } from "@/features/dashboard/actions";
 import { OrgUserInventoryPageContent } from "@/features/inventory/components/OrgUserInventoryPageContent";
 
 export const metadata: Metadata = {
@@ -55,13 +53,12 @@ export default async function InventoryPage({
     notFound();
   }
 
-  // Org user flow
-  const [result, draftsResult, shipmentDraftsResult, consolidatedResult, auditResult] = await Promise.all([
+  // Org user flow - only load data needed for the default Inventory tab
+  // Consolidated and History tabs load client-side on demand
+  const [result, draftsResult, shipmentDraftsResult] = await Promise.all([
     getOrgUserPackages(),
     getPackagesInDrafts(),
     getPackagesInShipmentDrafts(),
-    getOrgUserConsolidatedInventory(),
-    getAuditPackages(),
   ]);
 
   if (!result.success) {
@@ -125,9 +122,6 @@ export default async function InventoryPage({
   if (params.processing) initialFilters.processing = [params.processing];
   if (params.quality) initialFilters.quality = [params.quality];
 
-  const consolidated = consolidatedResult.success ? consolidatedResult.data : [];
-  const auditPackages = auditResult.success ? auditResult.data : [];
-
   return (
     <div className="space-y-6">
       <div>
@@ -141,8 +135,6 @@ export default async function InventoryPage({
         packages={packages}
         packagesInDrafts={draftsResult.success ? draftsResult.data : []}
         packagesInShipmentDrafts={shipmentDraftsResult.success ? shipmentDraftsResult.data : []}
-        consolidated={consolidated}
-        auditPackages={auditPackages}
         initialFilters={Object.keys(initialFilters).length > 0 ? initialFilters : undefined}
       />
     </div>

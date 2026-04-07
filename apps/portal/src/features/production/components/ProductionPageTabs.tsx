@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@timber/ui";
 import type { Process, ProcessWithNotes, ProductionListItem, ProductionHistoryItem } from "../types";
 import type { ProcessBreakdownItem, AdminProcessBreakdownItem } from "@/features/dashboard/types";
 import type { TrackingSetListItem } from "../actions/tracking";
+import { getValidatedProductions, getProcessesWithNotes } from "../actions";
+import { getTrackingSets } from "../actions/tracking";
+import { getProcessBreakdown, getAdminProcessBreakdown } from "@/features/dashboard/actions";
 import { NewProductionForm } from "./NewProductionForm";
 import { DraftProductionTable } from "./DraftProductionTable";
 import { ProductionHistoryTable } from "./ProductionHistoryTable";
@@ -16,39 +20,27 @@ import { AdminProcessBreakdownTable } from "@/features/dashboard/components/Admi
 
 interface ProductionPageTabsProps {
   processes: Process[];
-  processesWithNotes: ProcessWithNotes[];
   drafts: ProductionListItem[];
-  history: ProductionHistoryItem[];
-  breakdown: ProcessBreakdownItem[] | AdminProcessBreakdownItem[];
-  trackingSets: TrackingSetListItem[];
   defaultTab?: string;
   defaultProcess?: string;
   showOrganisation?: boolean;
-  /** If true, shows delete button for history entries (Super Admin only) */
   canDeleteHistory?: boolean;
-  /** Organization name for the Process List tab */
   organizationName?: string;
-  /** Organization ID for saving process notes */
   organizationId?: string;
-  /** If true, use admin breakdown table with trend indicators */
   isAdmin?: boolean;
+  orgIds?: string[];
 }
 
 /**
  * Production Page Tabs
  *
- * Wraps production page content in three tabs:
- * - Drafts: new production form + draft list
- * - Completed: validated production entries with sort/filter
- * - Process List: view and edit process descriptions
+ * Drafts tab data is loaded on the server for instant display.
+ * Other tabs (History, Consolidated, Tracking, Processes) load on demand
+ * when the user clicks them, providing a faster initial page load.
  */
 export function ProductionPageTabs({
   processes,
-  processesWithNotes,
   drafts,
-  history,
-  breakdown,
-  trackingSets,
   defaultTab,
   defaultProcess,
   showOrganisation = false,
@@ -56,11 +48,19 @@ export function ProductionPageTabs({
   organizationName,
   organizationId,
   isAdmin = false,
+  orgIds,
 }: ProductionPageTabsProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const lastPathRef = useRef<string | null>(null);
+
+  // Lazy-loaded tab data
+  const [history, setHistory] = useState<ProductionHistoryItem[] | null>(null);
+  const [breakdown, setBreakdown] = useState<(ProcessBreakdownItem | AdminProcessBreakdownItem)[] | null>(null);
+  const [trackingSets, setTrackingSets] = useState<TrackingSetListItem[] | null>(null);
+  const [processesWithNotes, setProcessesWithNotes] = useState<ProcessWithNotes[] | null>(null);
+  const [loadingTab, setLoadingTab] = useState<string | null>(null);
 
   // Helper to build URL preserving org filter
   const buildUrl = (params: Record<string, string>) => {
@@ -71,6 +71,47 @@ export function ProductionPageTabs({
     }
     return `/production?${urlParams.toString()}`;
   };
+
+  // Load data for a specific tab
+  const loadTabData = useCallback(async (tab: string) => {
+    switch (tab) {
+      case "history": {
+        if (history !== null) return;
+        setLoadingTab("history");
+        const result = await getValidatedProductions(orgIds);
+        setHistory(result.success ? result.data : []);
+        setLoadingTab(null);
+        break;
+      }
+      case "consolidated": {
+        if (breakdown !== null) return;
+        setLoadingTab("consolidated");
+        const result = isAdmin
+          ? await getAdminProcessBreakdown(undefined, orgIds)
+          : await getProcessBreakdown();
+        setBreakdown(result.success ? result.data : []);
+        setLoadingTab(null);
+        break;
+      }
+      case "tracking": {
+        if (trackingSets !== null) return;
+        setLoadingTab("tracking");
+        const result = await getTrackingSets();
+        setTrackingSets(result.success ? result.data : []);
+        setLoadingTab(null);
+        break;
+      }
+      case "processes": {
+        if (processesWithNotes !== null) return;
+        setLoadingTab("processes");
+        const noteOrgId = orgIds?.[0] || organizationId;
+        const result = await getProcessesWithNotes(noteOrgId);
+        setProcessesWithNotes(result.success ? result.data : []);
+        setLoadingTab(null);
+        break;
+      }
+    }
+  }, [history, breakdown, trackingSets, processesWithNotes, orgIds, isAdmin, organizationId]);
 
   // Refresh data when returning to /production from a draft page
   useEffect(() => {
@@ -103,22 +144,34 @@ export function ProductionPageTabs({
   const [activeTab, setActiveTab] = useState(getDefaultTab());
   const [activeProcessFilter, setActiveProcessFilter] = useState<string | undefined>(defaultProcess);
 
+  // Load data for the initial tab if it's not "active" (drafts)
+  useEffect(() => {
+    if (activeTab !== "active") {
+      loadTabData(activeTab);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleProcessClick = (processName: string) => {
-    // Set the filter immediately (before tab switch renders)
     setActiveProcessFilter(processName);
-    // Switch to the history tab
     setActiveTab("history");
     sessionStorage.setItem("production-tab", "history");
-    // Update the URL with the filter (preserving org)
+    loadTabData("history");
     router.push(buildUrl({ tab: "history", process: processName }));
   };
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     sessionStorage.setItem("production-tab", value);
+    loadTabData(value);
     // Update URL when tab changes manually (preserving org)
     router.push(buildUrl({ tab: value }));
   };
+
+  const TabLoading = () => (
+    <div className="flex items-center justify-center py-12">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange}>
@@ -141,17 +194,23 @@ export function ProductionPageTabs({
       </TabsContent>
 
       <TabsContent value="history">
-        <ProductionHistoryTable
-          key={activeProcessFilter || "all"}
-          entries={history}
-          defaultProcess={activeProcessFilter}
-          showOrganisation={showOrganisation}
-          canDelete={canDeleteHistory}
-        />
+        {history === null ? (
+          <TabLoading />
+        ) : (
+          <ProductionHistoryTable
+            key={activeProcessFilter || "all"}
+            entries={history}
+            defaultProcess={activeProcessFilter}
+            showOrganisation={showOrganisation}
+            canDelete={canDeleteHistory}
+          />
+        )}
       </TabsContent>
 
       <TabsContent value="consolidated">
-        {isAdmin ? (
+        {breakdown === null ? (
+          <TabLoading />
+        ) : isAdmin ? (
           <AdminProcessBreakdownTable
             breakdown={breakdown as AdminProcessBreakdownItem[]}
             onProcessClick={handleProcessClick}
@@ -165,15 +224,23 @@ export function ProductionPageTabs({
       </TabsContent>
 
       <TabsContent value="tracking">
-        <TrackingTab trackingSets={trackingSets} />
+        {trackingSets === null ? (
+          <TabLoading />
+        ) : (
+          <TrackingTab trackingSets={trackingSets} />
+        )}
       </TabsContent>
 
       <TabsContent value="processes">
-        <ProcessesTab
-          processes={processesWithNotes}
-          organizationName={organizationName}
-          organizationId={organizationId}
-        />
+        {processesWithNotes === null ? (
+          <TabLoading />
+        ) : (
+          <ProcessesTab
+            processes={processesWithNotes}
+            organizationName={organizationName}
+            organizationId={organizationId}
+          />
+        )}
       </TabsContent>
     </Tabs>
   );

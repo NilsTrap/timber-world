@@ -3,12 +3,8 @@ import { redirect, notFound } from "next/navigation";
 import { getSession, isAdmin, isSuperAdmin, orgHasModule } from "@/lib/auth";
 import {
   getProcesses,
-  getProcessesWithNotes,
   getDraftProductions,
-  getValidatedProductions,
 } from "@/features/production/actions";
-import { getProcessBreakdown, getAdminProcessBreakdown } from "@/features/dashboard/actions";
-import { getTrackingSets } from "@/features/production/actions/tracking";
 import { ProductionPageTabs } from "@/features/production/components/ProductionPageTabs";
 
 export const metadata: Metadata = {
@@ -21,10 +17,8 @@ export const dynamic = "force-dynamic";
 /**
  * Production Page
  *
- * Org user page for creating and managing production entries.
- * Shows tabs: Active (new production form + drafts) and History (validated entries).
- *
- * TODO [i18n]: Replace hardcoded text with useTranslations()
+ * Only loads data for the default tab (Drafts) on the server.
+ * Other tabs (History, Consolidated, Tracking, Processes) load client-side on demand.
  */
 export default async function ProductionPage({
   searchParams,
@@ -54,24 +48,15 @@ export default async function ProductionPage({
     ? orgParam.split(",").filter(Boolean)
     : undefined;
 
-  // Determine which org to use for processes with notes (single org - use first selected or user's org)
-  const processNotesOrgId = orgIds?.[0] || session.organisationId || undefined;
-
-  const [processesResult, processesWithNotesResult, draftsResult, historyResult, breakdownResult, trackingResult] = await Promise.all([
+  // Only load processes (for new production form) and drafts on the server
+  // Other tab data is loaded client-side on demand
+  const [processesResult, draftsResult] = await Promise.all([
     getProcesses(),
-    getProcessesWithNotes(processNotesOrgId),
     getDraftProductions(orgIds),
-    getValidatedProductions(orgIds),
-    userIsAdmin ? getAdminProcessBreakdown(undefined, orgIds) : getProcessBreakdown(),
-    getTrackingSets(),
   ]);
 
   const processes = processesResult.success ? processesResult.data : [];
-  const processesWithNotes = processesWithNotesResult.success ? processesWithNotesResult.data : [];
   const drafts = draftsResult.success ? draftsResult.data : [];
-  const history = historyResult.success ? historyResult.data : [];
-  const breakdown = breakdownResult.success ? breakdownResult.data : [];
-  const trackingSets = trackingResult.success ? trackingResult.data : [];
 
   return (
     <div className="space-y-6">
@@ -84,11 +69,7 @@ export default async function ProductionPage({
 
       <ProductionPageTabs
         processes={processes}
-        processesWithNotes={processesWithNotes}
         drafts={drafts}
-        history={history}
-        breakdown={breakdown}
-        trackingSets={trackingSets}
         defaultTab={tab}
         defaultProcess={process}
         showOrganisation={isSuperAdmin(session)}
@@ -96,6 +77,7 @@ export default async function ProductionPage({
         organizationName={session.organisationName || undefined}
         organizationId={orgIds?.[0] || session.organisationId || undefined}
         isAdmin={userIsAdmin}
+        orgIds={orgIds}
       />
     </div>
   );
