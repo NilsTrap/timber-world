@@ -91,20 +91,29 @@ export async function addPackagesToShipment(
   // For inter-org shipments, we're essentially "marking" which packages are part of the shipment
   // Keep original package numbers - only update shipment_id and sequence
   // IMPORTANT: Preserve source_shipment_id to maintain incoming shipment history
+  let addedCount = 0;
+  const errors: string[] = [];
+
   for (const pkgId of validPackageIds) {
     // Get the package's current shipment_id to preserve as source if not already set
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: currentPkg } = await (supabase as any)
+    const { data: currentPkg, error: fetchError } = await (supabase as any)
       .from("inventory_packages")
       .select("shipment_id, source_shipment_id")
       .eq("id", pkgId)
       .single();
 
+    if (fetchError) {
+      console.error(`Failed to fetch package ${pkgId}:`, fetchError);
+      errors.push(`Failed to read package ${pkgId}: ${fetchError.message}`);
+      continue;
+    }
+
     // If source_shipment_id is not set and package has a current shipment, preserve it
     const sourceShipmentId = currentPkg?.source_shipment_id || currentPkg?.shipment_id || null;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    const { data: updated, error: updateError } = await (supabase as any)
       .from("inventory_packages")
       .update({
         shipment_id: shipmentId,
@@ -112,15 +121,33 @@ export async function addPackagesToShipment(
         // Preserve the original incoming shipment reference
         source_shipment_id: sourceShipmentId,
       })
-      .eq("id", pkgId);
+      .eq("id", pkgId)
+      .select("id");
 
+    if (updateError) {
+      console.error(`Failed to update package ${pkgId}:`, updateError);
+      errors.push(`Failed to add package ${pkgId}: ${updateError.message}`);
+      continue;
+    }
+
+    if (!updated || updated.length === 0) {
+      console.error(`Package ${pkgId} update affected 0 rows (possible RLS restriction)`);
+      errors.push(`Package ${pkgId} could not be updated (permission denied)`);
+      continue;
+    }
+
+    addedCount++;
     nextSequence++;
   }
 
   revalidatePath("/shipments");
   revalidatePath("/inventory");
 
-  return { success: true, data: { added: validPackageIds.length } };
+  if (addedCount === 0 && errors.length > 0) {
+    return { success: false, error: errors[0]!, code: "UPDATE_FAILED" };
+  }
+
+  return { success: true, data: { added: addedCount } };
 }
 
 /**
