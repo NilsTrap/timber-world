@@ -59,70 +59,97 @@ export function AcceptInviteForm() {
     async function processInviteToken() {
       const supabase = createClient();
 
-      // Check if we have hash params (Supabase adds tokens to the URL hash)
+      // 1. Check for PKCE code in query params (modern Supabase flow)
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get("code");
+
+      if (code) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (error || !data.user) {
+          console.error("Failed to exchange code for session:", error);
+          setInviteState({
+            status: "error",
+            message:
+              "This invitation link has expired or is invalid. Please contact your administrator for a new invite.",
+          });
+          return;
+        }
+
+        // Clear the code from the URL
+        window.history.replaceState(null, "", window.location.pathname);
+
+        const userMeta = data.user.user_metadata;
+        setInviteState({
+          status: "ready",
+          email: data.user.email || "",
+          name: (userMeta?.name as string) || null,
+        });
+        return;
+      }
+
+      // 2. Check for hash params (legacy implicit flow)
       const hashParams = new URLSearchParams(
-        window.location.hash.substring(1) // Remove the # prefix
+        window.location.hash.substring(1)
       );
 
       const accessToken = hashParams.get("access_token");
       const refreshToken = hashParams.get("refresh_token");
       const type = hashParams.get("type");
 
-      // If no tokens in hash, check if there's already a session (user refreshed the page)
-      if (!accessToken) {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (session?.user) {
-          // Check if user needs to set password (invited but not yet active)
-          const userMeta = session.user.user_metadata;
+      if (accessToken) {
+        // Verify this is an invite token
+        if (type !== "invite" && type !== "recovery" && type !== "signup") {
           setInviteState({
-            status: "ready",
-            email: session.user.email || "",
-            name: (userMeta?.name as string) || null,
+            status: "error",
+            message: "Invalid invitation link. Please contact your administrator.",
           });
           return;
         }
 
-        setInviteState({ status: "no_token" });
-        return;
-      }
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken || "",
+        });
 
-      // Verify this is an invite token
-      if (type !== "invite" && type !== "recovery" && type !== "signup") {
+        if (error || !data.user) {
+          console.error("Failed to set session:", error);
+          setInviteState({
+            status: "error",
+            message:
+              "This invitation link has expired or is invalid. Please contact your administrator for a new invite.",
+          });
+          return;
+        }
+
+        // Clear the hash from the URL
+        window.history.replaceState(null, "", window.location.pathname);
+
+        const userMeta = data.user.user_metadata;
         setInviteState({
-          status: "error",
-          message: "Invalid invitation link. Please contact your administrator.",
+          status: "ready",
+          email: data.user.email || "",
+          name: (userMeta?.name as string) || null,
         });
         return;
       }
 
-      // Set up the session using the tokens
-      const { data, error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken || "",
-      });
+      // 3. Fallback: check if there's already a session (user refreshed the page)
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (error || !data.user) {
-        console.error("Failed to set session:", error);
+      if (session?.user) {
+        const userMeta = session.user.user_metadata;
         setInviteState({
-          status: "error",
-          message:
-            "This invitation link has expired or is invalid. Please contact your administrator for a new invite.",
+          status: "ready",
+          email: session.user.email || "",
+          name: (userMeta?.name as string) || null,
         });
         return;
       }
 
-      // Clear the hash from the URL (for cleaner UX)
-      window.history.replaceState(null, "", window.location.pathname);
-
-      const userMeta = data.user.user_metadata;
-      setInviteState({
-        status: "ready",
-        email: data.user.email || "",
-        name: (userMeta?.name as string) || null,
-      });
+      setInviteState({ status: "no_token" });
     }
 
     processInviteToken();
