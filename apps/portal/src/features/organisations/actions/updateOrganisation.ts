@@ -14,7 +14,14 @@ import type { Organisation, ActionResult } from "../types";
  */
 export async function updateOrganisation(
   id: string,
-  input: { name: string; code?: string }
+  input: {
+    name: string;
+    code?: string;
+    legalAddress?: string | null;
+    vatNumber?: string | null;
+    registrationNumber?: string | null;
+    country?: string | null;
+  }
 ): Promise<ActionResult<Organisation>> {
   // 1. Check authentication
   const session = await getSession();
@@ -62,13 +69,25 @@ export async function updateOrganisation(
   if (newCode) {
     updatePayload.code = newCode;
   }
+  if ("legalAddress" in input) {
+    updatePayload.legal_address = input.legalAddress ?? null;
+  }
+  if ("vatNumber" in input) {
+    updatePayload.vat_number = input.vatNumber ?? null;
+  }
+  if ("registrationNumber" in input) {
+    updatePayload.registration_number = input.registrationNumber ?? null;
+  }
+  if ("country" in input) {
+    updatePayload.country = input.country ?? null;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("organisations")
     .update(updatePayload)
     .eq("id", id)
-    .select("id, code, name, is_active, is_external, created_at, updated_at")
+    .select("id, code, name, is_active, is_external, legal_address, vat_number, registration_number, country, logo_url, created_at, updated_at")
     .single();
 
   if (error) {
@@ -95,6 +114,11 @@ export async function updateOrganisation(
     name: data.name as string,
     isActive: data.is_active as boolean,
     isExternal: data.is_external as boolean,
+    legalAddress: (data.legal_address as string | null) ?? null,
+    vatNumber: (data.vat_number as string | null) ?? null,
+    registrationNumber: (data.registration_number as string | null) ?? null,
+    country: (data.country as string | null) ?? null,
+    logoUrl: (data.logo_url as string | null) ?? null,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
   };

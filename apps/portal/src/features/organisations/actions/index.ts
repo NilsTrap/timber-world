@@ -56,3 +56,6 @@ export type { Person } from "./getAllPeople";
 // Per-org reference data exclusions
 export { getOrgRefExclusions } from "./getOrgRefExclusions";
 export { updateOrgRefExclusions } from "./updateOrgRefExclusions";
+
+// Delivery addresses
+export { getDeliveryAddresses, saveDeliveryAddress, deleteDeliveryAddress } from "./deliveryAddresses";

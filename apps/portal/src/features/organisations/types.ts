@@ -14,10 +14,26 @@ export interface Organisation {
   isActive: boolean;
   /** External organisations don't use the platform - they're suppliers/customers */
   isExternal: boolean;
+  legalAddress: string | null;
+  vatNumber: string | null;
+  registrationNumber: string | null;
+  country: string | null;
+  logoUrl: string | null;
   createdAt: string;
   updatedAt: string;
   /** Number of portal users in this organisation */
   userCount?: number;
+}
+
+export interface DeliveryAddress {
+  id: string;
+  organisationId: string;
+  label: string;
+  address: string;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactHours: string | null;
+  isDefault: boolean;
 }
 
 /**
