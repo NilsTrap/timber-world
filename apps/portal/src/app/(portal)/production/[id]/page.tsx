@@ -134,7 +134,6 @@ export default async function ProductionEntryPage({
           <p className="text-muted-foreground mb-2">
             Production date: {productionDate}
           </p>
-          <ProductionActivityLog productionEntryId={id} />
           {isCorrection && correctsEntryId && originalEntryInfo && (
             <p className="text-sm text-muted-foreground mt-1">
               Corrects:{" "}
@@ -205,6 +204,8 @@ export default async function ProductionEntryPage({
         initialActualWork={actualWork}
         usedPackageNumbers={usedPackageNumbers}
       />
+
+      <ProductionActivityLog productionEntryId={id} />
     </div>
   );
 }
