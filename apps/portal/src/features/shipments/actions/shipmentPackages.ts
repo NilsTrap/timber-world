@@ -95,11 +95,11 @@ export async function addPackagesToShipment(
   const errors: string[] = [];
 
   for (const pkgId of validPackageIds) {
-    // Get the package's current shipment_id to preserve as source if not already set
+    // Get the package's current state to preserve source and check production link
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: currentPkg, error: fetchError } = await (supabase as any)
       .from("inventory_packages")
-      .select("shipment_id, source_shipment_id")
+      .select("shipment_id, source_shipment_id, production_entry_id")
       .eq("id", pkgId)
       .single();
 
@@ -112,15 +112,21 @@ export async function addPackagesToShipment(
     // If source_shipment_id is not set and package has a current shipment, preserve it
     const sourceShipmentId = currentPkg?.source_shipment_id || currentPkg?.shipment_id || null;
 
+    // Build update payload - only set package_sequence for non-production packages
+    // Production packages have a unique constraint on (production_entry_id, package_sequence)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updatePayload: any = {
+      shipment_id: shipmentId,
+      source_shipment_id: sourceShipmentId,
+    };
+    if (!currentPkg?.production_entry_id) {
+      updatePayload.package_sequence = nextSequence;
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: updated, error: updateError } = await (supabase as any)
       .from("inventory_packages")
-      .update({
-        shipment_id: shipmentId,
-        package_sequence: nextSequence,
-        // Preserve the original incoming shipment reference
-        source_shipment_id: sourceShipmentId,
-      })
+      .update(updatePayload)
       .eq("id", pkgId)
       .select("id");
 
