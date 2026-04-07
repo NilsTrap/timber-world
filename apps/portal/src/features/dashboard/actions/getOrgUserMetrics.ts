@@ -26,100 +26,66 @@ export async function getOrgUserMetrics(): Promise<ActionResult<OrgUserMetrics>>
   // Use currentOrganizationId (Epic 10) with fallback to organisationId (legacy)
   const orgId = session.currentOrganizationId || session.organisationId;
 
-  // Query 1: Total available inventory volume
-  // Uses same pattern as getOrgUserPackages: shipment packages + production packages
-  // IMPORTANT: Must deduplicate by package ID to avoid double-counting
-  const allPackages: { id: string; volume_m3: number }[] = [];
+  // Run ALL inventory + production queries in parallel (were sequential before)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = supabase as any;
 
-  // 1a. Shipment-sourced packages (shipped to this organisation's facility, not consumed)
-  // Only include packages from shipments that have been accepted or completed
-  if (orgId) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: shipmentPkgs, error: shipmentError } = await (supabase as any)
-      .from("inventory_packages")
-      .select("id, volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(to_organisation_id, status)")
-      .eq("shipments.to_organisation_id", orgId)
-      .in("shipments.status", ["accepted", "completed"])
-      .neq("status", "consumed");
+  const [shipmentResult, productionResult, directResult, outgoingDraftResult, onTheWayResult, entriesResult] = orgId
+    ? await Promise.all([
+        // 1a. Shipment-sourced packages
+        client
+          .from("inventory_packages")
+          .select("id, volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(to_organisation_id, status)")
+          .eq("shipments.to_organisation_id", orgId)
+          .in("shipments.status", ["accepted", "completed"])
+          .neq("status", "consumed"),
+        // 1b. Production-sourced packages
+        client
+          .from("inventory_packages")
+          .select("id, volume_m3, portal_production_entries!inner(organisation_id)")
+          .eq("portal_production_entries.organisation_id", orgId)
+          .eq("organisation_id", orgId)
+          .eq("status", "produced"),
+        // 1c. Direct inventory packages
+        client
+          .from("inventory_packages")
+          .select("id, volume_m3")
+          .eq("organisation_id", orgId)
+          .is("shipment_id", null)
+          .is("production_entry_id", null)
+          .neq("status", "consumed"),
+        // 1d. Outgoing draft shipment packages
+        client
+          .from("inventory_packages")
+          .select("id, volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(from_organisation_id, status)")
+          .eq("shipments.from_organisation_id", orgId)
+          .eq("shipments.status", "draft")
+          .neq("status", "consumed"),
+        // 1e. Outgoing pending shipment packages
+        client
+          .from("inventory_packages")
+          .select("id, volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(from_organisation_id, status)")
+          .eq("shipments.from_organisation_id", orgId)
+          .eq("shipments.status", "pending")
+          .neq("status", "consumed"),
+        // 2. Production totals
+        client
+          .from("portal_production_entries")
+          .select("total_input_m3, total_output_m3")
+          .eq("organisation_id", orgId)
+          .eq("status", "validated"),
+      ])
+    : [{ data: null }, { data: null }, { data: null }, { data: null }, { data: null }, { data: null }];
 
-    if (shipmentError) {
-      console.error("[getOrgUserMetrics] Failed to fetch shipment packages:", shipmentError.message);
-    } else if (shipmentPkgs) {
-      allPackages.push(...shipmentPkgs);
-    }
-  }
+  // Collect all packages and deduplicate
+  const allPackages: { id: string; volume_m3: number }[] = [
+    ...(shipmentResult.data || []),
+    ...(productionResult.data || []),
+    ...(directResult.data || []),
+    ...(outgoingDraftResult.data || []),
+    ...(onTheWayResult.data || []),
+  ];
 
-  // 1b. Production-sourced packages (from this organisation, status = produced)
-  // Also verify package still belongs to this org (shipped packages have org_id updated)
-  if (orgId) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: productionPkgs, error: productionError } = await (supabase as any)
-      .from("inventory_packages")
-      .select("id, volume_m3, portal_production_entries!inner(organisation_id)")
-      .eq("portal_production_entries.organisation_id", orgId)
-      .eq("organisation_id", orgId)
-      .eq("status", "produced");
-
-    if (productionError) {
-      console.error("[getOrgUserMetrics] Failed to fetch production packages:", productionError.message);
-    } else if (productionPkgs) {
-      allPackages.push(...productionPkgs);
-    }
-  }
-
-  // 1c. Direct inventory packages (admin-added, no shipment or production source)
-  if (orgId) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: directPkgs, error: directError } = await (supabase as any)
-      .from("inventory_packages")
-      .select("id, volume_m3")
-      .eq("organisation_id", orgId)
-      .is("shipment_id", null)
-      .is("production_entry_id", null)
-      .neq("status", "consumed");
-
-    if (directError) {
-      console.error("[getOrgUserMetrics] Failed to fetch direct packages:", directError.message);
-    } else if (directPkgs) {
-      allPackages.push(...directPkgs);
-    }
-  }
-
-  // 1d. Packages in outgoing draft shipments (still in this org's inventory)
-  if (orgId) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: outgoingDraftPkgs, error: outgoingDraftError } = await (supabase as any)
-      .from("inventory_packages")
-      .select("id, volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(from_organisation_id, status)")
-      .eq("shipments.from_organisation_id", orgId)
-      .eq("shipments.status", "draft")
-      .neq("status", "consumed");
-
-    if (outgoingDraftError) {
-      console.error("[getOrgUserMetrics] Failed to fetch outgoing draft packages:", outgoingDraftError.message);
-    } else if (outgoingDraftPkgs) {
-      allPackages.push(...outgoingDraftPkgs);
-    }
-  }
-
-  // 1e. Packages in outgoing pending shipments ("on the way" - still belongs to sender until accepted)
-  if (orgId) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: onTheWayPkgs, error: onTheWayError } = await (supabase as any)
-      .from("inventory_packages")
-      .select("id, volume_m3, shipments!inner!inventory_packages_shipment_id_fkey(from_organisation_id, status)")
-      .eq("shipments.from_organisation_id", orgId)
-      .eq("shipments.status", "pending")
-      .neq("status", "consumed");
-
-    if (onTheWayError) {
-      console.error("[getOrgUserMetrics] Failed to fetch on-the-way packages:", onTheWayError.message);
-    } else if (onTheWayPkgs) {
-      allPackages.push(...onTheWayPkgs);
-    }
-  }
-
-  // Deduplicate by package ID and sum volumes
   const seenIds = new Set<string>();
   let totalInventoryM3 = 0;
   for (const pkg of allPackages) {
@@ -129,30 +95,19 @@ export async function getOrgUserMetrics(): Promise<ActionResult<OrgUserMetrics>>
     }
   }
 
-  // Query 2: Production totals from validated entries (from this organisation)
+  // Production totals
   let totalProductionVolumeM3 = 0;
   let totalInputM3 = 0;
   let totalOutputM3 = 0;
 
-  if (orgId) {
+  if (entriesResult.data) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: entries, error: entriesError } = await (supabase as any)
-      .from("portal_production_entries")
-      .select("total_input_m3, total_output_m3")
-      .eq("organisation_id", orgId)
-      .eq("status", "validated");
-
-    if (entriesError) {
-      console.error("[getOrgUserMetrics] Failed to fetch production entries:", entriesError.message);
-    } else if (entries) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const entry of entries as any[]) {
-        const inputM3 = Number(entry.total_input_m3) || 0;
-        const outputM3 = Number(entry.total_output_m3) || 0;
-        totalInputM3 += inputM3;
-        totalOutputM3 += outputM3;
-        totalProductionVolumeM3 += outputM3;
-      }
+    for (const entry of entriesResult.data as any[]) {
+      const inputM3 = Number(entry.total_input_m3) || 0;
+      const outputM3 = Number(entry.total_output_m3) || 0;
+      totalInputM3 += inputM3;
+      totalOutputM3 += outputM3;
+      totalProductionVolumeM3 += outputM3;
     }
   }
 

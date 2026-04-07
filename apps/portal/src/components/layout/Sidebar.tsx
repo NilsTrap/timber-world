@@ -13,6 +13,7 @@ import {
   type OrganizationSwitcherOption,
 } from "./OrganizationSwitcher";
 import { logoutUser } from "@/features/auth/actions";
+import { getPendingShipmentCount } from "@/features/shipments/actions/getOrgShipments";
 
 /**
  * Navigation Item Type
@@ -36,6 +37,8 @@ interface SidebarProps {
   userMemberships?: OrganizationSwitcherOption[];
   /** Whether user has multiple organization memberships */
   hasMultipleOrgs?: boolean;
+  /** Whether to load pending shipment badge count client-side */
+  loadShipmentBadge?: boolean;
 }
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
@@ -53,9 +56,11 @@ export function Sidebar({
   currentOrganization,
   userMemberships = [],
   hasMultipleOrgs = false,
+  loadShipmentBadge = false,
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [shipmentBadge, setShipmentBadge] = useState(0);
   const searchParams = useSearchParams();
 
   // Get current orgs from URL for OrganizationSelector (comma-separated)
@@ -70,6 +75,16 @@ export function Sidebar({
     }
     setIsMounted(true);
   }, []);
+
+  // Load pending shipment count asynchronously (doesn't block page render)
+  useEffect(() => {
+    if (!loadShipmentBadge) return;
+    getPendingShipmentCount().then((result) => {
+      if (result.success && result.data > 0) {
+        setShipmentBadge(result.data);
+      }
+    });
+  }, [loadShipmentBadge]);
 
   // Save collapsed state to localStorage
   const toggleCollapsed = () => {
@@ -147,7 +162,7 @@ export function Sidebar({
                 label={item.label}
                 iconName={item.iconName}
                 isCollapsed={isCollapsed}
-                badge={item.badge}
+                badge={item.href === "/shipments" ? shipmentBadge : item.badge}
               />
             </li>
           ))}

@@ -7,7 +7,6 @@ import {
 } from "@/lib/auth";
 import { Sidebar, type NavItem } from "./Sidebar";
 import { getActiveOrganisations } from "@/features/shipments/actions/getActiveOrganisations";
-import { getPendingShipmentCount } from "@/features/shipments/actions/getOrgShipments";
 import type { OrganizationOption } from "./OrganizationSelector";
 import type { OrganizationSwitcherOption } from "./OrganizationSwitcher";
 
@@ -88,16 +87,8 @@ export async function SidebarWrapper() {
   // Fallback (legacy/unlinked) → "Timber World Platform"
   const brandName = session?.currentOrganizationName || session?.organisationName || "Timber World Platform";
 
-  // Fetch pending shipment count for org users
-  let pendingShipmentCount = 0;
-  if (session?.role === "user" && (session.currentOrganizationId || session.organisationId)) {
-    const countResult = await getPendingShipmentCount();
-    if (countResult.success) {
-      pendingShipmentCount = countResult.data;
-    }
-  }
-
   // Get nav items based on role
+  // Pending shipment count is loaded client-side to avoid blocking server render
   let navItems: NavItem[];
 
   if (session?.role === "admin") {
@@ -105,7 +96,7 @@ export async function SidebarWrapper() {
     navItems = ADMIN_NAV_ITEMS;
   } else {
     // Org users - filter by user's effective modules (intersection of org + user modules)
-    const orgUserItems = getOrgUserNavItems(pendingShipmentCount);
+    const orgUserItems = getOrgUserNavItems(0);
     const orgId = session?.currentOrganizationId || session?.organisationId || null;
     const portalUserId = session?.portalUserId;
     const enabledModules = portalUserId
@@ -155,6 +146,7 @@ export async function SidebarWrapper() {
       currentOrganization={currentOrganization}
       userMemberships={userMemberships}
       hasMultipleOrgs={hasMultipleOrganizations(session)}
+      loadShipmentBadge={session?.role === "user"}
     />
   );
 }
