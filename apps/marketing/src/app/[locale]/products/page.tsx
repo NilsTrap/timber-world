@@ -91,7 +91,7 @@ export default async function ProductsPage({ params }: Props) {
                       {product.title}
                     </h3>
                     {product.description && (
-                      <p className="text-sm text-gray-600 line-clamp-3">
+                      <p className="text-sm text-gray-600">
                         {product.description}
                       </p>
                     )}
