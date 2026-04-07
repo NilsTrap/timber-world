@@ -337,6 +337,20 @@ export async function traceProductionPipeline(
     currentPackageIds = nextPackageIds;
   }
 
+  // Re-evaluate isTracked for all stage inputs using the final allTrackedPackageIds.
+  // This fixes order-dependent bugs where entries at the same depth level produce
+  // packages consumed by other entries at the same depth — the producing entry may
+  // not have been processed yet when the consuming entry checked isTracked.
+  for (const stage of stages) {
+    let outsideCount = 0;
+    for (const input of stage.inputs) {
+      input.isTracked = allTrackedPackageIds.has(input.id);
+      if (!input.isTracked) outsideCount++;
+    }
+    stage.hasOutsidePackages = outsideCount > 0;
+    stage.outsidePackageCount = outsideCount;
+  }
+
   // Identify remaining packages (seeds not consumed by any validated production)
   const consumedPackageIds = new Set<string>();
   for (const stage of stages) {
