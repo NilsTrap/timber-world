@@ -156,16 +156,8 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     return null;
   }
 
-  // Get portal user ID
-  const supabase = await createClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: portalUser } = await (supabase as any)
-    .from("portal_users")
-    .select("id")
-    .eq("auth_user_id", session.id)
-    .single();
-
-  const portalUserId = portalUser?.id;
+  // Use portalUserId from session (already fetched by getSession)
+  const portalUserId = session.portalUserId;
 
   if (!portalUserId) {
     return null;

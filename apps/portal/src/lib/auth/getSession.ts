@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 
@@ -65,7 +66,9 @@ export interface SessionUser {
  *
  * @returns SessionUser if authenticated, null otherwise
  */
-export async function getSession(): Promise<SessionUser | null> {
+export const getSession = cache(_getSessionImpl);
+
+async function _getSessionImpl(): Promise<SessionUser | null> {
   const supabase = await createClient();
 
   const {

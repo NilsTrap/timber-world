@@ -1,14 +1,14 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 
 /**
  * Get enabled modules for an organization
  *
- * Lightweight function to fetch which modules are enabled for a specific organization.
- * Used primarily for filtering navigation items in the sidebar.
+ * Wrapped with React.cache() to deduplicate within a single request.
  */
-export async function getOrgEnabledModules(
+export const getOrgEnabledModules = cache(async (
   organizationId: string | null
-): Promise<Set<string>> {
+): Promise<Set<string>> => {
   if (!organizationId) {
     return new Set();
   }
@@ -19,19 +19,14 @@ export async function getOrgEnabledModules(
 
   const { data: orgModules } = await client
     .from("organization_modules")
-    .select("module_code, enabled")
-    .eq("organization_id", organizationId);
+    .select("module_code")
+    .eq("organization_id", organizationId)
+    .eq("enabled", true);
 
-  const enabledModules = new Set<string>();
-
-  (orgModules || []).forEach((m: { module_code: string; enabled: boolean }) => {
-    if (m.enabled) {
-      enabledModules.add(m.module_code);
-    }
-  });
-
-  return enabledModules;
-}
+  return new Set(
+    (orgModules || []).map((m: { module_code: string }) => m.module_code)
+  );
+});
 
 /**
  * Check if an organization has a specific module enabled
@@ -48,11 +43,12 @@ export async function orgHasModule(
  * Get enabled modules for a user within an organization
  *
  * Returns the intersection of org-level and user-level enabled modules.
+ * Wrapped with React.cache() to deduplicate within a single request.
  */
-export async function getUserEnabledModules(
+export const getUserEnabledModules = cache(async (
   userId: string,
   organizationId: string | null
-): Promise<Set<string>> {
+): Promise<Set<string>> => {
   if (!organizationId || !userId) {
     return new Set();
   }
@@ -89,4 +85,4 @@ export async function getUserEnabledModules(
   });
 
   return effectiveModules;
-}
+});
