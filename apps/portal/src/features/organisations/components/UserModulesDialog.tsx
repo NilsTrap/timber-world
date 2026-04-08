@@ -99,8 +99,21 @@ export function UserModulesDialog({
       const next = new Set(prev);
       if (next.has(moduleCode)) {
         next.delete(moduleCode);
+        // If turning off the parent .view module, also turn off all sub-modules
+        if (moduleCode.endsWith(".view")) {
+          const prefix = moduleCode.split(".")[0] + ".";
+          for (const code of prev) {
+            if (code.startsWith(prefix)) next.delete(code);
+          }
+        }
       } else {
         next.add(moduleCode);
+        // If turning on a sub-module, also ensure the parent .view is on
+        const prefix = moduleCode.split(".")[0];
+        const parentView = prefix + ".view";
+        if (moduleCode !== parentView) {
+          next.add(parentView);
+        }
       }
       return next;
     });

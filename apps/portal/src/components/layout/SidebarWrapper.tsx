@@ -57,7 +57,13 @@ function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
 }
 
 /**
- * Filter nav items based on enabled modules
+ * Filter nav items based on enabled modules.
+ *
+ * A nav item is shown if:
+ * - It has no module requirement, OR
+ * - The exact module (e.g. "orders.view") is in the set, OR
+ * - Any module with the same prefix (e.g. "orders.create") is in the set
+ *   (so that sub-module access implies sidebar visibility)
  */
 function filterNavItemsByModules(
   items: ModuleNavItem[],
@@ -66,8 +72,14 @@ function filterNavItemsByModules(
   return items.filter((item) => {
     // No module requirement = always show
     if (!item.requiresModule) return true;
-    // Check if module is enabled
-    return enabledModules.has(item.requiresModule);
+    // Exact match
+    if (enabledModules.has(item.requiresModule)) return true;
+    // Prefix match: "orders.view" → check for any "orders.*" module
+    const prefix = item.requiresModule.split(".")[0] + ".";
+    for (const mod of enabledModules) {
+      if (mod.startsWith(prefix)) return true;
+    }
+    return false;
   });
 }
 
