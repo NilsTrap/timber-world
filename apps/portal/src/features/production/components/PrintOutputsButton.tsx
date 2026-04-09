@@ -68,7 +68,7 @@ export function PrintOutputsButton({
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[98vw] max-h-[90vh] overflow-auto w-fit min-w-[900px]">
+        <DialogContent className="max-w-[98vw] w-[98vw] max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>Print Production Outputs</DialogTitle>
           </DialogHeader>

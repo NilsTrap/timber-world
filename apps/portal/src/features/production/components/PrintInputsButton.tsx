@@ -35,7 +35,7 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-auto sm:max-w-fit">
+        <DialogContent className="max-w-[98vw] w-[98vw] max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>Print Input Packages</DialogTitle>
           </DialogHeader>
