@@ -66,6 +66,10 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
                   <th className="text-left py-2 px-2 font-semibold">Package</th>
                   <th className="text-left py-2 px-2 font-semibold">Product</th>
                   <th className="text-left py-2 px-2 font-semibold">Species</th>
+                  <th className="text-left py-2 px-2 font-semibold">Humidity</th>
+                  <th className="text-left py-2 px-2 font-semibold">Type</th>
+                  <th className="text-left py-2 px-2 font-semibold">Processing</th>
+                  <th className="text-left py-2 px-2 font-semibold">Quality</th>
                   <th className="text-left py-2 px-2 font-semibold">Dims (TxWxL)</th>
                   <th className="text-right py-2 px-2 font-semibold">Pieces</th>
                   <th className="text-right py-2 px-2 font-semibold">Vol m³</th>
@@ -80,6 +84,10 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
                     <td className="py-2 px-2 font-medium">{input.packageNumber}</td>
                     <td className="py-2 px-2">{input.productName || "-"}</td>
                     <td className="py-2 px-2">{input.woodSpecies || "-"}</td>
+                    <td className="py-2 px-2">{input.humidity || "-"}</td>
+                    <td className="py-2 px-2">{input.typeName || "-"}</td>
+                    <td className="py-2 px-2">{input.processing || "-"}</td>
+                    <td className="py-2 px-2">{input.quality || "-"}</td>
                     <td className="py-2 px-2">
                       {input.thickness && input.width && input.length
                         ? `${input.thickness}x${input.width}x${input.length}`
@@ -99,7 +107,7 @@ export function PrintInputsButton({ inputs, processName, productionDate }: Print
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-black font-bold">
-                  <td colSpan={6} className="py-2 px-2">Total</td>
+                  <td colSpan={10} className="py-2 px-2">Total</td>
                   <td className="py-2 px-2 text-right tabular-nums">
                     {inputs.reduce((sum, i) => sum + (i.piecesUsed ?? (parseInt(i.availablePieces || "0", 10) || 0)), 0)}
                   </td>

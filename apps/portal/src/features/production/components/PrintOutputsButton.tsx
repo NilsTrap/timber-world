@@ -96,6 +96,8 @@ export function PrintOutputsButton({
                   <th className="text-left py-2 px-2 font-semibold">Species</th>
                   <th className="text-left py-2 px-2 font-semibold">Humidity</th>
                   <th className="text-left py-2 px-2 font-semibold">Type</th>
+                  <th className="text-left py-2 px-2 font-semibold">Processing</th>
+                  <th className="text-left py-2 px-2 font-semibold">Quality</th>
                   <th className="text-left py-2 px-2 font-semibold">Dims (TxWxL)</th>
                   <th className="text-right py-2 px-2 font-semibold">Pieces</th>
                   <th className="text-right py-2 px-2 font-semibold">Vol m³</th>
@@ -110,6 +112,8 @@ export function PrintOutputsButton({
                     <td className="py-2 px-2">{row.woodSpecies}</td>
                     <td className="py-2 px-2">{row.humidity}</td>
                     <td className="py-2 px-2">{row.typeName}</td>
+                    <td className="py-2 px-2">{row.processing}</td>
+                    <td className="py-2 px-2">{row.quality}</td>
                     <td className="py-2 px-2">
                       {row.thickness !== "-" && row.width !== "-" && row.length !== "-"
                         ? `${row.thickness}x${row.width}x${row.length}`
@@ -124,7 +128,7 @@ export function PrintOutputsButton({
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-black font-bold">
-                  <td colSpan={7} className="py-2 px-2">Total</td>
+                  <td colSpan={9} className="py-2 px-2">Total</td>
                   <td className="py-2 px-2 text-right tabular-nums">{totalPieces}</td>
                   <td className="py-2 px-2 text-right tabular-nums">
                     {totalVolume.toFixed(3).replace(".", ",")}
