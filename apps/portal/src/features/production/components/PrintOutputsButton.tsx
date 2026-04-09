@@ -68,12 +68,12 @@ export function PrintOutputsButton({
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[98vw] w-[98vw] max-h-[90vh] overflow-auto">
+        <DialogContent className="max-w-[98vw] sm:max-w-[98vw] w-fit max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>Print Production Outputs</DialogTitle>
           </DialogHeader>
 
-          <div ref={contentRef} className="overflow-x-auto">
+          <div ref={contentRef}>
             <div className="header mb-6">
               <h1 className="text-xl font-bold">Production Outputs</h1>
               {processName && (
@@ -87,7 +87,7 @@ export function PrintOutputsButton({
               </p>
             </div>
 
-            <table className="text-sm border-collapse whitespace-nowrap w-full">
+            <table className="text-sm border-collapse whitespace-nowrap">
               <thead>
                 <tr className="border-b-2 border-black">
                   <th className="text-left py-2 px-2 font-semibold">#</th>
