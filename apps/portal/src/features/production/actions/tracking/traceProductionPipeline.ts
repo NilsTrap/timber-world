@@ -24,6 +24,12 @@ export interface PipelinePackage {
   quality: string | null;
   typeName: string | null;
   processing: string | null;
+  /** True when the package is in a pending outgoing shipment (on the way) */
+  isOnTheWay?: boolean;
+  /** True when the package has been delivered (shipment completed) */
+  isShipped?: boolean;
+  /** Shipment code if the package is assigned to a shipment */
+  shipmentCode?: string | null;
 }
 
 export interface PipelineStage {
@@ -47,6 +53,7 @@ export interface PipelineResult {
   seedPackages: PipelinePackage[];
   remainingPackages: PipelinePackage[];
   finalPackages: PipelinePackage[];
+  onTheWayPackages: PipelinePackage[];
   shippedPackages: PipelinePackage[];
 }
 
@@ -116,6 +123,7 @@ export async function traceProductionPipeline(
         seedPackages: [],
         remainingPackages: [],
         finalPackages: [],
+        onTheWayPackages: [],
         shippedPackages: [],
       },
     };
@@ -256,7 +264,7 @@ export async function traceProductionPipeline(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: outputInventory } = await (supabase as any)
           .from("inventory_packages")
-          .select("id, package_number, status, thickness, width, length, pieces, volume_m3, ref_product_names!inventory_packages_product_name_id_fkey(value), ref_wood_species!inventory_packages_wood_species_id_fkey(value), ref_quality!inventory_packages_quality_id_fkey(value), ref_types(value), ref_processing(value)")
+          .select("id, package_number, status, shipment_id, thickness, width, length, pieces, volume_m3, ref_product_names!inventory_packages_product_name_id_fkey(value), ref_wood_species!inventory_packages_wood_species_id_fkey(value), ref_quality!inventory_packages_quality_id_fkey(value), ref_types(value), ref_processing(value), shipments!inventory_packages_shipment_id_fkey(shipment_code, status)")
           .eq("production_entry_id", entryId);
 
         outputPackages = ((outputInventory ?? []) as any[]).map((pkg: any) => {
@@ -279,6 +287,8 @@ export async function traceProductionPipeline(
             quality: pkg.ref_quality?.value ?? null,
             typeName: pkg.ref_types?.value ?? null,
             processing: pkg.ref_processing?.value ?? null,
+            isOnTheWay: pkg.shipments?.status === "pending",
+            shipmentCode: pkg.shipments?.shipment_code ?? null,
           };
         });
 
@@ -394,9 +404,10 @@ export async function traceProductionPipeline(
     ? await fetchPackageDetails(supabase, finalPackageIds, allTrackedPackageIds)
     : [];
 
-  // Shipped packages = final packages with status containing "shipped" or that have an outgoing shipment
-  const shippedPackages = finalPackages.filter((p) => p.status === "shipped");
-  const nonShippedFinal = finalPackages.filter((p) => p.status !== "shipped");
+  // Split final packages into: shipped (delivered), on-the-way (pending shipment), and available (in warehouse)
+  const shippedPackages = finalPackages.filter((p) => p.isShipped);
+  const onTheWayPackages = finalPackages.filter((p) => !p.isShipped && p.isOnTheWay);
+  const availablePackages = finalPackages.filter((p) => !p.isShipped && !p.isOnTheWay);
 
   return {
     success: true,
@@ -404,7 +415,8 @@ export async function traceProductionPipeline(
       stages,
       seedPackages,
       remainingPackages,
-      finalPackages: nonShippedFinal,
+      finalPackages: availablePackages,
+      onTheWayPackages,
       shippedPackages,
     },
   };
@@ -423,7 +435,7 @@ async function fetchPackageDetails(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (supabase as any)
     .from("inventory_packages")
-    .select("id, package_number, status, thickness, width, length, pieces, volume_m3, ref_product_names!inventory_packages_product_name_id_fkey(value), ref_wood_species!inventory_packages_wood_species_id_fkey(value), ref_quality!inventory_packages_quality_id_fkey(value), ref_types(value), ref_processing(value)")
+    .select("id, package_number, status, shipment_id, thickness, width, length, pieces, volume_m3, ref_product_names!inventory_packages_product_name_id_fkey(value), ref_wood_species!inventory_packages_wood_species_id_fkey(value), ref_quality!inventory_packages_quality_id_fkey(value), ref_types(value), ref_processing(value), shipments!inventory_packages_shipment_id_fkey(shipment_code, status)")
     .in("id", packageIds);
 
   const packages = ((data ?? []) as any[]).map((pkg: any) => ({
@@ -441,6 +453,9 @@ async function fetchPackageDetails(
     quality: pkg.ref_quality?.value ?? null,
     typeName: pkg.ref_types?.value ?? null,
     processing: pkg.ref_processing?.value ?? null,
+    isOnTheWay: pkg.shipments?.status === "pending",
+    isShipped: pkg.shipments?.status === "completed" || pkg.status === "shipped",
+    shipmentCode: pkg.shipments?.shipment_code ?? null,
   }));
 
   // Restore original pieces/volume for consumed packages

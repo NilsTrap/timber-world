@@ -8,6 +8,7 @@ export { removeTrackingPackages } from "./removeTrackingPackages";
 export { getTrackingSetDetail } from "./getTrackingSetDetail";
 export type { TrackingSetDetail, TrackingSetPackage } from "./getTrackingSetDetail";
 export { traceProductionPipeline } from "./traceProductionPipeline";
+export { tracePackageHistory } from "./tracePackageHistory";
 export type {
   PipelinePackage,
   PipelineStage,

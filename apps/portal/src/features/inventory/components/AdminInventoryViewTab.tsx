@@ -5,6 +5,7 @@ import { DataEntryTable, Button, type ColumnDef, type DataEntryTableHandle, Tool
 import { X, MessageSquare, Truck } from "lucide-react";
 import { SummaryCards } from "@/features/shipments/components/SummaryCards";
 import { PrintInventoryButton } from "./PrintInventoryButton";
+import { PackageHistoryDialog } from "./PackageHistoryDialog";
 import type { EditablePackageItem } from "@/features/shipments/types";
 
 interface AdminInventoryViewTabProps {
@@ -183,6 +184,8 @@ export function AdminInventoryViewTab({ packages, initialFilters }: AdminInvento
     []
   );
 
+  const [selectedPackage, setSelectedPackage] = useState<{ id: string; number: string } | null>(null);
+
   const [displayedPackages, setDisplayedPackages] = useState<EditablePackageItem[]>(packages);
 
   const handleDisplayRowsChange = useCallback((rows: EditablePackageItem[]) => {
@@ -246,6 +249,13 @@ export function AdminInventoryViewTab({ packages, initialFilters }: AdminInvento
         onDisplayRowsChange={handleDisplayRowsChange}
         onFilterActiveChange={setHasActiveFilters}
         initialFilters={initialFilters}
+        onRowClick={(row) => setSelectedPackage({ id: row.id, number: row.packageNumber })}
+      />
+
+      <PackageHistoryDialog
+        packageId={selectedPackage?.id ?? null}
+        packageNumber={selectedPackage?.number ?? null}
+        onClose={() => setSelectedPackage(null)}
       />
     </div>
   );

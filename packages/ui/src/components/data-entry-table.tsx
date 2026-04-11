@@ -145,6 +145,10 @@ export interface DataEntryTableProps<TRow> {
   isRowDisabled?: (row: TRow) => boolean;
   /** Tooltip text to show for disabled rows. Receives row for customization. */
   getDisabledTooltip?: (row: TRow) => string;
+
+  // ─── Row Click ──────────────────────────────────────────────────────
+  /** Called when a row is clicked. Useful for opening detail dialogs. */
+  onRowClick?: (row: TRow) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -199,6 +203,7 @@ function DataEntryTableInner<TRow>(
     initialFilters,
     isRowDisabled,
     getDisabledTooltip,
+    onRowClick,
   }: DataEntryTableProps<TRow>,
   ref: React.ForwardedRef<DataEntryTableHandle>
 ) {
@@ -995,8 +1000,9 @@ function DataEntryTableInner<TRow>(
               return (
               <TableRow
                 key={getRowKey(row)}
-                className={`${getRowClassName?.(row) ?? ""} ${rowDisabled ? "bg-muted/30" : ""}`}
+                className={`${getRowClassName?.(row) ?? ""} ${rowDisabled ? "bg-muted/30" : ""} ${onRowClick ? "cursor-pointer" : ""}`}
                 title={disabledTooltip}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {columns.map((col) => {
                   const isCollapsed = col.collapsible && collapsedColumns.has(col.key);

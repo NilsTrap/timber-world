@@ -406,7 +406,7 @@ export function TrackingSetDetailPage() {
         }
         const outsidePackages = [...outsideMap.values()];
         const allInputs = [...pipeline.seedPackages, ...outsidePackages];
-        const allOutput = [...pipeline.finalPackages, ...pipeline.shippedPackages];
+        const allOutput = [...pipeline.finalPackages, ...pipeline.onTheWayPackages, ...pipeline.shippedPackages];
         const inputVolume = allInputs.reduce((s, p) => s + (p.volumeM3 ?? 0), 0);
         const outputVolume = allOutput.reduce((s, p) => s + (p.volumeM3 ?? 0), 0);
         const outcomePercentage = inputVolume > 0 ? (outputVolume / inputVolume) * 100 : 0;
@@ -430,6 +430,9 @@ export function TrackingSetDetailPage() {
                 {outsidePackages.length > 0 && (
                   <span className="italic">+{outsidePackages.length} outside</span>
                 )}
+                {pipeline.onTheWayPackages.length > 0 && (
+                  <span className="italic text-amber-600">{pipeline.onTheWayPackages.length} on the way</span>
+                )}
                 {pipeline.shippedPackages.length > 0 && (
                   <span className="italic">{pipeline.shippedPackages.length} shipped</span>
                 )}
@@ -440,9 +443,10 @@ export function TrackingSetDetailPage() {
                 <div className="pt-3">
                   <InputOutputTable
                     sections={[
-                      { label: "Tracked Inputs", packages: pipeline.seedPackages, color: "bg-blue-50/50" },
-                      ...(outsidePackages.length > 0 ? [{ label: "Outside Inputs", packages: outsidePackages, color: "bg-orange-50/50" }] : []),
-                      { label: "Output — Available", packages: pipeline.finalPackages, color: "bg-green-50/50" },
+                      { label: "Tracked Inputs", packages: pipeline.seedPackages, color: "bg-blue-50/50", showShipmentStatus: false },
+                      ...(outsidePackages.length > 0 ? [{ label: "Outside Inputs", packages: outsidePackages, color: "bg-orange-50/50", showShipmentStatus: false }] : []),
+                      { label: "Output — In Warehouse", packages: pipeline.finalPackages, color: "bg-green-50/50" },
+                      { label: "Output — On The Way", packages: pipeline.onTheWayPackages, color: "bg-amber-50/50" },
                       { label: "Output — Shipped", packages: pipeline.shippedPackages, color: "bg-purple-50/50" },
                     ]}
                   />

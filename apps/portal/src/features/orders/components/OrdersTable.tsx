@@ -734,7 +734,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
           </Button>
         </div>
       ) : (<>
-        <div ref={scrollRef} className="rounded-lg border max-h-[calc(100vh-12rem)] overflow-auto">
+        <div ref={scrollRef} className="rounded-lg border max-h-[calc(100vh-10rem)] overflow-auto">
           <Table className="w-auto table-fixed">
             <TableHeader className="bg-card sticky top-0 z-10 [&_tr:first-child]:rounded-t-lg [&_tr:first-child_th:first-child]:rounded-tl-lg [&_tr:first-child_th:last-child]:rounded-tr-lg">
               <TableRow>
@@ -1619,7 +1619,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
               const fmtPct = (v: number) => v !== 0 ? `${v.toFixed(1)}%` : "-";
               const color = (v: number) => v > 0 ? "text-green-600" : v < 0 ? "text-red-600" : "";
               return (
-                <tfoot className="bg-white dark:bg-gray-950 sticky bottom-0 border-t font-medium text-sm">
+                <tfoot className="bg-white dark:bg-gray-950 sticky bottom-0 z-10 border-t font-medium text-sm shadow-[0_-2px_4px_rgba(0,0,0,0.05)]">
                   <tr>
                     {leadingCount > 0 && <td className="px-2 py-2" colSpan={leadingCount}>Total</td>}
                     {show("treads") && <td className="px-2 py-2 text-right">{fmtInt(s.treads)}</td>}

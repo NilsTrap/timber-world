@@ -1,5 +1,5 @@
 # generated: 2026-01-22
-# updated: 2026-04-06
+# updated: 2026-04-11
 # project: Timber-World
 # project_key: platform
 # tracking_system: file-system
@@ -20,7 +20,7 @@
 #   - done: Story completed
 
 generated: 2026-01-22
-updated: 2026-04-06
+updated: 2026-04-11
 project: Timber-World
 project_key: platform
 tracking_system: file-system
@@ -140,6 +140,19 @@ development_status:
   # - Sub-module pattern (orders.view, orders.pricing, etc.)
   # - Migration: dropped roles/user_roles/user_permission_overrides tables
   # - Renamed features → modules everywhere
+
+  # Production Tracking Enhancements (2026-04-11)
+  epic-production-tracking-enhancements: done
+  # - Shipped/on-the-way/in-warehouse status markers on tracking summary
+  # - Shipment status detection via shipments FK join (not package status)
+  # - Per-process missing pieces calculation (simple for Planing, strip-to-panel for Gluing)
+  # - Print dialog auto-sizing (w-fit with responsive max-width)
+  # - Package production history dialog: click any inventory package to trace backwards
+  #   through all production processes (origin → intermediate → final output)
+  # - DataEntryTable onRowClick support for inventory tables
+  # - Highlighted target package in history view (yellow background)
+  # - Consumed output volume restoration in backward trace (matches forward pipeline logic)
+  # - Orders analytics footer z-index and shadow fix
 
 # ============================================================
 # PHASE 3: Planned Features

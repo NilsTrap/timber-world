@@ -5,6 +5,7 @@ import { DataEntryTable, Button, type ColumnDef, type DataEntryTableHandle, Tool
 import { X, FileText, MessageSquare, Truck } from "lucide-react";
 import { SummaryCards } from "@/features/shipments/components/SummaryCards";
 import { PrintInventoryButton } from "./PrintInventoryButton";
+import { PackageHistoryDialog } from "./PackageHistoryDialog";
 import type { PackageListItem } from "../types";
 import type { DraftPackageInfo } from "@/features/production/actions";
 import type { ShipmentDraftPackageInfo } from "@/features/shipments/actions";
@@ -219,6 +220,8 @@ export function OrgUserInventory({ packages, packagesInDrafts = [], packagesInSh
     [draftsMap, shipmentDraftsMap]
   );
 
+  const [selectedPackage, setSelectedPackage] = useState<{ id: string; number: string } | null>(null);
+
   const [displayedPackages, setDisplayedPackages] = useState<PackageListItem[]>(packages);
 
   const handleDisplayRowsChange = useCallback((rows: PackageListItem[]) => {
@@ -286,6 +289,13 @@ export function OrgUserInventory({ packages, packagesInDrafts = [], packagesInSh
           if (shipmentDraftsMap.has(row.id)) return "bg-blue-50";
           return undefined;
         }}
+        onRowClick={(row) => setSelectedPackage({ id: row.id, number: row.packageNumber })}
+      />
+
+      <PackageHistoryDialog
+        packageId={selectedPackage?.id ?? null}
+        packageNumber={selectedPackage?.number ?? null}
+        onClose={() => setSelectedPackage(null)}
       />
     </div>
   );
