@@ -121,6 +121,11 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
     setIsLoading(false);
   }, [orderId, router]);
 
+  const refreshOrderFiles = useCallback(async () => {
+    const result = await getOrderFiles(orderId);
+    if (result.success) setOrderFiles(result.data);
+  }, [orderId]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -177,7 +182,7 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
                 </span>
               </div>
               <div style={{ position: "absolute", left: "65%", top: 0 }}>
-                <PdfThumbnail file={thumbnailFile} height={140} />
+                <PdfThumbnail key={thumbnailFile.id} file={thumbnailFile} height={140} />
               </div>
             </>
           );
@@ -230,6 +235,7 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
         orderId={orderId}
         showCustomer={tab === "list" || tab === "sales"}
         showProduction={tab === "production" || tab === "sales"}
+        onFilesChanged={refreshOrderFiles}
       />
 
       {/* Activity Log */}

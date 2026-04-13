@@ -268,9 +268,10 @@ interface OrderFilesSectionProps {
   orderId: string;
   showCustomer: boolean;
   showProduction: boolean;
+  onFilesChanged?: () => void;
 }
 
-export function OrderFilesSection({ orderId, showCustomer, showProduction }: OrderFilesSectionProps) {
+export function OrderFilesSection({ orderId, showCustomer, showProduction, onFilesChanged }: OrderFilesSectionProps) {
   const [files, setFiles] = useState<OrderFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewFile, setPreviewFile] = useState<OrderFile | null>(null);
@@ -283,7 +284,8 @@ export function OrderFilesSection({ orderId, showCustomer, showProduction }: Ord
       setFiles(result.data);
     }
     setLoading(false);
-  }, [orderId]);
+    onFilesChanged?.();
+  }, [orderId, onFilesChanged]);
 
   useEffect(() => {
     loadFiles();
@@ -338,7 +340,7 @@ export function OrderFilesSection({ orderId, showCustomer, showProduction }: Ord
               files={customerFiles}
               onRefresh={loadFiles}
               onPreviewPdf={handlePreviewPdf}
-              showThumbnailToggle
+              showThumbnailToggle={!showProduction}
               copyToCategory={showProduction ? "production" : undefined}
             />
           </div>
@@ -352,7 +354,7 @@ export function OrderFilesSection({ orderId, showCustomer, showProduction }: Ord
               files={productionFiles}
               onRefresh={loadFiles}
               onPreviewPdf={handlePreviewPdf}
-              showThumbnailToggle
+              showThumbnailToggle={showCustomer}
             />
           </div>
         )}

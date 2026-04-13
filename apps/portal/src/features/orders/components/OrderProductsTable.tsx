@@ -158,7 +158,7 @@ export function OrderProductsTable({
         key: "riser",
         label: ["Riser", "mm"],
         type: "text",
-        placeholder: "mm",
+        placeholder: "-",
         width: "w-[4rem]",
         isNumeric: true,
         navigable: true,

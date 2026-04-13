@@ -4,11 +4,10 @@ import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImper
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Pencil,
+  ChevronRight,
   Plus,
   Trash2,
   Loader2,
-  Check,
   X,
 } from "lucide-react";
 import {
@@ -122,14 +121,12 @@ function EditableCell({
   type = "text",
   placeholder,
   onSave,
-  editing: editMode,
   align,
 }: {
   value: string;
   type?: "text" | "date";
   placeholder?: string;
   onSave: (value: string) => void;
-  editing: boolean;
   align?: "left" | "right";
 }) {
   const [draft, setDraft] = useState(value);
@@ -141,11 +138,11 @@ function EditableCell({
   }, [value]);
 
   useEffect(() => {
-    if (active || editMode) {
+    if (active) {
       inputRef.current?.focus();
       if (type === "text") inputRef.current?.select();
     }
-  }, [active, editMode, type]);
+  }, [active, type]);
 
   const commit = (deactivate = true) => {
     if (deactivate) setActive(false);
@@ -163,11 +160,11 @@ function EditableCell({
     }
   };
 
-  if (!editMode && !active) {
+  if (!active) {
     const display = type === "date" ? formatDate(value || null) : (value || placeholder || "-");
     return (
       <span
-        className={`cursor-text rounded py-0.5 block w-full min-h-[1.75rem] flex items-center hover:bg-muted/60 transition-colors ${!value ? "text-muted-foreground" : ""}${align === "right" ? " justify-end" : ""}`}
+        className={`cursor-text rounded py-0.5 px-0.5 block w-full min-h-[1.75rem] flex items-center hover:bg-muted/60 hover:ring-1 hover:ring-muted-foreground/20 transition-colors ${!value ? "text-muted-foreground" : ""}${align === "right" ? " justify-end" : ""}`}
         onClick={(e) => { e.stopPropagation(); setActive(true); }}
       >
         {display}
@@ -208,7 +205,6 @@ function EditableSelectCell({
   displayValue: string;
   options: OrganisationOption[];
   onSave: (value: string) => void;
-  editing?: boolean;
 }) {
   const [active, setActive] = useState(false);
   const selectRef = useRef<HTMLSelectElement>(null);
@@ -220,7 +216,7 @@ function EditableSelectCell({
   if (!active) {
     return (
       <span
-        className={`cursor-text rounded py-0.5 block w-full min-h-[1.75rem] flex items-center hover:bg-muted/60 transition-colors line-clamp-2 ${!displayValue ? "text-muted-foreground" : ""}`}
+        className={`cursor-text rounded py-0.5 px-0.5 block w-full min-h-[1.75rem] flex items-center hover:bg-muted/60 hover:ring-1 hover:ring-muted-foreground/20 transition-colors line-clamp-2 ${!displayValue ? "text-muted-foreground" : ""}`}
         onClick={(e) => { e.stopPropagation(); setActive(true); }}
       >
         {displayValue || "-"}
@@ -273,9 +269,6 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
   const [isLoading, setIsLoading] = useState(true);
   const [organisations, setOrganisations] = useState<OrganisationOption[]>([]);
   const scrollRef = useScrollRestore(`orders-${tab}-scroll`);
-
-  // Edit mode — which order row is being edited
-  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
 
   // Delete confirmation state
   const [deleteOrderItem, setDeleteOrderItem] = useState<Order | null>(null);
@@ -642,8 +635,6 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
     });
     if (result.success) {
       await loadOrders();
-      // Auto-enter edit mode for the new order
-      setEditingOrderId(result.data.id);
     } else {
       toast.error(result.error);
     }
@@ -741,6 +732,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
           <Table className="w-auto table-fixed">
             <TableHeader className="bg-card sticky top-0 z-10 [&_tr:first-child]:rounded-t-lg [&_tr:first-child_th:first-child]:rounded-tl-lg [&_tr:first-child_th:last-child]:rounded-tr-lg">
               <TableRow>
+                <TableHead className="w-6 px-0" />
                 {show("customer") && (
                 <TableHead className="text-sm px-2 w-28 whitespace-nowrap">
                   {headerWithMenu("customer", "Customer")}
@@ -1018,23 +1010,30 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {headerWithMenu("status", "Status")}
                 </TableHead>
                 )}
-                <TableHead className="w-16 px-0" />
+                <TableHead className="w-8 px-0" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayOrders.map((order) => {
-                const isEditing = editingOrderId === order.id;
-                return (
+              {displayOrders.map((order) => (
                 <TableRow
                   key={order.id}
                   className="hover:bg-accent/50 transition-colors cursor-pointer"
                   onClick={() => router.push(tab === "list" ? `/orders/${order.id}` : `/orders/${order.id}?tab=${tab}`)}
                 >
+                  <TableCell className="px-0 py-0 w-6">
+                    <button
+                      className="flex items-center justify-center w-6 h-full text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={(e) => { e.stopPropagation(); router.push(tab === "list" ? `/orders/${order.id}` : `/orders/${order.id}?tab=${tab}`); }}
+                      title="Open order"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </TableCell>
                   {show("customer") && (
                   <TableCell className="px-2 text-sm">
                     {canSelectCustomer ? (
                       <EditableSelectCell
-                        value={order.customerOrganisationId}
+                        value={order.customerOrganisationId || ""}
                         displayValue={order.customerOrganisationName || "-"}
                         options={organisations}
                         onSave={(val) => saveField(order.id, { customerOrganisationId: val })}
@@ -1083,7 +1082,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.dateReceived}
                       type="date"
                       onSave={(val) => saveField(order.id, { dateReceived: val })}
-                      editing={isEditing}
+
                     />
                     )}
                   </TableCell>
@@ -1098,7 +1097,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       type="date"
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { dateLoaded: val || null })}
-                      editing={isEditing}
+
                     />
                     )}
                   </TableCell>
@@ -1112,7 +1111,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.name}
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { name: val })}
-                      editing={isEditing}
+
                     />
                     )}
                   </TableCell>
@@ -1126,7 +1125,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.projectNumber || ""}
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { projectNumber: val || null })}
-                      editing={isEditing}
+
                     />
                     )}
                   </TableCell>
@@ -1143,7 +1142,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.treadLength || ""}
                       placeholder="0"
                       onSave={(val) => saveField(order.id, { treadLength: val || null })}
-                      editing={isEditing}
+
                       align="right"
                     />
                     )}
@@ -1168,7 +1167,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       type="date"
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { plannedDate: val || null })}
-                      editing={isEditing}
+
                     />
                   </TableCell>
                   )}
@@ -1238,7 +1237,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.treadM3 > 0 ? order.treadM3.toFixed(4) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionField(order.id, "treadM3", val)}
-                      editing={isEditing}
+
                       align="right"
                     />
                   </TableCell>
@@ -1249,7 +1248,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.winderM3 > 0 ? order.winderM3.toFixed(4) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionField(order.id, "winderM3", val)}
-                      editing={isEditing}
+
                       align="right"
                     />
                   </TableCell>
@@ -1260,7 +1259,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.quarterM3 > 0 ? order.quarterM3.toFixed(4) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionField(order.id, "quarterM3", val)}
-                      editing={isEditing}
+
                       align="right"
                     />
                   </TableCell>
@@ -1276,7 +1275,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.usedMaterialM3 > 0 ? order.usedMaterialM3.toFixed(4) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionField(order.id, "usedMaterialM3", val)}
-                      editing={isEditing}
+
                       align="right"
                     />
                   </TableCell>
@@ -1297,7 +1296,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.productionMaterial > 0 ? order.productionMaterial.toFixed(2) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionCostField(order.id, "productionMaterial", val)}
-                      editing={isEditing}
+
                       align="right"
                     />
                   </TableCell>
@@ -1308,7 +1307,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.productionFinishing > 0 ? order.productionFinishing.toFixed(2) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionCostField(order.id, "productionFinishing", val)}
-                      editing={isEditing}
+
                       align="right"
                     />
                   </TableCell>
@@ -1324,7 +1323,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.productionInvoiceNumber || ""}
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { productionInvoiceNumber: val || null })}
-                      editing={isEditing}
+
                     />
                   </TableCell>
                   )}
@@ -1335,7 +1334,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       type="date"
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { productionPaymentDate: val || null })}
-                      editing={isEditing}
+
                     />
                   </TableCell>
                   )}
@@ -1345,7 +1344,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.woodArt > 0 ? order.woodArt.toFixed(2) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionCostField(order.id, "woodArt", val)}
-                      editing={isEditing}
+
                       align="right"
                     />
                   </TableCell>
@@ -1356,7 +1355,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.woodArtCnc > 0 ? order.woodArtCnc.toFixed(2) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionCostField(order.id, "woodArtCnc", val)}
-                      editing={isEditing}
+
                       align="right"
                     />
                   </TableCell>
@@ -1372,7 +1371,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.woodArtInvoiceNumber || ""}
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { woodArtInvoiceNumber: val || null })}
-                      editing={isEditing}
+
                     />
                   </TableCell>
                   )}
@@ -1383,7 +1382,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       type="date"
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { woodArtPaymentDate: val || null })}
-                      editing={isEditing}
+
                     />
                   </TableCell>
                   )}
@@ -1393,7 +1392,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.advanceInvoiceNumber || ""}
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { advanceInvoiceNumber: val || null })}
-                      editing={isEditing}
+
                     />
                   </TableCell>
                   )}
@@ -1403,7 +1402,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.invoiceNumber || ""}
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { invoiceNumber: val || null })}
-                      editing={isEditing}
+
                     />
                   </TableCell>
                   )}
@@ -1413,7 +1412,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.packageNumber || ""}
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { packageNumber: val || null })}
-                      editing={isEditing}
+
                     />
                   </TableCell>
                   )}
@@ -1423,7 +1422,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.transportInvoiceNumber || ""}
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { transportInvoiceNumber: val || null })}
-                      editing={isEditing}
+
                     />
                   </TableCell>
                   )}
@@ -1433,7 +1432,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       value={order.transportPrice || ""}
                       placeholder="-"
                       onSave={(val) => saveField(order.id, { transportPrice: val || null })}
-                      editing={isEditing}
+
                     />
                   </TableCell>
                   )}
@@ -1600,28 +1599,17 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   </TableCell>
                   )}
                   <TableCell className="px-0">
-                    <div className="flex items-center">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={(e) => { e.stopPropagation(); setEditingOrderId(isEditing ? null : order.id); }}
-                        aria-label={isEditing ? "Done editing" : "Edit order"}
-                      >
-                        {isEditing ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={(e) => { e.stopPropagation(); handleDelete(order); }}
-                        aria-label={`Delete ${order.name}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={(e) => { e.stopPropagation(); handleDelete(order); }}
+                      aria-label={`Delete ${order.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
-                );
-              })}
+              ))}
             </TableBody>
             {/* Analytics totals footer */}
             {analyticsSummary && displayOrders.length > 0 && (() => {
@@ -1636,6 +1624,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
               return (
                 <tfoot className="bg-white dark:bg-gray-950 sticky bottom-0 z-10 border-t font-medium text-sm shadow-[0_-2px_4px_rgba(0,0,0,0.05)]">
                   <tr>
+                    <td className="px-0" />
                     {leadingCount > 0 && <td className="px-2 py-2" colSpan={leadingCount}>Total</td>}
                     {show("treads") && <td className="px-2 py-2 text-right">{fmtInt(s.treads)}</td>}
                     {show("winders") && <td className="px-2 py-2 text-right">{fmtInt(s.winders)}</td>}
