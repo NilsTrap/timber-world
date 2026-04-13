@@ -1,5 +1,5 @@
 # generated: 2026-01-22
-# updated: 2026-04-11
+# updated: 2026-04-13
 # project: Timber-World
 # project_key: platform
 # tracking_system: file-system
@@ -20,7 +20,7 @@
 #   - done: Story completed
 
 generated: 2026-01-22
-updated: 2026-04-11
+updated: 2026-04-13
 project: Timber-World
 project_key: platform
 tracking_system: file-system
@@ -125,6 +125,11 @@ development_status:
   # - Order products with staircase code linking
   # - Order packages with pricing (piece, m3, m2)
   # - Per-tab ColumnHeaderMenu filters with clear button
+  # - Order file management: upload/download/delete/preview per category (customer/production) (2026-04-13)
+  # - Copy customer files to production with optional PDF logo/title block removal (pdf-lib)
+  # - Per-category PDF thumbnails: customer thumbnail on list tab, production on sales/production tabs
+  # - Order activity log with tab-scoped entries
+  # - Default producer set to Wood Art for all orders
 
   # UK Staircase Pricing
   epic-uk-staircase-pricing: done
@@ -140,6 +145,17 @@ development_status:
   # - Sub-module pattern (orders.view, orders.pricing, etc.)
   # - Migration: dropped roles/user_roles/user_permission_overrides tables
   # - Renamed features → modules everywhere
+
+  # Organisation Enhancements (2026-04-13)
+  epic-organisation-enhancements: done
+  # - Bank details fields (bank_name, iban, swift)
+  # - Contact person fields (contact_name, contact_email, contact_phone)
+  # - Inventory sort by dimensions (thickness/width/length/pieces) instead of org/shipment
+
+  # Shipment Bug Fixes (2026-04-13)
+  epic-shipment-fixes: done
+  # - Fix ambiguous FK join in pallet assignment (source_shipment_id caused PostgREST error)
+  # - Fill gaps in pallet numbering when pallets are deleted (use first available number)
 
   # Production Tracking Enhancements (2026-04-11)
   epic-production-tracking-enhancements: done
