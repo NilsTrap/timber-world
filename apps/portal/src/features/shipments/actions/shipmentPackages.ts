@@ -112,16 +112,14 @@ export async function addPackagesToShipment(
     // If source_shipment_id is not set and package has a current shipment, preserve it
     const sourceShipmentId = currentPkg?.source_shipment_id || currentPkg?.shipment_id || null;
 
-    // Build update payload - only set package_sequence for non-production packages
-    // Production packages have a unique constraint on (production_entry_id, package_sequence)
+    // Build update payload - always set package_sequence for the new shipment
+    // The shipment_seq unique constraint is on (shipment_id, package_sequence)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updatePayload: any = {
       shipment_id: shipmentId,
       source_shipment_id: sourceShipmentId,
+      package_sequence: nextSequence,
     };
-    if (!currentPkg?.production_entry_id) {
-      updatePayload.package_sequence = nextSequence;
-    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: updated, error: updateError } = await (supabase as any)
