@@ -75,17 +75,32 @@ export async function addPackagesToShipment(
     return { success: false, error: "No valid packages to add", code: "NO_VALID_PACKAGES" };
   }
 
-  // Get current max sequence in shipment
+  // Get all packages already in this shipment
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: maxSeqData } = await (supabase as any)
+  const { data: existingPkgs } = await (supabase as any)
     .from("inventory_packages")
-    .select("package_sequence")
-    .eq("shipment_id", shipmentId)
-    .order("package_sequence", { ascending: false })
-    .limit(1)
-    .single();
+    .select("id, package_sequence")
+    .eq("shipment_id", shipmentId);
 
-  let nextSequence = (maxSeqData?.package_sequence ?? 0) + 1;
+  const alreadyInShipment = new Set(
+    (existingPkgs ?? []).map((p: { id: string }) => p.id)
+  );
+  const maxSeq = (existingPkgs ?? []).reduce(
+    (max: number, p: { package_sequence: number | null }) => Math.max(max, p.package_sequence ?? 0), 0
+  );
+  let nextSequence = maxSeq + 1;
+
+  // Fix any existing packages with NULL sequences (from previous bugs)
+  for (const pkg of (existingPkgs ?? []) as { id: string; package_sequence: number | null }[]) {
+    if (pkg.package_sequence === null) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from("inventory_packages")
+        .update({ package_sequence: nextSequence })
+        .eq("id", pkg.id);
+      nextSequence++;
+    }
+  }
 
   // Update packages to link to this shipment
   // For inter-org shipments, we're essentially "marking" which packages are part of the shipment
@@ -95,6 +110,12 @@ export async function addPackagesToShipment(
   const errors: string[] = [];
 
   for (const pkgId of validPackageIds) {
+    // Skip packages already in this shipment
+    if (alreadyInShipment.has(pkgId)) {
+      addedCount++;
+      continue;
+    }
+
     // Get the package's current state to preserve source and check production link
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: currentPkg, error: fetchError } = await (supabase as any)
