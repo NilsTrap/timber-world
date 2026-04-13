@@ -45,17 +45,17 @@ export async function createPallet(
     return { success: false, error: "Can only add pallets to draft shipments", code: "NOT_DRAFT" };
   }
 
-  // Get the next pallet number
+  // Get the first available pallet number (fills gaps from deleted pallets)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: maxPallet } = await (supabase as any)
+  const { data: existingPallets } = await (supabase as any)
     .from("shipment_pallets")
     .select("pallet_number")
     .eq("shipment_id", shipmentId)
-    .order("pallet_number", { ascending: false })
-    .limit(1)
-    .single();
+    .order("pallet_number", { ascending: true });
 
-  const nextPalletNumber = (maxPallet?.pallet_number ?? 0) + 1;
+  const usedNumbers = new Set((existingPallets ?? []).map((p: { pallet_number: number }) => p.pallet_number));
+  let nextPalletNumber = 1;
+  while (usedNumbers.has(nextPalletNumber)) nextPalletNumber++;
 
   // Create the pallet
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
