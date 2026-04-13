@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Allow larger server action payloads for file uploads (default is 1MB)
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "25mb",
+    },
+  },
   // Use .nosync suffix locally to prevent iCloud sync, but use .next on Vercel
   distDir: process.env.VERCEL ? ".next" : ".next.nosync",
   // Important for monorepo: transpile workspace packages

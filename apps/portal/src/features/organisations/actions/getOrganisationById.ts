@@ -54,7 +54,7 @@ export async function getOrganisationById(
   // 4. Fetch organisation
   const { data, error } = await client
     .from("organisations")
-    .select("id, code, name, is_active, is_external, legal_address, vat_number, registration_number, country, logo_url, created_at, updated_at")
+    .select("id, code, name, is_active, is_external, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, logo_url, created_at, updated_at")
     .eq("id", id)
     .single();
 
@@ -107,6 +107,12 @@ export async function getOrganisationById(
     vatNumber: (data.vat_number as string | null) ?? null,
     registrationNumber: (data.registration_number as string | null) ?? null,
     country: (data.country as string | null) ?? null,
+    phone: (data.phone as string | null) ?? null,
+    email: (data.email as string | null) ?? null,
+    website: (data.website as string | null) ?? null,
+    bankName: (data.bank_name as string | null) ?? null,
+    bankAccountNumber: (data.bank_account_number as string | null) ?? null,
+    bankSwiftCode: (data.bank_swift_code as string | null) ?? null,
     logoUrl: (data.logo_url as string | null) ?? null,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,

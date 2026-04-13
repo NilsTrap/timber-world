@@ -21,6 +21,12 @@ export async function updateOrganisation(
     vatNumber?: string | null;
     registrationNumber?: string | null;
     country?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    website?: string | null;
+    bankName?: string | null;
+    bankAccountNumber?: string | null;
+    bankSwiftCode?: string | null;
   }
 ): Promise<ActionResult<Organisation>> {
   // 1. Check authentication
@@ -81,13 +87,31 @@ export async function updateOrganisation(
   if ("country" in input) {
     updatePayload.country = input.country ?? null;
   }
+  if ("phone" in input) {
+    updatePayload.phone = input.phone ?? null;
+  }
+  if ("email" in input) {
+    updatePayload.email = input.email ?? null;
+  }
+  if ("website" in input) {
+    updatePayload.website = input.website ?? null;
+  }
+  if ("bankName" in input) {
+    updatePayload.bank_name = input.bankName ?? null;
+  }
+  if ("bankAccountNumber" in input) {
+    updatePayload.bank_account_number = input.bankAccountNumber ?? null;
+  }
+  if ("bankSwiftCode" in input) {
+    updatePayload.bank_swift_code = input.bankSwiftCode ?? null;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("organisations")
     .update(updatePayload)
     .eq("id", id)
-    .select("id, code, name, is_active, is_external, legal_address, vat_number, registration_number, country, logo_url, created_at, updated_at")
+    .select("id, code, name, is_active, is_external, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, logo_url, created_at, updated_at")
     .single();
 
   if (error) {
@@ -118,6 +142,12 @@ export async function updateOrganisation(
     vatNumber: (data.vat_number as string | null) ?? null,
     registrationNumber: (data.registration_number as string | null) ?? null,
     country: (data.country as string | null) ?? null,
+    phone: (data.phone as string | null) ?? null,
+    email: (data.email as string | null) ?? null,
+    website: (data.website as string | null) ?? null,
+    bankName: (data.bank_name as string | null) ?? null,
+    bankAccountNumber: (data.bank_account_number as string | null) ?? null,
+    bankSwiftCode: (data.bank_swift_code as string | null) ?? null,
     logoUrl: (data.logo_url as string | null) ?? null,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,

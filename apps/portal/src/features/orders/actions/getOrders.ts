@@ -15,6 +15,8 @@ import type { Order, ActionResult } from "../types";
  */
 export async function getOrders(options?: {
   includeCompleted?: boolean;
+  /** Filter file counts by category. Omit for all files. */
+  fileCountCategory?: "customer" | "production";
 }): Promise<ActionResult<Order[]>> {
   // 1. Check authentication
   const session = await getSession();
@@ -177,6 +179,29 @@ export async function getOrders(options?: {
         const entryId = inp.production_entry_id as string;
         const vol = parseFloat(inp.volume_m3) || 0;
         inputsByEntryId[entryId] = (inputsByEntryId[entryId] || 0) + vol;
+      }
+    }
+  }
+
+  // 6b. Batch-fetch file counts per order (optionally filtered by category)
+  const orderIds = (data || []).map((row: { id: string }) => row.id);
+  const fileCountMap = new Map<string, number>();
+  if (orderIds.length > 0) {
+    let fileQuery = client
+      .from("order_files")
+      .select("order_id")
+      .in("order_id", orderIds);
+
+    if (options?.fileCountCategory) {
+      fileQuery = fileQuery.eq("category", options.fileCountCategory);
+    }
+
+    const { data: fileCounts } = await fileQuery;
+
+    if (fileCounts) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const row of fileCounts as any[]) {
+        fileCountMap.set(row.order_id, (fileCountMap.get(row.order_id) ?? 0) + 1);
       }
     }
   }
@@ -369,6 +394,7 @@ export async function getOrders(options?: {
     createdByName: row.portal_users?.name as string | undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
+    fileCount: fileCountMap.get(row.id as string) ?? 0,
   };
   });
 

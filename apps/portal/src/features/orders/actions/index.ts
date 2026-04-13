@@ -11,3 +11,8 @@ export { getCustomerOptions } from "./getCustomerOptions";
 export { getStaircaseCodes } from "./getStaircaseCodes";
 export type { StaircaseCode } from "./getStaircaseCodes";
 export { saveOrderProducts } from "./saveOrderProducts";
+export { getOrderFiles } from "./getOrderFiles";
+export { uploadOrderFile } from "./uploadOrderFile";
+export { deleteOrderFile } from "./deleteOrderFile";
+export { getOrderFileUrl } from "./getOrderFileUrl";
+export { setOrderFileThumbnail } from "./setOrderFileThumbnail";

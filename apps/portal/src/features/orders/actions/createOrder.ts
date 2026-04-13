@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import { createOrderSchema } from "../schemas";
 import type { Order, ActionResult } from "../types";
+import { logOrderActivity } from "./logOrderActivity";
 
 /**
  * Create Order
@@ -231,7 +232,10 @@ export async function createOrder(input: {
     createdBy: data.created_by as string | null,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
+    fileCount: 0,
   };
+
+  await logOrderActivity(order.id, session.portalUserId, "created", `Order ${order.name} created`, "list");
 
   return {
     success: true,

@@ -95,12 +95,13 @@ export type OrderColumn =
   | "plMaterials"
   | "plTotal"
   | "plPercentFromInvoice"
+  | "files"
   | "status";
 
 /** All columns shown by default */
 const ALL_COLUMNS: OrderColumn[] = [
   "customer", "seller", "dateReceived", "dateLoaded", "purchaseOrderNr", "projectNumber",
-  "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice", "status",
+  "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice", "files", "status",
 ];
 
 function formatDate(value: string | null): string {
@@ -287,14 +288,15 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
 
   const loadOrders = useCallback(async (showSpinner = false) => {
     if (showSpinner) setIsLoading(true);
-    const result = await getOrders();
+    const fileCountCategory = tab === "list" ? "customer" as const : tab === "production" ? "production" as const : undefined;
+    const result = await getOrders({ fileCountCategory });
     if (result.success) {
       setOrders(result.data);
     } else {
       toast.error(result.error);
     }
     setIsLoading(false);
-  }, []);
+  }, [tab]);
 
   useEffect(() => {
     loadOrders(true);
@@ -332,10 +334,10 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
       case "purchaseOrderNr": return order.name || "";
       case "projectNumber": return order.projectNumber || "";
       case "type": return order.typeSummary || "";
-      case "treadLength": return order.treadLength || "";
-      case "treads": return order.treads ? String(order.treads) : "";
-      case "winders": return order.winders ? String(order.winders) : "";
-      case "quarters": return order.quarters ? String(order.quarters) : "";
+      case "treadLength": return order.treadLength || "0";
+      case "treads": return String(order.treads);
+      case "winders": return String(order.winders);
+      case "quarters": return String(order.quarters);
       case "totalPieces": return order.totalPieces ? String(order.totalPieces) : "";
       case "totalPrice": return order.totalPricePence ? (order.totalPricePence / 100).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
       case "totalKg": return order.totalKg > 0 ? order.totalKg.toFixed(2) : "";
@@ -380,6 +382,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
       case "plMaterials": return order.plMaterialsValue !== 0 ? order.plMaterialsValue.toFixed(2) : "";
       case "plTotal": return order.plTotalValue !== 0 ? order.plTotalValue.toFixed(2) : "";
       case "plPercentFromInvoice": return order.plPercentFromInvoice !== 0 ? order.plPercentFromInvoice.toFixed(1) : "";
+      case "files": return order.fileCount > 0 ? String(order.fileCount) : "";
       case "status": return getStatusLabel(order.status);
       default: return "";
     }
@@ -546,7 +549,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
   // Inline save helper — update a single field on an order
   const saveField = useCallback(
     async (orderId: string, field: Record<string, string | number | null>) => {
-      const result = await updateOrder(orderId, field);
+      const result = await updateOrder(orderId, field, tab);
       if (result.success) {
         // Only update the field that was saved + updatedAt, preserving everything else
         const updates: Record<string, unknown> = { ...field, updatedAt: result.data.updatedAt };
@@ -569,7 +572,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
 
         // Auto-set status to "loaded" when dateLoaded is set
         if (field.dateLoaded && field.dateLoaded !== null) {
-          const statusResult = await updateOrderStatus(orderId, "loaded");
+          const statusResult = await updateOrderStatus(orderId, "loaded", tab);
           if (statusResult.success) {
             updates.status = "loaded";
           }
@@ -589,7 +592,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
   const saveProductionField = useCallback(
     async (orderId: string, fieldName: "treadM3" | "winderM3" | "quarterM3" | "usedMaterialM3", value: string) => {
       const numVal = value ? parseFloat(value.replace(",", ".")) : null;
-      const result = await updateOrder(orderId, { [fieldName]: numVal });
+      const result = await updateOrder(orderId, { [fieldName]: numVal }, tab);
       if (result.success) {
         setOrders((prev) =>
           prev.map((o) => {
@@ -613,7 +616,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
   const saveProductionCostField = useCallback(
     async (orderId: string, fieldName: "productionMaterial" | "productionFinishing" | "woodArt" | "woodArtCnc", value: string) => {
       const numVal = value ? parseFloat(value.replace(",", ".")) : null;
-      const result = await updateOrder(orderId, { [fieldName]: numVal });
+      const result = await updateOrder(orderId, { [fieldName]: numVal }, tab);
       if (result.success) {
         setOrders((prev) =>
           prev.map((o) => {
@@ -686,7 +689,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
     if (statusChangeOrder) {
       setNewStatus(status);
       setIsChangingStatus(true);
-      const result = await updateOrderStatus(statusChangeOrder.id, status);
+      const result = await updateOrderStatus(statusChangeOrder.id, status, tab);
       if (result.success) {
         toast.success(`Status changed to ${getStatusLabel(status)}`);
         loadOrders();
@@ -1005,6 +1008,11 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {headerWithMenu("plPercentFromInvoice", <span className="flex flex-col leading-tight text-right whitespace-nowrap"><span>%</span><span>Invoice</span></span>, true)}
                 </TableHead>
                 )}
+                {show("files") && (
+                <TableHead className="text-sm px-2 w-12 text-center">
+                  Files
+                </TableHead>
+                )}
                 {show("status") && (
                 <TableHead className="text-sm px-2 w-20">
                   {headerWithMenu("status", "Status")}
@@ -1019,8 +1027,8 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                 return (
                 <TableRow
                   key={order.id}
-                  className={`hover:bg-accent/50 transition-colors ${tab !== "production" ? "cursor-pointer" : ""}`}
-                  onClick={tab !== "production" ? () => router.push(tab === "list" ? `/orders/${order.id}` : `/orders/${order.id}?tab=${tab}`) : undefined}
+                  className="hover:bg-accent/50 transition-colors cursor-pointer"
+                  onClick={() => router.push(tab === "list" ? `/orders/${order.id}` : `/orders/${order.id}?tab=${tab}`)}
                 >
                   {show("customer") && (
                   <TableCell className="px-2 text-sm">
@@ -1051,7 +1059,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   </TableCell>
                   )}
                   {show("producer") && (
-                  <TableCell className="px-2 text-sm max-w-48">
+                  <TableCell className="px-2 text-sm whitespace-nowrap">
                     {tab === "production" ? (
                       <span className={!order.producerOrganisationName ? "text-muted-foreground" : ""}>{order.producerOrganisationName || "-"}</span>
                     ) : organisations.length > 0 ? (
@@ -1129,11 +1137,11 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {show("treadLength") && (
                   <TableCell className="px-2 text-sm text-right whitespace-nowrap">
                     {tab === "production" ? (
-                      <span className={!order.treadLength ? "text-muted-foreground" : ""}>{order.treadLength || "-"}</span>
+                      <span>{order.treadLength || "0"}</span>
                     ) : (
                     <EditableCell
                       value={order.treadLength || ""}
-                      placeholder="-"
+                      placeholder="0"
                       onSave={(val) => saveField(order.id, { treadLength: val || null })}
                       editing={isEditing}
                       align="right"
@@ -1142,13 +1150,13 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   </TableCell>
                   )}
                   {show("treads") && (
-                  <TableCell className="px-2 text-sm text-right">{order.treads || <span className="text-muted-foreground">-</span>}</TableCell>
+                  <TableCell className="px-2 text-sm text-right">{order.treads}</TableCell>
                   )}
                   {show("winders") && (
-                  <TableCell className="px-2 text-sm text-right">{order.winders || <span className="text-muted-foreground">-</span>}</TableCell>
+                  <TableCell className="px-2 text-sm text-right">{order.winders}</TableCell>
                   )}
                   {show("quarters") && (
-                  <TableCell className="px-2 text-sm text-right">{order.quarters || <span className="text-muted-foreground">-</span>}</TableCell>
+                  <TableCell className="px-2 text-sm text-right">{order.quarters}</TableCell>
                   )}
                   {show("totalPieces") && (
                   <TableCell className="px-2 text-sm text-right">{order.totalPieces || <span className="text-muted-foreground">-</span>}</TableCell>
@@ -1569,6 +1577,13 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     </TableCell>
                     );
                   })()}
+                  {show("files") && (
+                  <TableCell className="px-2 text-sm text-center">
+                    {order.fileCount > 0 ? (
+                      <span className="text-muted-foreground">{order.fileCount}</span>
+                    ) : null}
+                  </TableCell>
+                  )}
                   {show("status") && (
                   <TableCell className="px-1">
                     <button
@@ -1646,6 +1661,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     {show("plMaterials") && <td className={`px-2 py-2 text-right ${color(s.plMaterials)}`}>{fmt(s.plMaterials)}</td>}
                     {show("plTotal") && <td className={`px-2 py-2 text-right ${color(s.plTotal)}`}>{fmt(s.plTotal)}</td>}
                     {show("plPercentFromInvoice") && <td className={`px-2 py-2 text-right ${color(s.plPercent)}`}>{fmtPct(s.plPercent)}</td>}
+                    {show("files") && <td className="px-2 py-2" />}
                     {show("status") && <td className="px-2 py-2" />}
                   </tr>
                 </tfoot>

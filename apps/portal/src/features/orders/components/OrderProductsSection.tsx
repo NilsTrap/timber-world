@@ -30,6 +30,8 @@ interface OrderProductsSectionProps {
   readOnly?: boolean;
   /** Columns to hide from the products table */
   hiddenColumns?: ProductColumnKey[];
+  /** Current tab context for activity logging */
+  tab?: string;
 }
 
 /** Sort rows: Tread → Winder → Quarter, then by length ascending */
@@ -91,6 +93,7 @@ export function OrderProductsSection({
   staircaseCodes,
   readOnly,
   hiddenColumns,
+  tab,
 }: OrderProductsSectionProps) {
   // We need to resolve display values → IDs from the initial data
   // Since OrderPackage has display values, we need the raw IDs from DB
@@ -175,7 +178,7 @@ export function OrderProductsSection({
         eurPerM3: parseFloat(r.eurPerM3) || 0,
       }));
 
-      const result = await saveOrderProducts(orderId, organisationId, rowInputs);
+      const result = await saveOrderProducts(orderId, organisationId, rowInputs, tab);
 
       if (!result.success) {
         toast.error(result.error);
@@ -278,7 +281,7 @@ export function OrderProductsSection({
           transportPerPiece: parseFloat(r.transportPerPiece) || 0,
           eurPerM3: parseFloat(r.eurPerM3) || 0,
         }));
-        saveOrderProducts(orderId, organisationId, rowInputs).catch(console.error);
+        saveOrderProducts(orderId, organisationId, rowInputs, tab).catch(console.error);
         pendingRowsRef.current = null;
       }
     };

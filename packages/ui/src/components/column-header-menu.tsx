@@ -66,8 +66,8 @@ function ColumnHeaderMenu({
           return ddmmyyyyToNum(b) - ddmmyyyyToNum(a);
         }
         if (isNumeric) {
-          const aNum = parseFloat(a);
-          const bNum = parseFloat(b);
+          const aNum = parseFloat(a.replace(",", "."));
+          const bNum = parseFloat(b.replace(",", "."));
           const aValid = !isNaN(aNum);
           const bValid = !isNaN(bNum);
           if (aValid && bValid) return aNum - bNum;

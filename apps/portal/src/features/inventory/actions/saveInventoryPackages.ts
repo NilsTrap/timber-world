@@ -76,13 +76,12 @@ export async function saveInventoryPackages(
       return shipmentCache.get(cacheKey) ?? null;
     }
 
-    // Try to find existing shipment with this code for this organisation
+    // Try to find existing shipment with this code (unique constraint is global, not per-org)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existingShipments } = await (supabase as any)
       .from("shipments")
       .select("id")
       .eq("shipment_code", shipmentCode)
-      .eq("to_organisation_id", organisationId)
       .limit(1);
 
     let shipmentId: string | null = null;
@@ -150,8 +149,9 @@ export async function saveInventoryPackages(
       volume_is_calculated: pkg.volumeIsCalculated,
     };
 
-    // Only update shipment_id if a shipment code was provided
-    if (shipmentCode && shipmentCode !== "" && shipmentCode !== "-") {
+    // Only update shipment_id if a shipment code was provided AND we successfully resolved it.
+    // Never set shipment_id to null — that would unlink existing packages from their shipments.
+    if (shipmentCode && shipmentCode !== "" && shipmentCode !== "-" && shipmentId) {
       updateData.shipment_id = shipmentId;
     }
 

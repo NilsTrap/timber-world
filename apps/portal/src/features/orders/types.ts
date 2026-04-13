@@ -125,6 +125,8 @@ export interface Order {
   createdByName?: string;
   createdAt: string;
   updatedAt: string;
+  /** Number of attached files */
+  fileCount: number;
 }
 
 /**
@@ -195,6 +197,26 @@ export const ORDER_STATUSES: OrderStatus[] = [
  */
 export const CURRENCIES = ["EUR", "GBP", "USD"] as const;
 export type Currency = (typeof CURRENCIES)[number];
+
+/**
+ * Order file category
+ */
+export type OrderFileCategory = "customer" | "production";
+
+/**
+ * Order file attachment
+ */
+export interface OrderFile {
+  id: string;
+  orderId: string;
+  category: OrderFileCategory;
+  fileName: string;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+  uploadedByName: string | null;
+  isThumbnail: boolean;
+  createdAt: string;
+}
 
 /**
  * Client-side order product row for DataEntryTable editing

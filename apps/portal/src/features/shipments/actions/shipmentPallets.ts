@@ -178,7 +178,7 @@ export async function assignPackageToPallet(
     .select(`
       id,
       shipment_id,
-      shipment:shipments(id, from_organisation_id, status)
+      shipment:shipments!inventory_packages_shipment_id_fkey(id, from_organisation_id, status)
     `)
     .eq("id", packageId)
     .single();

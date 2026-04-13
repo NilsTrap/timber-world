@@ -18,6 +18,12 @@ export interface Organisation {
   vatNumber: string | null;
   registrationNumber: string | null;
   country: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  bankSwiftCode: string | null;
   logoUrl: string | null;
   createdAt: string;
   updatedAt: string;

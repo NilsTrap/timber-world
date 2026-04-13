@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
+import { logOrderActivity } from "./logOrderActivity";
 
 interface OrderProductInput {
   dbId: string | null;
@@ -34,7 +35,8 @@ interface SaveResult {
 export async function saveOrderProducts(
   orderId: string,
   organisationId: string,
-  rows: OrderProductInput[]
+  rows: OrderProductInput[],
+  tab?: string
 ): Promise<ActionResult<SaveResult>> {
   const session = await getSession();
   if (!session) {
@@ -182,6 +184,14 @@ export async function saveOrderProducts(
         return { success: false, error: `Failed to update product: ${updateResults[i].error.message}`, code: "UPDATE_FAILED" };
       }
     }
+  }
+
+  const parts: string[] = [];
+  if (toInsert.length > 0) parts.push(`${toInsert.length} added`);
+  if (toUpdate.length > 0) parts.push(`${toUpdate.length} updated`);
+  if (toDelete.length > 0) parts.push(`${toDelete.length} removed`);
+  if (parts.length > 0) {
+    await logOrderActivity(orderId, session.portalUserId, "products_saved", `Products: ${parts.join(", ")}`, tab);
   }
 
   return { success: true, data: { insertedIds } };

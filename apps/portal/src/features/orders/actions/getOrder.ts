@@ -43,7 +43,7 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
   // Non-admin: check org match (buyer or seller) and feature
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    if (data.customer_organisation_id !== orgId && data.seller_organisation_id !== orgId) {
+    if (data.customer_organisation_id !== orgId && data.seller_organisation_id !== orgId && data.producer_organisation_id !== orgId) {
       return { success: false, error: "Permission denied", code: "FORBIDDEN" };
     }
     const hasModule = await orgHasModule(orgId, "orders.view");
@@ -106,6 +106,7 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
     createdByName: data.portal_users?.name,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
+    fileCount: 0,
   };
 
   return { success: true, data: order };

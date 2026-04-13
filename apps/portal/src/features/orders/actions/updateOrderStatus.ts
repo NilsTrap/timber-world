@@ -5,6 +5,7 @@ import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import { updateOrderStatusSchema } from "../schemas";
 import type { Order, OrderStatus, ActionResult } from "../types";
 import { isValidUUID } from "../types";
+import { logOrderActivity } from "./logOrderActivity";
 
 /**
  * Update Order Status
@@ -14,7 +15,8 @@ import { isValidUUID } from "../types";
  */
 export async function updateOrderStatus(
   orderId: string,
-  newStatus: OrderStatus
+  newStatus: OrderStatus,
+  tab?: string
 ): Promise<ActionResult<Order>> {
   // 1. Check authentication
   const session = await getSession();
@@ -172,7 +174,10 @@ export async function updateOrderStatus(
     createdBy: data.created_by as string | null,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
+    fileCount: 0,
   };
+
+  await logOrderActivity(orderId, session.portalUserId, "status_changed", `Status changed to ${newStatus}`, tab);
 
   return {
     success: true,

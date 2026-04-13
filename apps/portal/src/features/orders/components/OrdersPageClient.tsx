@@ -63,7 +63,7 @@ export function OrdersPageClient({
   const SALES_COLUMNS: OrderColumn[] = [
     "customer", "seller", "producer", "dateReceived", "dateLoaded", "purchaseOrderNr", "projectNumber",
     "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice", "totalKg",
-    "advanceInvoiceNumber", "invoiceNumber", "packageNumber", "transportInvoiceNumber", "transportPrice", "status",
+    "advanceInvoiceNumber", "invoiceNumber", "packageNumber", "transportInvoiceNumber", "transportPrice", "files", "status",
   ];
 
   const PRODUCTION_COLUMNS: OrderColumn[] = [
@@ -71,7 +71,7 @@ export function OrdersPageClient({
     "type", "treadLength", "treads", "winders", "quarters", "totalPieces",
     "plannedDate", "treadM3", "winderM3", "quarterM3", "totalProducedM3", "usedMaterialM3", "wasteM3", "wastePercent",
     "productionMaterial", "productionFinishing", "productionTotal", "productionInvoiceNumber", "productionPaymentDate",
-    "woodArt", "woodArtCnc", "woodArtTotal", "woodArtInvoiceNumber", "woodArtPaymentDate", "status",
+    "woodArt", "woodArtCnc", "woodArtTotal", "woodArtInvoiceNumber", "woodArtPaymentDate", "files", "status",
   ];
 
   const ANALYTICS_COLUMNS: OrderColumn[] = [

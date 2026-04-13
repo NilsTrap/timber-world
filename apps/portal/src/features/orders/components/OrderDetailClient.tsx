@@ -15,6 +15,11 @@ import { getStatusLabel } from "../types";
 import { OrderProductsSection } from "./OrderProductsSection";
 import type { ProductColumnKey } from "./OrderProductsTable";
 import { OrderPackagesTable } from "./OrderPackagesTable";
+import { OrderFilesSection } from "./OrderFilesSection";
+import { OrderActivityLog } from "./OrderActivityLog";
+import { PdfThumbnail } from "./PdfThumbnail";
+import { getOrderFiles } from "../actions/getOrderFiles";
+import type { OrderFile } from "../types";
 
 const ORDER_LAST_ENTRY_KEY = "order-last-entry";
 
@@ -72,6 +77,7 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const [packages, setPackages] = useState<OrderPackage[]>([]);
   const [dropdowns, setDropdowns] = useState<RefDropdowns | null>(null);
   const [staircaseCodes, setStaircaseCodes] = useState<StaircaseCode[]>([]);
+  const [orderFiles, setOrderFiles] = useState<OrderFile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -81,11 +87,12 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
-    const [orderResult, pkgResult, refsResult, codesResult] = await Promise.all([
+    const [orderResult, pkgResult, refsResult, codesResult, filesResult] = await Promise.all([
       getOrder(orderId),
       getOrderPackages(orderId),
       getReferenceDropdowns(),
       getStaircaseCodes(),
+      getOrderFiles(orderId),
     ]);
 
     if (!orderResult.success) {
@@ -107,6 +114,9 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
     }
     if (codesResult.success) {
       setStaircaseCodes(codesResult.data ?? []);
+    }
+    if (filesResult.success) {
+      setOrderFiles(filesResult.data);
     }
     setIsLoading(false);
   }, [orderId, router]);
@@ -150,36 +160,57 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
         Back to orders
       </Link>
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {order.name}
-          </h1>
-          <p className="text-muted-foreground">
-            {order.customerOrganisationName}
-            {order.sellerOrganisationName && <> · Seller: {order.sellerOrganisationName}</>}
-            {order.producerOrganisationName && <> · Producer: {order.producerOrganisationName}</>}
-            {" · Received: "}{order.dateReceived}{order.dateLoaded && <>{" · Loaded: "}{order.dateLoaded}</>}
-          </p>
-        </div>
-        <span
-          className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-800"}`}
-        >
-          {getStatusLabel(order.status)}
-        </span>
-      </div>
+      {/* Header + Ordered Products — thumbnail and badge float right so content flows beside them */}
+      <div className="relative">
+        {(() => {
+          const thumbnailCategory = tab === "list" ? "customer" : "production";
+          const thumbnailFile = orderFiles.find((f) => f.isThumbnail && f.category === thumbnailCategory);
+          const isPdf = thumbnailFile && (thumbnailFile.mimeType === "application/pdf" || thumbnailFile.fileName.toLowerCase().endsWith(".pdf"));
+          if (!isPdf) return null;
+          return (
+            <>
+              <div className="float-right ml-4 mb-2">
+                <span
+                  className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-800"}`}
+                >
+                  {getStatusLabel(order.status)}
+                </span>
+              </div>
+              <div style={{ position: "absolute", left: "65%", top: 0 }}>
+                <PdfThumbnail file={thumbnailFile} height={140} />
+              </div>
+            </>
+          );
+        })()}
+        <h1 className="text-3xl font-semibold tracking-tight">
+          {order.name}
+        </h1>
+        {!orderFiles.some((f) => f.isThumbnail && f.category === (tab === "list" ? "customer" : "production")) && (
+          <span
+            className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium mt-1 ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-800"}`}
+          >
+            {getStatusLabel(order.status)}
+          </span>
+        )}
+        <p className="text-muted-foreground mb-2">
+          {order.customerOrganisationName}
+          {order.sellerOrganisationName && <> · Seller: {order.sellerOrganisationName}</>}
+          {order.producerOrganisationName && <> · Producer: {order.producerOrganisationName}</>}
+          {" · Received: "}{order.dateReceived}{order.dateLoaded && <>{" · Loaded: "}{order.dateLoaded}</>}
+        </p>
 
-      {/* Ordered Products - DataEntryTable */}
-      <OrderProductsSection
-        orderId={orderId}
-        organisationId={order.customerOrganisationId}
-        initialPackages={orderedPackages}
-        dropdowns={dropdowns}
-        staircaseCodes={staircaseCodes}
-        readOnly={!isEditable}
-        hiddenColumns={tab === "list" ? LIST_TAB_HIDDEN_COLUMNS : tab === "sales" ? SALES_TAB_HIDDEN_COLUMNS : tab === "production" ? PRODUCTION_TAB_HIDDEN_COLUMNS : undefined}
-      />
+        {/* Ordered Products - DataEntryTable */}
+        <OrderProductsSection
+          orderId={orderId}
+          organisationId={order.customerOrganisationId}
+          initialPackages={orderedPackages}
+          dropdowns={dropdowns}
+          staircaseCodes={staircaseCodes}
+          readOnly={!isEditable}
+          hiddenColumns={tab === "list" ? LIST_TAB_HIDDEN_COLUMNS : tab === "sales" ? SALES_TAB_HIDDEN_COLUMNS : tab === "production" ? PRODUCTION_TAB_HIDDEN_COLUMNS : undefined}
+          tab={tab}
+        />
+      </div>
 
       {/* Produced Packages (shown only when there are any) */}
       {producedPackages.length > 0 && (
@@ -193,6 +224,16 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
           onChanged={loadData}
         />
       )}
+
+      {/* Order Files */}
+      <OrderFilesSection
+        orderId={orderId}
+        showCustomer={tab === "list" || tab === "sales"}
+        showProduction={tab === "production" || tab === "sales"}
+      />
+
+      {/* Activity Log */}
+      <OrderActivityLog orderId={orderId} tab={tab} />
     </div>
   );
 }

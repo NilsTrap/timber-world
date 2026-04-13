@@ -76,6 +76,12 @@ export function OrganisationDetailTabs({
   const [vatNumber, setVatNumber] = useState(organisation.vatNumber ?? "");
   const [registrationNumber, setRegistrationNumber] = useState(organisation.registrationNumber ?? "");
   const [country, setCountry] = useState(organisation.country ?? "");
+  const [phone, setPhone] = useState(organisation.phone ?? "");
+  const [email, setEmail] = useState(organisation.email ?? "");
+  const [website, setWebsite] = useState(organisation.website ?? "");
+  const [bankName, setBankName] = useState(organisation.bankName ?? "");
+  const [bankAccountNumber, setBankAccountNumber] = useState(organisation.bankAccountNumber ?? "");
+  const [bankSwiftCode, setBankSwiftCode] = useState(organisation.bankSwiftCode ?? "");
   const [logoUrl, setLogoUrl] = useState(organisation.logoUrl ?? "");
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -85,6 +91,12 @@ export function OrganisationDetailTabs({
     vatNumber: organisation.vatNumber ?? "",
     registrationNumber: organisation.registrationNumber ?? "",
     country: organisation.country ?? "",
+    phone: organisation.phone ?? "",
+    email: organisation.email ?? "",
+    website: organisation.website ?? "",
+    bankName: organisation.bankName ?? "",
+    bankAccountNumber: organisation.bankAccountNumber ?? "",
+    bankSwiftCode: organisation.bankSwiftCode ?? "",
   });
 
   // Delivery addresses
@@ -180,7 +192,13 @@ export function OrganisationDetailTabs({
     legalAddress !== savedDetails.legalAddress ||
     vatNumber !== savedDetails.vatNumber ||
     registrationNumber !== savedDetails.registrationNumber ||
-    country !== savedDetails.country;
+    country !== savedDetails.country ||
+    phone !== savedDetails.phone ||
+    email !== savedDetails.email ||
+    website !== savedDetails.website ||
+    bankName !== savedDetails.bankName ||
+    bankAccountNumber !== savedDetails.bankAccountNumber ||
+    bankSwiftCode !== savedDetails.bankSwiftCode;
 
   const saveDetails = async () => {
     setIsSavingDetails(true);
@@ -190,9 +208,15 @@ export function OrganisationDetailTabs({
       vatNumber: vatNumber || null,
       registrationNumber: registrationNumber || null,
       country: country || null,
+      phone: phone || null,
+      email: email || null,
+      website: website || null,
+      bankName: bankName || null,
+      bankAccountNumber: bankAccountNumber || null,
+      bankSwiftCode: bankSwiftCode || null,
     });
     if (result.success) {
-      setSavedDetails({ legalAddress, vatNumber, registrationNumber, country });
+      setSavedDetails({ legalAddress, vatNumber, registrationNumber, country, phone, email, website, bankName, bankAccountNumber, bankSwiftCode });
       toast.success("Organisation details saved");
     } else {
       toast.error(result.error);
@@ -515,6 +539,82 @@ export function OrganisationDetailTabs({
                       placeholder="e.g. Estonia"
                     />
                   </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g. +44 20 1234 5678"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="e.g. info@company.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="website">Website</Label>
+                  <Input
+                    id="website"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    placeholder="e.g. https://company.com"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end pt-2">
+                <Button
+                  onClick={saveDetails}
+                  disabled={isSavingDetails || !hasDetailsChanged}
+                >
+                  {isSavingDetails ? "Saving..." : "Save Details"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bank Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Bank Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bankName">Bank Name</Label>
+                  <Input
+                    id="bankName"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    placeholder="e.g. Barclays"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bankAccountNumber">Account Number</Label>
+                  <Input
+                    id="bankAccountNumber"
+                    value={bankAccountNumber}
+                    onChange={(e) => setBankAccountNumber(e.target.value)}
+                    placeholder="e.g. GB29 NWBK 6016 1331 9268 19"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bankSwiftCode">SWIFT Code</Label>
+                  <Input
+                    id="bankSwiftCode"
+                    value={bankSwiftCode}
+                    onChange={(e) => setBankSwiftCode(e.target.value)}
+                    placeholder="e.g. NWBKGB2L"
+                  />
                 </div>
               </div>
               <div className="flex justify-end pt-2">

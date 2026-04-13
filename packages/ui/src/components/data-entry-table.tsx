@@ -436,11 +436,14 @@ function DataEntryTableInner<TRow>(
           const aVal = getColDisplayValue(a.row, col);
           const bVal = getColDisplayValue(b.row, col);
           if (col.isNumeric || col.type === "numeric") {
-            const aNum = parseFloat(col.getValue(a.row));
-            const bNum = parseFloat(col.getValue(b.row));
-            if (!isNaN(aNum) && !isNaN(bNum)) {
+            const aNum = parseFloat(col.getValue(a.row).replace(",", "."));
+            const bNum = parseFloat(col.getValue(b.row).replace(",", "."));
+            const aValid = !isNaN(aNum);
+            const bValid = !isNaN(bNum);
+            if (aValid && bValid) {
               return sortState.direction === "asc" ? aNum - bNum : bNum - aNum;
             }
+            if (aValid !== bValid) return aValid ? -1 : 1;
           }
           const cmp = aVal.localeCompare(bVal);
           return sortState.direction === "asc" ? cmp : -cmp;
@@ -491,11 +494,15 @@ function DataEntryTableInner<TRow>(
         const bVal = getColDisplayValue(b, col);
 
         if (col.isNumeric || col.type === "numeric") {
-          const aNum = parseFloat(col.getValue(a));
-          const bNum = parseFloat(col.getValue(b));
-          if (!isNaN(aNum) && !isNaN(bNum)) {
+          const aNum = parseFloat(col.getValue(a).replace(",", "."));
+          const bNum = parseFloat(col.getValue(b).replace(",", "."));
+          const aValid = !isNaN(aNum);
+          const bValid = !isNaN(bNum);
+          if (aValid && bValid) {
             return sort.direction === "asc" ? aNum - bNum : bNum - aNum;
           }
+          // Push empty/non-numeric values to end regardless of direction
+          if (aValid !== bValid) return aValid ? -1 : 1;
         }
 
         const cmp = aVal.localeCompare(bVal);

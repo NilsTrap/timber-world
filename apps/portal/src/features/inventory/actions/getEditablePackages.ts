@@ -171,24 +171,20 @@ export async function getEditablePackages(orgIds?: string[]): Promise<ActionResu
     packages = allPackages;
   }
 
-  // Sort by Org → Shipment → Package (left-to-right, ascending)
+  // Sort by Thickness → Width → Length → Pieces (ascending, numeric with comma support)
+  const numVal = (v: string | null) => {
+    if (!v) return Infinity;
+    const n = parseFloat(v.replace(",", "."));
+    return isNaN(n) ? Infinity : n;
+  };
   packages.sort((a, b) => {
-    // 1. Organisation code
-    const orgCmp = (a.organisationCode ?? "").localeCompare(b.organisationCode ?? "");
-    if (orgCmp !== 0) return orgCmp;
-    // 2. Shipment code
-    const shipCmp = (a.shipmentCode ?? "").localeCompare(b.shipmentCode ?? "");
-    if (shipCmp !== 0) return shipCmp;
-    // 3. Package number (prefix alphabetically, then numeric part)
-    const pkgA = a.packageNumber ?? "";
-    const pkgB = b.packageNumber ?? "";
-    const prefA = pkgA.replace(/\d+$/, "");
-    const prefB = pkgB.replace(/\d+$/, "");
-    const prefCmp = prefA.localeCompare(prefB);
-    if (prefCmp !== 0) return prefCmp;
-    const numA = parseInt(pkgA.replace(/\D/g, "") || "0", 10);
-    const numB = parseInt(pkgB.replace(/\D/g, "") || "0", 10);
-    return numA - numB;
+    const thickCmp = numVal(a.thickness) - numVal(b.thickness);
+    if (thickCmp !== 0) return thickCmp;
+    const widthCmp = numVal(a.width) - numVal(b.width);
+    if (widthCmp !== 0) return widthCmp;
+    const lengthCmp = numVal(a.length) - numVal(b.length);
+    if (lengthCmp !== 0) return lengthCmp;
+    return numVal(a.pieces) - numVal(b.pieces);
   });
 
   return { success: true, data: packages };

@@ -5,6 +5,7 @@ import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import { updateOrderSchema } from "../schemas";
 import type { Order, ActionResult } from "../types";
 import { isValidUUID } from "../types";
+import { logOrderActivity } from "./logOrderActivity";
 
 /**
  * Update Order
@@ -47,7 +48,8 @@ export async function updateOrder(
     woodArtCnc?: number | null;
     woodArtInvoiceNumber?: string | null;
     woodArtPaymentDate?: string | null;
-  }
+  },
+  tab?: string
 ): Promise<ActionResult<Order>> {
   // 1. Check authentication
   const session = await getSession();
@@ -308,7 +310,17 @@ export async function updateOrder(
     createdBy: data.created_by as string | null,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
+    fileCount: 0,
   };
+
+  const changedFields = Object.keys(input).filter((k) => input[k as keyof typeof input] !== undefined);
+  await logOrderActivity(
+    orderId,
+    session.portalUserId,
+    "updated",
+    `Updated ${changedFields.join(", ")}`,
+    tab
+  );
 
   return {
     success: true,

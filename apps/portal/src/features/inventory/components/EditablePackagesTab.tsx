@@ -414,21 +414,53 @@ export function EditablePackagesTab({ packages, defaultOrgId }: EditablePackages
         }
       }
 
-      // 3. Save all packages (new and modified) - skip if no packages left
-      if (localPackages.length === 0) {
-        // All packages were deleted, nothing to save
+      // 3. Only save NEW packages and packages that actually CHANGED — not all packages
+      // Build a map of original packages by ID for comparison
+      const originalMap = new Map(originalPackages.map(p => [p.id, p]));
+
+      const changedOrNewPackages = localPackages.filter(pkg => {
+        if (pkg.isNew || pkg.id.startsWith("new-")) return true;
+        const orig = originalMap.get(pkg.id);
+        if (!orig) return true; // Not found in originals, treat as changed
+        // Compare all saveable fields
+        return (
+          pkg.packageNumber !== orig.packageNumber ||
+          pkg.shipmentCode !== orig.shipmentCode ||
+          pkg.organisationId !== orig.organisationId ||
+          pkg.productNameId !== orig.productNameId ||
+          pkg.woodSpeciesId !== orig.woodSpeciesId ||
+          pkg.humidityId !== orig.humidityId ||
+          pkg.typeId !== orig.typeId ||
+          pkg.processingId !== orig.processingId ||
+          pkg.fscId !== orig.fscId ||
+          pkg.qualityId !== orig.qualityId ||
+          pkg.thickness !== orig.thickness ||
+          pkg.width !== orig.width ||
+          pkg.length !== orig.length ||
+          pkg.pieces !== orig.pieces ||
+          pkg.volumeM3 !== orig.volumeM3 ||
+          pkg.volumeIsCalculated !== orig.volumeIsCalculated
+        );
+      });
+
+      if (changedOrNewPackages.length === 0 && deletedIds.size === 0) {
+        toast.success("No changes to save");
+        setDeletedIds(new Set());
+        setPendingShipmentCodeUpdates(new Map());
+      } else if (changedOrNewPackages.length === 0) {
+        // Only deletions
         const deletedCount = deletedIds.size;
         toast.success(`Deleted ${deletedCount} package${deletedCount !== 1 ? "s" : ""}`);
         setDeletedIds(new Set());
         setPendingShipmentCodeUpdates(new Map());
-        setOriginalPackages([]);
+        setOriginalPackages(localPackages);
         router.refresh();
       } else {
-        const packagesToSave = localPackages.map(pkg => ({
+        const packagesToSave = changedOrNewPackages.map(pkg => ({
           id: pkg.id,
           isNew: pkg.isNew,
           packageNumber: pkg.packageNumber,
-          shipmentCode: pkg.shipmentCode, // Include shipment code for new packages
+          shipmentCode: pkg.shipmentCode,
           organisationId: pkg.organisationId,
           productNameId: pkg.productNameId,
           woodSpeciesId: pkg.woodSpeciesId,
@@ -478,7 +510,7 @@ export function EditablePackagesTab({ packages, defaultOrgId }: EditablePackages
     } finally {
       setIsSaving(false);
     }
-  }, [localPackages, deletedIds, pendingShipmentCodeUpdates, router]);
+  }, [localPackages, originalPackages, deletedIds, pendingShipmentCodeUpdates, router]);
 
   // Discard changes
   const handleDiscard = useCallback(() => {
