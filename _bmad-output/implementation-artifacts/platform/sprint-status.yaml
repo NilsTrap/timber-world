@@ -20,7 +20,7 @@
 #   - done: Story completed
 
 generated: 2026-01-22
-updated: 2026-04-13
+updated: 2026-04-19
 project: Timber-World
 project_key: platform
 tracking_system: file-system
@@ -130,6 +130,10 @@ development_status:
   # - Per-category PDF thumbnails: customer thumbnail on list tab, production on sales/production tabs
   # - Order activity log with tab-scoped entries
   # - Default producer set to Wood Art for all orders
+  # - Orders table UX: navigate icon column, single-click edit, row click for non-editable cells (2026-04-19)
+  # - Thumbnail toggle only on list tab (customer files) and sales tab (production files)
+  # - Thumbnail preview updates immediately on toggle (key-based remount)
+  # - Riser placeholder shows "-" instead of "mm" when empty
 
   # UK Staircase Pricing
   epic-uk-staircase-pricing: done
@@ -152,10 +156,13 @@ development_status:
   # - Contact person fields (contact_name, contact_email, contact_phone)
   # - Inventory sort by dimensions (thickness/width/length/pieces) instead of org/shipment
 
-  # Shipment Bug Fixes (2026-04-13)
+  # Shipment Bug Fixes (2026-04-13, 2026-04-19)
   epic-shipment-fixes: done
   # - Fix ambiguous FK join in pallet assignment (source_shipment_id caused PostgREST error)
   # - Fill gaps in pallet numbering when pallets are deleted (use first available number)
+  # - Fix package_sequence not assigned for production packages when adding to shipment
+  # - Fix NULL sequences from previous bugs causing constraint violations
+  # - Skip packages already in shipment from previous partial adds
 
   # Production Tracking Enhancements (2026-04-11)
   epic-production-tracking-enhancements: done
