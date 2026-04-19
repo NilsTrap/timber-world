@@ -13,7 +13,6 @@
     "inStock": "Auf Lager",
     "resources": "Ressourcen",
     "contact": "Kontakt",
-    "specifications": "Specifications",
     "requestQuote": "Angebot anfordern",
     "skipToContent": "Zum Hauptinhalt springen"
   },
@@ -218,13 +217,6 @@
     "privacyLink": "Mehr erfahren",
     "accept": "Akzeptieren",
     "reject": "Ablehnen"
-  },
-  "specifications": {
-    "title": "Product Specifications",
-    "description": "Download detailed specifications, technical data sheets, and product images.",
-    "noSpecs": "Specifications coming soon. Check back later.",
-    "download": "Download",
-    "files": "{count, plural, =1 {1 file} other {# files}}"
   },
   "privacy": {
     "title": "Datenschutzerklärung",
