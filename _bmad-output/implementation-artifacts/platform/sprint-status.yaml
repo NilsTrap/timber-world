@@ -20,7 +20,7 @@
 #   - done: Story completed
 
 generated: 2026-01-22
-updated: 2026-04-19
+updated: 2026-04-20
 project: Timber-World
 project_key: platform
 tracking_system: file-system
@@ -116,6 +116,12 @@ development_status:
   # - Marketing stock table with ColumnHeaderMenu sort/filter (added 2026-04-06)
   # - Source org toggle (marketing_enabled)
   # - Marketing website stock page filtered to internal orgs only (fixed 2026-04-06)
+  # - EU funding banner changed from Latvian to English with new logo (2026-04-19)
+  # - Product specification field: per-product specification text in CMS, Specification button on website
+  # - Specification preview window with print button (not auto-print)
+  # - Multi-language product texts: locale selector in CMS Products tab, locale-aware fetching with EN fallback
+  # - Auto-translated product texts to all 8 locales (fi, sv, no, da, nl, de, es)
+  # - Products page static text translated in all locales (title, description, button labels)
 
   # Orders Feature
   epic-orders: done
