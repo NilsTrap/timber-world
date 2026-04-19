@@ -222,7 +222,8 @@
     "title": "Vores Produkter",
     "description": "Udforsk vores udvalg af premium egepaneler og træløsninger, fremstillet med ekspertise fra bæredygtige europæiske skove.",
     "noProducts": "Produkter kommer snart. Kom tilbage senere.",
-    "specification": "Specifikation"
+    "specification": "Specifikation",
+    "print": "Udskriv"
   },
   "privacy": {
     "title": "Privatlivspolitik",

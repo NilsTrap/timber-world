@@ -71,6 +71,7 @@ export default async function ProductsPage({ params }: Props) {
                   description={product.description}
                   specification={product.specification}
                   specificationLabel={t("specification")}
+                  printLabel={t("print")}
                   imageUrl={product.imageUrl}
                   altText={product.altText}
                 />

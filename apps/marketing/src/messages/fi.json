@@ -222,7 +222,8 @@
     "title": "Tuotteemme",
     "description": "Tutustu valikoimaamme laadukkaita tammipaneeleja ja puutuotteita, jotka on valmistettu ammattitaidolla kestävistä eurooppalaisista metsistä.",
     "noProducts": "Tuotteita tulossa pian. Tarkista myöhemmin uudelleen.",
-    "specification": "Tuotetiedot"
+    "specification": "Tuotetiedot",
+    "print": "Tulosta"
   },
   "privacy": {
     "title": "Tietosuojakäytäntö",

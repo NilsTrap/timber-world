@@ -224,7 +224,8 @@
     "title": "Our Products",
     "description": "Explore our range of premium oak panels and wood solutions, crafted with expertise from sustainable European forests.",
     "noProducts": "Products coming soon. Check back later.",
-    "specification": "Specification"
+    "specification": "Specification",
+    "print": "Print"
   },
   "privacy": {
     "title": "Privacy Policy",

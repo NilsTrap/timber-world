@@ -222,7 +222,8 @@
     "title": "Nuestros Productos",
     "description": "Explore nuestra gama de paneles de roble premium y soluciones de madera, elaborados con experiencia de bosques europeos sostenibles.",
     "noProducts": "Productos próximamente. Vuelva más tarde.",
-    "specification": "Especificación"
+    "specification": "Especificación",
+    "print": "Imprimir"
   },
   "privacy": {
     "title": "Política de Privacidad",
