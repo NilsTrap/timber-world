@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { siteConfig } from "@timber/config/site";
 import { type Locale } from "@timber/config/i18n";
 import { generateAlternateLinks, generateCanonical } from "@timber/config/hreflang";
 import { getCMSProducts } from "@/lib/actions/cms-products";
+import { ProductCard } from "@/components/features/products/ProductCard";
 
 type Props = {
   params: Promise<{ locale: string }>;
@@ -64,39 +64,14 @@ export default async function ProductsPage({ params }: Props) {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {products.map((product) => (
-                <div
+                <ProductCard
                   key={product.key}
-                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-                >
-                  {/* Product Image */}
-                  <div className="aspect-video relative bg-gray-100">
-                    {product.imageUrl ? (
-                      <Image
-                        src={product.imageUrl}
-                        alt={product.altText || product.title}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400">
-                        <span className="text-sm">No image</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Product Info */}
-                  <div className="p-4">
-                    <h3 className="font-heading text-lg font-semibold text-charcoal mb-2">
-                      {product.title}
-                    </h3>
-                    {product.description && (
-                      <p className="text-sm text-gray-600">
-                        {product.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                  productKey={product.key}
+                  title={product.title}
+                  description={product.description}
+                  imageUrl={product.imageUrl}
+                  altText={product.altText}
+                />
               ))}
             </div>
           )}
