@@ -82,24 +82,22 @@ export function ProductCard({ title, description, specification, imageUrl, altTe
 
       {/* Product Info */}
       <div className="p-4">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="font-heading text-lg font-semibold text-charcoal mb-2">
-            {title}
-          </h3>
-          <button
-            onClick={handlePrint}
-            className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-xs text-gray-500 hover:text-charcoal hover:bg-gray-100 transition-colors"
-            title="Specification"
-          >
-            <Printer className="h-3.5 w-3.5" />
-            Specification
-          </button>
-        </div>
+        <h3 className="font-heading text-lg font-semibold text-charcoal mb-2">
+          {title}
+        </h3>
         {description && (
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 mb-3">
             {description}
           </p>
         )}
+        <button
+          onClick={handlePrint}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-gray-600 border border-gray-200 hover:text-charcoal hover:border-gray-300 hover:bg-gray-50 transition-colors"
+          title="Specification"
+        >
+          <Printer className="h-3.5 w-3.5" />
+          Specification
+        </button>
       </div>
     </div>
   );
