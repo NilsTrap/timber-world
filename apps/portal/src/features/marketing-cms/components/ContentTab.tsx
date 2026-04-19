@@ -70,15 +70,16 @@ export function ContentTab() {
   const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
   const [togglingSlots, setTogglingSlots] = useState<Set<string>>(new Set());
   const [productLocale, setProductLocale] = useState("en");
+  const [activeSubTab, setActiveSubTab] = useState("hero");
 
-  // Fetch all data
+  // Fetch all data (initial load)
   const fetchData = useCallback(async () => {
     setIsLoading(true);
 
     const [mediaResult, heroResult, productsResult, journeyResult] = await Promise.all([
       getMarketingMedia(),
       getHeroTexts("en"),
-      getProductTexts(productLocale),
+      getProductTexts("en"),
       getJourneyTextsGrouped("en"),
     ]);
 
@@ -95,11 +96,21 @@ export function ContentTab() {
     else toast.error(journeyResult.error);
 
     setIsLoading(false);
-  }, [productLocale]);
+  }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Refetch only product texts when locale changes
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const result = await getProductTexts(productLocale);
+      if (!cancelled && result.success) setProducts(result.data);
+    })();
+    return () => { cancelled = true; };
+  }, [productLocale]);
 
   // Media handlers
   const handleReplace = useCallback((m: MarketingMedia) => {
@@ -145,7 +156,7 @@ export function ContentTab() {
 
   return (
     <>
-      <Tabs defaultValue="hero" className="space-y-4">
+      <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="hero">Hero</TabsTrigger>
           <TabsTrigger value="products">Products</TabsTrigger>
