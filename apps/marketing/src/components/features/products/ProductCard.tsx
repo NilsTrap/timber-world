@@ -17,11 +17,12 @@ interface ProductCardProps {
   title: string;
   description: string;
   specification: string;
+  specificationLabel?: string;
   imageUrl: string | null;
   altText: string | null;
 }
 
-export function ProductCard({ title, description, specification, imageUrl, altText }: ProductCardProps) {
+export function ProductCard({ title, description, specification, specificationLabel = "Specification", imageUrl, altText }: ProductCardProps) {
   const handlePrint = useCallback(() => {
     const printWindow = window.open("", "_blank", "width=800,height=600");
     if (!printWindow) return;
@@ -47,7 +48,7 @@ export function ProductCard({ title, description, specification, imageUrl, altTe
   <h1>${escapeHtml(title)}</h1>
   ${imageUrl ? `<img src="${imageUrl}" alt="${escapeHtml(altText || title)}" />` : ""}
   ${description ? `<p class="description">${nl2br(description)}</p>` : ""}
-  ${specification ? `<h2>Specification</h2><div class="specification">${nl2br(specification)}</div>` : ""}
+  ${specification ? `<h2>${escapeHtml(specificationLabel)}</h2><div class="specification">${nl2br(specification)}</div>` : ""}
   <script>
     ${imageUrl ? `
     const img = document.querySelector('img');
@@ -59,7 +60,7 @@ export function ProductCard({ title, description, specification, imageUrl, altTe
 </body>
 </html>`);
     printWindow.document.close();
-  }, [title, description, specification, imageUrl, altText]);
+  }, [title, description, specification, specificationLabel, imageUrl, altText]);
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
@@ -93,10 +94,10 @@ export function ProductCard({ title, description, specification, imageUrl, altTe
         <button
           onClick={handlePrint}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-gray-600 border border-gray-200 hover:text-charcoal hover:border-gray-300 hover:bg-gray-50 transition-colors"
-          title="Specification"
+          title={specificationLabel}
         >
           <Printer className="h-3.5 w-3.5" />
-          Specification
+          {specificationLabel}
         </button>
       </div>
     </div>

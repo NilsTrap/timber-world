@@ -218,6 +218,12 @@
     "accept": "Acceptera",
     "reject": "Avvisa"
   },
+  "products": {
+    "title": "Våra Produkter",
+    "description": "Utforska vårt sortiment av premium ekpaneler och trälösningar, tillverkade med expertis från hållbara europeiska skogar.",
+    "noProducts": "Produkter kommer snart. Kom tillbaka senare.",
+    "specification": "Specifikation"
+  },
   "privacy": {
     "title": "Integritetspolicy",
     "intro": "På Timber International respekterar vi din integritet. Denna policy förklarar vilken information vi samlar in när du besöker vår webbplats och hur vi använder den.",

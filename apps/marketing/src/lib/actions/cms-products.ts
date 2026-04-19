@@ -24,6 +24,7 @@ interface MediaRow {
 interface TextRow {
   section: string;
   key: string;
+  locale: string;
   value: string;
 }
 
@@ -32,7 +33,7 @@ interface TextRow {
  *
  * Fetches product images and texts from the CMS for the Products page.
  */
-export async function getCMSProducts(): Promise<CMSProduct[]> {
+export async function getCMSProducts(locale: string = "en"): Promise<CMSProduct[]> {
   const supabase = await createClient();
 
   // Fetch product images
@@ -53,18 +54,23 @@ export async function getCMSProducts(): Promise<CMSProduct[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: textsData, error: textsError } = await (supabase as any)
     .from("marketing_texts")
-    .select("section, key, value")
+    .select("section, key, locale, value")
     .eq("category", "products")
-    .eq("locale", "en");
+    .in("locale", [locale, "en"]);
 
   if (textsError) {
     console.error("Failed to fetch product texts:", textsError);
     return [];
   }
 
-  // Build text map
+  // Build text map: English first as fallback, then requested locale overwrites
   const textMap = new Map<string, string>();
-  for (const text of (textsData as TextRow[]) || []) {
+  const enTexts = ((textsData as TextRow[]) || []).filter((t) => t.locale === "en");
+  const localeTexts = ((textsData as TextRow[]) || []).filter((t) => t.locale === locale);
+  for (const text of enTexts) {
+    textMap.set(`${text.section}.${text.key}`, text.value);
+  }
+  for (const text of localeTexts) {
     textMap.set(`${text.section}.${text.key}`, text.value);
   }
 

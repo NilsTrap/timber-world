@@ -218,6 +218,12 @@
     "accept": "Aceptar",
     "reject": "Rechazar"
   },
+  "products": {
+    "title": "Nuestros Productos",
+    "description": "Explore nuestra gama de paneles de roble premium y soluciones de madera, elaborados con experiencia de bosques europeos sostenibles.",
+    "noProducts": "Productos próximamente. Vuelva más tarde.",
+    "specification": "Especificación"
+  },
   "privacy": {
     "title": "Política de Privacidad",
     "intro": "En Timber International, respetamos su privacidad. Esta política explica qué información recopilamos cuando visita nuestro sitio web y cómo la utilizamos.",

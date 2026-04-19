@@ -36,7 +36,7 @@ export default async function ProductsPage({ params }: Props) {
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: "products" });
-  const products = await getCMSProducts();
+  const products = await getCMSProducts(locale);
 
   return (
     <div className="bg-warm-cream min-h-screen">
@@ -70,6 +70,7 @@ export default async function ProductsPage({ params }: Props) {
                   title={product.title}
                   description={product.description}
                   specification={product.specification}
+                  specificationLabel={t("specification")}
                   imageUrl={product.imageUrl}
                   altText={product.altText}
                 />

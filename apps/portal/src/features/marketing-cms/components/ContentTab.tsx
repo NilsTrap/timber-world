@@ -12,6 +12,11 @@ import {
   Input,
   Textarea,
   Card,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@timber/ui";
 import { getMarketingMedia, getHeroTexts, getProductTexts, getJourneyTextsGrouped, updateMarketingText, updateMarketingMedia } from "../actions";
 import { MediaCard } from "./MediaCard";
@@ -64,6 +69,7 @@ export function ContentTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
   const [togglingSlots, setTogglingSlots] = useState<Set<string>>(new Set());
+  const [productLocale, setProductLocale] = useState("en");
 
   // Fetch all data
   const fetchData = useCallback(async () => {
@@ -72,7 +78,7 @@ export function ContentTab() {
     const [mediaResult, heroResult, productsResult, journeyResult] = await Promise.all([
       getMarketingMedia(),
       getHeroTexts("en"),
-      getProductTexts("en"),
+      getProductTexts(productLocale),
       getJourneyTextsGrouped("en"),
     ]);
 
@@ -89,7 +95,7 @@ export function ContentTab() {
     else toast.error(journeyResult.error);
 
     setIsLoading(false);
-  }, []);
+  }, [productLocale]);
 
   useEffect(() => {
     fetchData();
@@ -110,7 +116,8 @@ export function ContentTab() {
     const saveKey = `${category}.${section}.${key}`;
     setSavingKeys((prev) => new Set(prev).add(saveKey));
 
-    const result = await updateMarketingText(category, section, key, value, "en");
+    const locale = category === "products" ? productLocale : "en";
+    const result = await updateMarketingText(category, section, key, value, locale);
 
     setSavingKeys((prev) => {
       const next = new Set(prev);
@@ -221,9 +228,29 @@ export function ContentTab() {
         {/* Products Sub-tab */}
         <TabsContent value="products" className="space-y-6">
           <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-2">Products</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-semibold">Products</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Language:</span>
+                <Select value={productLocale} onValueChange={setProductLocale}>
+                  <SelectTrigger className="w-28 h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="fi">Finnish</SelectItem>
+                    <SelectItem value="sv">Swedish</SelectItem>
+                    <SelectItem value="no">Norwegian</SelectItem>
+                    <SelectItem value="da">Danish</SelectItem>
+                    <SelectItem value="nl">Dutch</SelectItem>
+                    <SelectItem value="de">German</SelectItem>
+                    <SelectItem value="es">Spanish</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <p className="text-sm text-muted-foreground mb-6">
-              Product images, titles, and descriptions for the Products page.
+              Product images, titles, descriptions, and specifications. Switch language to edit translations.
             </p>
 
             <div className="space-y-6">

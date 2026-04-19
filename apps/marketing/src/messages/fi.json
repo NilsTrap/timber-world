@@ -218,6 +218,12 @@
     "accept": "Hyväksy",
     "reject": "Hylkää"
   },
+  "products": {
+    "title": "Tuotteemme",
+    "description": "Tutustu valikoimaamme laadukkaita tammipaneeleja ja puutuotteita, jotka on valmistettu ammattitaidolla kestävistä eurooppalaisista metsistä.",
+    "noProducts": "Tuotteita tulossa pian. Tarkista myöhemmin uudelleen.",
+    "specification": "Tuotetiedot"
+  },
   "privacy": {
     "title": "Tietosuojakäytäntö",
     "intro": "Timber Internationalilla kunnioitamme yksityisyyttäsi. Tämä käytäntö selittää, mitä tietoja keräämme vieraillessasi verkkosivustollamme ja miten käytämme niitä.",

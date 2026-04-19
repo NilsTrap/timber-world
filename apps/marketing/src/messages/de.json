@@ -218,6 +218,12 @@
     "accept": "Akzeptieren",
     "reject": "Ablehnen"
   },
+  "products": {
+    "title": "Unsere Produkte",
+    "description": "Entdecken Sie unser Sortiment an hochwertigen Eichenpaneelen und Holzlösungen, mit Fachwissen aus nachhaltigen europäischen Wäldern gefertigt.",
+    "noProducts": "Produkte kommen bald. Schauen Sie später noch einmal vorbei.",
+    "specification": "Spezifikation"
+  },
   "privacy": {
     "title": "Datenschutzerklärung",
     "intro": "Bei Timber International respektieren wir Ihre Privatsphäre. Diese Richtlinie erklärt, welche Informationen wir sammeln, wenn Sie unsere Website besuchen, und wie wir sie verwenden.",

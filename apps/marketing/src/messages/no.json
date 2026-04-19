@@ -218,6 +218,12 @@
     "accept": "Godta",
     "reject": "Avslå"
   },
+  "products": {
+    "title": "Våre Produkter",
+    "description": "Utforsk vårt utvalg av premium eikepaneler og treløsninger, laget med ekspertise fra bærekraftige europeiske skoger.",
+    "noProducts": "Produkter kommer snart. Sjekk tilbake senere.",
+    "specification": "Spesifikasjon"
+  },
   "privacy": {
     "title": "Personvernerklæring",
     "intro": "Hos Timber International respekterer vi personvernet ditt. Denne erklæringen forklarer hvilken informasjon vi samler inn når du besøker nettstedet vårt og hvordan vi bruker den.",

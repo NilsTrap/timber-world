@@ -218,6 +218,12 @@
     "accept": "Accepteren",
     "reject": "Weigeren"
   },
+  "products": {
+    "title": "Onze Producten",
+    "description": "Ontdek ons assortiment premium eiken panelen en houtoplossingen, vakkundig vervaardigd uit duurzame Europese bossen.",
+    "noProducts": "Producten komen binnenkort. Kom later terug.",
+    "specification": "Specificatie"
+  },
   "privacy": {
     "title": "Privacybeleid",
     "intro": "Bij Timber International respecteren wij uw privacy. Dit beleid legt uit welke informatie wij verzamelen wanneer u onze website bezoekt en hoe wij deze gebruiken.",
