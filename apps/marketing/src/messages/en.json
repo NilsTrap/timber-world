@@ -13,7 +13,6 @@
     "inStock": "In Stock",
     "resources": "Resources",
     "contact": "Contact",
-    "specifications": "Specifications",
     "requestQuote": "Request Quote",
     "skipToContent": "Skip to main content"
   },
@@ -225,13 +224,6 @@
     "title": "Our Products",
     "description": "Explore our range of premium oak panels and wood solutions, crafted with expertise from sustainable European forests.",
     "noProducts": "Products coming soon. Check back later."
-  },
-  "specifications": {
-    "title": "Product Specifications",
-    "description": "Download detailed specifications, technical data sheets, and product images.",
-    "noSpecs": "Specifications coming soon. Check back later.",
-    "download": "Download",
-    "files": "{count, plural, =1 {1 file} other {# files}}"
   },
   "privacy": {
     "title": "Privacy Policy",

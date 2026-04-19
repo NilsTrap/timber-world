@@ -12,7 +12,6 @@ export const siteConfig = {
   navigation: [
     { name: 'Products', href: '/products', key: 'products' },
     { name: 'In Stock', href: '/stock', key: 'inStock' },
-    { name: 'Specifications', href: '/specifications', key: 'specifications' },
     { name: 'Request Quote', href: '/quote', key: 'requestQuote' },
   ],
 } as const;
