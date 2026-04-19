@@ -69,6 +69,7 @@ export default async function ProductsPage({ params }: Props) {
                   productKey={product.key}
                   title={product.title}
                   description={product.description}
+                  specification={product.specification}
                   imageUrl={product.imageUrl}
                   altText={product.altText}
                 />

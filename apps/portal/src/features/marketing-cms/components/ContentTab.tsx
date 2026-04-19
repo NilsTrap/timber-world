@@ -233,6 +233,7 @@ export function ContentTab() {
                   key: slot.key,
                   title: "",
                   description: "",
+                  specification: "",
                 };
 
                 const isActive = mediaItem?.isActive ?? true;
@@ -347,6 +348,40 @@ export function ContentTab() {
                               disabled={savingKeys.has(`products.${slot.key}.description`)}
                             >
                               {savingKeys.has(`products.${slot.key}.description`) ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Save className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium flex items-center gap-2">
+                            <HeadingBadge level="P" />
+                            Specification
+                          </label>
+                          <div className="flex gap-2">
+                            <Textarea
+                              value={productText.specification}
+                              onChange={(e) =>
+                                setProducts((prev) =>
+                                  prev.map((p) =>
+                                    p.key === slot.key ? { ...p, specification: e.target.value } : p
+                                  )
+                                )
+                              }
+                              placeholder="Product specification (shown when user clicks Specification button)"
+                              rows={4}
+                              className="flex-1"
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => saveText("products", slot.key, "specification", productText.specification)}
+                              disabled={savingKeys.has(`products.${slot.key}.specification`)}
+                            >
+                              {savingKeys.has(`products.${slot.key}.specification`) ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
                                 <Save className="h-4 w-4" />

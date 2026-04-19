@@ -186,6 +186,7 @@ export async function getProductTexts(
     key: slot.key,
     title: textMap.get(`${slot.key}.title`) || slot.label,
     description: textMap.get(`${slot.key}.description`) || "",
+    specification: textMap.get(`${slot.key}.specification`) || "",
   }));
 
   return {

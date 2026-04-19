@@ -155,4 +155,5 @@ export interface ProductTexts {
   key: string;
   title: string;
   description: string;
+  specification: string;
 }

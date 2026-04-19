@@ -9,6 +9,7 @@ export interface CMSProduct {
   key: string;
   title: string;
   description: string;
+  specification: string;
   imageUrl: string | null;
   altText: string | null;
 }
@@ -85,6 +86,7 @@ export async function getCMSProducts(): Promise<CMSProduct[]> {
       key,
       title: textMap.get(`${key}.title`) || key.replace("product-", "Product "),
       description: textMap.get(`${key}.description`) || "",
+      specification: textMap.get(`${key}.specification`) || "",
       imageUrl: urlData?.publicUrl || null,
       altText: media.alt_text,
     });
