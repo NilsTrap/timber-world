@@ -7,3 +7,4 @@ export { MediaUploadDialog } from "./MediaUploadDialog";
 export { HeroMediaSection } from "./HeroMediaSection";
 export { LogosSection } from "./LogosSection";
 export { ProductsSection } from "./ProductsSection";
+export { SpecificationsTab } from "./SpecificationsTab";

@@ -4,6 +4,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@timber/ui";
 import { ContentTab } from "./ContentTab";
 import { MetaTab } from "./MetaTab";
+import { SpecificationsTab } from "./SpecificationsTab";
 import { ReferenceDataManager } from "@/features/reference-data";
 import { AnalyticsDashboard } from "@/features/analytics";
 import { MarketingStockManager } from "@/features/marketing-stock";
@@ -13,7 +14,7 @@ interface MarketingCmsManagerProps {
   canDelete?: boolean;
 }
 
-const VALID_TABS = ["content", "meta", "reference", "analytics", "stock"] as const;
+const VALID_TABS = ["content", "specifications", "meta", "reference", "analytics", "stock"] as const;
 type TabValue = (typeof VALID_TABS)[number];
 
 /**
@@ -50,6 +51,7 @@ export function MarketingCmsManager({ canDelete = false }: MarketingCmsManagerPr
     <Tabs value={currentTab} onValueChange={handleTabChange}>
       <TabsList>
         <TabsTrigger value="content">Content</TabsTrigger>
+        <TabsTrigger value="specifications">Specifications</TabsTrigger>
         <TabsTrigger value="meta">Meta</TabsTrigger>
         <TabsTrigger value="reference">Reference Data</TabsTrigger>
         <TabsTrigger value="analytics">Analytics</TabsTrigger>
@@ -58,6 +60,10 @@ export function MarketingCmsManager({ canDelete = false }: MarketingCmsManagerPr
 
       <TabsContent value="content" className="mt-4">
         <ContentTab />
+      </TabsContent>
+
+      <TabsContent value="specifications" className="mt-4">
+        <SpecificationsTab />
       </TabsContent>
 
       <TabsContent value="meta" className="mt-4">
