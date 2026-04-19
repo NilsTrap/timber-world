@@ -83,10 +83,11 @@ export function ProductCard({ title, description, imageUrl, altText }: ProductCa
           </h3>
           <button
             onClick={handlePrint}
-            className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-charcoal hover:bg-gray-100 transition-colors"
-            title="Print / Save as PDF"
+            className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-xs text-gray-500 hover:text-charcoal hover:bg-gray-100 transition-colors"
+            title="Specification"
           >
-            <Printer className="h-4 w-4" />
+            <Printer className="h-3.5 w-3.5" />
+            Specification
           </button>
         </div>
         {description && (
