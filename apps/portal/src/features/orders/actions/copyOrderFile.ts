@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
+import { sanitizeStorageFileName } from "@/lib/utils/storage";
 import { PDFDocument, rgb } from "pdf-lib";
 import type { ActionResult, OrderFileCategory } from "../types";
 import { logOrderActivity } from "./logOrderActivity";
@@ -87,7 +88,8 @@ export async function copyOrderFile(
   // Upload to new path under target category
   const uniqueId = crypto.randomUUID();
   const fileName = stripLogo ? file.file_name.replace(/\.pdf$/i, "_nl.pdf") : file.file_name;
-  const newStoragePath = `${file.order_id}/${targetCategory}/${uniqueId}_${fileName}`;
+  const safeName = sanitizeStorageFileName(fileName);
+  const newStoragePath = `${file.order_id}/${targetCategory}/${uniqueId}_${safeName}`;
 
   const arrayBuffer = await fileData.arrayBuffer();
   let uploadData: Uint8Array | ArrayBuffer = arrayBuffer;
@@ -109,7 +111,11 @@ export async function copyOrderFile(
 
   if (uploadError) {
     console.error("Failed to upload copied file:", uploadError);
-    return { success: false, error: "Failed to copy file", code: "UPLOAD_FAILED" };
+    return {
+      success: false,
+      error: `Failed to copy file: ${uploadError.message}`,
+      code: "UPLOAD_FAILED",
+    };
   }
 
   // Insert new DB record

@@ -2,10 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
+import { sanitizeStorageFileName, resolveContentType } from "@/lib/utils/storage";
 import type { OrderFile, OrderFileCategory, ActionResult } from "../types";
 import { logOrderActivity } from "./logOrderActivity";
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 /**
  * Upload Order File
@@ -28,7 +29,7 @@ export async function uploadOrderFile(
   }
 
   if (file.size > MAX_FILE_SIZE) {
-    return { success: false, error: "File too large. Maximum size: 25MB", code: "FILE_TOO_LARGE" };
+    return { success: false, error: "File too large. Maximum size: 100MB", code: "FILE_TOO_LARGE" };
   }
 
   if (category !== "customer" && category !== "production") {
@@ -37,21 +38,27 @@ export async function uploadOrderFile(
 
   const supabase = await createClient();
 
-  // Build unique storage path
+  // Build unique storage path — sanitize filename so characters Supabase
+  // Storage rejects (e.g. `^`, `#`) don't cause the upload to fail.
   const uniqueId = crypto.randomUUID();
-  const storagePath = `${orderId}/${category}/${uniqueId}_${file.name}`;
+  const safeName = sanitizeStorageFileName(file.name);
+  const storagePath = `${orderId}/${category}/${uniqueId}_${safeName}`;
 
   // Upload to storage
   const arrayBuffer = await file.arrayBuffer();
   const { error: uploadError } = await supabase.storage
     .from("orders")
     .upload(storagePath, arrayBuffer, {
-      contentType: file.type,
+      contentType: resolveContentType(file.type),
     });
 
   if (uploadError) {
     console.error("Failed to upload order file:", uploadError);
-    return { success: false, error: "Failed to upload file", code: "UPLOAD_FAILED" };
+    return {
+      success: false,
+      error: `Failed to upload file: ${uploadError.message}`,
+      code: "UPLOAD_FAILED",
+    };
   }
 
   // Insert DB record

@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   // Allow larger server action payloads for file uploads (default is 1MB)
   experimental: {
     serverActions: {
-      bodySizeLimit: "25mb",
+      bodySizeLimit: "100mb",
     },
   },
   // Use .nosync suffix locally to prevent iCloud sync, but use .next on Vercel
