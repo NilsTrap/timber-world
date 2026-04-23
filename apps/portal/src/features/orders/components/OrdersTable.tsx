@@ -305,7 +305,30 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
   }, [canSelectCustomer, isAdmin]);
 
   // --- ColumnHeaderMenu sort/filter ---
-  const [columnSort, setColumnSort] = useState<ColumnSortState | null>({ column: "dateReceived", direction: "desc" });
+  // Persist sort per tab in sessionStorage so switching between list/sales/production/analytics
+  // and returning keeps whatever column/direction the user picked.
+  const sortStorageKey = `orders-${tab}-sort`;
+  const [columnSort, setColumnSortState] = useState<ColumnSortState | null>(() => {
+    if (typeof window === "undefined") return { column: "dateReceived", direction: "desc" };
+    const stored = sessionStorage.getItem(sortStorageKey);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed === null || (parsed && typeof parsed.column === "string" && (parsed.direction === "asc" || parsed.direction === "desc"))) {
+          return parsed;
+        }
+      } catch {
+        // fall through to default
+      }
+    }
+    return { column: "dateReceived", direction: "desc" };
+  });
+  const setColumnSort = useCallback<(value: ColumnSortState | null) => void>((value) => {
+    setColumnSortState(value);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(sortStorageKey, JSON.stringify(value));
+    }
+  }, [sortStorageKey]);
   const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
 
   const handleFilterChange = useCallback(
@@ -348,20 +371,20 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
       case "diffTransport": return order.invoicedTransport > 0 && order.usedTransport > 0 ? (order.invoicedTransport - order.usedTransport).toFixed(2) : "";
       case "diffTransportPercent": return order.invoicedTransport > 0 && order.usedTransport > 0 ? (((order.invoicedTransport - order.usedTransport) / order.invoicedTransport) * 100).toFixed(1) : "";
       case "treadM3": return order.treadM3 > 0 ? order.treadM3.toFixed(4) : "";
-      case "winderM3": return order.winderM3 > 0 ? order.winderM3.toFixed(4) : "";
-      case "quarterM3": return order.quarterM3 > 0 ? order.quarterM3.toFixed(4) : "";
+      case "winderM3": return order.winderM3 != null ? order.winderM3.toFixed(4) : "";
+      case "quarterM3": return order.quarterM3 != null ? order.quarterM3.toFixed(4) : "";
       case "totalProducedM3": return order.totalProducedM3 > 0 ? order.totalProducedM3.toFixed(4) : "";
       case "usedMaterialM3": return order.usedMaterialM3 > 0 ? order.usedMaterialM3.toFixed(4) : "";
       case "wasteM3": return order.wasteM3 > 0 ? order.wasteM3.toFixed(4) : "";
       case "wastePercent": return order.wastePercent > 0 ? order.wastePercent.toFixed(1) : "";
-      case "productionMaterial": return order.productionMaterial > 0 ? order.productionMaterial.toFixed(2) : "";
-      case "productionFinishing": return order.productionFinishing > 0 ? order.productionFinishing.toFixed(2) : "";
-      case "productionTotal": return order.productionTotal > 0 ? order.productionTotal.toFixed(2) : "";
+      case "productionMaterial": return order.productionMaterial != null ? order.productionMaterial.toFixed(2) : "";
+      case "productionFinishing": return order.productionFinishing != null ? order.productionFinishing.toFixed(2) : "";
+      case "productionTotal": return order.productionTotal != null ? order.productionTotal.toFixed(2) : "";
       case "productionInvoiceNumber": return order.productionInvoiceNumber || "";
       case "productionPaymentDate": return formatDate(order.productionPaymentDate);
-      case "woodArt": return order.woodArt > 0 ? order.woodArt.toFixed(2) : "";
-      case "woodArtCnc": return order.woodArtCnc > 0 ? order.woodArtCnc.toFixed(2) : "";
-      case "woodArtTotal": return order.woodArtTotal > 0 ? order.woodArtTotal.toFixed(2) : "";
+      case "woodArt": return order.woodArt != null ? order.woodArt.toFixed(2) : "";
+      case "woodArtCnc": return order.woodArtCnc != null ? order.woodArtCnc.toFixed(2) : "";
+      case "woodArtTotal": return order.woodArtTotal != null ? order.woodArtTotal.toFixed(2) : "";
       case "woodArtInvoiceNumber": return order.woodArtInvoiceNumber || "";
       case "woodArtPaymentDate": return formatDate(order.woodArtPaymentDate);
       case "advanceInvoiceNumber": return order.advanceInvoiceNumber || "";
@@ -581,17 +604,19 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
     [organisations]
   );
 
-  // Save a production m³ field and recalculate derived values locally
+  // Save a production m³ field and recalculate derived values locally.
+  // Empty string → null (cell shows "-"); "0" → 0 (cell shows 0).
   const saveProductionField = useCallback(
     async (orderId: string, fieldName: "treadM3" | "winderM3" | "quarterM3" | "usedMaterialM3", value: string) => {
-      const numVal = value ? parseFloat(value.replace(",", ".")) : null;
+      const trimmed = value.trim();
+      const numVal = trimmed === "" ? null : parseFloat(trimmed.replace(",", "."));
       const result = await updateOrder(orderId, { [fieldName]: numVal }, tab);
       if (result.success) {
         setOrders((prev) =>
           prev.map((o) => {
             if (o.id !== orderId) return o;
-            const updated = { ...o, [fieldName]: numVal ?? 0, updatedAt: result.data.updatedAt };
-            const total = updated.treadM3 + updated.winderM3 + updated.quarterM3;
+            const updated = { ...o, [fieldName]: numVal, updatedAt: result.data.updatedAt };
+            const total = updated.treadM3 + (updated.winderM3 ?? 0) + (updated.quarterM3 ?? 0);
             updated.totalProducedM3 = total;
             updated.wasteM3 = updated.usedMaterialM3 > 0 ? updated.usedMaterialM3 - total : 0;
             updated.wastePercent = updated.usedMaterialM3 > 0 ? (updated.wasteM3 / updated.usedMaterialM3) * 100 : 0;
@@ -605,18 +630,24 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
     []
   );
 
-  // Save a production cost field and recalculate totals locally
+  // Save a production cost field and recalculate totals locally.
+  // Totals are null only when both halves are null so the UI can keep "-" until the user enters something.
   const saveProductionCostField = useCallback(
     async (orderId: string, fieldName: "productionMaterial" | "productionFinishing" | "woodArt" | "woodArtCnc", value: string) => {
-      const numVal = value ? parseFloat(value.replace(",", ".")) : null;
+      const trimmed = value.trim();
+      const numVal = trimmed === "" ? null : parseFloat(trimmed.replace(",", "."));
       const result = await updateOrder(orderId, { [fieldName]: numVal }, tab);
       if (result.success) {
         setOrders((prev) =>
           prev.map((o) => {
             if (o.id !== orderId) return o;
-            const updated = { ...o, [fieldName]: numVal ?? 0, updatedAt: result.data.updatedAt };
-            updated.productionTotal = updated.productionMaterial + updated.productionFinishing;
-            updated.woodArtTotal = updated.woodArt + updated.woodArtCnc;
+            const updated = { ...o, [fieldName]: numVal, updatedAt: result.data.updatedAt };
+            updated.productionTotal = updated.productionMaterial == null && updated.productionFinishing == null
+              ? null
+              : (updated.productionMaterial ?? 0) + (updated.productionFinishing ?? 0);
+            updated.woodArtTotal = updated.woodArt == null && updated.woodArtCnc == null
+              ? null
+              : (updated.woodArt ?? 0) + (updated.woodArtCnc ?? 0);
             return updated;
           })
         );
@@ -1245,7 +1276,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {show("winderM3") && (
                   <TableCell className="px-2 text-sm">
                     <EditableCell
-                      value={order.winderM3 > 0 ? order.winderM3.toFixed(4) : ""}
+                      value={order.winderM3 != null ? order.winderM3.toFixed(4) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionField(order.id, "winderM3", val)}
 
@@ -1256,7 +1287,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {show("quarterM3") && (
                   <TableCell className="px-2 text-sm">
                     <EditableCell
-                      value={order.quarterM3 > 0 ? order.quarterM3.toFixed(4) : ""}
+                      value={order.quarterM3 != null ? order.quarterM3.toFixed(4) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionField(order.id, "quarterM3", val)}
 
@@ -1293,7 +1324,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {show("productionMaterial") && (
                   <TableCell className="px-2 text-sm">
                     <EditableCell
-                      value={order.productionMaterial > 0 ? order.productionMaterial.toFixed(2) : ""}
+                      value={order.productionMaterial != null ? order.productionMaterial.toFixed(2) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionCostField(order.id, "productionMaterial", val)}
 
@@ -1304,7 +1335,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {show("productionFinishing") && (
                   <TableCell className="px-2 text-sm">
                     <EditableCell
-                      value={order.productionFinishing > 0 ? order.productionFinishing.toFixed(2) : ""}
+                      value={order.productionFinishing != null ? order.productionFinishing.toFixed(2) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionCostField(order.id, "productionFinishing", val)}
 
@@ -1314,7 +1345,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   )}
                   {show("productionTotal") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.productionTotal > 0 ? order.productionTotal.toFixed(2) : <span className="text-muted-foreground">-</span>}
+                    {order.productionTotal != null ? order.productionTotal.toFixed(2) : <span className="text-muted-foreground">-</span>}
                   </TableCell>
                   )}
                   {show("productionInvoiceNumber") && (
@@ -1341,7 +1372,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {show("woodArt") && (
                   <TableCell className="px-2 text-sm">
                     <EditableCell
-                      value={order.woodArt > 0 ? order.woodArt.toFixed(2) : ""}
+                      value={order.woodArt != null ? order.woodArt.toFixed(2) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionCostField(order.id, "woodArt", val)}
 
@@ -1352,7 +1383,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {show("woodArtCnc") && (
                   <TableCell className="px-2 text-sm">
                     <EditableCell
-                      value={order.woodArtCnc > 0 ? order.woodArtCnc.toFixed(2) : ""}
+                      value={order.woodArtCnc != null ? order.woodArtCnc.toFixed(2) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionCostField(order.id, "woodArtCnc", val)}
 
@@ -1362,7 +1393,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   )}
                   {show("woodArtTotal") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.woodArtTotal > 0 ? order.woodArtTotal.toFixed(2) : <span className="text-muted-foreground">-</span>}
+                    {order.woodArtTotal != null ? order.woodArtTotal.toFixed(2) : <span className="text-muted-foreground">-</span>}
                   </TableCell>
                   )}
                   {show("woodArtInvoiceNumber") && (
@@ -1442,9 +1473,9 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   </TableCell>
                   )}
                   {show("usedWork") && (() => {
-                    const f = order.productionFinishing;
-                    const wa = order.woodArt;
-                    const cnc = order.woodArtCnc;
+                    const f = order.productionFinishing ?? 0;
+                    const wa = order.woodArt ?? 0;
+                    const cnc = order.woodArtCnc ?? 0;
                     const tooltip = order.usedWork > 0
                       ? `Finishing ${f.toFixed(2)} + Gluing ${wa.toFixed(2)} + CNC ${cnc.toFixed(2)} = ${order.usedWork.toFixed(2)}`
                       : "No data";

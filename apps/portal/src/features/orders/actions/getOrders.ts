@@ -299,11 +299,16 @@ export async function getOrders(options?: {
     }
     const typeSummary = typeSet.size > 0 ? [...typeSet].join(", ") : null;
 
-    // Use stored DB values if available, otherwise use computed from production data
+    // Use stored DB values if available, otherwise use computed from production data.
+    // `null` means "never entered" (UI shows "-"); `0` means "explicitly zero" (UI shows 0).
     const finalTreadM3 = row.tread_m3 != null ? parseFloat(row.tread_m3) : treadM3;
-    const finalWinderM3 = row.winder_m3 != null ? parseFloat(row.winder_m3) : winderM3;
-    const finalQuarterM3 = row.quarter_m3 != null ? parseFloat(row.quarter_m3) : quarterM3;
-    const finalTotalProducedM3 = finalTreadM3 + finalWinderM3 + finalQuarterM3;
+    const finalWinderM3: number | null = row.winder_m3 != null
+      ? parseFloat(row.winder_m3)
+      : (winderM3 > 0 ? winderM3 : null);
+    const finalQuarterM3: number | null = row.quarter_m3 != null
+      ? parseFloat(row.quarter_m3)
+      : (quarterM3 > 0 ? quarterM3 : null);
+    const finalTotalProducedM3 = finalTreadM3 + (finalWinderM3 ?? 0) + (finalQuarterM3 ?? 0);
 
     let computedUsedMaterialM3 = 0;
     for (const entryId of productionEntryIds) {
@@ -344,16 +349,20 @@ export async function getOrders(options?: {
     usedMaterialM3: finalUsedMaterialM3,
     wasteM3: finalWasteM3,
     wastePercent: finalWastePercent,
-    productionMaterial: parseFloat(row.production_material) || 0,
+    productionMaterial: row.production_material != null ? parseFloat(row.production_material) : null,
     productionWork: parseFloat(row.production_work) || 0,
-    productionFinishing: parseFloat(row.production_finishing) || 0,
-    productionTotal: (parseFloat(row.production_material) || 0) + (parseFloat(row.production_finishing) || 0),
+    productionFinishing: row.production_finishing != null ? parseFloat(row.production_finishing) : null,
+    productionTotal: row.production_material == null && row.production_finishing == null
+      ? null
+      : (parseFloat(row.production_material) || 0) + (parseFloat(row.production_finishing) || 0),
     productionInvoiceNumber: row.production_invoice_number as string | null,
     productionPaymentDate: row.production_payment_date as string | null,
-    woodArt: parseFloat(row.wood_art) || 0,
+    woodArt: row.wood_art != null ? parseFloat(row.wood_art) : null,
     glowing: parseFloat(row.glowing) || 0,
-    woodArtCnc: parseFloat(row.wood_art_cnc) || 0,
-    woodArtTotal: (parseFloat(row.wood_art) || 0) + (parseFloat(row.wood_art_cnc) || 0),
+    woodArtCnc: row.wood_art_cnc != null ? parseFloat(row.wood_art_cnc) : null,
+    woodArtTotal: row.wood_art == null && row.wood_art_cnc == null
+      ? null
+      : (parseFloat(row.wood_art) || 0) + (parseFloat(row.wood_art_cnc) || 0),
     woodArtInvoiceNumber: row.wood_art_invoice_number as string | null,
     woodArtPaymentDate: row.wood_art_payment_date as string | null,
     advanceInvoiceNumber: row.advance_invoice_number as string | null,

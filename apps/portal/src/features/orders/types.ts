@@ -39,10 +39,10 @@ export interface Order {
   maxM3: number;
   /** Produced tread volume in m³ */
   treadM3: number;
-  /** Produced winder volume in m³ */
-  winderM3: number;
-  /** Produced quarter volume in m³ */
-  quarterM3: number;
+  /** Produced winder volume in m³. `null` when never entered; `0` when explicitly set to zero. */
+  winderM3: number | null;
+  /** Produced quarter volume in m³. `null` when never entered; `0` when explicitly set to zero. */
+  quarterM3: number | null;
   /** Total produced volume in m³ (tread + winder + quarter) */
   totalProducedM3: number;
   /** Used material volume in m³ (from production inputs) */
@@ -51,18 +51,20 @@ export interface Order {
   wasteM3: number;
   /** Waste percentage (waste / used material × 100) */
   wastePercent: number;
-  /** Production cost fields */
-  productionMaterial: number;
+  /** Production cost fields. `null` when never entered; `0` when explicitly set to zero. */
+  productionMaterial: number | null;
   productionWork: number;
-  productionFinishing: number;
-  productionTotal: number;
+  productionFinishing: number | null;
+  /** Sum of productionMaterial + productionFinishing. `null` only when both parts are null. */
+  productionTotal: number | null;
   productionInvoiceNumber: string | null;
   productionPaymentDate: string | null;
-  /** Wood art cost fields */
-  woodArt: number;
+  /** Wood art cost fields. `null` when never entered; `0` when explicitly set to zero. */
+  woodArt: number | null;
   glowing: number;
-  woodArtCnc: number;
-  woodArtTotal: number;
+  woodArtCnc: number | null;
+  /** Sum of woodArt + woodArtCnc. `null` only when both parts are null. */
+  woodArtTotal: number | null;
   woodArtInvoiceNumber: string | null;
   woodArtPaymentDate: string | null;
   /** Advance invoice number */
