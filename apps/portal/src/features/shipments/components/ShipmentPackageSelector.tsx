@@ -196,7 +196,14 @@ export function ShipmentPackageSelector({
     setAdding(true);
     const result = await addPackagesToShipment(shipmentId, Array.from(selected));
     if (result.success) {
-      toast.success(`${result.data.added} package(s) added`);
+      const { added, requested, skipped, firstError } = result.data;
+      if (skipped > 0) {
+        toast.warning(
+          `Added ${added} of ${requested} package(s). ${skipped} could not be added${firstError ? `: ${firstError}` : "."}`
+        );
+      } else {
+        toast.success(`${added} package(s) added`);
+      }
       onPackagesAdded();
     } else {
       toast.error(result.error);

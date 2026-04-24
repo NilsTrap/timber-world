@@ -14,7 +14,7 @@ import type { ActionResult } from "../types";
 export async function addPackagesToShipment(
   shipmentId: string,
   packageIds: string[]
-): Promise<ActionResult<{ added: number }>> {
+): Promise<ActionResult<{ added: number; requested: number; skipped: number; firstError?: string }>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
@@ -134,12 +134,15 @@ export async function addPackagesToShipment(
     const sourceShipmentId = currentPkg?.source_shipment_id || currentPkg?.shipment_id || null;
 
     // Build update payload - always set package_sequence for the new shipment
-    // The shipment_seq unique constraint is on (shipment_id, package_sequence)
+    // The shipment_seq unique constraint is on (shipment_id, package_sequence).
+    // Null the pallet_id: pallets are per-shipment, so the source shipment's
+    // pallet reference would be orphan in the destination shipment.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updatePayload: any = {
       shipment_id: shipmentId,
       source_shipment_id: sourceShipmentId,
       package_sequence: nextSequence,
+      pallet_id: null,
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -172,7 +175,15 @@ export async function addPackagesToShipment(
     return { success: false, error: errors[0]!, code: "UPDATE_FAILED" };
   }
 
-  return { success: true, data: { added: addedCount } };
+  return {
+    success: true,
+    data: {
+      added: addedCount,
+      requested: packageIds.length,
+      skipped: packageIds.length - addedCount,
+      firstError: errors[0],
+    },
+  };
 }
 
 /**

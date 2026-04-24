@@ -288,13 +288,16 @@ export function ShipmentPalletTable({
     return rows;
   }, [packages, filterState, sortState, pallets]);
 
-  // Group packages by pallet
+  // Group packages by pallet.
+  // Packages whose pallet_id references a pallet that doesn't exist in THIS shipment
+  // (e.g. copied over from a source shipment) are grouped as loose so they still render.
   const palletGroups = useMemo(() => {
     const groups: PalletGroup[] = [];
+    const palletIdSet = new Set(pallets.map((p) => p.id));
     const palletPackages = new Map<string | null, PackageDetail[]>();
 
     for (const pkg of filteredPackages) {
-      const key = pkg.palletId;
+      const key = pkg.palletId && palletIdSet.has(pkg.palletId) ? pkg.palletId : null;
       if (!palletPackages.has(key)) {
         palletPackages.set(key, []);
       }
@@ -309,7 +312,7 @@ export function ShipmentPalletTable({
       groups.push({ pallet, packages: pkgs, totalPieces, totalVolume });
     }
 
-    // Add loose packages group (pallet = null)
+    // Add loose packages group (pallet = null or stale pallet_id)
     const loosePackages = palletPackages.get(null) ?? [];
     if (loosePackages.length > 0 || groups.length === 0) {
       const totalPieces = loosePackages.reduce((sum, p) => sum + (parseInt(p.pieces ?? "0") || 0), 0);
