@@ -700,6 +700,13 @@ export function IncomingShipmentPackageEditor({
     (importedPackages: EditablePackageItem[]) => {
       const newRows: PackageRow[] = importedPackages.map((pkg, index) => {
         const seq = latestRowsRef.current.length + index + 1;
+        // If the spreadsheet didn't include a volume column, compute it from
+        // dimensions + pieces so imported rows match manually-entered ones.
+        const needsAutoVolume =
+          (pkg.volumeM3 == null) && shouldAutoCalculate(pkg.thickness, pkg.width, pkg.length, pkg.pieces);
+        const computedVolume = needsAutoVolume
+          ? calculateVolume(pkg.thickness, pkg.width, pkg.length, pkg.pieces)
+          : null;
         return {
           id: pkg.id,
           isNew: true,
@@ -722,8 +729,8 @@ export function IncomingShipmentPackageEditor({
           width: pkg.width,
           length: pkg.length,
           pieces: pkg.pieces,
-          volumeM3: pkg.volumeM3,
-          volumeIsCalculated: pkg.volumeIsCalculated,
+          volumeM3: needsAutoVolume ? computedVolume : pkg.volumeM3,
+          volumeIsCalculated: needsAutoVolume ? true : pkg.volumeIsCalculated,
           palletId: null,
         };
       });

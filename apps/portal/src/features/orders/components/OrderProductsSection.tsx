@@ -296,7 +296,7 @@ export function OrderProductsSection({
             <>
               {rows.length} products
               {totalM3 > 0 && <> · {totalM3.toFixed(4)} m³</>}
-              {totalPrice > 0 && <> · £{totalPrice.toFixed(2)}</>}
+              {tab !== "production" && totalPrice > 0 && <> · £{totalPrice.toFixed(2)}</>}
             </>
           )}
         </span>

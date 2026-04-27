@@ -20,7 +20,7 @@
 #   - done: Story completed
 
 generated: 2026-01-22
-updated: 2026-04-20
+updated: 2026-04-27
 project: Timber-World
 project_key: platform
 tracking_system: file-system
@@ -182,6 +182,72 @@ development_status:
   # - Highlighted target package in history view (yellow background)
   # - Consumed output volume restoration in backward trace (matches forward pipeline logic)
   # - Orders analytics footer z-index and shadow fix
+
+  # Order File Upload Hardening (2026-04-21)
+  epic-order-file-upload-hardening: done
+  # - Sanitize filenames before building Supabase Storage path so chars like `^` (common in
+  #   CAD exports) no longer cause silent "Failed to upload file" errors
+  # - Fall back to application/octet-stream for unknown MIME types (.dxf etc.)
+  # - Surface real Supabase error message in toast instead of generic failure
+  # - Raise upload size limit 25MB → 100MB (uploadOrderFile + next.config bodySizeLimit)
+  # - Same sanitization applied to copyOrderFile
+
+  # Orders Table UX Polish (2026-04-23)
+  epic-orders-table-ux: done
+  # - Display 0 when explicitly entered for winder/quarter m³, material, finishing, gluing,
+  #   CNC and their totals (was collapsing to "-" because of `value > 0` checks)
+  # - Order type fields made nullable end-to-end: null = never entered, 0 = explicitly zero
+  # - Persist column sort per tab in sessionStorage (`orders-<tab>-sort`) so List/Sales/
+  #   Production/Analytics each remember their last sort across navigation and refresh
+
+  # Outgoing Shipment Pallet Fix (2026-04-24)
+  epic-outgoing-shipment-pallet-fix: done
+  # - Packages added to a new outgoing shipment carried their source shipment's pallet_id;
+  #   ShipmentPalletTable couldn't find the orphan pallet so packages disappeared from the
+  #   pallet groups even though totals still counted them
+  # - addPackagesToShipment now nulls pallet_id on move (pallets are per-shipment)
+  # - ShipmentPalletTable falls back to "Without Pallet" for any package whose pallet_id
+  #   isn't in the current shipment's pallet set
+  # - addPackagesToShipment now returns requested/added/skipped/firstError so the toast can
+  #   say "Added M of N. K could not be added: <real error>" instead of falsely claiming
+  #   full success after silent RLS drops
+
+  # Incoming Shipment Import Volume (2026-04-26)
+  epic-incoming-shipment-import-volume: done
+  # - When importing packages from spreadsheet, auto-calculate volume_m3 from
+  #   thickness × width × length × pieces if the spreadsheet had no volume column
+  # - Sets volumeIsCalculated=true so imported rows behave like manually-entered rows
+
+  # Order Detail Page Redesign (2026-04-27)
+  epic-order-detail-redesign: done
+  # - 2-column header layout: title + stacked meta on left, status badge + PDF thumbnail
+  #   on right (replaced absolute-positioned thumbnail that overlapped the products table)
+  # - Meta info shown as a labelled grid (Customer / Manufacturer / Workshop / Received /
+  #   Loaded), one item per row, instead of a single dot-separated paragraph
+  # - Per-tab field visibility:
+  #     List = Customer + Manufacturer + dates
+  #     Sales = all
+  #     Production = Manufacturer + Workshop + dates (Customer hidden)
+  # - "Ordered Products" summary hides the £ price total on the Production tab
+
+  # Naming Convention Update (2026-04-27)
+  epic-naming-convention-update: done
+  # - Renamed user-visible labels only (DB columns and TS field names unchanged):
+  #     "Seller"          → "Manufacturer"  (the orchestrator/brand owner, e.g. Wood and Good)
+  #     "Producer"        → "Workshop"       (the finishing subcontractor, e.g. Wood ART)
+  #     "Production Files" → "Workshop Files"
+  #     "Copy to production" tooltip → "Copy to Workshop"
+  # - Rationale: the middle company owns materials, manages production, and delivers
+  #   finished goods — "Manufacturer" (in the OEM/brand-owner sense) captures this better
+  #   than "Seller". The finishing partner is descriptively a "Workshop", not a "Producer"
+  #   of raw materials.
+
+  # PDF Logo Strip Adjustment (2026-04-27)
+  epic-pdf-logo-strip-adjustment: done
+  # - "Copy to Workshop without logo" now leaves a thin strip of the bottom drawing legend
+  #   visible (bottomLift = 28pt). Top/left/right of the white masking rectangle are
+  #   unchanged; only the bottom edge raised so e.g. drawing legend / version line stays
+  #   readable for the workshop.
 
 # ============================================================
 # PHASE 3: Planned Features

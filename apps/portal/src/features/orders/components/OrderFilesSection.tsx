@@ -202,7 +202,7 @@ function FileCategorySection({ orderId, category, label, files, onRefresh, onPre
                     className="h-7 w-7 p-0"
                     onClick={() => handleCopy(file)}
                     disabled={copyingId === file.id || strippingId === file.id}
-                    title={`Copy to ${copyToCategory}`}
+                    title={`Copy to ${copyToCategory === "production" ? "Workshop" : copyToCategory}`}
                   >
                     {copyingId === file.id
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -216,7 +216,7 @@ function FileCategorySection({ orderId, category, label, files, onRefresh, onPre
                     className="h-7 p-0 px-1 gap-0.5"
                     onClick={() => handleCopy(file, true)}
                     disabled={strippingId === file.id || copyingId === file.id}
-                    title={`Copy to ${copyToCategory} without logo`}
+                    title={`Copy to ${copyToCategory === "production" ? "Workshop" : copyToCategory} without logo`}
                   >
                     {strippingId === file.id
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -350,7 +350,7 @@ export function OrderFilesSection({ orderId, showCustomer, showProduction, onFil
             <FileCategorySection
               orderId={orderId}
               category="production"
-              label="Production Files"
+              label="Workshop Files"
               files={productionFiles}
               onRefresh={loadFiles}
               onPreviewPdf={handlePreviewPdf}

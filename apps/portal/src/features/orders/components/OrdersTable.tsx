@@ -770,10 +770,10 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                 </TableHead>
                 )}
                 {show("seller") && (
-                <TableHead className="text-sm px-2 w-40 whitespace-nowrap">{headerWithMenu("seller", tab === "production" ? "Buyer" : "Seller")}</TableHead>
+                <TableHead className="text-sm px-2 w-40 whitespace-nowrap">{headerWithMenu("seller", "Manufacturer")}</TableHead>
                 )}
                 {show("producer") && (
-                <TableHead className="text-sm px-2">{headerWithMenu("producer", "Producer")}</TableHead>
+                <TableHead className="text-sm px-2">{headerWithMenu("producer", "Workshop")}</TableHead>
                 )}
                 {show("dateReceived") && (
                 <TableHead className="text-sm px-2 w-24">

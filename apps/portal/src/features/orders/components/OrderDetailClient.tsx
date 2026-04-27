@@ -165,57 +165,66 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
         Back to orders
       </Link>
 
-      {/* Header + Ordered Products — thumbnail and badge float right so content flows beside them */}
-      <div className="relative">
-        {(() => {
-          const thumbnailCategory = tab === "list" ? "customer" : "production";
-          const thumbnailFile = orderFiles.find((f) => f.isThumbnail && f.category === thumbnailCategory);
-          const isPdf = thumbnailFile && (thumbnailFile.mimeType === "application/pdf" || thumbnailFile.fileName.toLowerCase().endsWith(".pdf"));
-          if (!isPdf) return null;
-          return (
-            <>
-              <div className="float-right ml-4 mb-2">
-                <span
-                  className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-800"}`}
-                >
-                  {getStatusLabel(order.status)}
-                </span>
-              </div>
-              <div style={{ position: "absolute", left: "65%", top: 0 }}>
+      {/* Header — title + stacked meta on the left, status badge + thumbnail on the right */}
+      {(() => {
+        const thumbnailCategory = tab === "list" ? "customer" : "production";
+        const thumbnailFile = orderFiles.find((f) => f.isThumbnail && f.category === thumbnailCategory);
+        const isPdf = thumbnailFile && (thumbnailFile.mimeType === "application/pdf" || thumbnailFile.fileName.toLowerCase().endsWith(".pdf"));
+        // Per-tab field visibility: customer info is hidden on production; producer is hidden on list.
+        const showCustomer = tab !== "production";
+        const showProducer = tab !== "list";
+        const metaRows: Array<{ label: string; value: string }> = [];
+        if (showCustomer && order.customerOrganisationName) {
+          metaRows.push({ label: "Customer", value: order.customerOrganisationName });
+        }
+        if (order.sellerOrganisationName) {
+          metaRows.push({ label: "Manufacturer", value: order.sellerOrganisationName });
+        }
+        if (showProducer && order.producerOrganisationName) {
+          metaRows.push({ label: "Workshop", value: order.producerOrganisationName });
+        }
+        metaRows.push({ label: "Received", value: order.dateReceived });
+        if (order.dateLoaded) {
+          metaRows.push({ label: "Loaded", value: order.dateLoaded });
+        }
+        return (
+          <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-start">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-3xl font-semibold tracking-tight">{order.name}</h1>
+              <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+                {metaRows.map((row) => (
+                  <div key={row.label} className="contents">
+                    <dt className="text-muted-foreground">{row.label}:</dt>
+                    <dd className="font-medium">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <div className="flex-shrink-0 flex flex-col items-end gap-2">
+              <span
+                className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-800"}`}
+              >
+                {getStatusLabel(order.status)}
+              </span>
+              {isPdf && thumbnailFile && (
                 <PdfThumbnail key={thumbnailFile.id} file={thumbnailFile} height={140} />
-              </div>
-            </>
-          );
-        })()}
-        <h1 className="text-3xl font-semibold tracking-tight">
-          {order.name}
-        </h1>
-        {!orderFiles.some((f) => f.isThumbnail && f.category === (tab === "list" ? "customer" : "production")) && (
-          <span
-            className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium mt-1 ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-800"}`}
-          >
-            {getStatusLabel(order.status)}
-          </span>
-        )}
-        <p className="text-muted-foreground mb-2">
-          {order.customerOrganisationName}
-          {order.sellerOrganisationName && <> · Seller: {order.sellerOrganisationName}</>}
-          {order.producerOrganisationName && <> · Producer: {order.producerOrganisationName}</>}
-          {" · Received: "}{order.dateReceived}{order.dateLoaded && <>{" · Loaded: "}{order.dateLoaded}</>}
-        </p>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
-        {/* Ordered Products - DataEntryTable */}
-        <OrderProductsSection
-          orderId={orderId}
-          organisationId={order.customerOrganisationId}
-          initialPackages={orderedPackages}
-          dropdowns={dropdowns}
-          staircaseCodes={staircaseCodes}
-          readOnly={!isEditable}
-          hiddenColumns={tab === "list" ? LIST_TAB_HIDDEN_COLUMNS : tab === "sales" ? SALES_TAB_HIDDEN_COLUMNS : tab === "production" ? PRODUCTION_TAB_HIDDEN_COLUMNS : undefined}
-          tab={tab}
-        />
-      </div>
+      {/* Ordered Products - DataEntryTable */}
+      <OrderProductsSection
+        orderId={orderId}
+        organisationId={order.customerOrganisationId}
+        initialPackages={orderedPackages}
+        dropdowns={dropdowns}
+        staircaseCodes={staircaseCodes}
+        readOnly={!isEditable}
+        hiddenColumns={tab === "list" ? LIST_TAB_HIDDEN_COLUMNS : tab === "sales" ? SALES_TAB_HIDDEN_COLUMNS : tab === "production" ? PRODUCTION_TAB_HIDDEN_COLUMNS : undefined}
+        tab={tab}
+      />
 
       {/* Produced Packages (shown only when there are any) */}
       {producedPackages.length > 0 && (

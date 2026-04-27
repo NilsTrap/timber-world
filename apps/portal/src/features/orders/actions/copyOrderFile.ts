@@ -22,13 +22,16 @@ async function removeLogo(pdfBytes: ArrayBuffer): Promise<Uint8Array> {
 
   for (const page of pages) {
     const { width, height } = page.getSize();
-    // Title block: single white rectangle, bottom-right corner
+    // Title block: single white rectangle, bottom-right corner.
+    // bottomLift raises the rectangle's bottom edge while keeping top/left/right fixed —
+    // so we leave a thin strip of the bottom row visible (e.g. drawing legend).
     const marginRight = 29;
     const marginBottom = 30;
+    const bottomLift = 28;
     const blockWidth = width * 0.16;
-    const blockHeight = height * 0.23;
+    const blockHeight = height * 0.23 - bottomLift;
     const x = width - marginRight - blockWidth;
-    const y = marginBottom;
+    const y = marginBottom + bottomLift;
 
     page.drawRectangle({
       x,
