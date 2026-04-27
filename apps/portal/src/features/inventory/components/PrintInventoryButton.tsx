@@ -61,7 +61,7 @@ export function PrintInventoryButton({
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[98vw] max-h-[90vh] overflow-auto w-fit min-w-[900px]">
+        <DialogContent className="max-w-[98vw] max-h-[90vh] overflow-auto w-fit min-w-[1300px]">
           <DialogHeader>
             <DialogTitle>Print {title}</DialogTitle>
           </DialogHeader>
@@ -87,6 +87,8 @@ export function PrintInventoryButton({
                   <th className="text-left py-2 px-2 font-semibold">Species</th>
                   <th className="text-left py-2 px-2 font-semibold">Humidity</th>
                   <th className="text-left py-2 px-2 font-semibold">Type</th>
+                  <th className="text-left py-2 px-2 font-semibold">Processing</th>
+                  <th className="text-left py-2 px-2 font-semibold">Quality</th>
                   <th className="text-left py-2 px-2 font-semibold">Dims (TxWxL)</th>
                   <th className="text-right py-2 px-2 font-semibold">Pieces</th>
                   <th className="text-right py-2 px-2 font-semibold">Vol m³</th>
@@ -105,6 +107,8 @@ export function PrintInventoryButton({
                     <td className="py-2 px-2">{pkg.woodSpecies || "-"}</td>
                     <td className="py-2 px-2">{pkg.humidity || "-"}</td>
                     <td className="py-2 px-2">{pkg.typeName || "-"}</td>
+                    <td className="py-2 px-2">{pkg.processing || "-"}</td>
+                    <td className="py-2 px-2">{pkg.quality || "-"}</td>
                     <td className="py-2 px-2">
                       {pkg.thickness && pkg.width && pkg.length
                         ? `${pkg.thickness}x${pkg.width}x${pkg.length}`
@@ -121,7 +125,7 @@ export function PrintInventoryButton({
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-black font-bold">
-                  <td colSpan={showOrganisation ? 9 : 8} className="py-2 px-2">Total</td>
+                  <td colSpan={showOrganisation ? 11 : 10} className="py-2 px-2">Total</td>
                   <td className="py-2 px-2 text-right tabular-nums">{totalPieces}</td>
                   <td className="py-2 px-2 text-right tabular-nums">
                     {totalVolume.toFixed(3).replace(".", ",")}
