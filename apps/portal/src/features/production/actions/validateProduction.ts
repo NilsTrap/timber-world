@@ -679,6 +679,28 @@ export async function validateProduction(
 
     console.log(`[validateProduction] Update-in-place: ${sortedExisting.length} existing, ${outputs.length} new outputs, reusing ${reusableCount}, inserting ${Math.max(0, outputs.length - sortedExisting.length)}, orphaning ${Math.max(0, sortedExisting.length - outputs.length)}`);
 
+    // Detect outputs that are already consumed by downstream production entries.
+    // Re-validating an upstream entry must NOT resurrect packages that have already been
+    // used as inputs elsewhere — that would create phantom inventory.
+    const reusableExistingIds = sortedExisting.slice(0, reusableCount).map((p: any) => p.id);
+    const consumedDownstreamIds = new Set<string>();
+    if (reusableExistingIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: downstreamUses } = await (supabase as any)
+        .from("portal_production_inputs")
+        .select("package_id, production_entry_id")
+        .in("package_id", reusableExistingIds)
+        .neq("production_entry_id", productionEntryId);
+      if (downstreamUses) {
+        for (const row of downstreamUses as { package_id: string }[]) {
+          consumedDownstreamIds.add(row.package_id);
+        }
+      }
+      if (consumedDownstreamIds.size > 0) {
+        console.log(`[validateProduction] ${consumedDownstreamIds.size} existing output(s) consumed downstream — preserving consumed state`);
+      }
+    }
+
     // 1. UPDATE existing packages by ID (reuse first N)
     if (reusableCount > 0) {
       // Save originals for rollback
@@ -707,11 +729,19 @@ export async function validateProduction(
         }
       }
 
-      // Phase 2: Update all fields including final package_numbers
+      // Phase 2: Update all fields including final package_numbers.
+      // For packages already consumed downstream, override pieces/volume/status so we
+      // don't undo the downstream consumption — but still propagate package_number,
+      // dimensions, and reference fields so the upstream re-validation takes effect.
       const updateResults = await Promise.all(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         outputPackages.slice(0, reusableCount).map((pkg: any, i: number) => {
           const { organisation_id, production_entry_id, shipment_id, ...fields } = pkg;
+          if (consumedDownstreamIds.has(sortedExisting[i].id)) {
+            fields.status = "consumed";
+            fields.pieces = "0";
+            fields.volume_m3 = 0;
+          }
           return (supabase as any)
             .from("inventory_packages")
             .update(fields)
