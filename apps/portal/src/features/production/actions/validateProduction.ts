@@ -188,15 +188,35 @@ export async function validateProduction(
           .eq("id", packageId)
       );
 
-      // Restore updated output packages to their original field values
-      for (const { id, original } of updatedOutputOriginals) {
-        rollbackPromises.push(
+      // Restore updated output packages to their original field values.
+      // Writing real (package_number, package_sequence) in parallel can collide on the
+      // two unique indexes for the same reason Phase 2 can. Pre-pass each row to a
+      // unique temp state first (await sequentially to avoid temp collisions among
+      // themselves), then write originals in parallel.
+      if (updatedOutputOriginals.length > 0) {
+        for (let i = 0; i < updatedOutputOriginals.length; i++) {
+          const { id } = updatedOutputOriginals[i]!;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (supabase as any)
+          const r = await (supabase as any)
             .from("inventory_packages")
-            .update(original)
-            .eq("id", id)
-        );
+            .update({
+              package_number: `__tmp_rollback_${productionEntryId}_${i}`,
+              package_sequence: -(i + 1),
+            })
+            .eq("id", id);
+          if (r.error) {
+            console.error("[validateProduction] Rollback temp-set failed:", r.error);
+          }
+        }
+        for (const { id, original } of updatedOutputOriginals) {
+          rollbackPromises.push(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (supabase as any)
+              .from("inventory_packages")
+              .update(original)
+              .eq("id", id)
+          );
+        }
       }
 
       // Delete any newly inserted output packages
@@ -711,19 +731,27 @@ export async function validateProduction(
         updatedOutputOriginals.push({ id: sortedExisting[i].id, original });
       }
 
-      // Phase 1: Set all package_numbers to temporary values to avoid unique constraint
-      // conflicts when package numbers are swapped or reassigned between rows
+      // Phase 1: Set all package_numbers AND package_sequences to temporary values to
+      // avoid unique-constraint collisions when those fields are swapped or reassigned
+      // between rows in parallel during Phase 2. Two unique indexes need protecting:
+      //   - inventory_packages_org_package_unique on (organisation_id, package_number)
+      //   - idx_inventory_packages_production_seq on (production_entry_id, package_sequence)
+      // Temp package_sequence uses a negative value (real sequences are positive 1..N)
+      // so the temp values can never collide with any real Phase 2 target.
       const tmpResults = await Promise.all(
         sortedExisting.slice(0, reusableCount).map((existing: any, i: number) =>
           (supabase as any)
             .from("inventory_packages")
-            .update({ package_number: `__tmp_${productionEntryId}_${i}` })
+            .update({
+              package_number: `__tmp_${productionEntryId}_${i}`,
+              package_sequence: -(i + 1),
+            })
             .eq("id", existing.id)
         )
       );
       for (const r of tmpResults) {
         if (r.error) {
-          console.error("[validateProduction] Failed to set temp package number:", r.error);
+          console.error("[validateProduction] Failed to set temp package number/sequence:", r.error);
           await revertChanges();
           return { success: false, error: `Failed to update output package: ${r.error.message}`, code: "UPDATE_FAILED" };
         }
