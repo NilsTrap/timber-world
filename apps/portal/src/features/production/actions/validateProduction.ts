@@ -897,18 +897,27 @@ export async function validateProduction(
     }
   }
 
-  // 8. Finalize: transition validating → validated with totals
+  // 8. Finalize: transition validating → validated with totals.
+  // On FIRST validation only, set production_date to today so the entry is filed
+  // under the completion date instead of the draft-creation date. Re-validation
+  // leaves production_date untouched — the first-validation date is the canonical
+  // "this process was completed on" date and must not move when entries are edited.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finalizeUpdate: Record<string, unknown> = {
+    status: "validated",
+    validated_at: new Date().toISOString(),
+    total_input_m3: totalInputM3,
+    total_output_m3: totalOutputM3,
+    outcome_percentage: outcomePercentage,
+    waste_percentage: wastePercentage,
+  };
+  if (!isRevalidation) {
+    finalizeUpdate.production_date = new Date().toISOString().split("T")[0];
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: updateEntryError } = await (supabase as any)
     .from("portal_production_entries")
-    .update({
-      status: "validated",
-      validated_at: new Date().toISOString(),
-      total_input_m3: totalInputM3,
-      total_output_m3: totalOutputM3,
-      outcome_percentage: outcomePercentage,
-      waste_percentage: wastePercentage,
-    })
+    .update(finalizeUpdate)
     .eq("id", productionEntryId)
     .eq("status", "validating");
 
