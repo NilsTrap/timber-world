@@ -20,7 +20,7 @@
 #   - done: Story completed
 
 generated: 2026-01-22
-updated: 2026-04-27
+updated: 2026-05-18
 project: Timber-World
 project_key: platform
 tracking_system: file-system
@@ -248,6 +248,58 @@ development_status:
   #   visible (bottomLift = 28pt). Top/left/right of the white masking rectangle are
   #   unchanged; only the bottom edge raised so e.g. drawing legend / version line stays
   #   readable for the workshop.
+
+  # Inventory Print Columns + Dialog Width (2026-04-27)
+  epic-inventory-print-columns: done
+  # - Added Processing and Quality columns to PrintInventoryButton (data was already in
+  #   PackageListItem, just wasn't rendered).
+  # - Bumped dialog min-width 900 -> 1300 so the wider table fits without horizontal scroll.
+
+  # Workshop File Logo Strip Tuning (2026-04-27)
+  epic-workshop-file-mask-tuning: done
+  # - Tightened the white masking rectangle in copyOrderFile (removeLogo) to spare more of
+  #   the drawing area while still covering the title block:
+  #     marginRight=30, bottomLift=28, leftInset=35, topInset=95.
+
+  # Consumed-Status Preservation in Re-validation (2026-05-05)
+  epic-consumed-status-preservation: done
+  # - validateProduction.ts: during in-place output update, query portal_production_inputs
+  #   for any rows that reference our existing output package IDs and belong to a DIFFERENT
+  #   production entry. Those packages are flagged as "consumed downstream" and their
+  #   update payload is overridden with status="consumed", pieces="0", volume_m3=0.
+  # - Fixes "phantom inventory" bug: upstream re-validation used to reset its outputs to
+  #   status="produced" with full pieces, even if a downstream entry had already consumed
+  #   them — packages appeared in inventory as available while still being counted as
+  #   consumed by downstream production.
+  # - Bulk data fix applied to 269 affected packages across multiple production families
+  #   in Inerce (INE) inventory (set to consumed/0/0).
+
+  # Package Sequence Collision Fix (2026-05-11)
+  epic-package-sequence-collision-fix: done
+  # - validateProduction.ts: Phase 1 now also sets each existing output's package_sequence
+  #   to a unique negative temp value (-(i+1)) alongside the existing __tmp_ package_number
+  #   rename. Phase 2 sets real positive sequences 1..N. Negative temp and positive real
+  #   values cannot collide on idx_inventory_packages_production_seq during parallel updates.
+  # - Rollback path hardened the same way: sequential pre-pass to temp values, then restore
+  #   originals in parallel — prevents rollback from itself colliding and leaving rows
+  #   stuck with __tmp_ package numbers (as happened on the INE Sanding 2026-03-31 entry).
+  # - One-off cleanup: deleted a stuck __tmp_ row on that Sanding entry.
+
+  # Production Date = First Validation Date (2026-05-14)
+  epic-production-date-first-validation: done
+  # - validateProduction.ts: on FIRST validation (!isRevalidation), set production_date to
+  #   today so completed entries are filed under the date work was completed, not the day
+  #   the draft was opened.
+  # - Re-validations leave production_date untouched — the first-validation date is the
+  #   canonical "completed on" date and must never move when entries are edited.
+  # - No backfill applied to historical data — change is forward-only by design.
+
+  # Orders Filter Persistence (2026-05-18)
+  epic-orders-filter-persistence: done
+  # - OrdersTable column filters now persist per-tab in sessionStorage under
+  #   orders-<tab>-filters (same pattern as orders-<tab>-sort introduced 2026-04-23).
+  # - Filters survive tab switches, detail-page navigation, and browser reload.
+  # - "Clear Filters" removes the storage entry alongside the in-memory state.
 
 # ============================================================
 # PHASE 3: Planned Features

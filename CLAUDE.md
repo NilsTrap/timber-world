@@ -25,7 +25,7 @@ This is a **BMad Method Framework** installation (v6.0.0-alpha.22) for the **Tim
 | Portal - Auth & Multi-Org | ✅ Complete |
 | Portal - Inventory & Production | ✅ Complete |
 | Portal - Shipments | ✅ Complete |
-| Portal - Orders (Sales/Production/Analytics) | ✅ Complete |
+| Portal - Orders (List/Prices/Sales/Production/Analytics) | ✅ Complete |
 | Portal - Competitor Pricing | ✅ Complete |
 | Portal - Marketing CMS & Stock | ✅ Complete |
 | Portal - UK Staircase Pricing | ✅ Complete |
@@ -42,7 +42,7 @@ This is a **BMad Method Framework** installation (v6.0.0-alpha.22) for the **Tim
 │       └── src/features/     # Feature modules:
 │           ├── auth/             # Login, register, invite
 │           ├── dashboard/        # Admin & org dashboards
-│           ├── orders/           # Order management (sales/production/analytics tabs)
+│           ├── orders/           # Order management (list/prices/sales/production/analytics tabs)
 │           ├── shipments/        # Incoming/outgoing shipment tracking
 │           ├── production/       # Production tracking with inputs/outputs
 │           ├── inventory/        # Stock/package management
@@ -416,6 +416,58 @@ When a user views a detail page (e.g. `/production/[id]`, `/shipments/[id]`), sa
 #### Back Links
 
 Back links from detail pages should navigate to the base list URL (e.g. `/production`, `/shipments`) without hardcoding a tab query param. The tab persistence via `sessionStorage` handles returning to the correct tab automatically.
+
+#### Sort + Filter Persistence (Orders Table)
+
+`OrdersTable.tsx` persists both column sort and column filters per-tab in `sessionStorage`:
+
+- `orders-<tab>-sort` — JSON-encoded `ColumnSortState | null`
+- `orders-<tab>-filters` — JSON-encoded `Record<string, string[]>` (Sets are serialised as arrays)
+
+Each tab (List / Prices / Sales / Production / Analytics) has its own independent state. The `setColumnSort` / `setColumnFilters` wrappers write through to storage on every change; "Clear Filters" removes the storage entry. Rehydration happens lazily in the `useState` initializer. Reuse this pattern for any new table where state should survive tab/page navigation.
+
+## Domain Conventions
+
+### Party Naming on Orders (User-Facing Labels)
+
+The DB columns are `customer_organisation_id`, `seller_organisation_id`, `producer_organisation_id` — but the UI labels are **deliberately different** to better describe the supply-chain roles:
+
+| DB column / TS field | UI label | Role |
+|---|---|---|
+| `customer_organisation_*` | **Customer** | End buyer (e.g. DDC) |
+| `seller_organisation_*` | **Manufacturer** | The orchestrator who owns materials, hires the workshop, sells to the customer (e.g. Wood and Good). Uses "Manufacturer" in the OEM / brand-owner sense — not literally swinging the saw. |
+| `producer_organisation_*` | **Workshop** | The finishing subcontractor (e.g. Wood ART). Does CNC, gluing, finishing — not raw-material production. |
+
+The "Production Files" section in order detail is labelled **"Workshop Files"** for the same reason. The schema names were left alone deliberately (renaming would be a much bigger change). When adding new UI strings, use the user-facing terminology.
+
+### Production Entry Date Semantics
+
+`portal_production_entries.production_date` has three different meanings depending on when you ask:
+
+- **While draft** — date the draft was opened (set at creation by `createProductionEntry.ts`).
+- **At first validation** — overwritten to "today" by `validateProduction.ts` so the completed-entries list files the entry under the completion date, not the draft-creation date.
+- **On any re-validation** — left untouched. The first-validation date is the canonical "completed on" date and never moves.
+
+Related timestamps on the same row:
+- `created_at` — always the draft-creation timestamp.
+- `validated_at` — overwritten on every validation (latest validation time).
+- `updated_at` — bumped on every UPDATE.
+
+Historical entries created before 2026-05-14 may still have `production_date` = draft-creation date. The forward-only fix does not backfill.
+
+### Production Re-Validation (In-Place Output Update)
+
+`validateProduction.ts` updates existing output `inventory_packages` in place rather than deleting and re-inserting. Several invariants must be preserved:
+
+1. **Phase 1 (temp values):** Before Phase 2 writes real fields, every existing output row is updated to a unique-and-safe temporary state:
+   - `package_number = __tmp_<entryId>_<i>` — prevents collision on the partial unique index `inventory_packages_org_package_unique` (organisation_id, package_number).
+   - `package_sequence = -(i + 1)` (negative) — prevents collision on `idx_inventory_packages_production_seq` (production_entry_id, package_sequence), since real sequences are positive 1..N.
+
+2. **Consumed-status preservation:** If a package is referenced as input by a *different* production entry (i.e. consumed downstream), the in-place update overrides the would-be payload with `{ status: "consumed", pieces: "0", volume_m3: 0 }`. This prevents "phantom inventory" — upstream re-validation must not resurrect packages that have already been consumed.
+
+3. **Rollback (failure path):** Same temp-value protection applies. The rollback first sequentially sets every row to a `__tmp_rollback_<entryId>_<i>` name and negative sequence, then writes originals in parallel. Otherwise the rollback itself can collide on the same unique indexes and leave rows stuck with `__tmp_*` names.
+
+If you touch `validateProduction.ts`, preserve all three of these protections.
 
 ## Working with BMad
 

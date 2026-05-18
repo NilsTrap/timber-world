@@ -1,7 +1,7 @@
 ---
 project_name: 'Timber-World-Platform'
 user_name: 'Nils'
-date: '2026-04-06'
+date: '2026-05-18'
 status: 'complete'
 sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime', 'session_verification', 'print_functionality', 'shipment_workflow', 'pallet_grouping', 'draft_blocking', 'competitor_pricing', 'marketing_stock', 'orders', 'modules_permissions', 'uk_staircase_pricing']
 architecture_ref: '_bmad-output/planning-artifacts/platform/architecture.md'
@@ -540,17 +540,43 @@ This ensures only internal marketing-enabled organisation packages appear on the
 
 ## Orders Feature
 
-Located in `apps/portal/src/features/orders/`. Three-tab interface:
+Located in `apps/portal/src/features/orders/`. Five-tab interface:
+- **List** — customer-facing summary (default tab for org users)
+- **Prices** — order/product pricing reference
 - **Sales** — order list with customer, dates, pricing, payment tracking
 - **Production** — production status, planned dates, costs
 - **Analytics** — order analytics and reporting
 
+### Party Naming (User-Facing Labels ≠ DB columns)
+
+The DB columns are `customer_organisation_id`, `seller_organisation_id`, `producer_organisation_id` — but the UI labels are intentionally different to better describe the supply chain roles:
+
+| DB column / TS field | UI label |
+|---|---|
+| `customer_organisation_*` | **Customer** (end buyer) |
+| `seller_organisation_*` | **Manufacturer** (orchestrator / brand owner — owns materials, hires workshop, sells to customer) |
+| `producer_organisation_*` | **Workshop** (finishing subcontractor) |
+
+When adding UI strings, always use the customer-facing labels. Don't rename the DB columns or TypeScript fields — that's a deliberate trade-off documented in CLAUDE.md.
+
+The order files section similarly uses **"Workshop Files"** as the user-facing label (DB category value is still `"production"`).
+
+### Per-Tab Field Visibility on Order Detail
+
+The order detail header shows different fields depending on the active tab:
+- **List**: Customer, Manufacturer, dates
+- **Sales**: Customer, Manufacturer, Workshop, dates
+- **Production**: Manufacturer, Workshop, dates (Customer hidden)
+
+The "Ordered Products" summary also hides the £ price total on the Production tab.
+
 ### Key Patterns
-- Orders have three org references: `seller_org_id`, `customer_org_id`, `producer_org_id`
+- Orders have three org references: `seller_organisation_id`, `customer_organisation_id`, `producer_organisation_id`
 - UK staircase orders link to `staircase_codes` for product pricing
 - Order products stored in `order_products` table with package-level detail
 - Each tab has its own `OrdersTable` instance with independent ColumnHeaderMenu filters
 - Clear filters button wired via `DataEntryTableHandle` refs
+- **Column sort + filters persist per-tab in sessionStorage** under `orders-<tab>-sort` and `orders-<tab>-filters` so users keep their working view across tab/page switches
 
 ### Module Sub-Permissions
 - `orders.view`, `orders.create`, `orders.customer-select`, `orders.pricing`, `orders.production-status`
@@ -564,6 +590,34 @@ Located in `apps/portal/src/features/uk-staircase-pricing/`. Admin-managed prici
 - `staircase_codes` — product definitions with type, material, length
 - `uk_staircase_pricing` — prices per staircase code
 - `order_products.staircase_code_id` — links order products to pricing
+
+## Production Entry Validation
+
+Located in `apps/portal/src/features/production/actions/validateProduction.ts`. Several invariants MUST be preserved when modifying this code:
+
+### Production Date Semantics
+
+`portal_production_entries.production_date` has different meanings depending on lifecycle stage:
+
+- **Draft**: date the draft was opened (set at creation in `createProductionEntry.ts`).
+- **First validation**: overwritten to "today" so the completed-entries list files the entry under the completion date, not the draft-creation date.
+- **Re-validation**: left untouched. The first-validation date is the canonical "completed on" date and never moves once recorded.
+
+Other timestamps: `created_at` always holds the draft-creation moment; `validated_at` is overwritten on every validation (latest validation time); `updated_at` bumps on any UPDATE. Historical entries created before 2026-05-14 may still have `production_date` = draft-creation date.
+
+### In-Place Output Update Invariants
+
+When re-validating, the validator updates existing output `inventory_packages` rows in place rather than delete-and-insert. Three invariants protect against partial-update corruption:
+
+1. **Phase 1 sets temp values for both number AND sequence:**
+   - `package_number = __tmp_<entryId>_<i>` — guards `inventory_packages_org_package_unique` (organisation_id, package_number)
+   - `package_sequence = -(i + 1)` (negative) — guards `idx_inventory_packages_production_seq` (production_entry_id, package_sequence), since real sequences are positive 1..N
+
+2. **Consumed-status preservation:** Before writing the Phase 2 payload for each existing row, the validator queries `portal_production_inputs` for rows that reference our existing output IDs and belong to a *different* production entry. Any such ID is flagged as "consumed downstream" — its update payload is overridden with `{ status: "consumed", pieces: "0", volume_m3: 0 }` so the upstream re-validation doesn't resurrect already-consumed inventory.
+
+3. **Rollback uses the same temp pattern:** On failure, the rollback first sequentially sets each row to `__tmp_rollback_<entryId>_<i>` + negative sequence, then writes originals in parallel. Otherwise the rollback itself can collide on the same unique indexes and leave rows stuck with `__tmp_*` package numbers.
+
+If you touch `validateProduction.ts`, preserve all three.
 
 ## Architecture Reference
 
