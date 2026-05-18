@@ -305,9 +305,11 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
   }, [canSelectCustomer, isAdmin]);
 
   // --- ColumnHeaderMenu sort/filter ---
-  // Persist sort per tab in sessionStorage so switching between list/sales/production/analytics
-  // and returning keeps whatever column/direction the user picked.
+  // Persist sort + filters per tab in sessionStorage so switching between
+  // list/sales/production/analytics and returning keeps whatever column/direction
+  // and active filters the user picked.
   const sortStorageKey = `orders-${tab}-sort`;
+  const filtersStorageKey = `orders-${tab}-filters`;
   const [columnSort, setColumnSortState] = useState<ColumnSortState | null>(() => {
     if (typeof window === "undefined") return { column: "dateReceived", direction: "desc" };
     const stored = sessionStorage.getItem(sortStorageKey);
@@ -329,13 +331,48 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
       sessionStorage.setItem(sortStorageKey, JSON.stringify(value));
     }
   }, [sortStorageKey]);
-  const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
+
+  const [columnFilters, setColumnFiltersState] = useState<Record<string, Set<string>>>(() => {
+    if (typeof window === "undefined") return {};
+    const stored = sessionStorage.getItem(filtersStorageKey);
+    if (!stored) return {};
+    try {
+      const parsed = JSON.parse(stored) as Record<string, string[]>;
+      const result: Record<string, Set<string>> = {};
+      for (const [k, arr] of Object.entries(parsed)) {
+        if (Array.isArray(arr) && arr.length > 0) result[k] = new Set(arr);
+      }
+      return result;
+    } catch {
+      return {};
+    }
+  });
+  const setColumnFilters = useCallback(
+    (updater: Record<string, Set<string>> | ((prev: Record<string, Set<string>>) => Record<string, Set<string>>)) => {
+      setColumnFiltersState((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        if (typeof window !== "undefined") {
+          const serializable: Record<string, string[]> = {};
+          for (const [k, s] of Object.entries(next)) {
+            if (s && s.size > 0) serializable[k] = [...s];
+          }
+          if (Object.keys(serializable).length === 0) {
+            sessionStorage.removeItem(filtersStorageKey);
+          } else {
+            sessionStorage.setItem(filtersStorageKey, JSON.stringify(serializable));
+          }
+        }
+        return next;
+      });
+    },
+    [filtersStorageKey]
+  );
 
   const handleFilterChange = useCallback(
     (columnKey: string, values: Set<string>) => {
       setColumnFilters((prev) => ({ ...prev, [columnKey]: values }));
     },
-    []
+    [setColumnFilters]
   );
 
   // Column display value getter for filter/sort
