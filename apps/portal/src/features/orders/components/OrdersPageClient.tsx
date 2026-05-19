@@ -61,21 +61,21 @@ export function OrdersPageClient({
   const showTab = (tab: string) => visibleTabs.includes(tab);
 
   const SALES_COLUMNS: OrderColumn[] = [
-    "customer", "seller", "producer", "dateReceived", "dateLoaded", "purchaseOrderNr", "projectNumber",
+    "customer", "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
     "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice", "totalKg",
     "advanceInvoiceNumber", "invoiceNumber", "packageNumber", "transportInvoiceNumber", "transportPrice", "files", "status",
   ];
 
   const PRODUCTION_COLUMNS: OrderColumn[] = [
-    "seller", "producer", "dateReceived", "dateLoaded", "purchaseOrderNr", "projectNumber",
+    "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
     "type", "treadLength", "treads", "winders", "quarters", "totalPieces",
-    "plannedDate", "treadM3", "winderM3", "quarterM3", "totalProducedM3", "usedMaterialM3", "wasteM3", "wastePercent",
+    "treadM3", "winderM3", "quarterM3", "totalProducedM3", "usedMaterialM3", "wasteM3", "wastePercent",
     "productionMaterial", "productionFinishing", "productionTotal", "productionInvoiceNumber", "productionPaymentDate",
     "woodArt", "woodArtCnc", "woodArtTotal", "woodArtInvoiceNumber", "woodArtPaymentDate", "files", "status",
   ];
 
   const ANALYTICS_COLUMNS: OrderColumn[] = [
-    "customer", "seller", "producer", "dateReceived", "dateLoaded", "purchaseOrderNr", "projectNumber",
+    "customer", "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
     "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice",
     "invoicedM3", "usedM3", "diffM3", "diffPercent", "plMaterial",
     "invoicedWork", "usedWork", "diffWork", "diffWorkPercent", "plWork",

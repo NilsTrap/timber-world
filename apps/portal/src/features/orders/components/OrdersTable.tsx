@@ -99,7 +99,7 @@ export type OrderColumn =
 
 /** All columns shown by default */
 const ALL_COLUMNS: OrderColumn[] = [
-  "customer", "seller", "dateReceived", "dateLoaded", "purchaseOrderNr", "projectNumber",
+  "customer", "seller", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
   "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice", "files", "status",
 ];
 
@@ -817,6 +817,11 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {headerWithMenu("dateReceived", <span className="flex flex-col leading-tight"><span>Date</span><span>Received</span></span>)}
                 </TableHead>
                 )}
+                {show("plannedDate") && (
+                <TableHead className="text-sm px-2">
+                  {headerWithMenu("plannedDate", <span className="flex flex-col leading-tight"><span>Planned</span><span>Date</span></span>)}
+                </TableHead>
+                )}
                 {show("dateLoaded") && (
                 <TableHead className="text-sm px-2 w-24">
                   {headerWithMenu("dateLoaded", <span className="flex flex-col leading-tight"><span>Date</span><span>Loaded</span></span>)}
@@ -852,11 +857,6 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                 {show("totalPieces") && (
                 <TableHead className="text-sm px-2 text-right w-14">
                   {headerWithMenu("totalPieces", <span className="flex flex-col leading-tight text-right"><span>Total</span><span>Pcs</span></span>, true)}
-                </TableHead>
-                )}
-                {show("plannedDate") && (
-                <TableHead className="text-sm px-2">
-                  {headerWithMenu("plannedDate", <span className="flex flex-col leading-tight"><span>Planned</span><span>Date</span></span>)}
                 </TableHead>
                 )}
                 {show("totalPrice") && (
@@ -1155,6 +1155,17 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     )}
                   </TableCell>
                   )}
+                  {show("plannedDate") && (
+                  <TableCell className="px-2 text-sm">
+                    <EditableCell
+                      value={order.plannedDate || ""}
+                      type="date"
+                      placeholder="-"
+                      onSave={(val) => saveField(order.id, { plannedDate: val || null })}
+
+                    />
+                  </TableCell>
+                  )}
                   {show("dateLoaded") && (
                   <TableCell className="px-2 text-sm">
                     {tab === "production" ? (
@@ -1227,17 +1238,6 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   )}
                   {show("totalPieces") && (
                   <TableCell className="px-2 text-sm text-right">{order.totalPieces || <span className="text-muted-foreground">-</span>}</TableCell>
-                  )}
-                  {show("plannedDate") && (
-                  <TableCell className="px-2 text-sm">
-                    <EditableCell
-                      value={order.plannedDate || ""}
-                      type="date"
-                      placeholder="-"
-                      onSave={(val) => saveField(order.id, { plannedDate: val || null })}
-
-                    />
-                  </TableCell>
                   )}
                   {show("totalPrice") && (
                   <TableCell className="px-2 text-sm text-right">
