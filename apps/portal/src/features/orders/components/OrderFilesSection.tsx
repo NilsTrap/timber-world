@@ -45,6 +45,7 @@ function FileCategorySection({ orderId, category, label, files, onRefresh, onPre
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
   const [togglingThumbnailId, setTogglingThumbnailId] = useState<string | null>(null);
   const [copyingId, setCopyingId] = useState<string | null>(null);
   const [strippingId, setStrippingId] = useState<string | null>(null);
@@ -122,6 +123,51 @@ function FileCategorySection({ orderId, category, label, files, onRefresh, onPre
     setDownloadingId(null);
   }, []);
 
+  const handleDownloadAll = useCallback(async () => {
+    if (files.length === 0) return;
+    setDownloadingAll(true);
+    let okCount = 0;
+    let failCount = 0;
+    for (const file of files) {
+      try {
+        const result = await getOrderFileUrl(file.id);
+        if (!result.success) {
+          failCount++;
+          continue;
+        }
+        // Fetch the file into a blob — this lets us trigger a real download via an
+        // Object URL. Using the signed URL directly (cross-origin) makes the browser
+        // open it in a new tab and ignore the `download` attribute; multiple sequential
+        // anchor clicks also get blocked as popup-spam. Blob URLs sidestep both.
+        const res = await fetch(result.data);
+        if (!res.ok) {
+          failCount++;
+          continue;
+        }
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objectUrl;
+        a.download = file.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        // Revoke after a short delay so the browser has time to start the download
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+        okCount++;
+      } catch (e) {
+        console.error(`Failed to download ${file.fileName}`, e);
+        failCount++;
+      }
+    }
+    if (failCount > 0) {
+      toast.error(`Downloaded ${okCount} of ${files.length} files. ${failCount} failed.`);
+    } else {
+      toast.success(`Downloaded ${okCount} file${okCount !== 1 ? "s" : ""}`);
+    }
+    setDownloadingAll(false);
+  }, [files]);
+
   const handleDelete = useCallback(async (file: OrderFile) => {
     const result = await deleteOrderFile(file.id);
     if (result.success) {
@@ -138,7 +184,7 @@ function FileCategorySection({ orderId, category, label, files, onRefresh, onPre
         <h3 className="text-sm font-medium text-muted-foreground">
           {label} ({files.length})
         </h3>
-        <div>
+        <div className="flex items-center gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -150,6 +196,18 @@ function FileCategorySection({ orderId, category, label, files, onRefresh, onPre
               }
             }}
           />
+          {files.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadAll}
+              disabled={downloadingAll}
+              title="Download all files in this section"
+            >
+              {downloadingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Download all
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
