@@ -61,16 +61,53 @@ export async function updateOrder(
     };
   }
 
-  // 2. Check permission: admin or orders.create module
+  // 2. Check permission. Two gates:
+  //    - admin OR orders.create  → can edit every field in `input`
+  //    - orders.tab.production.edit → can edit ONLY production-tab fields below
+  //      (date loaded, planned date, production m³ / material / finishing / wood art
+  //      and their invoice + payment metadata). Reject any other field with FORBIDDEN.
+  // The production-edit gate lets finishing-workshop orgs record their numbers on
+  // shared orders without seeing or touching pricing / customer data.
+  const PRODUCTION_EDIT_FIELDS = new Set<string>([
+    "dateLoaded",
+    "plannedDate",
+    "treadM3",
+    "winderM3",
+    "quarterM3",
+    "usedMaterialM3",
+    "productionMaterial",
+    "productionFinishing",
+    "productionInvoiceNumber",
+    "productionPaymentDate",
+    "woodArt",
+    "woodArtCnc",
+    "woodArtInvoiceNumber",
+    "woodArtPaymentDate",
+  ]);
   if (!isAdmin(session)) {
     const userOrgId = session.currentOrganizationId || session.organisationId;
     const canCreate = await orgHasModule(userOrgId, "orders.create");
     if (!canCreate) {
-      return {
-        success: false,
-        error: "Permission denied",
-        code: "FORBIDDEN",
-      };
+      const canProductionEdit = await orgHasModule(userOrgId, "orders.tab.production.edit");
+      if (!canProductionEdit) {
+        return {
+          success: false,
+          error: "Permission denied",
+          code: "FORBIDDEN",
+        };
+      }
+      // Reject any input field outside the production-edit allowlist.
+      const submittedFields = Object.keys(input).filter(
+        (k) => (input as Record<string, unknown>)[k] !== undefined,
+      );
+      const forbidden = submittedFields.filter((f) => !PRODUCTION_EDIT_FIELDS.has(f));
+      if (forbidden.length > 0) {
+        return {
+          success: false,
+          error: `Permission denied for field${forbidden.length > 1 ? "s" : ""}: ${forbidden.join(", ")}`,
+          code: "FORBIDDEN",
+        };
+      }
     }
   }
 
