@@ -20,7 +20,7 @@
 #   - done: Story completed
 
 generated: 2026-01-22
-updated: 2026-05-18
+updated: 2026-05-20
 project: Timber-World
 project_key: platform
 tracking_system: file-system
@@ -300,6 +300,90 @@ development_status:
   #   orders-<tab>-filters (same pattern as orders-<tab>-sort introduced 2026-04-23).
   # - Filters survive tab switches, detail-page navigation, and browser reload.
   # - "Clear Filters" removes the storage entry alongside the in-memory state.
+
+  # Order Files Download All Button (2026-05-19)
+  epic-orders-download-all: done
+  # - Added "Download all" button next to Upload in each order Files section
+  #   (Customer Files + Workshop Files).
+  # - Fetches each file as a Blob and triggers download via blob: Object URLs
+  #   instead of clicking the cross-origin signed URL directly. Sidesteps two
+  #   problems: cross-origin URLs ignore the <a download> attribute (would
+  #   open in a new tab instead of downloading), and multiple sequential
+  #   anchor clicks get popup-blocked. Blob URLs always trigger a save and
+  #   aren't subject to popup blocking.
+
+  # Granular Production-Tab Edit Permission (2026-05-19)
+  epic-orders-production-edit-module: done
+  # - New module orders.tab.production.edit registered (migration
+  #   20260519000001) so finishing-workshop orgs can fill in production-only
+  #   fields on shared orders without also being granted orders.create.
+  # - updateOrder.ts: admin OR orders.create still unrestricted. Otherwise
+  #   accepts orders.tab.production.edit and restricts the input to an
+  #   allowlist: dateLoaded, plannedDate, treadM3, winderM3, quarterM3,
+  #   usedMaterialM3, productionMaterial, productionFinishing,
+  #   productionInvoiceNumber, productionPaymentDate, woodArt, woodArtCnc,
+  #   woodArtInvoiceNumber, woodArtPaymentDate. Anything else returns
+  #   FORBIDDEN with the field name.
+  # - OrderDetailClient forces the Ordered Products table readOnly on the
+  #   Production tab — no more confusing "click → permission denied" UX.
+  # - Wood ART organisation granted the new module via one-off script.
+
+  # Planned Date Column on All Tabs (2026-05-18)
+  epic-orders-planned-date-column: done
+  # - Planned Date added to List, Sales, and Analytics tabs (was Production-
+  #   only). On every tab the three date columns now appear consecutively
+  #   as Received → Planned → Loaded.
+  # - Required moving the plannedDate JSX block in OrdersTable.tsx — the
+  #   array order only controls column visibility; the rendered order is
+  #   driven by the sequence of {show(...) && ...} blocks in the JSX.
+
+  # Order Status Cancelled + Sticky Row Order + Misc Fixes (2026-05-20)
+  epic-orders-cancelled-and-stability: done
+  # - New "cancelled" order status (migration 20260519000002): selectable
+  #   from List and Sales tabs via the existing status-change dialog;
+  #   rendered as a plain non-clickable Badge on the Production tab (no
+  #   permission-denied trap for workshop users without orders.create).
+  # - treadM3 made nullable end-to-end (same pattern as winder/quarter/
+  #   material/etc) so typing 0 sticks as 0 instead of collapsing back
+  #   to "-".
+  # - OrdersTable sticky row order: introduced displayedOrderIds state
+  #   that recomputes only on filter/sort change OR add/delete — NOT on
+  #   value edits. Editing a row no longer makes it jump positions
+  #   mid-edit; positions re-evaluate only on refresh, filter change,
+  #   or add/delete.
+  # - Analytics totals colspan: added plannedDate to leadingCols so the
+  #   totals footer aligns under the right columns after Planned Date
+  #   was inserted into the Analytics tab.
+
+  # Shipment Add Index Fix (2026-05-20)
+  epic-shipment-add-partial-moves: done
+  # - Narrowed idx_inventory_packages_production_seq with WHERE
+  #   production_entry_id IS NOT NULL AND shipment_id IS NULL (migration
+  #   20260520000001).
+  # - package_sequence is overloaded as both production-output ordering AND
+  #   shipment-row ordering. Before this change, both partial unique indexes
+  #   applied to a row that was produced AND in a shipment, so adding a
+  #   PARTIAL subset of a production entry's outputs to a shipment could
+  #   collide with un-moved siblings on (production_entry_id, package_sequence).
+  # - Now once a package gets shipment_id NOT NULL it falls out of the
+  #   production-sequence index — only the (shipment_id, package_sequence)
+  #   uniqueness applies, which is exactly what the shipment add code
+  #   needs. Reverted a short-lived Phase-1/Phase-2 temp-negative trick
+  #   that was added before settling on the index fix.
+
+  # Assign Package Numbers Defensive Check (2026-05-20)
+  epic-assign-package-numbers-defensive: done
+  # - assignPackageNumbers.ts: replaced "trust MAX + 1" with "load every
+  #   taken N-{code}-NNNN into a Set, then walk forward from max+1 skipping
+  #   any candidate already in the set" (per Nils' proposal).
+  # - Catches gaps where MAX trust is wrong: re-validation that changed
+  #   inventory_packages, deleted drafts whose validated inventory
+  #   survived, manual edits, copy-row, etc. Previously the collision
+  #   only surfaced at validate time with "Output package numbers already
+  #   exist in inventory: ..." after the user had already saved their work.
+  # - One-off cleanup: re-assigned the 10 outputs of the stuck Calibration
+  #   draft e8a09b40 (production_date 2026-05-12) from N-CA-0110..0119 to
+  #   N-CA-0154..0163 above current max.
 
 # ============================================================
 # PHASE 3: Planned Features

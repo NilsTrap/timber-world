@@ -1,7 +1,7 @@
 ---
 project_name: 'Timber-World-Platform'
 user_name: 'Nils'
-date: '2026-05-18'
+date: '2026-05-20'
 status: 'complete'
 sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime', 'session_verification', 'print_functionality', 'shipment_workflow', 'pallet_grouping', 'draft_blocking', 'competitor_pricing', 'marketing_stock', 'orders', 'modules_permissions', 'uk_staircase_pricing']
 architecture_ref: '_bmad-output/planning-artifacts/platform/architecture.md'
@@ -580,7 +580,30 @@ The "Ordered Products" summary also hides the £ price total on the Production t
 
 ### Module Sub-Permissions
 - `orders.view`, `orders.create`, `orders.customer-select`, `orders.pricing`, `orders.production-status`
-- `orders.sales-tab`, `orders.production-tab`, `orders.analytics-tab`
+- `orders.tab.list`, `orders.tab.prices`, `orders.tab.sales`, `orders.tab.production`, `orders.tab.analytics`
+- `orders.tab.production.edit` — granular edit permission. Lets finishing-workshop
+  orgs edit a fixed allowlist of production-tab fields (dateLoaded, plannedDate,
+  treadM3/winderM3/quarterM3/usedMaterialM3, productionMaterial, productionFinishing,
+  productionInvoiceNumber, productionPaymentDate, woodArt, woodArtCnc,
+  woodArtInvoiceNumber, woodArtPaymentDate) WITHOUT also granting orders.create.
+  Enforced in `updateOrder.ts`: admin OR orders.create still unrestricted; otherwise
+  this module is checked and any input field outside the allowlist returns FORBIDDEN
+  with the field name.
+
+### Order Status
+
+Database enum `order_status` values:
+- `draft` (default at creation)
+- `confirmed`
+- `loaded`
+- `cancelled` (added 2026-05-19)
+
+Status is selectable from the **List** and **Sales** tab via a click-to-change
+dialog. On the **Production** tab the status renders as a plain non-clickable
+Badge — workshop users without orders.create can't trigger permission-denied
+toasts. UI helpers in `apps/portal/src/features/orders/types.ts`:
+`OrderStatus`, `ORDER_STATUSES`, `getStatusLabel`, `getStatusBadgeVariant`.
+Detail-page badge colour map in `OrderDetailClient.tsx` (`STATUS_COLORS`).
 
 ## UK Staircase Pricing
 
@@ -590,6 +613,58 @@ Located in `apps/portal/src/features/uk-staircase-pricing/`. Admin-managed prici
 - `staircase_codes` — product definitions with type, material, length
 - `uk_staircase_pricing` — prices per staircase code
 - `order_products.staircase_code_id` — links order products to pricing
+
+## Production Package Number Assignment
+
+`apps/portal/src/features/production/actions/assignPackageNumbers.ts` allocates
+sequential package numbers (format `N-{PROCESS_CODE}-NNNN`, e.g. `N-CA-0042`)
+for the draft outputs of a production entry.
+
+**Defensive lookup (current behaviour):**
+1. Build a Set of every taken number for `(organisation_id, process_code)` by
+   union-ing `inventory_packages.package_number` and
+   `portal_production_outputs.package_number` (the latter joined to entries of
+   the same organisation).
+2. Start candidate = `max(taken) + 1` (or 1 if taken is empty).
+3. For each output needing a number, advance through candidates skipping any
+   already in the taken Set. Locally reserve assigned numbers in the Set so a
+   single batch can't hand out duplicates.
+
+This was changed from the simpler "trust MAX + 1" approach because that
+approach broke when gaps existed (re-validation that moved packages around,
+deleted drafts whose validated inventory survived, manual entries, etc.) and
+collisions only surfaced at validate time as "Output package numbers already
+exist in inventory".
+
+The function does NOT use a database-level atomic counter, so two concurrent
+assigns running in the same instant could still collide. For human-paced
+workflows it's reliable enough; if true atomicity becomes important the
+follow-up would be a per-(org, process) counter table.
+
+## Inventory Packages — `package_sequence`
+
+The `package_sequence` column is overloaded with two unrelated meanings on
+the same row:
+
+1. **Production-output ordering** — position of a package within its production
+   entry.
+2. **Shipment-row ordering** — position of a package within its shipment.
+
+Two partial unique indexes protect each scope:
+- `idx_inventory_packages_production_seq` on `(production_entry_id, package_sequence)`
+  WHERE `production_entry_id IS NOT NULL AND shipment_id IS NULL` (narrowed
+  2026-05-20). Only enforces uniqueness while the package is in inventory; once
+  shipped, the row falls out of this index.
+- The shipment-level uniqueness on `(shipment_id, package_sequence)` WHERE
+  `shipment_id IS NOT NULL`.
+
+Practical consequence: when a package moves from inventory into a shipment,
+its `package_sequence` is renumbered for the shipment without colliding with
+siblings still in inventory under the same production entry. When a package
+is removed from a shipment (`removePackageFromShipment` sets `shipment_id`
+and `package_sequence` to NULL), the row re-enters the production-sequence
+index with a NULL sequence — partial unique indexes treat NULL as distinct,
+so multiple un-sequenced packages within the same production entry coexist.
 
 ## Production Entry Validation
 
