@@ -64,7 +64,7 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
     treadLength: null,
     totalPricePence: 0,
     totalKg: 0,
-    maxM3: 0, treadM3: 0, winderM3: null, quarterM3: null, totalProducedM3: 0,
+    maxM3: 0, treadM3: null, winderM3: null, quarterM3: null, totalProducedM3: 0,
     usedMaterialM3: 0, wasteM3: 0, wastePercent: 0,
     productionMaterial: null, productionWork: 0, productionFinishing: null, productionTotal: null, productionInvoiceNumber: null, productionPaymentDate: null,
     woodArt: null, glowing: 0, woodArtCnc: null, woodArtTotal: null, woodArtInvoiceNumber: null, woodArtPaymentDate: null,

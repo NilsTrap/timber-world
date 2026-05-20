@@ -102,21 +102,26 @@ export async function addPackagesToShipment(
     }
   }
 
-  // Update packages to link to this shipment
-  // For inter-org shipments, we're essentially "marking" which packages are part of the shipment
-  // Keep original package numbers - only update shipment_id and sequence
-  // IMPORTANT: Preserve source_shipment_id to maintain incoming shipment history
+  // Update packages to link to this shipment.
+  // For inter-org shipments, we're essentially "marking" which packages are part of the shipment.
+  // Keep original package numbers - only update shipment_id and sequence.
+  // IMPORTANT: Preserve source_shipment_id to maintain incoming shipment history.
+  //
+  // The (production_entry_id, package_sequence) partial unique index is scoped
+  // to inventory packages (WHERE shipment_id IS NULL). As soon as we set
+  // shipment_id, the row falls out of that index — so the new shipment-sequence
+  // (1..N) is only constrained by the shipment-level uniqueness on
+  // (shipment_id, package_sequence). No conflict with sibling production
+  // packages still in inventory.
   let addedCount = 0;
   const errors: string[] = [];
 
   for (const pkgId of validPackageIds) {
-    // Skip packages already in this shipment
     if (alreadyInShipment.has(pkgId)) {
       addedCount++;
       continue;
     }
 
-    // Get the package's current state to preserve source and check production link
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: currentPkg, error: fetchError } = await (supabase as any)
       .from("inventory_packages")
@@ -130,13 +135,8 @@ export async function addPackagesToShipment(
       continue;
     }
 
-    // If source_shipment_id is not set and package has a current shipment, preserve it
     const sourceShipmentId = currentPkg?.source_shipment_id || currentPkg?.shipment_id || null;
 
-    // Build update payload - always set package_sequence for the new shipment
-    // The shipment_seq unique constraint is on (shipment_id, package_sequence).
-    // Null the pallet_id: pallets are per-shipment, so the source shipment's
-    // pallet reference would be orphan in the destination shipment.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updatePayload: any = {
       shipment_id: shipmentId,
@@ -157,7 +157,6 @@ export async function addPackagesToShipment(
       errors.push(`Failed to add package ${pkgId}: ${updateError.message}`);
       continue;
     }
-
     if (!updated || updated.length === 0) {
       console.error(`Package ${pkgId} update affected 0 rows (possible RLS restriction)`);
       errors.push(`Package ${pkgId} could not be updated (permission denied)`);

@@ -301,14 +301,16 @@ export async function getOrders(options?: {
 
     // Use stored DB values if available, otherwise use computed from production data.
     // `null` means "never entered" (UI shows "-"); `0` means "explicitly zero" (UI shows 0).
-    const finalTreadM3 = row.tread_m3 != null ? parseFloat(row.tread_m3) : treadM3;
+    const finalTreadM3: number | null = row.tread_m3 != null
+      ? parseFloat(row.tread_m3)
+      : (treadM3 > 0 ? treadM3 : null);
     const finalWinderM3: number | null = row.winder_m3 != null
       ? parseFloat(row.winder_m3)
       : (winderM3 > 0 ? winderM3 : null);
     const finalQuarterM3: number | null = row.quarter_m3 != null
       ? parseFloat(row.quarter_m3)
       : (quarterM3 > 0 ? quarterM3 : null);
-    const finalTotalProducedM3 = finalTreadM3 + (finalWinderM3 ?? 0) + (finalQuarterM3 ?? 0);
+    const finalTotalProducedM3 = (finalTreadM3 ?? 0) + (finalWinderM3 ?? 0) + (finalQuarterM3 ?? 0);
 
     let computedUsedMaterialM3 = 0;
     for (const entryId of productionEntryIds) {

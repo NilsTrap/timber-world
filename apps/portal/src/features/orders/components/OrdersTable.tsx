@@ -266,6 +266,10 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
   const router = useRouter();
   const show = useCallback((col: OrderColumn) => columns.includes(col), [columns]);
   const [orders, setOrders] = useState<Order[]>([]);
+  // Always-current ref to `orders` so effects that recompute the sticky display
+  // order can read latest data without depending on `orders` itself.
+  const latestOrdersRef = useRef<Order[]>(orders);
+  useEffect(() => { latestOrdersRef.current = orders; }, [orders]);
   const [isLoading, setIsLoading] = useState(true);
   const [organisations, setOrganisations] = useState<OrganisationOption[]>([]);
   const scrollRef = useScrollRestore(`orders-${tab}-scroll`);
@@ -407,7 +411,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
       case "usedTransport": return order.usedTransport > 0 ? order.usedTransport.toFixed(2) : "";
       case "diffTransport": return order.invoicedTransport > 0 && order.usedTransport > 0 ? (order.invoicedTransport - order.usedTransport).toFixed(2) : "";
       case "diffTransportPercent": return order.invoicedTransport > 0 && order.usedTransport > 0 ? (((order.invoicedTransport - order.usedTransport) / order.invoicedTransport) * 100).toFixed(1) : "";
-      case "treadM3": return order.treadM3 > 0 ? order.treadM3.toFixed(4) : "";
+      case "treadM3": return order.treadM3 != null ? order.treadM3.toFixed(4) : "";
       case "winderM3": return order.winderM3 != null ? order.winderM3.toFixed(4) : "";
       case "quarterM3": return order.quarterM3 != null ? order.quarterM3.toFixed(4) : "";
       case "totalProducedM3": return order.totalProducedM3 > 0 ? order.totalProducedM3.toFixed(4) : "";
@@ -490,10 +494,10 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
     return map;
   }, [orders, columns, columnFilters, getOrderDisplayValue]);
 
-  // Filtered + sorted orders
-  const displayOrders = useMemo(() => {
-    // Apply filters
-    let result = orders.filter((order) => {
+  // Compute the order IDs in display order from a snapshot of orders. Used to
+  // populate `displayedOrderIds` whenever filter/sort changes or new data loads.
+  const computeOrderedIds = useCallback((source: Order[]): string[] => {
+    let result = source.filter((order) => {
       for (const [colKey, allowedValues] of Object.entries(columnFilters)) {
         if (allowedValues.size === 0) continue;
         const val = getOrderDisplayValue(order, colKey);
@@ -501,7 +505,6 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
       }
       return true;
     });
-    // Apply sort
     if (columnSort) {
       const { column: sortCol, direction } = columnSort;
       const isNum = NUMERIC_COLS.has(sortCol);
@@ -520,8 +523,32 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
       // Default sort by dateReceived desc
       result = [...result].sort((a, b) => b.dateReceived.localeCompare(a.dateReceived));
     }
+    return result.map((o) => o.id);
+  }, [columnFilters, columnSort, getOrderDisplayValue, getOrderSortValue]);
+
+  // Sticky row order: list of order IDs in their displayed order. Populated when
+  // filter/sort changes or when orders are added/removed (length change), but
+  // NOT when an individual order's values change. That way the row a user is
+  // editing doesn't jump to a new position mid-edit.
+  const [displayedOrderIds, setDisplayedOrderIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setDisplayedOrderIds(computeOrderedIds(latestOrdersRef.current));
+  }, [computeOrderedIds, orders.length]);
+
+  // Filtered + sorted orders. Uses the sticky ID order, looking up current
+  // values from `orders` (so edits reflect immediately but row positions stay
+  // put). Orders not in `displayedOrderIds` are dropped — that's correct
+  // because they're either filtered-out by the current filter or stale.
+  const displayOrders = useMemo(() => {
+    const byId = new Map(orders.map((o) => [o.id, o]));
+    const result: Order[] = [];
+    for (const id of displayedOrderIds) {
+      const o = byId.get(id);
+      if (o) result.push(o);
+    }
     return result;
-  }, [orders, columnFilters, columnSort, getOrderDisplayValue, getOrderSortValue]);
+  }, [orders, displayedOrderIds]);
 
   // Analytics summary computed from filtered orders
   const analyticsSummary = useMemo(() => {
@@ -653,7 +680,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
           prev.map((o) => {
             if (o.id !== orderId) return o;
             const updated = { ...o, [fieldName]: numVal, updatedAt: result.data.updatedAt };
-            const total = updated.treadM3 + (updated.winderM3 ?? 0) + (updated.quarterM3 ?? 0);
+            const total = (updated.treadM3 ?? 0) + (updated.winderM3 ?? 0) + (updated.quarterM3 ?? 0);
             updated.totalProducedM3 = total;
             updated.wasteM3 = updated.usedMaterialM3 > 0 ? updated.usedMaterialM3 - total : 0;
             updated.wastePercent = updated.usedMaterialM3 > 0 ? (updated.wasteM3 / updated.usedMaterialM3) * 100 : 0;
@@ -1302,7 +1329,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {show("treadM3") && (
                   <TableCell className="px-2 text-sm">
                     <EditableCell
-                      value={order.treadM3 > 0 ? order.treadM3.toFixed(4) : ""}
+                      value={order.treadM3 != null ? order.treadM3.toFixed(4) : ""}
                       placeholder="-"
                       onSave={(val) => saveProductionField(order.id, "treadM3", val)}
 
@@ -1653,6 +1680,14 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   )}
                   {show("status") && (
                   <TableCell className="px-1">
+                    {tab === "production" ? (
+                      <Badge
+                        variant={getStatusBadgeVariant(order.status)}
+                        className="text-xs"
+                      >
+                        {getStatusLabel(order.status)}
+                      </Badge>
+                    ) : (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleStatusClick(order); }}
                       className="focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded"
@@ -1664,6 +1699,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                         {getStatusLabel(order.status)}
                       </Badge>
                     </button>
+                    )}
                   </TableCell>
                   )}
                   <TableCell className="px-0">
@@ -1683,7 +1719,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
             {analyticsSummary && displayOrders.length > 0 && (() => {
               const s = analyticsSummary;
               // Count leading non-numeric columns for the "Total" label colspan
-              const leadingCols: OrderColumn[] = ["customer", "seller", "producer", "dateReceived", "dateLoaded", "purchaseOrderNr", "projectNumber", "type", "treadLength"];
+              const leadingCols: OrderColumn[] = ["customer", "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber", "type", "treadLength"];
               const leadingCount = leadingCols.filter((c) => columns.includes(c)).length;
               const fmt = (v: number, d = 2) => v !== 0 ? v.toFixed(d) : "-";
               const fmtInt = (v: number) => v !== 0 ? String(v) : "-";

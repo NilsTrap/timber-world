@@ -291,7 +291,7 @@ export async function updateOrder(
     totalPricePence: 0,
     totalKg: 0,
     maxM3: 0,
-    treadM3: parseFloat(data.tread_m3) || 0,
+    treadM3: data.tread_m3 != null ? parseFloat(data.tread_m3) : null,
     winderM3: data.winder_m3 != null ? parseFloat(data.winder_m3) : null,
     quarterM3: data.quarter_m3 != null ? parseFloat(data.quarter_m3) : null,
     totalProducedM3: (parseFloat(data.tread_m3) || 0) + (parseFloat(data.winder_m3) || 0) + (parseFloat(data.quarter_m3) || 0),

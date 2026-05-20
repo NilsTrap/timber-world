@@ -10,20 +10,19 @@ interface AssignResult {
 }
 
 /**
- * Lookup the next available package number by checking both
- * inventory_packages and production_outputs tables.
+ * Build a Set of every package number currently in use for this org+process,
+ * across both validated inventory and draft production outputs.
  *
  * Format: N-{process_code}-{0001-9999}
  */
-async function lookupNextNumber(
+async function loadTakenNumbers(
   supabase: Awaited<ReturnType<typeof createClient>>,
   organisationId: string,
   processCode: string
-): Promise<number> {
+): Promise<Set<number>> {
   const pattern = `N-${processCode}-%`;
-  const regex = `^N-${processCode}-(\\d+)$`;
+  const numberRegex = new RegExp(`^N-${processCode}-(\\d+)$`);
 
-  // Query max from inventory_packages
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: invData } = await (supabase as any)
     .from("inventory_packages")
@@ -31,7 +30,6 @@ async function lookupNextNumber(
     .eq("organisation_id", organisationId)
     .like("package_number", pattern);
 
-  // Query max from portal_production_outputs (for drafts not yet in inventory)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: prodData } = await (supabase as any)
     .from("portal_production_outputs")
@@ -39,28 +37,33 @@ async function lookupNextNumber(
     .eq("portal_production_entries.organisation_id", organisationId)
     .like("package_number", pattern);
 
-  // Find the maximum number from both sources
-  let maxNumber = 0;
-  const numberRegex = new RegExp(regex);
-
-  for (const row of invData || []) {
+  const taken = new Set<number>();
+  for (const row of [...(invData ?? []), ...(prodData ?? [])]) {
     const match = row.package_number?.match(numberRegex);
     if (match) {
-      const num = parseInt(match[1], 10);
-      if (num > maxNumber) maxNumber = num;
+      const n = parseInt(match[1], 10);
+      if (!isNaN(n)) taken.add(n);
     }
   }
+  return taken;
+}
 
-  for (const row of prodData || []) {
-    const match = row.package_number?.match(numberRegex);
-    if (match) {
-      const num = parseInt(match[1], 10);
-      if (num > maxNumber) maxNumber = num;
-    }
+/**
+ * Find the next free package number above `from`. Verifies that the candidate
+ * is not already in the taken set — this is the defensive check that catches
+ * cases where "max(taken)+1" would lie (stale MAX, gaps from deleted drafts
+ * whose validated inventory survived, manual entries, etc.). When taken,
+ * candidates are skipped one at a time. Wraps at 9999 back to 1.
+ */
+function nextFreeNumber(taken: Set<number>, from: number): number {
+  let n = from;
+  // Bounded loop so a fully-saturated 1..9999 range fails predictably instead
+  // of hanging. 9999 iterations is the absolute worst case.
+  for (let i = 0; i < 9999; i++) {
+    if (!taken.has(n)) return n;
+    n = n >= 9999 ? 1 : n + 1;
   }
-
-  // Return next number (wrap at 9999)
-  return maxNumber >= 9999 ? 1 : maxNumber + 1;
+  throw new Error("All package numbers 1..9999 are taken");
 }
 
 /**
@@ -132,13 +135,25 @@ export async function assignPackageNumbers(
     return { success: true, assignedNumbers: [] };
   }
 
-  // Lookup the next available number
-  let nextNumber = await lookupNextNumber(supabase, organisationId, processCode);
+  // Load the currently-taken numbers, then assign by walking forward from
+  // max+1 but skipping any candidate already in the taken set. This protects
+  // against gaps caused by re-validated entries, deleted drafts whose
+  // validated inventory survived, manual edits, etc.
+  const taken = await loadTakenNumbers(supabase, organisationId, processCode);
+  let candidate = taken.size === 0 ? 1 : Math.max(...taken) + 1;
+  if (candidate > 9999) candidate = 1;
   const assignedNumbers: string[] = [];
 
-  // Assign numbers to each output
   for (const output of outputsNeedingNumbers) {
-    const packageNumber = `N-${processCode}-${String(nextNumber).padStart(4, "0")}`;
+    try {
+      candidate = nextFreeNumber(taken, candidate);
+    } catch (e) {
+      return {
+        success: false,
+        error: `Cannot assign package number: ${(e as Error).message}. Assigned so far: ${assignedNumbers.join(", ")}`,
+      };
+    }
+    const packageNumber = `N-${processCode}-${String(candidate).padStart(4, "0")}`;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: updateError } = await (supabase as any)
@@ -155,7 +170,10 @@ export async function assignPackageNumbers(
     }
 
     assignedNumbers.push(packageNumber);
-    nextNumber = nextNumber >= 9999 ? 1 : nextNumber + 1;
+    // Reserve this number locally so the loop's next iteration skips it,
+    // and advance the candidate cursor.
+    taken.add(candidate);
+    candidate = candidate >= 9999 ? 1 : candidate + 1;
   }
 
   return { success: true, assignedNumbers };

@@ -30,6 +30,8 @@ const STATUS_COLORS: Record<string, string> = {
   in_progress: "bg-purple-100 text-purple-800",
   shipped: "bg-orange-100 text-orange-800",
   completed: "bg-green-100 text-green-800",
+  loaded: "bg-green-100 text-green-800",
+  cancelled: "bg-gray-200 text-gray-700",
 };
 
 interface ReferenceOption {

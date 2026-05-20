@@ -10,7 +10,8 @@
 export type OrderStatus =
   | "draft"
   | "confirmed"
-  | "loaded";
+  | "loaded"
+  | "cancelled";
 
 /**
  * Order as stored in the database
@@ -37,8 +38,8 @@ export interface Order {
   totalKg: number;
   /** Maximum m³ (total of all package volumes from detail) */
   maxM3: number;
-  /** Produced tread volume in m³ */
-  treadM3: number;
+  /** Produced tread volume in m³. `null` when never entered; `0` when explicitly set to zero. */
+  treadM3: number | null;
   /** Produced winder volume in m³. `null` when never entered; `0` when explicitly set to zero. */
   winderM3: number | null;
   /** Produced quarter volume in m³. `null` when never entered; `0` when explicitly set to zero. */
@@ -164,6 +165,8 @@ export function getStatusBadgeVariant(
       return "default";
     case "loaded":
       return "success";
+    case "cancelled":
+      return "secondary";
     default:
       return "outline";
   }
@@ -180,6 +183,8 @@ export function getStatusLabel(status: OrderStatus): string {
       return "Confirmed";
     case "loaded":
       return "Loaded";
+    case "cancelled":
+      return "Cancelled";
     default:
       return status;
   }
@@ -192,6 +197,7 @@ export const ORDER_STATUSES: OrderStatus[] = [
   "draft",
   "confirmed",
   "loaded",
+  "cancelled",
 ];
 
 /**
