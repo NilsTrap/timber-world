@@ -103,6 +103,13 @@ const ALL_COLUMNS: OrderColumn[] = [
   "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice", "files", "status",
 ];
 
+/** Label shown in empty cells. Cancelled orders surface "cancelled" instead of
+ *  "-" so the cells don't look like "data missing" — both in the table and in
+ *  filter dropdown unique-values lists. */
+function emptyLabel(status: OrderStatus): string {
+  return status === "cancelled" ? "cancelled" : "-";
+}
+
 function formatDate(value: string | null): string {
   if (!value) return "-";
   const d = new Date(value);
@@ -161,7 +168,11 @@ function EditableCell({
   };
 
   if (!active) {
-    const display = type === "date" ? formatDate(value || null) : (value || placeholder || "-");
+    // For dates: format when set, otherwise fall back to placeholder so the
+    // caller (cancelled-aware) can override "-".
+    const display = type === "date"
+      ? (value ? formatDate(value) : (placeholder || "-"))
+      : (value || placeholder || "-");
     return (
       <span
         className={`cursor-text rounded py-0.5 px-0.5 block w-full min-h-[1.75rem] flex items-center hover:bg-muted/60 hover:ring-1 hover:ring-muted-foreground/20 transition-colors ${!value ? "text-muted-foreground" : ""}${align === "right" ? " justify-end" : ""}`}
@@ -381,6 +392,12 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
 
   // Column display value getter for filter/sort
   const getOrderDisplayValue = useCallback((order: Order, colKey: string): string => {
+    // After computing the column's raw display value below, surface "cancelled"
+    // for cancelled orders' empty cells so they don't look like missing data
+    // and appear as a distinct filter dropdown option. purchaseOrderNr is left
+    // alone per Nils' instruction. Implemented as a wrapper around the switch
+    // result so every existing case stays untouched.
+    const result = ((): string => {
     switch (colKey) {
       case "customer": return order.customerOrganisationName || "";
       case "seller": return order.sellerOrganisationName || "";
@@ -443,6 +460,11 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
       case "status": return getStatusLabel(order.status);
       default: return "";
     }
+    })();
+    if (result === "" && order.status === "cancelled" && colKey !== "purchaseOrderNr") {
+      return "cancelled";
+    }
+    return result;
   }, []);
 
   const NUMERIC_COLS = new Set([
@@ -1112,7 +1134,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
               {displayOrders.map((order) => (
                 <TableRow
                   key={order.id}
-                  className="hover:bg-accent/50 transition-colors cursor-pointer"
+                  className={`transition-colors cursor-pointer ${order.status === "cancelled" ? "bg-red-50 hover:bg-red-100" : "hover:bg-accent/50"}`}
                   onClick={() => router.push(tab === "list" ? `/orders/${order.id}` : `/orders/${order.id}?tab=${tab}`)}
                 >
                   <TableCell className="px-0 py-0 w-6">
@@ -1187,7 +1209,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <EditableCell
                       value={order.plannedDate || ""}
                       type="date"
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { plannedDate: val || null })}
 
                     />
@@ -1196,12 +1218,12 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {show("dateLoaded") && (
                   <TableCell className="px-2 text-sm">
                     {tab === "production" ? (
-                      <span className={!order.dateLoaded ? "text-muted-foreground" : ""}>{formatDate(order.dateLoaded)}</span>
+                      <span className={!order.dateLoaded ? "text-muted-foreground" : ""}>{order.dateLoaded ? formatDate(order.dateLoaded) : emptyLabel(order.status)}</span>
                     ) : (
                     <EditableCell
                       value={order.dateLoaded || ""}
                       type="date"
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { dateLoaded: val || null })}
 
                     />
@@ -1229,7 +1251,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     ) : (
                     <EditableCell
                       value={order.projectNumber || ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { projectNumber: val || null })}
 
                     />
@@ -1237,7 +1259,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   </TableCell>
                   )}
                   {show("type") && (
-                  <TableCell className="px-2 text-sm">{order.typeSummary || <span className="text-muted-foreground">-</span>}</TableCell>
+                  <TableCell className="px-2 text-sm">{order.typeSummary || <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}</TableCell>
                   )}
                   {show("treadLength") && (
                   <TableCell className="px-2 text-sm text-right whitespace-nowrap">
@@ -1264,31 +1286,31 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   <TableCell className="px-2 text-sm text-right">{order.quarters}</TableCell>
                   )}
                   {show("totalPieces") && (
-                  <TableCell className="px-2 text-sm text-right">{order.totalPieces || <span className="text-muted-foreground">-</span>}</TableCell>
+                  <TableCell className="px-2 text-sm text-right">{order.totalPieces || <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}</TableCell>
                   )}
                   {show("totalPrice") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.totalPricePence ? (order.totalPricePence / 100).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : <span className="text-muted-foreground">-</span>}
+                    {order.totalPricePence ? (order.totalPricePence / 100).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("totalKg") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.totalKg > 0 ? order.totalKg.toFixed(2) : <span className="text-muted-foreground">-</span>}
+                    {order.totalKg > 0 ? order.totalKg.toFixed(2) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("maxM3") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.maxM3 > 0 ? order.maxM3.toFixed(4) : <span className="text-muted-foreground">-</span>}
+                    {order.maxM3 > 0 ? order.maxM3.toFixed(4) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("invoicedM3") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.maxM3 > 0 ? order.maxM3.toFixed(4) : <span className="text-muted-foreground">-</span>}
+                    {order.maxM3 > 0 ? order.maxM3.toFixed(4) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("usedM3") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.usedMaterialM3 > 0 ? order.usedMaterialM3.toFixed(4) : <span className="text-muted-foreground">-</span>}
+                    {order.usedMaterialM3 > 0 ? order.usedMaterialM3.toFixed(4) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("diffM3") && (() => {
@@ -1297,7 +1319,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <TableCell className="px-2 text-sm text-right">
                       {diff !== null
                         ? <span className={diff < 0 ? "text-red-600" : diff > 0 ? "text-green-600" : ""}>{diff.toFixed(4)}</span>
-                        : <span className="text-muted-foreground">-</span>}
+                        : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}
@@ -1307,7 +1329,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <TableCell className="px-2 text-sm text-right">
                       {diffPct !== null
                         ? <span className={diffPct < 0 ? "text-red-600" : diffPct > 0 ? "text-green-600" : ""}>{diffPct.toFixed(1)}%</span>
-                        : <span className="text-muted-foreground">-</span>}
+                        : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}
@@ -1322,7 +1344,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <TableCell className="px-2 text-sm text-right" title={tooltip}>
                       {order.plMaterialValue !== 0
                         ? <span className={order.plMaterialValue < 0 ? "text-red-600" : "text-green-600"}>{order.plMaterialValue.toFixed(2)}</span>
-                        : <span className="text-muted-foreground">-</span>}
+                        : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}
@@ -1330,7 +1352,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.treadM3 != null ? order.treadM3.toFixed(4) : ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveProductionField(order.id, "treadM3", val)}
 
                       align="right"
@@ -1341,7 +1363,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.winderM3 != null ? order.winderM3.toFixed(4) : ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveProductionField(order.id, "winderM3", val)}
 
                       align="right"
@@ -1352,7 +1374,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.quarterM3 != null ? order.quarterM3.toFixed(4) : ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveProductionField(order.id, "quarterM3", val)}
 
                       align="right"
@@ -1361,14 +1383,14 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   )}
                   {show("totalProducedM3") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.totalProducedM3 > 0 ? order.totalProducedM3.toFixed(4) : <span className="text-muted-foreground">-</span>}
+                    {order.totalProducedM3 > 0 ? order.totalProducedM3.toFixed(4) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("usedMaterialM3") && (
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.usedMaterialM3 > 0 ? order.usedMaterialM3.toFixed(4) : ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveProductionField(order.id, "usedMaterialM3", val)}
 
                       align="right"
@@ -1377,19 +1399,19 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   )}
                   {show("wasteM3") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.wasteM3 > 0 ? order.wasteM3.toFixed(4) : <span className="text-muted-foreground">-</span>}
+                    {order.wasteM3 > 0 ? order.wasteM3.toFixed(4) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("wastePercent") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.wastePercent > 0 ? `${order.wastePercent.toFixed(1)}%` : <span className="text-muted-foreground">-</span>}
+                    {order.wastePercent > 0 ? `${order.wastePercent.toFixed(1)}%` : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("productionMaterial") && (
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.productionMaterial != null ? order.productionMaterial.toFixed(2) : ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveProductionCostField(order.id, "productionMaterial", val)}
 
                       align="right"
@@ -1400,7 +1422,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.productionFinishing != null ? order.productionFinishing.toFixed(2) : ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveProductionCostField(order.id, "productionFinishing", val)}
 
                       align="right"
@@ -1409,14 +1431,14 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   )}
                   {show("productionTotal") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.productionTotal != null ? order.productionTotal.toFixed(2) : <span className="text-muted-foreground">-</span>}
+                    {order.productionTotal != null ? order.productionTotal.toFixed(2) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("productionInvoiceNumber") && (
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.productionInvoiceNumber || ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { productionInvoiceNumber: val || null })}
 
                     />
@@ -1427,7 +1449,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <EditableCell
                       value={order.productionPaymentDate || ""}
                       type="date"
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { productionPaymentDate: val || null })}
 
                     />
@@ -1437,7 +1459,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.woodArt != null ? order.woodArt.toFixed(2) : ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveProductionCostField(order.id, "woodArt", val)}
 
                       align="right"
@@ -1448,7 +1470,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.woodArtCnc != null ? order.woodArtCnc.toFixed(2) : ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveProductionCostField(order.id, "woodArtCnc", val)}
 
                       align="right"
@@ -1457,14 +1479,14 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   )}
                   {show("woodArtTotal") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.woodArtTotal != null ? order.woodArtTotal.toFixed(2) : <span className="text-muted-foreground">-</span>}
+                    {order.woodArtTotal != null ? order.woodArtTotal.toFixed(2) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("woodArtInvoiceNumber") && (
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.woodArtInvoiceNumber || ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { woodArtInvoiceNumber: val || null })}
 
                     />
@@ -1475,7 +1497,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <EditableCell
                       value={order.woodArtPaymentDate || ""}
                       type="date"
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { woodArtPaymentDate: val || null })}
 
                     />
@@ -1485,7 +1507,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.advanceInvoiceNumber || ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { advanceInvoiceNumber: val || null })}
 
                     />
@@ -1495,7 +1517,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.invoiceNumber || ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { invoiceNumber: val || null })}
 
                     />
@@ -1505,7 +1527,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.packageNumber || ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { packageNumber: val || null })}
 
                     />
@@ -1515,7 +1537,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.transportInvoiceNumber || ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { transportInvoiceNumber: val || null })}
 
                     />
@@ -1525,7 +1547,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   <TableCell className="px-2 text-sm">
                     <EditableCell
                       value={order.transportPrice || ""}
-                      placeholder="-"
+                      placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { transportPrice: val || null })}
 
                     />
@@ -1533,7 +1555,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   )}
                   {show("invoicedWork") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.invoicedWork > 0 ? order.invoicedWork.toFixed(2) : <span className="text-muted-foreground">-</span>}
+                    {order.invoicedWork > 0 ? order.invoicedWork.toFixed(2) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("usedWork") && (() => {
@@ -1545,7 +1567,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       : "No data";
                     return (
                     <TableCell className="px-2 text-sm text-right" title={tooltip}>
-                      {order.usedWork > 0 ? order.usedWork.toFixed(2) : <span className="text-muted-foreground">-</span>}
+                      {order.usedWork > 0 ? order.usedWork.toFixed(2) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}
@@ -1555,7 +1577,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <TableCell className="px-2 text-sm text-right">
                       {diff !== null
                         ? <span className={diff < 0 ? "text-red-600" : diff > 0 ? "text-green-600" : ""}>{diff.toFixed(2)}</span>
-                        : <span className="text-muted-foreground">-</span>}
+                        : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}
@@ -1565,7 +1587,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <TableCell className="px-2 text-sm text-right">
                       {diffPct !== null
                         ? <span className={diffPct < 0 ? "text-red-600" : diffPct > 0 ? "text-green-600" : ""}>{diffPct.toFixed(1)}%</span>
-                        : <span className="text-muted-foreground">-</span>}
+                        : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}
@@ -1579,18 +1601,18 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <TableCell className="px-2 text-sm text-right" title={tooltip}>
                       {order.plWorkValue !== 0
                         ? <span className={order.plWorkValue < 0 ? "text-red-600" : "text-green-600"}>{order.plWorkValue.toFixed(2)}</span>
-                        : <span className="text-muted-foreground">-</span>}
+                        : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}
                   {show("invoicedTransport") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.invoicedTransport > 0 ? order.invoicedTransport.toFixed(2) : <span className="text-muted-foreground">-</span>}
+                    {order.invoicedTransport > 0 ? order.invoicedTransport.toFixed(2) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("usedTransport") && (
                   <TableCell className="px-2 text-sm text-right">
-                    {order.usedTransport > 0 ? order.usedTransport.toFixed(2) : <span className="text-muted-foreground">-</span>}
+                    {order.usedTransport > 0 ? order.usedTransport.toFixed(2) : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                   </TableCell>
                   )}
                   {show("diffTransport") && (() => {
@@ -1599,7 +1621,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <TableCell className="px-2 text-sm text-right">
                       {diff !== null
                         ? <span className={diff < 0 ? "text-red-600" : diff > 0 ? "text-green-600" : ""}>{diff.toFixed(2)}</span>
-                        : <span className="text-muted-foreground">-</span>}
+                        : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}
@@ -1609,7 +1631,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <TableCell className="px-2 text-sm text-right">
                       {diffPct !== null
                         ? <span className={diffPct < 0 ? "text-red-600" : diffPct > 0 ? "text-green-600" : ""}>{diffPct.toFixed(1)}%</span>
-                        : <span className="text-muted-foreground">-</span>}
+                        : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}
@@ -1623,7 +1645,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <TableCell className="px-2 text-sm text-right" title={tooltip}>
                       {order.plTransportValue !== 0
                         ? <span className={order.plTransportValue < 0 ? "text-red-600" : "text-green-600"}>{order.plTransportValue.toFixed(2)}</span>
-                        : <span className="text-muted-foreground">-</span>}
+                        : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}
@@ -1636,7 +1658,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <TableCell className="px-2 text-sm text-right" title={tooltip}>
                       {val !== 0
                         ? <span className={val < 0 ? "text-red-600" : "text-green-600"}>{val.toFixed(2)}</span>
-                        : <span className="text-muted-foreground">-</span>}
+                        : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}
@@ -1653,7 +1675,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <TableCell className="px-2 text-sm text-right" title={tooltip}>
                       {val !== 0
                         ? <span className={val < 0 ? "text-red-600" : "text-green-600"}>{val.toFixed(2)}</span>
-                        : <span className="text-muted-foreground">-</span>}
+                        : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}
@@ -1667,7 +1689,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     <TableCell className="px-2 text-sm text-right" title={tooltip}>
                       {val !== 0
                         ? <span className={val < 0 ? "text-red-600" : "text-green-600"}>{val.toFixed(1)}%</span>
-                        : <span className="text-muted-foreground">-</span>}
+                        : <span className="text-muted-foreground">{emptyLabel(order.status)}</span>}
                     </TableCell>
                     );
                   })()}

@@ -57,7 +57,7 @@ export default async function ProductionEntryPage({
     notFound();
   }
 
-  const { processName, processCode, productionDate: rawDate, status, entryType, correctsEntryId, workUnit, workFormula, plannedWork, actualWork } = result.data;
+  const { processName, processCode, productionDate: rawDate, status, entryType, correctsEntryId, workUnit, workFormula, plannedWork, actualWork, palletCount, palletPrice } = result.data;
   const productionDate = formatDate(rawDate);
   const isDraft = status === "draft";
   const isCorrection = entryType === "correction";
@@ -203,6 +203,8 @@ export default async function ProductionEntryPage({
         initialPlannedWork={plannedWork}
         initialActualWork={actualWork}
         usedPackageNumbers={usedPackageNumbers}
+        palletPrice={palletPrice}
+        initialPalletCount={palletCount}
       />
 
       <ProductionActivityLog productionEntryId={id} />

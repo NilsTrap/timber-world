@@ -163,6 +163,7 @@ export const updateOrderStatusSchema = z.object({
     "draft",
     "confirmed",
     "loaded",
+    "cancelled",
   ]),
 });
 

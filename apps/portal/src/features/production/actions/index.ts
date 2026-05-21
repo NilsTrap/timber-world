@@ -1,6 +1,8 @@
 export { getProcesses, getProcessesWithNotes } from "./getProcesses";
 export { saveProcessNote } from "./saveProcessNote";
 export { saveProcessWorkUnit } from "./saveProcessWorkUnit";
+export { saveProcessPalletPrice } from "./saveProcessPalletPrice";
+export { savePalletCount } from "./savePalletCount";
 export { createProductionEntry } from "./createProductionEntry";
 export { createCorrectionEntry } from "./createCorrectionEntry";
 export { getDraftProductions } from "./getDraftProductions";

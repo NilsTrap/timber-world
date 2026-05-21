@@ -12,6 +12,8 @@ export interface Process {
   workUnit: string | null;
   workFormula: WorkFormula;
   price: number | null;
+  /** Auxiliary unit price for pallets used in this process. Only set for Packing. */
+  palletPrice: number | null;
 }
 
 export interface ProcessWithNotes extends Process {
@@ -62,6 +64,7 @@ export interface ProductionListItem {
 export interface ProductionHistoryItem {
   id: string;
   processName: string;
+  processCode: string | null;
   productionDate: string;
   totalInputM3: number;
   totalOutputM3: number;
@@ -76,6 +79,10 @@ export interface ProductionHistoryItem {
   actualWork: number | null;
   workUnit: string | null;
   price: number | null;
+  /** Pallet count for this entry (Packing only). NULL = not entered. */
+  palletCount: number | null;
+  /** Pallet unit price from the process (Packing only). */
+  palletPrice: number | null;
   invoiceNumber: string | null;
 }
 

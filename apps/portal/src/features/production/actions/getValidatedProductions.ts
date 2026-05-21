@@ -28,7 +28,7 @@ export async function getValidatedProductions(orgIds?: string[]): Promise<
   let query = (supabase as any)
     .from("portal_production_entries")
     .select(
-      "id, production_date, total_input_m3, total_output_m3, outcome_percentage, waste_percentage, validated_at, entry_type, organisation_id, created_by, planned_work, actual_work, invoice_number, ref_processes(value, work_unit, price), organisations(code, name)"
+      "id, production_date, total_input_m3, total_output_m3, outcome_percentage, waste_percentage, validated_at, entry_type, organisation_id, created_by, planned_work, actual_work, pallet_count, invoice_number, ref_processes(value, code, work_unit, price, pallet_price), organisations(code, name)"
     )
     .eq("status", "validated")
     .order("validated_at", { ascending: false });
@@ -68,6 +68,7 @@ export async function getValidatedProductions(orgIds?: string[]): Promise<
   const items: ProductionHistoryItem[] = (data ?? []).map((row: any) => ({
     id: row.id,
     processName: row.ref_processes?.value ?? "Unknown",
+    processCode: row.ref_processes?.code ?? null,
     productionDate: row.production_date,
     totalInputM3: row.total_input_m3 ?? 0,
     totalOutputM3: row.total_output_m3 ?? 0,
@@ -82,6 +83,8 @@ export async function getValidatedProductions(orgIds?: string[]): Promise<
     actualWork: row.actual_work ?? null,
     workUnit: row.ref_processes?.work_unit ?? null,
     price: row.ref_processes?.price != null ? Number(row.ref_processes.price) : null,
+    palletCount: row.pallet_count ?? null,
+    palletPrice: row.ref_processes?.pallet_price != null ? Number(row.ref_processes.pallet_price) : null,
     invoiceNumber: row.invoice_number ?? null,
   }));
 

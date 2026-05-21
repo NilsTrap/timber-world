@@ -10,10 +10,11 @@ import {
   TableHeader,
   TableRow,
   Button,
+  Input,
   Textarea,
 } from "@timber/ui";
 import { Pencil, Check, X } from "lucide-react";
-import { saveProcessNote } from "../actions";
+import { saveProcessNote, saveProcessPalletPrice } from "../actions";
 import { PrintProcessesButton } from "./PrintProcessesButton";
 import { getFormulaDescription } from "../utils/calculateWorkAmount";
 import type { ProcessWithNotes } from "../types";
@@ -22,6 +23,9 @@ interface ProcessesTabProps {
   processes: ProcessWithNotes[];
   organizationName?: string;
   organizationId?: string;
+  /** Show pallet price as a read-only value for non-admins. Only platform admins
+   *  may edit it (server action enforces this too). */
+  canEditPalletPrice?: boolean;
 }
 
 /**
@@ -30,12 +34,43 @@ interface ProcessesTabProps {
  * Displays all available production processes with their codes and
  * organization-specific notes. Users can edit notes inline.
  */
-export function ProcessesTab({ processes: initialProcesses, organizationName, organizationId }: ProcessesTabProps) {
+export function ProcessesTab({ processes: initialProcesses, organizationName, organizationId, canEditPalletPrice = false }: ProcessesTabProps) {
   const [processes, setProcesses] = useState(initialProcesses);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [isPending, startTransition] = useTransition();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Inline edit state for pallet price (Packing only).
+  const [editingPalletPriceId, setEditingPalletPriceId] = useState<string | null>(null);
+  const [palletPriceDraft, setPalletPriceDraft] = useState("");
+  const [isSavingPalletPrice, setIsSavingPalletPrice] = useState(false);
+
+  const handlePalletPriceSave = useCallback(async (process: ProcessWithNotes) => {
+    setIsSavingPalletPrice(true);
+    const trimmed = palletPriceDraft.trim().replace(",", ".");
+    const numeric = trimmed === "" ? null : parseFloat(trimmed);
+    if (numeric !== null && (isNaN(numeric) || numeric < 0)) {
+      toast.error("Pallet price must be a non-negative number");
+      setIsSavingPalletPrice(false);
+      return;
+    }
+    const result = await saveProcessPalletPrice({
+      processId: process.id,
+      palletPrice: numeric,
+    });
+    if (result.success) {
+      setProcesses((prev) =>
+        prev.map((p) => (p.id === process.id ? { ...p, palletPrice: numeric } : p))
+      );
+      setEditingPalletPriceId(null);
+      setPalletPriceDraft("");
+      toast.success("Pallet price saved");
+    } else {
+      toast.error(result.error);
+    }
+    setIsSavingPalletPrice(false);
+  }, [palletPriceDraft]);
 
   // Focus textarea when editing notes
   useEffect(() => {
@@ -119,6 +154,7 @@ export function ProcessesTab({ processes: initialProcesses, organizationName, or
               <TableHead className="w-24">Work Unit</TableHead>
               <TableHead className="w-56">Formula</TableHead>
               <TableHead className="w-28">Price</TableHead>
+              <TableHead className="w-32">Pallet Price</TableHead>
               <TableHead>Description / Notes</TableHead>
               <TableHead className="w-20"></TableHead>
             </TableRow>
@@ -146,6 +182,57 @@ export function ProcessesTab({ processes: initialProcesses, organizationName, or
                       {process.price.toFixed(2).replace('.', ',')}
                       {process.workUnit && <span className="text-muted-foreground text-xs ml-1">/ {process.workUnit}</span>}
                     </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="align-top text-sm">
+                  {process.code === "PC" ? (
+                    canEditPalletPrice ? (
+                      editingPalletPriceId === process.id ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            autoFocus
+                            value={palletPriceDraft}
+                            onChange={(e) => setPalletPriceDraft(e.target.value)}
+                            onBlur={() => handlePalletPriceSave(process)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handlePalletPriceSave(process);
+                              if (e.key === "Escape") { setEditingPalletPriceId(null); setPalletPriceDraft(""); }
+                            }}
+                            disabled={isSavingPalletPrice}
+                            className="h-7 w-20 text-sm"
+                            placeholder="0,00"
+                          />
+                          <span className="text-muted-foreground text-xs">/ pallet</span>
+                        </div>
+                      ) : (
+                        <button
+                          className="text-left hover:bg-muted/60 rounded px-1 py-0.5 -mx-1 transition-colors w-full"
+                          onClick={() => {
+                            setEditingPalletPriceId(process.id);
+                            setPalletPriceDraft(process.palletPrice != null ? process.palletPrice.toFixed(2).replace(".", ",") : "");
+                          }}
+                          title="Click to edit pallet price"
+                        >
+                          {process.palletPrice != null ? (
+                            <span>
+                              {process.palletPrice.toFixed(2).replace('.', ',')}
+                              <span className="text-muted-foreground text-xs ml-1">/ pallet</span>
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">— (click to set)</span>
+                          )}
+                        </button>
+                      )
+                    ) : process.palletPrice != null ? (
+                      <span>
+                        {process.palletPrice.toFixed(2).replace('.', ',')}
+                        <span className="text-muted-foreground text-xs ml-1">/ pallet</span>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}

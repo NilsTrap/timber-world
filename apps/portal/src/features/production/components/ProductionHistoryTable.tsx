@@ -237,12 +237,25 @@ export function ProductionHistoryTable({
     setter(`${d}.${m}.${y}`);
   };
 
-  // Calculate sum for an entry
+  // Calculate sum for an entry.
+  // Base: actualWork × per-unit price.
+  // For Packing entries (processCode "PC"), also add palletCount × palletPrice.
+  // Pallet cost is Packing-only by design — other processes ignore it even
+  // if data is present.
   const getSum = (entry: ProductionHistoryItem): number | null => {
+    let total: number | null = null;
     if (entry.price != null && entry.actualWork != null) {
-      return entry.actualWork * entry.price;
+      total = entry.actualWork * entry.price;
     }
-    return null;
+    if (
+      entry.processCode === "PC" &&
+      entry.palletCount != null &&
+      entry.palletPrice != null
+    ) {
+      const palletCost = entry.palletCount * entry.palletPrice;
+      total = (total ?? 0) + palletCost;
+    }
+    return total;
   };
 
   // Compute display value for each column (used for filtering)

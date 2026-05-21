@@ -239,6 +239,7 @@ export function ProductionPageTabs({
             processes={processesWithNotes}
             organizationName={organizationName}
             organizationId={organizationId}
+            canEditPalletPrice={isAdmin}
           />
         )}
       </TabsContent>

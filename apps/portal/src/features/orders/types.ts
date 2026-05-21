@@ -157,7 +157,7 @@ export function isValidUUID(id: string): boolean {
  */
 export function getStatusBadgeVariant(
   status: OrderStatus
-): "outline" | "secondary" | "default" | "success" {
+): "outline" | "secondary" | "default" | "success" | "destructive" {
   switch (status) {
     case "draft":
       return "outline";
@@ -166,7 +166,7 @@ export function getStatusBadgeVariant(
     case "loaded":
       return "success";
     case "cancelled":
-      return "secondary";
+      return "destructive";
     default:
       return "outline";
   }

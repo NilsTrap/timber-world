@@ -21,6 +21,10 @@ export interface ProductionEntryDetail {
   workFormula: WorkFormula;
   plannedWork: number | null;
   actualWork: number | null;
+  /** Number of pallets used in this entry (Packing only). NULL = not entered. */
+  palletCount: number | null;
+  /** Auxiliary pallet unit price configured on the process (Packing). NULL = pallets not tracked. */
+  palletPrice: number | null;
 }
 
 /**
@@ -46,7 +50,7 @@ export async function getProductionEntry(
 
   const { data, error } = await (supabase as any)
     .from("portal_production_entries")
-    .select("id, production_date, status, entry_type, corrects_entry_id, notes, created_at, organisation_id, planned_work, actual_work, ref_processes(value, code, work_unit, work_formula)")
+    .select("id, production_date, status, entry_type, corrects_entry_id, notes, created_at, organisation_id, planned_work, actual_work, pallet_count, ref_processes(value, code, work_unit, work_formula, pallet_price)")
     .eq("id", id)
     .single();
 
@@ -76,6 +80,8 @@ export async function getProductionEntry(
       workFormula: data.ref_processes?.work_formula ?? null,
       plannedWork: data.planned_work ?? null,
       actualWork: data.actual_work ?? null,
+      palletCount: data.pallet_count ?? null,
+      palletPrice: data.ref_processes?.pallet_price != null ? Number(data.ref_processes.pallet_price) : null,
     },
   };
 }

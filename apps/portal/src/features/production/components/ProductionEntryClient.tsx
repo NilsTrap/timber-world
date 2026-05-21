@@ -13,6 +13,7 @@ import { ProductionOutputsSection } from "./ProductionOutputsSection";
 import { ProductionSummary } from "./ProductionSummary";
 import { ValidateProductionDialog } from "./ValidateProductionDialog";
 import { WorkAmountsSection } from "./WorkAmountsSection";
+import { PalletSection } from "./PalletSection";
 
 interface ProductionEntryClientProps {
   productionEntryId: string;
@@ -41,6 +42,10 @@ interface ProductionEntryClientProps {
   initialActualWork?: number | null;
   /** Package numbers that are used in other processes (read-only in edit mode) */
   usedPackageNumbers?: string[];
+  /** Pallet unit price from process (null = pallet UI hidden for this process). */
+  palletPrice?: number | null;
+  /** Initial pallet count for this entry. */
+  initialPalletCount?: number | null;
 }
 
 /**
@@ -72,6 +77,8 @@ export function ProductionEntryClient({
   initialPlannedWork,
   initialActualWork,
   usedPackageNumbers = [],
+  palletPrice,
+  initialPalletCount,
 }: ProductionEntryClientProps) {
   const router = useRouter();
   const [inputTotalM3, setInputTotalM3] = useState(initialInputTotal);
@@ -283,6 +290,15 @@ export function ProductionEntryClient({
         readOnly={readOnly}
         onWorkAmountsChange={handleWorkAmountsChange}
       />
+
+      {processCode === "PC" && (
+        <PalletSection
+          productionEntryId={productionEntryId}
+          palletPrice={palletPrice ?? null}
+          initialPalletCount={initialPalletCount ?? null}
+          readOnly={readOnly}
+        />
+      )}
 
       {/* Validate/Cancel Buttons — for draft entries and admin edit mode */}
       {!readOnly && (
