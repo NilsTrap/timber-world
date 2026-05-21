@@ -20,7 +20,7 @@
 #   - done: Story completed
 
 generated: 2026-01-22
-updated: 2026-05-20
+updated: 2026-05-21
 project: Timber-World
 project_key: platform
 tracking_system: file-system
@@ -384,6 +384,47 @@ development_status:
   # - One-off cleanup: re-assigned the 10 outputs of the stuck Calibration
   #   draft e8a09b40 (production_date 2026-05-12) from N-CA-0110..0119 to
   #   N-CA-0154..0163 above current max.
+
+  # Cancelled Order Status UX (2026-05-20)
+  epic-cancelled-status-ux: done
+  # - Zod updateOrderStatusSchema now accepts "cancelled" (the new enum
+  #   was added to the DB and TS types in epic-orders-cancelled-and-stability
+  #   but the validation schema was missed, causing "Invalid enum value"
+  #   400s when users tried to change status).
+  # - Cancelled rows tinted red (bg-red-50 + hover:bg-red-100) and the
+  #   Cancelled status badge now uses the destructive variant so cancelled
+  #   orders stand out visually.
+  # - All empty cells on cancelled orders display "cancelled" instead of
+  #   "-" via a new emptyLabel(status) helper. Applied to ~50 sites
+  #   (text-muted-foreground spans, EditableCell placeholder props, and
+  #   getOrderDisplayValue used by the filter dropdown unique-values list).
+  #   purchaseOrderNr column kept as "-" per Nils' instruction.
+  # - Bug fix in EditableCell type="date": placeholder prop was ignored
+  #   (always rendered formatDate(value) which returns "-" for null).
+  #   Now date cells correctly use the caller-provided placeholder.
+  # - Production-tab readonly dateLoaded span also honours emptyLabel
+  #   so cancelled orders show "cancelled" there too.
+
+  # Packing Pallet Cost Tracking (2026-05-21)
+  epic-packing-pallet-cost: done
+  # - Migration 20260521000001 adds ref_processes.pallet_price (auxiliary
+  #   per-pallet unit price) and portal_production_entries.pallet_count.
+  # - Schema is generic but UI is Packing-only (processCode === "PC"):
+  #     - Admin Processes tab (Reference Data): pallet price column shown
+  #       only on the Packing row, editable inline by platform admins.
+  #       canEditPalletPrice prop driven by isAdmin; saveProcessPalletPrice
+  #       enforces isSuperAdmin server-side too.
+  #     - Production entry page: PalletSection appears below Work Amounts
+  #       on every Packing draft. Count input is always shown and
+  #       editable. Pallet cost (count × palletPrice) shows once price is
+  #       configured; otherwise a "ask admin to configure" hint sits in
+  #       the price slot so the count input still works.
+  # - ProductionHistoryTable Sum column now adds palletCount × palletPrice
+  #   to work cost for validated Packing entries. Other processes
+  #   unaffected (defensive check, no UI path exists for non-Packing
+  #   to acquire pallet data anyway).
+  # - Org users see pallet price as read-only reference info. Pallet count
+  #   itself is editable by anyone who can edit the production entry.
 
 # ============================================================
 # PHASE 3: Planned Features

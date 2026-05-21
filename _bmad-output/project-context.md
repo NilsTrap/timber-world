@@ -1,7 +1,7 @@
 ---
 project_name: 'Timber-World-Platform'
 user_name: 'Nils'
-date: '2026-05-20'
+date: '2026-05-21'
 status: 'complete'
 sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime', 'session_verification', 'print_functionality', 'shipment_workflow', 'pallet_grouping', 'draft_blocking', 'competitor_pricing', 'marketing_stock', 'orders', 'modules_permissions', 'uk_staircase_pricing']
 architecture_ref: '_bmad-output/planning-artifacts/platform/architecture.md'
@@ -640,6 +640,34 @@ The function does NOT use a database-level atomic counter, so two concurrent
 assigns running in the same instant could still collide. For human-paced
 workflows it's reliable enough; if true atomicity becomes important the
 follow-up would be a per-(org, process) counter table.
+
+## Packing Pallet Cost
+
+The Packing process is the only one that tracks pallet usage. Pallet cost
+is auxiliary to the per-unit work cost and rolled into the entry's total
+in the production history Sum column.
+
+**Schema** (added 2026-05-21, migration 20260521000001):
+- `ref_processes.pallet_price NUMERIC NULL` — per-pallet unit price.
+  Configurable per-process but only ever set for Packing. Editable only by
+  platform admins (`isSuperAdmin` server gate in `saveProcessPalletPrice`).
+- `portal_production_entries.pallet_count INTEGER NULL` — number of
+  pallets used in a specific Packing entry.
+
+**UI gates** (Packing-only via `processCode === "PC"`):
+- Reference data — Production → Processes tab: pallet price column shows
+  an editable input on the Packing row for admins, a read-only value for
+  org users, and "—" non-clickable on every other process row.
+- Production entry — `ProductionEntryClient` renders `PalletSection`
+  below `WorkAmountsSection` for any Packing draft. Count input always
+  visible; cost shows once an admin has set the price.
+
+**Sum calculation** in `ProductionHistoryTable.getSum`:
+- Base: `actualWork × ref_processes.price`
+- For Packing entries only: `+ palletCount × palletPrice`
+- Defensive `processCode === "PC"` check — no UI path exists for
+  non-Packing to acquire pallet data, but the check guards against
+  future UI changes or direct DB edits.
 
 ## Inventory Packages — `package_sequence`
 
