@@ -21,7 +21,7 @@ import {
   TooltipTrigger,
   type ColumnSortState,
 } from "@timber/ui";
-import { Loader2, MessageSquare, FileText } from "lucide-react";
+import { Loader2, MessageSquare, FileText, Truck } from "lucide-react";
 import { addPackagesToShipment } from "../actions/shipmentPackages";
 import { getShipmentAvailablePackages, type ShipmentAvailablePackage } from "../actions/getShipmentAvailablePackages";
 import { toast } from "sonner";
@@ -176,7 +176,7 @@ export function ShipmentPackageSelector({
 
   // Get selectable rows (exclude packages in production drafts)
   const selectableRows = useMemo(
-    () => displayRows.filter((r) => !r.inProductionDraft),
+    () => displayRows.filter((r) => !r.inProductionDraft && !r.inOutgoingShipment),
     [displayRows]
   );
 
@@ -308,22 +308,28 @@ export function ShipmentPackageSelector({
                 <TableBody>
                   {displayRows.map((pkg) => {
                     const isSelected = selected.has(pkg.id);
-                    const isDisabled = pkg.inProductionDraft;
+                    const inOtherShipment = pkg.inOutgoingShipment;
+                    // Either marker (production draft OR outgoing shipment) means
+                    // the row is non-selectable. The row tint differs by reason:
+                    // amber for production drafts, blue for outgoing shipments.
+                    const isDisabled = pkg.inProductionDraft || inOtherShipment;
 
                     return (
                       <TableRow
                         key={pkg.id}
                         className={
-                          isDisabled
+                          pkg.inProductionDraft
                             ? "bg-amber-50 opacity-60 cursor-not-allowed"
-                            : isSelected
-                              ? "bg-accent/30 hover:bg-accent/40 cursor-pointer"
-                              : "hover:bg-accent/10 cursor-pointer"
+                            : inOtherShipment
+                              ? "bg-blue-50 opacity-60 cursor-not-allowed"
+                              : isSelected
+                                ? "bg-accent/30 hover:bg-accent/40 cursor-pointer"
+                                : "hover:bg-accent/10 cursor-pointer"
                         }
                         onClick={isDisabled ? undefined : () => handleToggleSelect(pkg.id)}
                       >
                         {/* Checkbox */}
-                        <TableCell className={`px-2 sticky left-0 z-10 ${isDisabled ? "bg-amber-50" : "bg-background"}`}>
+                        <TableCell className={`px-2 sticky left-0 z-10 ${pkg.inProductionDraft ? "bg-amber-50" : inOtherShipment ? "bg-blue-50" : "bg-background"}`}>
                           <input
                             type="checkbox"
                             checked={isSelected}
@@ -351,15 +357,29 @@ export function ShipmentPackageSelector({
                             );
                           }
 
-                          // Special rendering for packageNumber to show notes and production draft icons
+                          // Special rendering for packageNumber to show notes, production-draft, and outgoing-shipment markers
                           if (col.key === "packageNumber") {
                             const hasNote = !!pkg.notes;
                             const inDraft = pkg.inProductionDraft;
-                            if (hasNote || inDraft) {
+                            if (hasNote || inDraft || inOtherShipment) {
                               return (
                                 <TableCell key={col.key} className="px-1 text-xs whitespace-nowrap">
                                   <div className="flex items-center gap-1">
                                     <span>{value || "-"}</span>
+                                    {inOtherShipment && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Truck className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                                          </TooltipTrigger>
+                                          <TooltipContent side="right" className="max-w-xs">
+                                            <p className="text-sm">
+                                              Already in shipment {pkg.outgoingShipmentCode ?? "(unknown)"}
+                                            </p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
                                     {hasNote && (
                                       <TooltipProvider>
                                         <Tooltip>

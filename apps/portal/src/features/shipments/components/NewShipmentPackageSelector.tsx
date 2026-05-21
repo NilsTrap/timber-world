@@ -21,7 +21,7 @@ import {
   TooltipTrigger,
   type ColumnSortState,
 } from "@timber/ui";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Truck, FileText } from "lucide-react";
 import type { ShipmentAvailablePackage } from "../actions/getShipmentAvailablePackages";
 
 interface NewShipmentPackageSelectorProps {
@@ -168,13 +168,20 @@ export function NewShipmentPackageSelector({
     });
   }, []);
 
+  // Packages already in a production draft or another outgoing shipment are
+  // shown but disabled — never selectable, not counted in "select all".
+  const selectableRows = useMemo(
+    () => displayRows.filter((r) => !r.inProductionDraft && !r.inOutgoingShipment),
+    [displayRows]
+  );
+
   const handleSelectAll = useCallback(() => {
-    if (selected.size === displayRows.length) {
+    if (selected.size === selectableRows.length && selectableRows.length > 0) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(displayRows.map((r) => r.id)));
+      setSelected(new Set(selectableRows.map((r) => r.id)));
     }
-  }, [displayRows, selected.size]);
+  }, [selectableRows, selected.size]);
 
   const handleAddSelected = useCallback(() => {
     const selectedPackages = availablePackages.filter((pkg) => selected.has(pkg.id));
@@ -244,7 +251,7 @@ export function NewShipmentPackageSelector({
                     <TableHead className="px-1 w-[40px] sticky left-0 bg-background z-10">
                       <input
                         type="checkbox"
-                        checked={selected.size === displayRows.length && displayRows.length > 0}
+                        checked={selected.size === selectableRows.length && selectableRows.length > 0}
                         onChange={handleSelectAll}
                         className="h-4 w-4 rounded border-input"
                         title="Select all"
@@ -284,25 +291,31 @@ export function NewShipmentPackageSelector({
                 <TableBody>
                   {displayRows.map((pkg) => {
                     const isSelected = selected.has(pkg.id);
+                    const isDisabled = pkg.inProductionDraft || pkg.inOutgoingShipment;
 
                     return (
                       <TableRow
                         key={pkg.id}
                         className={
-                          isSelected
-                            ? "bg-accent/30 hover:bg-accent/40 cursor-pointer"
-                            : "hover:bg-accent/10 cursor-pointer"
+                          pkg.inProductionDraft
+                            ? "bg-amber-50 opacity-60 cursor-not-allowed"
+                            : pkg.inOutgoingShipment
+                              ? "bg-blue-50 opacity-60 cursor-not-allowed"
+                              : isSelected
+                                ? "bg-accent/30 hover:bg-accent/40 cursor-pointer"
+                                : "hover:bg-accent/10 cursor-pointer"
                         }
-                        onClick={() => handleToggleSelect(pkg.id)}
+                        onClick={isDisabled ? undefined : () => handleToggleSelect(pkg.id)}
                       >
                         {/* Checkbox */}
-                        <TableCell className="px-2 sticky left-0 bg-background z-10">
+                        <TableCell className={`px-2 sticky left-0 z-10 ${pkg.inProductionDraft ? "bg-amber-50" : pkg.inOutgoingShipment ? "bg-blue-50" : "bg-background"}`}>
                           <input
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => handleToggleSelect(pkg.id)}
                             onClick={(e) => e.stopPropagation()}
                             className="h-4 w-4 rounded border-input"
+                            disabled={isDisabled}
                           />
                         </TableCell>
 
@@ -323,24 +336,53 @@ export function NewShipmentPackageSelector({
                             );
                           }
 
-                          // Special rendering for packageNumber to show notes icon
+                          // Special rendering for packageNumber to show note,
+                          // outgoing-shipment, and production-draft markers.
                           if (col.key === "packageNumber") {
                             const hasNote = !!pkg.notes;
-                            if (hasNote) {
+                            if (hasNote || pkg.inOutgoingShipment || pkg.inProductionDraft) {
                               return (
                                 <TableCell key={col.key} className="px-1 text-xs whitespace-nowrap">
                                   <div className="flex items-center gap-1">
                                     <span>{value || "-"}</span>
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <MessageSquare className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
-                                        </TooltipTrigger>
-                                        <TooltipContent side="right" className="max-w-xs">
-                                          <p className="whitespace-pre-wrap text-sm">{pkg.notes}</p>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
+                                    {pkg.inOutgoingShipment && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Truck className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                                          </TooltipTrigger>
+                                          <TooltipContent side="right" className="max-w-xs">
+                                            <p className="text-sm">
+                                              Already in shipment {pkg.outgoingShipmentCode ?? "(unknown)"}
+                                            </p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                    {pkg.inProductionDraft && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <FileText className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>In production draft</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                    {hasNote && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <MessageSquare className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                                          </TooltipTrigger>
+                                          <TooltipContent side="right" className="max-w-xs">
+                                            <p className="whitespace-pre-wrap text-sm">{pkg.notes}</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
                                   </div>
                                 </TableCell>
                               );

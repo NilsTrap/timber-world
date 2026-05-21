@@ -31,6 +31,13 @@ export interface ShipmentAvailablePackage {
   notes: string | null;
   /** True if this package is in a production draft (cannot be added to shipment) */
   inProductionDraft: boolean;
+  /** True if this package is already part of another OUTGOING shipment (draft or
+   *  pending) from this org. Shown in the selector with a truck marker so the
+   *  user knows it's earmarked. Adding it to the new shipment would silently
+   *  move it from the other shipment. */
+  inOutgoingShipment: boolean;
+  /** Code of the other outgoing shipment this package is currently attached to. */
+  outgoingShipmentCode: string | null;
 }
 
 /**
@@ -75,6 +82,27 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
     (draftInputs ?? []).map((row: any) => row.package_id)
   );
 
+  // Also collect packages already attached to another draft/pending OUTGOING
+  // shipment from this org. They aren't excluded from the available list —
+  // the UI shows them with a blue truck marker so the user can see they're
+  // earmarked. Pre-checking lets us attach the shipment code for the tooltip.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: outgoingDraftPkgs } = await (supabase as any)
+    .from("inventory_packages")
+    .select(`
+      id,
+      shipments!inner!inventory_packages_shipment_id_fkey(shipment_code, from_organisation_id, status)
+    `)
+    .eq("shipments.from_organisation_id", orgId)
+    .in("shipments.status", ["draft", "pending"]);
+
+  const packagesInOutgoingShipment = new Map<string, string>();
+  for (const row of (outgoingDraftPkgs ?? []) as { id: string; shipments: { shipment_code: string } | null }[]) {
+    if (row.shipments?.shipment_code) {
+      packagesInOutgoingShipment.set(row.id, row.shipments.shipment_code);
+    }
+  }
+
   // Query 1: Shipment-sourced packages (shipped to this organisation's facility)
   // Only include packages from shipments that have been accepted or completed
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -117,7 +145,13 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
     return { success: false, error: `Failed to fetch packages: ${shipmentError.message}`, code: "QUERY_FAILED" };
   }
 
-  // Query 2: Production-sourced packages (from this organisation)
+  // Query 2: Production-sourced packages (from this organisation).
+  // IMPORTANT: filter on BOTH the production_entry's org AND the package's
+  // own organisation_id. When a package gets shipped to another org, its
+  // organisation_id is updated to the destination but production_entry_id
+  // stays pointing back at the originating org's entry. Without the
+  // `inventory_packages.organisation_id` filter, we'd leak packages that
+  // are no longer in this org's inventory into the available-packages list.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: productionData, error: productionError } = await (supabase as any)
     .from("inventory_packages")
@@ -149,6 +183,7 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
     .eq("portal_production_entries.organisation_id", orgId)
+    .eq("organisation_id", orgId)
     .eq("status", "produced")
     .order("package_sequence", { ascending: true });
 
@@ -196,7 +231,9 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
     console.error("Failed to fetch direct packages:", directError);
   }
 
-  // Merge and deduplicate (keep packages in production drafts - they'll be shown as disabled)
+  // Merge and deduplicate. Keep all packages — packages in production or
+  // outgoing-shipment drafts are shown with marker badges (the UI handles the
+  // visual differentiation).
   const allData = [...(shipmentData ?? []), ...(productionData ?? []), ...(directData ?? [])];
   const seenIds = new Set<string>();
   const uniqueData = allData.filter((pkg: { id: string }) => {
@@ -231,6 +268,8 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
     volumeM3: pkg.volume_m3 != null ? Number(pkg.volume_m3) : null,
     notes: pkg.notes ?? null,
     inProductionDraft: packagesInProductionDrafts.has(pkg.id),
+    inOutgoingShipment: packagesInOutgoingShipment.has(pkg.id),
+    outgoingShipmentCode: packagesInOutgoingShipment.get(pkg.id) ?? null,
   }));
 
   packages.sort((a, b) => (a.packageNumber ?? "").localeCompare(b.packageNumber ?? ""));
