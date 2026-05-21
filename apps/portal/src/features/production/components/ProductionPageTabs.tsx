@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@timber/ui";
 import type { Process, ProcessWithNotes, ProductionListItem, ProductionHistoryItem } from "../types";
 import type { ProcessBreakdownItem, AdminProcessBreakdownItem } from "@/features/dashboard/types";
 import type { TrackingSetListItem } from "../actions/tracking";
-import { getValidatedProductions, getProcessesWithNotes } from "../actions";
+import { getValidatedProductions, getProcessesWithNotes, getProductionPlans } from "../actions";
 import { getTrackingSets } from "../actions/tracking";
 import { getProcessBreakdown, getAdminProcessBreakdown } from "@/features/dashboard/actions";
 import { NewProductionForm } from "./NewProductionForm";
@@ -15,6 +15,8 @@ import { DraftProductionTable } from "./DraftProductionTable";
 import { ProductionHistoryTable } from "./ProductionHistoryTable";
 import { ProcessesTab } from "./ProcessesTab";
 import { TrackingTab } from "./TrackingTab";
+import { PlansTab } from "./PlansTab";
+import type { ProductionPlanListItem } from "../types-plans";
 import { ProcessBreakdownTable } from "@/features/dashboard/components/ProcessBreakdownTable";
 import { AdminProcessBreakdownTable } from "@/features/dashboard/components/AdminProcessBreakdownTable";
 
@@ -60,6 +62,7 @@ export function ProductionPageTabs({
   const [breakdown, setBreakdown] = useState<(ProcessBreakdownItem | AdminProcessBreakdownItem)[] | null>(null);
   const [trackingSets, setTrackingSets] = useState<TrackingSetListItem[] | null>(null);
   const [processesWithNotes, setProcessesWithNotes] = useState<ProcessWithNotes[] | null>(null);
+  const [plans, setPlans] = useState<ProductionPlanListItem[] | null>(null);
   const [loadingTab, setLoadingTab] = useState<string | null>(null);
 
   // Helper to build URL preserving org filter
@@ -110,8 +113,16 @@ export function ProductionPageTabs({
         setLoadingTab(null);
         break;
       }
+      case "plans": {
+        if (plans !== null) return;
+        setLoadingTab("plans");
+        const result = await getProductionPlans();
+        setPlans(result.success ? result.data : []);
+        setLoadingTab(null);
+        break;
+      }
     }
-  }, [history, breakdown, trackingSets, processesWithNotes, orgIds, isAdmin, organizationId]);
+  }, [history, breakdown, trackingSets, processesWithNotes, plans, orgIds, isAdmin, organizationId]);
 
   // Refresh data when returning to /production from a draft page
   useEffect(() => {
@@ -180,6 +191,7 @@ export function ProductionPageTabs({
         <TabsTrigger value="history">Completed</TabsTrigger>
         <TabsTrigger value="consolidated">Consolidated</TabsTrigger>
         <TabsTrigger value="tracking">Tracking</TabsTrigger>
+        <TabsTrigger value="plans">Plans</TabsTrigger>
         <TabsTrigger value="processes">Process List</TabsTrigger>
       </TabsList>
 
@@ -228,6 +240,14 @@ export function ProductionPageTabs({
           <TabLoading />
         ) : (
           <TrackingTab trackingSets={trackingSets} />
+        )}
+      </TabsContent>
+
+      <TabsContent value="plans">
+        {plans === null ? (
+          <TabLoading />
+        ) : (
+          <PlansTab plans={plans} />
         )}
       </TabsContent>
 
