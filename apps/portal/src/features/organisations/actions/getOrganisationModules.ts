@@ -1,5 +1,6 @@
 "use server";
 
+import { updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
@@ -125,6 +126,10 @@ export async function updateOrganisationModules(
       return { success: false, error: "Failed to update modules", code: "INSERT_FAILED" };
     }
   }
+
+  // Invalidate cached org-module set; sidebar / permission checks for
+  // any user in this org will see the change on the next request.
+  updateTag(`org-modules:${organisationId}`);
 
   return { success: true, data: undefined };
 }
