@@ -79,8 +79,14 @@ export async function getAvailablePackages(
     shipmentQuery = shipmentQuery.not("id", "in", `(${usedPackageIds.join(",")})`);
   }
 
-  // Query 2: Production-sourced packages owned by this user's organisation (status: produced, non-zero pieces, allow null, or has volume)
-  // Filter by organisation_id for proper multi-tenant isolation (not created_by)
+  // Query 2: Production-sourced packages owned by this user's organisation
+  // (status: produced, non-zero pieces, allow null, or has volume).
+  // IMPORTANT: filter on BOTH portal_production_entries.organisation_id AND
+  // inventory_packages.organisation_id. When a package gets shipped to another
+  // org its organisation_id is updated to the destination, but production_entry_id
+  // stays pointing at the original org's entry. Without the package-level
+  // org filter we'd leak packages that are no longer in this org's inventory
+  // (e.g. shipped to TWG) back into INE's production input selector.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let productionQuery = (supabase as any)
     .from("inventory_packages")
@@ -90,6 +96,7 @@ export async function getAvailablePackages(
       ${refSelect}
     `)
     .eq("portal_production_entries.organisation_id", session.organisationId)
+    .eq("organisation_id", session.organisationId)
     .eq("status", "produced")
     .or("pieces.neq.0,pieces.is.null,volume_m3.gt.0")
     .order("package_sequence", { ascending: true });

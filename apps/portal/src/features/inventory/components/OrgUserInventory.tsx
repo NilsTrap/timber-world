@@ -108,7 +108,7 @@ export function OrgUserInventory({ packages, packagesInDrafts = [], packagesInSh
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Truck className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />
+                      <Truck className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="font-medium">On The Way</p>
@@ -284,8 +284,8 @@ export function OrgUserInventory({ packages, packagesInDrafts = [], packagesInSh
         onFilterActiveChange={setHasActiveFilters}
         initialFilters={initialFilters}
         getRowClassName={(row) => {
-          if (row.isOnTheWay) return "bg-amber-50";
           if (draftsMap.has(row.id)) return "bg-amber-50";
+          if (row.isOnTheWay) return "bg-blue-50";
           if (shipmentDraftsMap.has(row.id)) return "bg-blue-50";
           return undefined;
         }}
