@@ -1,0 +1,27 @@
+-- Paired rollback for 20260522000009. Rename to .sql + supabase db push.
+
+DO $$
+DECLARE
+  t TEXT;
+BEGIN
+  FOR t IN SELECT unnest(ARRAY[
+    'ref_fsc','ref_humidity','ref_processes','ref_processing',
+    'ref_product_names','ref_quality','ref_types','ref_wood_species',
+    'module_presets','order_shipments','shipment_pallets',
+    'portal_production_inputs','portal_production_outputs','portal_production_lines',
+    'audit_log','organization_relationships',
+    'crm_company_keywords','crm_keywords',
+    'production_package_counters','portal_inventory','portal_products'
+  ])
+  LOOP
+    BEGIN
+      EXECUTE format('DROP POLICY IF EXISTS %1$I_select ON public.%1$I', t);
+      EXECUTE format('DROP POLICY IF EXISTS %1$I_admin_write ON public.%1$I', t);
+      EXECUTE format('DROP POLICY IF EXISTS %1$I_admin_all ON public.%1$I', t);
+      EXECUTE format('DROP POLICY IF EXISTS %1$I_write ON public.%1$I', t);
+      EXECUTE format('ALTER TABLE public.%I DISABLE ROW LEVEL SECURITY', t);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Failed for %: %', t, SQLERRM;
+    END;
+  END LOOP;
+END $$;
