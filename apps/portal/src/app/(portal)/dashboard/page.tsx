@@ -6,6 +6,7 @@ import { AccessDeniedHandler } from "@/components/AccessDeniedHandler";
 import { getOrgUserMetrics, getAdminMetrics } from "@/features/dashboard/actions";
 import { OrgUserDashboardMetrics } from "@/features/dashboard/components/OrgUserDashboardMetrics";
 import { AdminDashboardContent } from "@/features/dashboard/components/AdminDashboardContent";
+import { perfLog } from "@/lib/debug/perfLog";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -22,7 +23,9 @@ export const dynamic = "force-dynamic";
  */
 async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
   try {
-    const metricsResult = await getAdminMetrics(undefined, orgIds);
+    const metricsResult = await perfLog("dashboard.getAdminMetrics", () =>
+      getAdminMetrics(undefined, orgIds),
+    );
 
     const hasError = !metricsResult.success;
     if (hasError) {
@@ -56,7 +59,9 @@ async function AdminDashboardLoader({ orgIds }: { orgIds?: string[] }) {
  * TODO [i18n]: Replace hardcoded text with useTranslations()
  */
 async function OrgUserDashboardContent() {
-  const metricsResult = await getOrgUserMetrics();
+  const metricsResult = await perfLog("dashboard.getOrgUserMetrics", () =>
+    getOrgUserMetrics(),
+  );
 
   // Handle errors - show user-friendly message instead of silently failing
   if (!metricsResult.success) {
@@ -86,7 +91,7 @@ export default async function DashboardPage({
   searchParams: Promise<{ org?: string }>;
 }) {
   const { org: orgParam } = await searchParams;
-  const session = await getSession();
+  const session = await perfLog("dashboard.getSession", () => getSession());
 
   if (!session) {
     redirect("/login");
@@ -97,7 +102,9 @@ export default async function DashboardPage({
   // Check org feature access for non-admin users
   if (!userIsAdmin) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasModule = await orgHasModule(orgId, "dashboard.view");
+    const hasModule = await perfLog("dashboard.orgHasModule", () =>
+      orgHasModule(orgId, "dashboard.view"),
+    );
     if (!hasModule) {
       notFound();
     }

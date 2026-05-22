@@ -7,6 +7,7 @@ import { getOrgUserPackages } from "@/features/inventory/actions";
 import { getPackagesInDrafts } from "@/features/production/actions";
 import { getPackagesInShipmentDrafts } from "@/features/shipments/actions";
 import { OrgUserInventoryPageContent } from "@/features/inventory/components/OrgUserInventoryPageContent";
+import { perfLog } from "@/lib/debug/perfLog";
 
 type InventoryParams = {
   product?: string;
@@ -40,11 +41,15 @@ function InventorySkeleton() {
 }
 
 async function InventoryData({ params }: { params: InventoryParams }) {
-  const [result, draftsResult, shipmentDraftsResult] = await Promise.all([
-    getOrgUserPackages(),
-    getPackagesInDrafts(),
-    getPackagesInShipmentDrafts(),
-  ]);
+  const [result, draftsResult, shipmentDraftsResult] = await perfLog(
+    "inventory.page.parallel-fetch",
+    () =>
+      Promise.all([
+        perfLog("inventory.getOrgUserPackages", () => getOrgUserPackages()),
+        perfLog("inventory.getPackagesInDrafts", () => getPackagesInDrafts()),
+        perfLog("inventory.getPackagesInShipmentDrafts", () => getPackagesInShipmentDrafts()),
+      ]),
+  );
 
   if (!result.success) {
     return (
@@ -112,14 +117,16 @@ export default async function InventoryPage({
   searchParams: Promise<InventoryParams>;
 }) {
   const params = await searchParams;
-  const session = await getSession();
+  const session = await perfLog("inventory.getSession", () => getSession());
 
   if (!session) redirect("/login");
   if (isAdmin(session)) redirect("/admin/inventory");
 
   // Module gate must run before render so notFound() can trigger.
   const orgId = session.currentOrganizationId || session.organisationId;
-  const hasModule = await orgHasModule(orgId, "inventory.view");
+  const hasModule = await perfLog("inventory.orgHasModule", () =>
+    orgHasModule(orgId, "inventory.view"),
+  );
   if (!hasModule) notFound();
 
   // Header paints immediately; package data streams in via Suspense.

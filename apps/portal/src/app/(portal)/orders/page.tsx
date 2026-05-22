@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import { OrdersPageClient } from "@/features/orders/components";
 import type { SessionUser } from "@/lib/auth/getSession";
+import { perfLog } from "@/lib/debug/perfLog";
 
 export const metadata = {
   title: "Orders | Timber World",
@@ -40,10 +41,14 @@ async function OrdersBody({ session }: { session: SessionUser }) {
   if (userIsAdmin) {
     visibleTabs = [...allTabs];
   } else {
-    const [customerSelect, ...tabChecks] = await Promise.all([
-      orgHasModule(userOrgId, "orders.customer-select"),
-      ...allTabs.map((tab) => orgHasModule(userOrgId, `orders.tab.${tab}`)),
-    ]);
+    const [customerSelect, ...tabChecks] = await perfLog(
+      "orders.tab-permission-checks",
+      () =>
+        Promise.all([
+          orgHasModule(userOrgId, "orders.customer-select"),
+          ...allTabs.map((tab) => orgHasModule(userOrgId, `orders.tab.${tab}`)),
+        ]),
+    );
     canSelectCustomer = customerSelect;
     visibleTabs = allTabs.filter((_, i) => tabChecks[i]);
     if (visibleTabs.length === 0) visibleTabs = ["list"];
@@ -61,7 +66,7 @@ async function OrdersBody({ session }: { session: SessionUser }) {
 }
 
 export default async function OrdersPage() {
-  const session = await getSession();
+  const session = await perfLog("orders.getSession", () => getSession());
 
   if (!session) redirect("/login");
 
@@ -70,7 +75,9 @@ export default async function OrdersPage() {
 
   // Module gate runs before render so notFound() can trigger early.
   if (!userIsAdmin) {
-    const hasOrdersModule = await orgHasModule(userOrgId, "orders.view");
+    const hasOrdersModule = await perfLog("orders.orgHasModule", () =>
+      orgHasModule(userOrgId, "orders.view"),
+    );
     if (!hasOrdersModule) notFound();
   }
 
