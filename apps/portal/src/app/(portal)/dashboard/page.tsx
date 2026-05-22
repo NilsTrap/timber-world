@@ -126,7 +126,27 @@ export default async function DashboardPage({
         </p>
       </div>
 
-      {userIsAdmin ? <AdminDashboardLoader orgIds={orgIds} /> : <OrgUserDashboardContent />}
+      {/* Stream metrics in via Suspense — the header above paints immediately
+          while the data-fetching loader does its work in the background. */}
+      <Suspense fallback={<DashboardSkeleton />}>
+        {userIsAdmin ? <AdminDashboardLoader orgIds={orgIds} /> : <OrgUserDashboardContent />}
+      </Suspense>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {[0, 1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="rounded-lg border bg-card p-6 shadow-sm h-28 animate-pulse"
+        >
+          <div className="h-3 w-24 bg-muted rounded mb-3" />
+          <div className="h-7 w-16 bg-muted rounded" />
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,31 +1,40 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * Get enabled modules for an organization
+ * Cross-request cached fetch of an org's enabled modules. Cached for 5 min;
+ * any admin action that mutates organization_modules should call
+ * revalidateTag("org-modules:<orgId>") so the change shows up immediately.
  *
- * Wrapped with React.cache() to deduplicate within a single request.
+ * Wrapped in React.cache as well so multiple lookups within one request
+ * still dedupe at the function-call level.
  */
+const fetchOrgModules = (organizationId: string) =>
+  unstable_cache(
+    async (orgId: string): Promise<string[]> => {
+      const supabase = await createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const client = supabase as any;
+      const { data } = await client
+        .from("organization_modules")
+        .select("module_code")
+        .eq("organization_id", orgId)
+        .eq("enabled", true);
+      return (data || []).map((m: { module_code: string }) => m.module_code);
+    },
+    ["org-modules", organizationId],
+    { revalidate: 300, tags: [`org-modules:${organizationId}`] },
+  )(organizationId);
+
 export const getOrgEnabledModules = cache(async (
   organizationId: string | null
 ): Promise<Set<string>> => {
   if (!organizationId) {
     return new Set();
   }
-
-  const supabase = await createClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const client = supabase as any;
-
-  const { data: orgModules } = await client
-    .from("organization_modules")
-    .select("module_code")
-    .eq("organization_id", organizationId)
-    .eq("enabled", true);
-
-  return new Set(
-    (orgModules || []).map((m: { module_code: string }) => m.module_code)
-  );
+  const codes = await fetchOrgModules(organizationId);
+  return new Set(codes);
 });
 
 /**
@@ -45,6 +54,42 @@ export async function orgHasModule(
  * Returns the intersection of org-level and user-level enabled modules.
  * Wrapped with React.cache() to deduplicate within a single request.
  */
+/**
+ * Cross-request cached fetch of a (user, org) module set. Same caching
+ * strategy as getOrgEnabledModules — 5-min TTL, revalidate via the
+ * `user-modules:<userId>:<orgId>` tag from any admin action that
+ * toggles user_modules.
+ */
+const fetchUserModules = (userId: string, organizationId: string) =>
+  unstable_cache(
+    async (uid: string, oid: string): Promise<string[]> => {
+      const supabase = await createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const client = supabase as any;
+      const [orgResult, userResult] = await Promise.all([
+        client
+          .from("organization_modules")
+          .select("module_code")
+          .eq("organization_id", oid)
+          .eq("enabled", true),
+        client
+          .from("user_modules")
+          .select("module_code")
+          .eq("user_id", uid)
+          .eq("organization_id", oid)
+          .eq("enabled", true),
+      ]);
+      const orgSet = new Set(
+        (orgResult.data || []).map((m: { module_code: string }) => m.module_code),
+      );
+      return ((userResult.data || []) as Array<{ module_code: string }>)
+        .map((m) => m.module_code)
+        .filter((code) => orgSet.has(code));
+    },
+    ["user-modules", userId, organizationId],
+    { revalidate: 300, tags: [`user-modules:${userId}:${organizationId}`] },
+  )(userId, organizationId);
+
 export const getUserEnabledModules = cache(async (
   userId: string,
   organizationId: string | null
@@ -52,37 +97,6 @@ export const getUserEnabledModules = cache(async (
   if (!organizationId || !userId) {
     return new Set();
   }
-
-  const supabase = await createClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const client = supabase as any;
-
-  // Fetch org modules and user modules in parallel
-  const [orgResult, userResult] = await Promise.all([
-    client
-      .from("organization_modules")
-      .select("module_code")
-      .eq("organization_id", organizationId)
-      .eq("enabled", true),
-    client
-      .from("user_modules")
-      .select("module_code")
-      .eq("user_id", userId)
-      .eq("organization_id", organizationId)
-      .eq("enabled", true),
-  ]);
-
-  const orgModules = new Set(
-    (orgResult.data || []).map((m: { module_code: string }) => m.module_code)
-  );
-
-  // Intersection: user has it AND org has it
-  const effectiveModules = new Set<string>();
-  (userResult.data || []).forEach((m: { module_code: string }) => {
-    if (orgModules.has(m.module_code)) {
-      effectiveModules.add(m.module_code);
-    }
-  });
-
-  return effectiveModules;
+  const codes = await fetchUserModules(userId, organizationId);
+  return new Set(codes);
 });
