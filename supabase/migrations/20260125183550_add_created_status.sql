@@ -10,6 +10,17 @@
 -- - active: User has logged in at least once
 
 -- =============================================
+-- 0. ENSURE STATUS COLUMN EXISTS
+-- =============================================
+-- Defensive: the column is also added by a later migration
+-- (20260126000004_extend_portal_users.sql) using ADD COLUMN IF NOT EXISTS,
+-- so adding it here too is safe. Production was set up with the column
+-- present at this point in the history; fresh DBs (staging, future
+-- branches) need this guard to apply the migration cleanly.
+ALTER TABLE portal_users
+  ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'invited';
+
+-- =============================================
 -- 1. UPDATE STATUS CHECK CONSTRAINT
 -- =============================================
 

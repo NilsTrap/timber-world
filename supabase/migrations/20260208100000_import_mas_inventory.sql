@@ -18,6 +18,18 @@ DECLARE
   v_processing_id UUID := 'a5619dda-ab5f-4c2b-82ec-927164c663ec'; -- Sanded
   v_fsc_no_id UUID := 'bd8a1f01-1bf2-4a37-b1ee-96e5295780bd'; -- No
 BEGIN
+  -- Skip if the target org or source products table don't exist (e.g. fresh
+  -- staging DBs that don't have the MAS AS data). On production both exist
+  -- and the migration runs through normally.
+  IF NOT EXISTS (SELECT 1 FROM organisations WHERE id = v_mas_org_id) THEN
+    RAISE NOTICE 'MAS AS org not present; skipping MAS inventory import on this DB.';
+    RETURN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='products') THEN
+    RAISE NOTICE 'products table not present; skipping MAS inventory import on this DB.';
+    RETURN;
+  END IF;
+
   -- Get next shipment number
   v_shipment_number := get_next_shipment_number();
 

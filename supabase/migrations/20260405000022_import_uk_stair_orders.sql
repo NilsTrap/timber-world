@@ -1,18 +1,29 @@
 -- Import 27 stair production UK orders from PDF "Stair production UK - DB Import"
 -- Customer = organisation_id (buyer), all status = draft
 -- Deal nr column is skipped per user request
+--
+-- Guarded: only runs on DBs where the customer orgs referenced below are
+-- already seeded. Fresh staging/branch DBs without that data skip this
+-- migration silently. Production has the orgs and runs through normally.
 
--- Advance the sequence past existing orders (ORD-001, ORD-002 already exist)
-SELECT setval('order_number_seq', GREATEST(
-  (SELECT COALESCE(MAX(CAST(SUBSTRING(code FROM 'ORD-(\d+)') AS INTEGER)), 0) FROM orders),
-  (SELECT last_value FROM order_number_seq)
-));
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM organisations WHERE id = 'eb8f72e1-468e-44ee-b819-f0d9fe239783') THEN
+    RAISE NOTICE 'UK stair orders import skipped: customer org missing.';
+    RETURN;
+  END IF;
 
-INSERT INTO orders (
-  id, code, name, project_number, organisation_id, date_received, date_loaded,
-  tread_length, advance_invoice_number, package_number, transport_invoice_number, transport_price,
-  status, currency, created_by
-) VALUES
+  -- Advance the sequence past existing orders (ORD-001, ORD-002 already exist)
+  PERFORM setval('order_number_seq', GREATEST(
+    (SELECT COALESCE(MAX(CAST(SUBSTRING(code FROM 'ORD-(\d+)') AS INTEGER)), 0) FROM orders),
+    (SELECT last_value FROM order_number_seq)
+  ));
+
+  INSERT INTO orders (
+    id, code, name, project_number, organisation_id, date_received, date_loaded,
+    tread_length, advance_invoice_number, package_number, transport_invoice_number, transport_price,
+    status, currency, created_by
+  ) VALUES
 -- Row 1: Ovoms, 02.04.2026, P00659, 0V02091-FF
 (gen_random_uuid(), 'ORD-' || LPAD(nextval('order_number_seq')::text, 3, '0'), 'P00659', '0V02091-FF',
  'eb8f72e1-468e-44ee-b819-f0d9fe239783', '2026-04-02', NULL,
@@ -171,3 +182,4 @@ INSERT INTO orders (
  '2ef9e211-aadc-49b5-a450-4b5a9b1dd614', '2026-02-18', '2026-03-06',
  '1075/1200', 'AV0156', 'TWG05245', '21369', '158',
  'draft', 'EUR', 'c10efee0-e4fb-4e45-8f17-977540a45b95');
+END $$;
