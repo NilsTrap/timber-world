@@ -120,7 +120,53 @@ export async function runNegativeSuite(): Promise<ProbeResult[]> {
     });
   }
 
-  // Probe: write attempts that should be blocked
+  // Cross-tenant write probes — each should be blocked by RLS WITH CHECK.
+  {
+    const { data, error } = await aClient
+      .from("inventory_packages")
+      .insert({
+        organisation_id: orgBId,
+        package_number: "IJL-LEAK-INV-" + Date.now(),
+      })
+      .select("id");
+    const inserted = data?.length ?? 0;
+    results.push({
+      userKey: userAFull.userKey,
+      probeName: "inventory.insert-other-org",
+      description: "Org-A user inserts an inventory_package owned by Org-B",
+      outcome: inserted > 0 ? "leaked" : "blocked",
+      rowsSeen: inserted,
+      errorMessage: error?.message,
+    });
+    if (inserted > 0 && data) {
+      const ids = data.map((r) => (r as { id: string }).id);
+      await adminClient().from("inventory_packages").delete().in("id", ids);
+    }
+  }
+
+  {
+    const { data, error } = await aClient
+      .from("shipments")
+      .insert({
+        from_organisation_id: orgBId,
+        shipment_code: "IJL-LEAK-SH-" + Date.now(),
+      })
+      .select("id");
+    const inserted = data?.length ?? 0;
+    results.push({
+      userKey: userAFull.userKey,
+      probeName: "shipments.insert-other-org",
+      description: "Org-A user inserts a shipment owned by Org-B",
+      outcome: inserted > 0 ? "leaked" : "blocked",
+      rowsSeen: inserted,
+      errorMessage: error?.message,
+    });
+    if (inserted > 0 && data) {
+      const ids = data.map((r) => (r as { id: string }).id);
+      await adminClient().from("shipments").delete().in("id", ids);
+    }
+  }
+
   {
     const { data, error } = await aClient
       .from("orders")

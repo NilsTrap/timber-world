@@ -1,5 +1,36 @@
 {
-  "count": 0,
-  "error": "column orders.total_volume_m3 does not exist",
-  "rows": []
+  "count": 3,
+  "error": null,
+  "rows": [
+    {
+      "code": "IJL-ORG-A-001",
+      "created_at": "2026-05-22T16:08:35.885174+00:00",
+      "customer_organisation_id": "ff7637cb-f48e-4d7e-a8d1-fe93c537effc",
+      "id": "38f9ce06-f00e-4373-bc8d-4deddbe710cc",
+      "producer_organisation_id": null,
+      "seller_organisation_id": null,
+      "status": "draft",
+      "volume_m3": null
+    },
+    {
+      "code": "IJL-ORG-A-002",
+      "created_at": "2026-05-22T16:08:35.885174+00:00",
+      "customer_organisation_id": "ff7637cb-f48e-4d7e-a8d1-fe93c537effc",
+      "id": "85f35795-7d24-409f-9689-135660d14ce9",
+      "producer_organisation_id": null,
+      "seller_organisation_id": null,
+      "status": "draft",
+      "volume_m3": null
+    },
+    {
+      "code": "IJL-ORG-A-003",
+      "created_at": "2026-05-22T16:08:35.885174+00:00",
+      "customer_organisation_id": "ff7637cb-f48e-4d7e-a8d1-fe93c537effc",
+      "id": "d719a5a8-052d-40fd-84fb-b6ddc7764aa0",
+      "producer_organisation_id": null,
+      "seller_organisation_id": null,
+      "status": "draft",
+      "volume_m3": null
+    }
+  ]
 }

@@ -14,7 +14,7 @@ import { userClient } from "../lib/supabase.js";
 import { writeSnapshot, type SnapshotPath } from "../lib/snapshot.js";
 
 const ORDERS_SELECT =
-  "id, status, customer_organisation_id, seller_organisation_id, producer_organisation_id, created_at, total_volume_m3";
+  "id, code, status, customer_organisation_id, seller_organisation_id, producer_organisation_id, created_at, volume_m3";
 
 async function snapshotOrdersForUser(
   client: SupabaseClient,
