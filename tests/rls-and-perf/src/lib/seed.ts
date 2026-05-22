@@ -138,46 +138,44 @@ async function syncMembershipsAndModules(
     const orgId = orgIdByKey[orgKey];
     if (!orgId) continue;
 
-    // organization_memberships
+    // organization_memberships — uses US spelling (organization_id) per the
+    // table schema. portal_users still uses UK (organisation_id); mixed.
     const { data: existingMembership } = await supabase
       .from("organization_memberships")
       .select("user_id")
       .eq("user_id", portalUserId)
-      .eq("organisation_id", orgId)
+      .eq("organization_id", orgId)
       .maybeSingle();
 
     if (!existingMembership) {
       const { error } = await supabase
         .from("organization_memberships")
-        .insert({ user_id: portalUserId, organisation_id: orgId, is_active: true });
+        .insert({
+          user_id: portalUserId,
+          organization_id: orgId,
+          is_active: true,
+          is_primary: true,
+        });
       if (error) {
         console.warn(`Could not insert membership ${user.email}→${orgKey}: ${error.message}`);
       }
     }
 
-    // user_modules — disable everything not in enabledModules, enable everything that is
-    // First, fetch module ids
-    const { data: modules } = await supabase
-      .from("modules")
-      .select("id, key")
-      .in("key", user.enabledModules);
-
-    if (modules && modules.length > 0) {
-      for (const mod of modules) {
-        const { error } = await supabase
-          .from("user_modules")
-          .upsert(
-            {
-              user_id: portalUserId,
-              organisation_id: orgId,
-              module_id: mod.id,
-              enabled: true,
-            },
-            { onConflict: "user_id,organisation_id,module_id" },
-          );
-        if (error) {
-          console.warn(`Could not enable module ${mod.key} for ${user.email}: ${error.message}`);
-        }
+    // user_modules — enable each module code we want for this user/org
+    for (const moduleCode of user.enabledModules) {
+      const { error } = await supabase
+        .from("user_modules")
+        .upsert(
+          {
+            user_id: portalUserId,
+            organization_id: orgId,
+            module_code: moduleCode,
+            enabled: true,
+          },
+          { onConflict: "user_id,organization_id,module_code" },
+        );
+      if (error) {
+        console.warn(`Could not enable module ${moduleCode} for ${user.email}: ${error.message}`);
       }
     }
   }
@@ -188,22 +186,44 @@ async function syncOrgModules(
   org: TestOrgDef,
   orgId: string,
 ): Promise<void> {
-  const { data: modules } = await supabase
-    .from("modules")
-    .select("id, key")
-    .in("key", org.enabledModules);
-
-  if (!modules) return;
-  for (const mod of modules) {
+  for (const moduleCode of org.enabledModules) {
     const { error } = await supabase
       .from("organization_modules")
       .upsert(
-        { organisation_id: orgId, module_id: mod.id, enabled: true },
-        { onConflict: "organisation_id,module_id" },
+        { organization_id: orgId, module_code: moduleCode, enabled: true },
+        { onConflict: "organization_id,module_code" },
       );
     if (error) {
-      console.warn(`Could not enable org-module ${mod.key} for ${org.code}: ${error.message}`);
+      console.warn(`Could not enable org-module ${moduleCode} for ${org.code}: ${error.message}`);
     }
+  }
+}
+
+async function seedSampleOrders(
+  supabase: ReturnType<typeof adminClient>,
+  orgIdByKey: Record<string, string>,
+): Promise<void> {
+  // 3 sample orders per org so cross-tenant probes have something concrete
+  // to leak (pre-RLS) or correctly block (post-RLS).
+  for (const orgKey of ["org-a", "org-b"]) {
+    const orgId = orgIdByKey[orgKey];
+    if (!orgId) continue;
+
+    const { count } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_organisation_id", orgId);
+    if ((count ?? 0) > 0) continue;
+
+    const rows = [1, 2, 3].map((i) => ({
+      code: `IJL-${orgKey.toUpperCase()}-${i.toString().padStart(3, "0")}`,
+      name: `IJL test order ${orgKey} #${i}`,
+      customer_organisation_id: orgId,
+      status: "draft" as const,
+      currency: "EUR",
+    }));
+    const { error } = await supabase.from("orders").insert(rows);
+    if (error) console.warn(`Could not seed orders for ${orgKey}: ${error.message}`);
   }
 }
 
@@ -226,6 +246,9 @@ export async function seed(): Promise<{ orgIdByKey: Record<string, string> }> {
     await syncMembershipsAndModules(supabase, user, portalUserId, orgIdByKey);
     console.log(`  ✓ ${user.email}`);
   }
+
+  console.log("→ Seeding sample data (orders)...");
+  await seedSampleOrders(supabase, orgIdByKey);
 
   console.log("✓ Seed complete.");
   return { orgIdByKey };

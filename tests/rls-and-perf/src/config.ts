@@ -81,24 +81,36 @@ const PASS_ORG_A_FULL = "IjlTestOrgAFull!4kqp82";
 const PASS_ORG_A_LIMITED = "IjlTestOrgALim!7zw3vd";
 const PASS_ORG_B_FULL = "IjlTestOrgBFull!8jm5px";
 
+// Note: organisations.code is CHAR(3) — codes must be exactly 3 chars.
+// Module codes match the `modules.code` values in the DB (see migrations
+// from 2026-04-06). Full-access users get all the top-level view codes.
+const FULL_MODULES = [
+  "dashboard.view",
+  "orders.view",
+  "inventory.view",
+  "production.view",
+  "shipments.view",
+];
+
+// Note: organisations.code is CHAR(3) — codes must be exactly 3 chars.
 export const TEST_ORGS: TestOrgDef[] = [
   {
     orgKey: "org-a",
-    code: "IJLA",
+    code: "JLA",
     name: "IJL Test Org A",
-    enabledModules: ["orders", "inventory", "production", "shipments"],
+    enabledModules: FULL_MODULES,
   },
   {
     orgKey: "org-b",
-    code: "IJLB",
+    code: "JLB",
     name: "IJL Test Org B",
-    enabledModules: ["orders", "inventory", "production", "shipments"],
+    enabledModules: FULL_MODULES,
   },
   {
     orgKey: "org-c-empty",
-    code: "IJLC",
+    code: "JLC",
     name: "IJL Test Org C (Empty)",
-    enabledModules: ["orders", "inventory"],
+    enabledModules: ["dashboard.view", "orders.view", "inventory.view"],
   },
 ];
 
@@ -119,7 +131,7 @@ export const TEST_USERS: TestUserDef[] = [
     name: "IJL Test User — Org A (Full)",
     isPlatformAdmin: false,
     orgKeys: ["org-a"],
-    enabledModules: ["orders", "inventory", "production", "shipments"],
+    enabledModules: FULL_MODULES,
   },
   {
     userKey: "org-a-limited",
@@ -128,7 +140,7 @@ export const TEST_USERS: TestUserDef[] = [
     name: "IJL Test User — Org A (Orders only)",
     isPlatformAdmin: false,
     orgKeys: ["org-a"],
-    enabledModules: ["orders"],
+    enabledModules: ["dashboard.view", "orders.view"],
   },
   {
     userKey: "org-b-full",
@@ -137,7 +149,7 @@ export const TEST_USERS: TestUserDef[] = [
     name: "IJL Test User — Org B (Full)",
     isPlatformAdmin: false,
     orgKeys: ["org-b"],
-    enabledModules: ["orders", "inventory", "production", "shipments"],
+    enabledModules: FULL_MODULES,
   },
 ];
 

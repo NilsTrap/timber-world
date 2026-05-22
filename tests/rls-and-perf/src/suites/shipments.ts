@@ -8,7 +8,7 @@ import { userClient } from "../lib/supabase.js";
 import { writeSnapshot, type SnapshotPath } from "../lib/snapshot.js";
 
 const SHIP_SELECT =
-  "id, status, from_organisation_id, to_organisation_id, shipment_number, created_at";
+  "id, status, from_organisation_id, to_organisation_id, shipment_code, shipment_number, created_at";
 
 async function snapshotForUser(
   client: SupabaseClient,
@@ -16,7 +16,7 @@ async function snapshotForUser(
   kind: "baseline" | "current",
 ): Promise<void> {
   const { data, error } = await client
-    .from("portal_shipments")
+    .from("shipments")
     .select(SHIP_SELECT)
     .order("created_at", { ascending: false })
     .limit(200);

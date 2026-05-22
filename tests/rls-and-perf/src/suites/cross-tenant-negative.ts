@@ -107,7 +107,7 @@ export async function runNegativeSuite(): Promise<ProbeResult[]> {
 
   {
     const { data, error } = await aClient
-      .from("portal_shipments")
+      .from("shipments")
       .select("id, from_organisation_id, to_organisation_id")
       .or(`from_organisation_id.eq.${orgBId},to_organisation_id.eq.${orgBId}`);
     results.push({
@@ -125,6 +125,8 @@ export async function runNegativeSuite(): Promise<ProbeResult[]> {
     const { data, error } = await aClient
       .from("orders")
       .insert({
+        code: "IJL-TEST-LEAK-" + Date.now(),
+        name: "RLS negative test row — Org-A inserting into Org-B",
         customer_organisation_id: orgBId,
         status: "draft",
       })
