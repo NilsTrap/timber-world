@@ -3,6 +3,7 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import dynamic from "next/dynamic";
 import {
   DataEntryTable,
   Input,
@@ -21,8 +22,14 @@ import { SummaryCards } from "@/features/shipments/components/SummaryCards";
 import { deleteInventoryPackage, saveInventoryPackages, updateShipmentCode } from "../actions";
 import { getReferenceDropdowns } from "@/features/shipments/actions";
 import { getOrganisations } from "@/features/organisations/actions";
-import { PasteImportModal } from "./PasteImportModal";
 import type { EditablePackageItem, ReferenceDropdowns } from "@/features/shipments/types";
+
+// PasteImportModal is ~436 LOC and only mounts when the user clicks
+// "Paste import" — keep it out of the initial bundle.
+const PasteImportModal = dynamic(
+  () => import("./PasteImportModal").then((mod) => mod.PasteImportModal),
+  { ssr: false },
+);
 
 // ─── Volume Helpers ───────────────────────────────────────────────────────────
 

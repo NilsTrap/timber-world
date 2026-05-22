@@ -43,10 +43,21 @@ import {
   resetUserPassword,
   deleteOrganisationUser,
 } from "../actions";
+import dynamic from "next/dynamic";
 import type { OrganisationUser } from "../types";
-import { AddUserDialog } from "./AddUserDialog";
+
+// AddUserDialog (369 LOC) and UserModulesDialog (336 LOC) only mount when
+// the admin clicks the corresponding action — keep them out of the
+// initial OrganisationUsersTable bundle.
+const AddUserDialog = dynamic(
+  () => import("./AddUserDialog").then((mod) => mod.AddUserDialog),
+  { ssr: false },
+);
+const UserModulesDialog = dynamic(
+  () => import("./UserModulesDialog").then((mod) => mod.UserModulesDialog),
+  { ssr: false },
+);
 import { EditUserDialog } from "./EditUserDialog";
-import { UserModulesDialog } from "./UserModulesDialog";
 
 type SortColumn = "name" | "email" | "status" | "lastLoginAt";
 type SortDirection = "asc" | "desc";

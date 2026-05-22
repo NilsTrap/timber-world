@@ -2,13 +2,21 @@
 
 import { useMemo, useState, useCallback, useEffect, useRef, useTransition } from "react";
 import { toast } from "sonner";
+import dynamic from "next/dynamic";
 import { DataEntryTable, Button, type ColumnDef } from "@timber/ui";
 import { FileSpreadsheet } from "lucide-react";
 import { getReferenceDropdowns } from "../actions";
 import { saveIncomingShipmentPackages } from "../actions/saveIncomingShipmentPackages";
-import { PasteImportModal } from "@/features/inventory/components/PasteImportModal";
 import type { PackageDetail, ReferenceDropdowns } from "../types";
 import type { EditablePackageItem } from "../types";
+
+// PasteImportModal only mounts when the user clicks "Paste import" —
+// keep it out of the initial bundle.
+const PasteImportModal = dynamic(
+  () =>
+    import("@/features/inventory/components/PasteImportModal").then((mod) => mod.PasteImportModal),
+  { ssr: false },
+);
 
 // ─── Volume Helpers ───────────────────────────────────────────────────────────
 
