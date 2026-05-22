@@ -155,7 +155,7 @@ export async function getOrders(options?: {
     };
   }
 
-  // 6. Collect all production_entry_ids across all orders to batch-fetch inputs
+  // 6. Collect ids needed for the two follow-up batch-fetches
   const allProductionEntryIds = new Set<string>();
   for (const row of data || []) {
     for (const pkg of row.inventory_packages || []) {
@@ -164,45 +164,42 @@ export async function getOrders(options?: {
       }
     }
   }
+  const orderIds = (data || []).map((row: { id: string }) => row.id);
 
-  // Fetch production inputs for all relevant entries in one query
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let inputsByEntryId: Record<string, number> = {};
-  if (allProductionEntryIds.size > 0) {
-    const { data: inputsData } = await client
-      .from("portal_production_inputs")
-      .select("production_entry_id, volume_m3")
-      .in("production_entry_id", [...allProductionEntryIds]);
+  // Fire the production-inputs and file-count queries in parallel — they're
+  // independent of each other and both only need the ids we just collected.
+  const inputsPromise =
+    allProductionEntryIds.size > 0
+      ? client
+          .from("portal_production_inputs")
+          .select("production_entry_id, volume_m3")
+          .in("production_entry_id", [...allProductionEntryIds])
+      : Promise.resolve({ data: [] as Array<{ production_entry_id: string; volume_m3: string }> });
 
-    if (inputsData) {
-      for (const inp of inputsData) {
-        const entryId = inp.production_entry_id as string;
-        const vol = parseFloat(inp.volume_m3) || 0;
-        inputsByEntryId[entryId] = (inputsByEntryId[entryId] || 0) + vol;
-      }
+  let fileQuery = client
+    .from("order_files")
+    .select("order_id")
+    .in("order_id", orderIds);
+  if (options?.fileCountCategory) {
+    fileQuery = fileQuery.eq("category", options.fileCountCategory);
+  }
+  const filesPromise = orderIds.length > 0 ? fileQuery : Promise.resolve({ data: [] as Array<{ order_id: string }> });
+
+  const [{ data: inputsData }, { data: fileCounts }] = await Promise.all([inputsPromise, filesPromise]);
+
+  const inputsByEntryId: Record<string, number> = {};
+  if (inputsData) {
+    for (const inp of inputsData as Array<{ production_entry_id: string; volume_m3: string }>) {
+      const entryId = inp.production_entry_id;
+      const vol = parseFloat(inp.volume_m3) || 0;
+      inputsByEntryId[entryId] = (inputsByEntryId[entryId] || 0) + vol;
     }
   }
 
-  // 6b. Batch-fetch file counts per order (optionally filtered by category)
-  const orderIds = (data || []).map((row: { id: string }) => row.id);
   const fileCountMap = new Map<string, number>();
-  if (orderIds.length > 0) {
-    let fileQuery = client
-      .from("order_files")
-      .select("order_id")
-      .in("order_id", orderIds);
-
-    if (options?.fileCountCategory) {
-      fileQuery = fileQuery.eq("category", options.fileCountCategory);
-    }
-
-    const { data: fileCounts } = await fileQuery;
-
-    if (fileCounts) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const row of fileCounts as any[]) {
-        fileCountMap.set(row.order_id, (fileCountMap.get(row.order_id) ?? 0) + 1);
-      }
+  if (fileCounts) {
+    for (const row of fileCounts as Array<{ order_id: string }>) {
+      fileCountMap.set(row.order_id, (fileCountMap.get(row.order_id) ?? 0) + 1);
     }
   }
 

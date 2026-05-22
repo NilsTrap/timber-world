@@ -42,7 +42,7 @@ test.describe("Epic 6: Multi-Tenancy Foundation", () => {
       // Get the options and select the second one (first org after "All")
       const options = await orgSelector.locator("option").all();
       if (options.length > 1) {
-        const orgId = await options[1].getAttribute("value");
+        const orgId = await options[1]!.getAttribute("value");
         await orgSelector.selectOption(orgId!);
 
         // URL should include org parameter
@@ -58,7 +58,7 @@ test.describe("Epic 6: Multi-Tenancy Foundation", () => {
       const options = await orgSelector.locator("option").all();
 
       if (options.length > 1) {
-        const orgId = await options[1].getAttribute("value");
+        const orgId = await options[1]!.getAttribute("value");
         await orgSelector.selectOption(orgId!);
 
         // Wait for URL to update after org selection
@@ -141,7 +141,7 @@ test.describe("Epic 6: Multi-Tenancy Foundation", () => {
       const options = await orgSelector.locator("option").all();
 
       if (options.length > 1) {
-        const orgId = await options[1].getAttribute("value");
+        const orgId = await options[1]!.getAttribute("value");
         await orgSelector.selectOption(orgId!);
 
         // Wait for page to reload with filter
@@ -182,7 +182,7 @@ test.describe("Epic 6: Multi-Tenancy Foundation", () => {
       const options = await orgSelector.locator("option").all();
 
       if (options.length > 1) {
-        const orgId = await options[1].getAttribute("value");
+        const orgId = await options[1]!.getAttribute("value");
         await orgSelector.selectOption(orgId!);
 
         // URL should include org filter
@@ -248,7 +248,7 @@ test.describe("Epic 6: Multi-Tenancy Foundation", () => {
       const options = await orgSelector.locator("option").all();
 
       if (options.length > 1) {
-        const orgId = await options[1].getAttribute("value");
+        const orgId = await options[1]!.getAttribute("value");
 
         // Navigate directly to dashboard with org filter
         await superAdminPage.goto(`/dashboard?org=${orgId}`);
