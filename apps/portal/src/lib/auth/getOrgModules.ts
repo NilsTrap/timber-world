@@ -1,22 +1,15 @@
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@timber/database/admin";
 
-/**
- * Cross-request cached fetch of an org's enabled modules. Cached for 5 min;
- * any admin action that mutates organization_modules should call
- * revalidateTag("org-modules:<orgId>") so the change shows up immediately.
- *
- * Wrapped in React.cache as well so multiple lookups within one request
- * still dedupe at the function-call level.
- */
+// Service-role client shared across cached calls (no per-request state).
+const adminClient = createAdminClient();
+
 const fetchOrgModules = (organizationId: string) =>
   unstable_cache(
     async (orgId: string): Promise<string[]> => {
-      const supabase = await createClient();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const client = supabase as any;
-      const { data } = await client
+      const { data } = await (adminClient as any)
         .from("organization_modules")
         .select("module_code")
         .eq("organization_id", orgId)
@@ -49,12 +42,6 @@ export async function orgHasModule(
 }
 
 /**
- * Get enabled modules for a user within an organization
- *
- * Returns the intersection of org-level and user-level enabled modules.
- * Wrapped with React.cache() to deduplicate within a single request.
- */
-/**
  * Cross-request cached fetch of a (user, org) module set. Same caching
  * strategy as getOrgEnabledModules — 5-min TTL, revalidate via the
  * `user-modules:<userId>:<orgId>` tag from any admin action that
@@ -63,9 +50,8 @@ export async function orgHasModule(
 const fetchUserModules = (userId: string, organizationId: string) =>
   unstable_cache(
     async (uid: string, oid: string): Promise<string[]> => {
-      const supabase = await createClient();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const client = supabase as any;
+      const client = adminClient as any;
       const [orgResult, userResult] = await Promise.all([
         client
           .from("organization_modules")
