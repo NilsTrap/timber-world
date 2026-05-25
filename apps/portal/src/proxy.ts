@@ -11,11 +11,6 @@ import { NextResponse, type NextRequest } from "next/server";
  * - Users with incomplete setup (status="invited") → redirect to /accept-invite
  */
 export async function proxy(request: NextRequest) {
-  // Perf instrumentation — diagnostic, remove once we've found the slow
-  // path. Adds Server-Timing header + writes a one-line log to Vercel
-  // function logs so we can see how much edge auth costs per request.
-  const __perfStart = Date.now();
-
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -125,14 +120,6 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
   }
-
-  // Perf instrumentation tail.
-  const __perfDur = Date.now() - __perfStart;
-  response.headers.set(
-    "Server-Timing",
-    `proxy;dur=${__perfDur};desc="edge auth + portal_users lookup"`,
-  );
-  console.log(`[PERF-SRV] proxy ${__perfDur}ms ${request.method} ${pathname}`);
 
   return response;
 }
