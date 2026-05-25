@@ -1,0 +1,36 @@
+{
+  "count": 3,
+  "error": null,
+  "rows": [
+    {
+      "code": "IJL-ORG-B-002",
+      "created_at": "2026-05-22T21:47:32.382206+00:00",
+      "customer_organisation_id": "bdbb6710-6aa6-46aa-910b-92e7d2740656",
+      "id": "4dc309d0-a1c5-4f9e-a880-f9ba724f70f9",
+      "producer_organisation_id": null,
+      "seller_organisation_id": null,
+      "status": "draft",
+      "volume_m3": null
+    },
+    {
+      "code": "IJL-ORG-B-001",
+      "created_at": "2026-05-22T21:47:32.382206+00:00",
+      "customer_organisation_id": "bdbb6710-6aa6-46aa-910b-92e7d2740656",
+      "id": "07dddd91-a0d2-4b30-8115-c32d503af687",
+      "producer_organisation_id": null,
+      "seller_organisation_id": null,
+      "status": "draft",
+      "volume_m3": null
+    },
+    {
+      "code": "IJL-ORG-B-003",
+      "created_at": "2026-05-22T21:47:32.382206+00:00",
+      "customer_organisation_id": "bdbb6710-6aa6-46aa-910b-92e7d2740656",
+      "id": "9f9afaab-c779-46be-a912-12d4ac0099f8",
+      "producer_organisation_id": null,
+      "seller_organisation_id": null,
+      "status": "draft",
+      "volume_m3": null
+    }
+  ]
+}

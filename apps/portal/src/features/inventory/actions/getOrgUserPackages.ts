@@ -33,10 +33,13 @@ export async function getOrgUserPackages(): Promise<ActionResult<PackageListItem
 
   const supabase = await createClient();
 
-  // Query 1: Shipment-sourced packages (shipped to this organisation's facility)
-  // Only include packages from shipments that have been accepted or completed
+  // The five package sources below are independent: each is its own
+  // `inventory_packages` query with different filters. Fire them all in
+  // parallel and reduce ~4 round-trips of waterfall latency.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: shipmentData, error: shipmentError } = await (supabase as any)
+  const sb = supabase as any;
+
+  const shipmentPromise = sb
     .from("inventory_packages")
     .select(`
       id,
@@ -63,16 +66,7 @@ export async function getOrgUserPackages(): Promise<ActionResult<PackageListItem
     .neq("status", "consumed")
     .order("package_sequence", { ascending: true });
 
-  if (shipmentError) {
-    console.error("Failed to fetch shipment packages:", shipmentError);
-    return { success: false, error: `Failed to fetch packages: ${shipmentError.message}`, code: "QUERY_FAILED" };
-  }
-
-  // Query 2: Production-sourced packages (from this organisation)
-  // Filter by organisation_id on production entries AND verify package still belongs to this org
-  // (packages shipped to another org have their organisation_id updated)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: productionData, error: productionError } = await (supabase as any)
+  const productionPromise = sb
     .from("inventory_packages")
     .select(`
       id,
@@ -99,15 +93,7 @@ export async function getOrgUserPackages(): Promise<ActionResult<PackageListItem
     .eq("status", "produced")
     .order("package_sequence", { ascending: true });
 
-  if (productionError) {
-    console.error("Failed to fetch production packages:", productionError);
-    // Non-fatal: continue with other results
-  }
-
-  // Query 3: Direct inventory packages (admin-added, no shipment or production source)
-  // These have organisation_id set directly on the package
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: directData, error: directError } = await (supabase as any)
+  const directPromise = sb
     .from("inventory_packages")
     .select(`
       id,
@@ -134,14 +120,7 @@ export async function getOrgUserPackages(): Promise<ActionResult<PackageListItem
     .neq("status", "consumed")
     .order("package_sequence", { ascending: true });
 
-  if (directError) {
-    console.error("Failed to fetch direct packages:", directError);
-    // Non-fatal: continue with other results
-  }
-
-  // Query 4: Packages in outgoing draft shipments FROM this organisation
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: outgoingDraftData, error: outgoingDraftError } = await (supabase as any)
+  const outgoingDraftPromise = sb
     .from("inventory_packages")
     .select(`
       id,
@@ -168,15 +147,7 @@ export async function getOrgUserPackages(): Promise<ActionResult<PackageListItem
     .neq("status", "consumed")
     .order("package_sequence", { ascending: true });
 
-  if (outgoingDraftError) {
-    console.error("Failed to fetch outgoing draft packages:", outgoingDraftError);
-    // Non-fatal: continue with other results
-  }
-
-  // Query 5: Packages in outgoing PENDING shipments FROM this organisation ("on the way")
-  // These are packages that have been sent but not yet received - show with special styling
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: onTheWayData, error: onTheWayError } = await (supabase as any)
+  const onTheWayPromise = sb
     .from("inventory_packages")
     .select(`
       id,
@@ -209,6 +180,36 @@ export async function getOrgUserPackages(): Promise<ActionResult<PackageListItem
     .neq("status", "consumed")
     .order("package_sequence", { ascending: true });
 
+  const [
+    { data: shipmentData, error: shipmentError },
+    { data: productionData, error: productionError },
+    { data: directData, error: directError },
+    { data: outgoingDraftData, error: outgoingDraftError },
+    { data: onTheWayData, error: onTheWayError },
+  ] = await Promise.all([
+    shipmentPromise,
+    productionPromise,
+    directPromise,
+    outgoingDraftPromise,
+    onTheWayPromise,
+  ]);
+
+  if (shipmentError) {
+    console.error("Failed to fetch shipment packages:", shipmentError);
+    return { success: false, error: `Failed to fetch packages: ${shipmentError.message}`, code: "QUERY_FAILED" };
+  }
+  if (productionError) {
+    console.error("Failed to fetch production packages:", productionError);
+    // Non-fatal: continue with other results
+  }
+  if (directError) {
+    console.error("Failed to fetch direct packages:", directError);
+    // Non-fatal: continue with other results
+  }
+  if (outgoingDraftError) {
+    console.error("Failed to fetch outgoing draft packages:", outgoingDraftError);
+    // Non-fatal: continue with other results
+  }
   if (onTheWayError) {
     console.error("Failed to fetch on-the-way packages:", onTheWayError);
     // Non-fatal: continue with other results

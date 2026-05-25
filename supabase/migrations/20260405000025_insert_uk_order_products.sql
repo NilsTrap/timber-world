@@ -1,12 +1,19 @@
 -- Insert inventory_packages (products) for UK stair orders
--- Based on PDF analysis: 12 HIGH confidence + 4 MEDIUM confidence orders
--- Package numbers 11-47 (existing DDC max is 10)
+-- Guarded: only runs on DBs where the customer org and its order rows
+-- are already seeded (production). Fresh staging DBs skip silently.
 
-INSERT INTO inventory_packages (
-  package_number, product_name_id, wood_species_id, type_id, quality_id,
-  thickness, width, length, pieces, volume_m3, volume_is_calculated,
-  status, organisation_id, order_id, staircase_code_id, riser, unit_price_piece
-) VALUES
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM organisations WHERE id = '2ef9e211-aadc-49b5-a450-4b5a9b1dd614') THEN
+    RAISE NOTICE 'UK order products import skipped: customer org missing.';
+    RETURN;
+  END IF;
+
+  INSERT INTO inventory_packages (
+    package_number, product_name_id, wood_species_id, type_id, quality_id,
+    thickness, width, length, pieces, volume_m3, volume_is_calculated,
+    status, organisation_id, order_id, staircase_code_id, riser, unit_price_piece
+  ) VALUES
 
 -- ============ HIGH CONFIDENCE (12 orders) ============
 
@@ -117,3 +124,4 @@ INSERT INTO inventory_packages (
  '22', '280', '1200', '1',  NULL, false, 'ordered', '2ef9e211-aadc-49b5-a450-4b5a9b1dd614', 'a4ffe798-962b-4327-930e-fc1d071f74c8', 'e43f6b54-d9dc-434e-b117-55951286da32', '200', 110),
 ('47', 'e3f3a659-ccfb-4747-803f-f4bd07b8c234', 'f76816b0-0fd5-4bf4-bba0-021116f156fd', '8e1b7831-9ab6-4e32-9755-6651607b63f9', '1f8c12b7-adbc-4ed9-b9fc-2161b108687f',
  '22', '280', '1200', '1',  NULL, false, 'ordered', '2ef9e211-aadc-49b5-a450-4b5a9b1dd614', 'a4ffe798-962b-4327-930e-fc1d071f74c8', 'a14c3cad-5ce7-4fdf-b841-d7639c26ab30', '200', 150);
+END $$;

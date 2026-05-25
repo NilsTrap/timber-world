@@ -1,5 +1,6 @@
 "use server";
 
+import { updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
@@ -144,6 +145,12 @@ export async function updateUserModules(
       return { success: false, error: "Failed to update user modules", code: "INSERT_FAILED" };
     }
   }
+
+  // Invalidate the cached module set for this (user, org) pair so the
+  // sidebar and permission checks reflect the new state immediately.
+  // updateTag (Next 16) gives read-your-own-writes semantics inside a
+  // server action — caller sees the new value on the next read.
+  updateTag(`user-modules:${userId}:${organisationId}`);
 
   return { success: true, data: undefined };
 }

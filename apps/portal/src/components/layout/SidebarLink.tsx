@@ -108,9 +108,20 @@ export function SidebarLink({ href, label, iconName, isCollapsed, badge }: Sideb
     [href, router, pathname]
   );
 
+  // Hover-only prefetch: Next's default Link prefetch eagerly fetches every
+  // visible nav target on page load (~12-26 RSC fetches per dashboard hit).
+  // Disabling default prefetch and prefetching on hover instead trades a
+  // ~50-150ms first-click latency for ~10× less background server work.
+  const handleMouseEnter = useCallback(() => {
+    router.prefetch(finalHref);
+  }, [router, finalHref]);
+
   return (
     <Link
       href={finalHref}
+      prefetch={false}
+      onMouseEnter={handleMouseEnter}
+      onFocus={handleMouseEnter}
       onClick={handleClick}
       aria-label={isCollapsed ? label : undefined}
       aria-current={isActive ? "page" : undefined}

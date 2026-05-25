@@ -1,0 +1,20 @@
+{
+  "name": "@timber/tests-rls-and-perf",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "snapshot": "tsx src/run.ts --mode=snapshot",
+    "diff": "tsx src/run.ts --mode=diff",
+    "baseline": "tsx src/run.ts --mode=baseline",
+    "negative": "tsx src/run.ts --mode=negative"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5",
+    "@types/node": "^22"
+  }
+}

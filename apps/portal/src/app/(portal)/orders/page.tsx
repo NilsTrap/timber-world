@@ -1,54 +1,80 @@
+import { Suspense } from "react";
 import { redirect, notFound } from "next/navigation";
 import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
 import { OrdersPageClient } from "@/features/orders/components";
+import type { SessionUser } from "@/lib/auth/getSession";
 
 export const metadata = {
   title: "Orders | Timber World",
 };
 
+function OrdersSkeleton() {
+  return (
+    <div className="rounded-lg border bg-card p-6 shadow-sm">
+      <div className="flex gap-2 mb-4">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-9 w-24 bg-muted rounded animate-pulse" />
+        ))}
+      </div>
+      <div className="space-y-2">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-10 bg-muted/60 rounded animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+async function OrdersBody({ session }: { session: SessionUser }) {
+  const userIsAdmin = isAdmin(session);
+  const userOrgId = session.currentOrganizationId || session.organisationId || null;
+  const userOrgName = session.currentOrganizationName || session.organisationName || null;
+
+  // Determine visibility + permissions. All module lookups dedupe via
+  // React.cache, so this Promise.all costs one query plus one round-trip.
+  const allTabs = ["list", "prices", "sales", "production", "analytics"] as const;
+
+  let canSelectCustomer = userIsAdmin;
+  let visibleTabs: string[];
+
+  if (userIsAdmin) {
+    visibleTabs = [...allTabs];
+  } else {
+    const [customerSelect, ...tabChecks] = await Promise.all([
+      orgHasModule(userOrgId, "orders.customer-select"),
+      ...allTabs.map((tab) => orgHasModule(userOrgId, `orders.tab.${tab}`)),
+    ]);
+    canSelectCustomer = customerSelect;
+    visibleTabs = allTabs.filter((_, i) => tabChecks[i]);
+    if (visibleTabs.length === 0) visibleTabs = ["list"];
+  }
+
+  return (
+    <OrdersPageClient
+      isAdmin={userIsAdmin}
+      canSelectCustomer={canSelectCustomer}
+      userOrganisationId={userOrgId}
+      userOrganisationName={userOrgName}
+      visibleTabs={visibleTabs}
+    />
+  );
+}
+
 export default async function OrdersPage() {
   const session = await getSession();
 
-  if (!session) {
-    redirect("/login");
-  }
+  if (!session) redirect("/login");
 
   const userIsAdmin = isAdmin(session);
   const userOrgId = session.currentOrganizationId || session.organisationId || null;
 
-  // For non-admin users, check if their organization has the orders module enabled
+  // Module gate runs before render so notFound() can trigger early.
   if (!userIsAdmin) {
     const hasOrdersModule = await orgHasModule(userOrgId, "orders.view");
-    if (!hasOrdersModule) {
-      notFound();
-    }
+    if (!hasOrdersModule) notFound();
   }
 
-  const userOrgName = session.currentOrganizationName || session.organisationName || null;
-
-  // Determine if user can select a customer organisation for orders
-  let canSelectCustomer = userIsAdmin;
-  if (!userIsAdmin && userOrgId) {
-    canSelectCustomer = await orgHasModule(userOrgId, "orders.customer-select");
-  }
-
-  // Determine which tabs the user can see (admins see all)
-  const allTabs = ["list", "prices", "sales", "production", "analytics"] as const;
-  let visibleTabs: string[];
-  if (userIsAdmin) {
-    visibleTabs = [...allTabs];
-  } else {
-    const tabChecks = await Promise.all(
-      allTabs.map(async (tab) => ({
-        tab,
-        allowed: await orgHasModule(userOrgId, `orders.tab.${tab}`),
-      }))
-    );
-    visibleTabs = tabChecks.filter((t) => t.allowed).map((t) => t.tab);
-    // If no tabs explicitly enabled, default to list
-    if (visibleTabs.length === 0) visibleTabs = ["list"];
-  }
-
+  // Header paints immediately; the rest streams in via Suspense.
   return (
     <div className="space-y-4">
       <div>
@@ -59,14 +85,9 @@ export default async function OrdersPage() {
             : "View and create orders for your organisation"}
         </p>
       </div>
-
-      <OrdersPageClient
-        isAdmin={userIsAdmin}
-        canSelectCustomer={canSelectCustomer}
-        userOrganisationId={userOrgId}
-        userOrganisationName={userOrgName}
-        visibleTabs={visibleTabs}
-      />
+      <Suspense fallback={<OrdersSkeleton />}>
+        <OrdersBody session={session} />
+      </Suspense>
     </div>
   );
 }

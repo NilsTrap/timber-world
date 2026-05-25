@@ -57,10 +57,14 @@ export async function getAuditPackages(orgId?: string): Promise<ActionResult<Aud
   }
 
   const supabase = await createClient();
-
-  // 1. Fetch ALL packages (including consumed), optionally filtered by org
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabase as any)
+  const sb = supabase as any;
+
+  // 1. Build the packages query (must precede shipments/production lookups
+  //    because we need package fk-ids first). Fire it in parallel with the
+  //    two queries that don't depend on package data: organisations list
+  //    and production_inputs (full-table scan for consumed-package tracing).
+  let packagesQuery = sb
     .from("inventory_packages")
     .select(`
       id,
@@ -87,21 +91,25 @@ export async function getAuditPackages(orgId?: string): Promise<ActionResult<Aud
     .order("package_number", { ascending: true });
 
   if (orgId) {
-    query = query.eq("organisation_id", orgId);
+    packagesQuery = packagesQuery.eq("organisation_id", orgId);
   }
 
-  const { data: packagesData, error: packagesError } = await query;
+  const [
+    { data: packagesData, error: packagesError },
+    { data: orgsData },
+    { data: inputsData },
+  ] = await Promise.all([
+    packagesQuery,
+    sb.from("organisations").select("id, code, name"),
+    sb
+      .from("portal_production_inputs")
+      .select("package_id, production_entry_id, pieces_used, volume_m3"),
+  ]);
 
   if (packagesError) {
     console.error("Failed to fetch packages:", packagesError);
     return { success: false, error: `Failed to fetch packages: ${packagesError.message}`, code: "QUERY_FAILED" };
   }
-
-  // 2. Fetch all organisations
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: orgsData } = await (supabase as any)
-    .from("organisations")
-    .select("id, code, name");
 
   const orgsMap = new Map<string, { code: string; name: string }>();
   if (orgsData) {
@@ -110,67 +118,53 @@ export async function getAuditPackages(orgId?: string): Promise<ActionResult<Aud
     }
   }
 
-  // 3. Fetch all shipments for source/destination lookup
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // 2. Build dependent id sets from package data
   const allShipmentIds = new Set<string>();
   for (const pkg of packagesData as { shipment_id: string | null; source_shipment_id: string | null }[]) {
     if (pkg.shipment_id) allShipmentIds.add(pkg.shipment_id);
     if (pkg.source_shipment_id) allShipmentIds.add(pkg.source_shipment_id);
   }
-
-  const shipmentsMap = new Map<string, { code: string; fromOrg: string; toOrg: string; date: string }>();
-  if (allShipmentIds.size > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: shipmentsData } = await (supabase as any)
-      .from("shipments")
-      .select("id, shipment_code, from_organisation_id, to_organisation_id, shipment_date")
-      .in("id", [...allShipmentIds]);
-
-    if (shipmentsData) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const s of shipmentsData as any[]) {
-        shipmentsMap.set(s.id, {
-          code: s.shipment_code,
-          fromOrg: orgsMap.get(s.from_organisation_id)?.code ?? "",
-          toOrg: orgsMap.get(s.to_organisation_id)?.code ?? "",
-          date: s.shipment_date ?? "",
-        });
-      }
-    }
-  }
-
-  // 4. Fetch all production entries for source lookup
   const allProductionIds = new Set<string>();
   for (const pkg of packagesData as { production_entry_id: string | null }[]) {
     if (pkg.production_entry_id) allProductionIds.add(pkg.production_entry_id);
   }
 
-  const productionMap = new Map<string, { processName: string; date: string }>();
-  if (allProductionIds.size > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: prodData } = await (supabase as any)
-      .from("portal_production_entries")
-      .select("id, production_date, ref_processes(value)")
-      .in("id", [...allProductionIds]);
+  // 3. Fire shipments + production-entries lookups in parallel — they only
+  //    depend on the id sets just computed and don't depend on each other.
+  const [shipmentsRes, prodRes] = await Promise.all([
+    allShipmentIds.size > 0
+      ? sb
+          .from("shipments")
+          .select("id, shipment_code, from_organisation_id, to_organisation_id, shipment_date")
+          .in("id", [...allShipmentIds])
+      : Promise.resolve({ data: [] as any[] }),
+    allProductionIds.size > 0
+      ? sb
+          .from("portal_production_entries")
+          .select("id, production_date, ref_processes(value)")
+          .in("id", [...allProductionIds])
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
 
-    if (prodData) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const p of prodData as any[]) {
-        productionMap.set(p.id, {
-          processName: p.ref_processes?.value ?? "Unknown",
-          date: p.production_date ?? "",
-        });
-      }
-    }
+  const shipmentsMap = new Map<string, { code: string; fromOrg: string; toOrg: string; date: string }>();
+  for (const s of (shipmentsRes.data ?? []) as any[]) {
+    shipmentsMap.set(s.id, {
+      code: s.shipment_code,
+      fromOrg: orgsMap.get(s.from_organisation_id)?.code ?? "",
+      toOrg: orgsMap.get(s.to_organisation_id)?.code ?? "",
+      date: s.shipment_date ?? "",
+    });
   }
 
-  // 5. Fetch all production inputs to find where packages were consumed (and their original values)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: inputsData } = await (supabase as any)
-    .from("portal_production_inputs")
-    .select("package_id, production_entry_id, pieces_used, volume_m3");
+  const productionMap = new Map<string, { processName: string; date: string }>();
+  for (const p of (prodRes.data ?? []) as any[]) {
+    productionMap.set(p.id, {
+      processName: p.ref_processes?.value ?? "Unknown",
+      date: p.production_date ?? "",
+    });
+  }
 
-  // Map: package_id -> { production_entry_id, pieces_used, volume_m3 }
+  // 4. Map: package_id -> { production_entry_id, pieces_used, volume_m3 }
   const consumedInMap = new Map<string, { entryId: string; piecesUsed: number; volumeM3: number }>();
   if (inputsData) {
     for (const input of inputsData as { package_id: string; production_entry_id: string; pieces_used: number | null; volume_m3: number | null }[]) {

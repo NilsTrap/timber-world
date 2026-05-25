@@ -3,12 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ClipboardPaste, Copy } from "lucide-react";
 import { toast } from "sonner";
+import dynamic from "next/dynamic";
 import { Button } from "@timber/ui";
 import { saveProductionOutputs, getNextPackageNumbers, validateSingleOutput, unvalidateSingleOutput } from "../actions";
 import type { NextPackageNumber } from "../actions";
 import { ProductionOutputsTable } from "./ProductionOutputsTable";
-import { OutputPasteImportModal, type PartialOutputRow } from "./OutputPasteImportModal";
+import type { PartialOutputRow } from "./OutputPasteImportModal";
 import { PrintOutputsButton } from "./PrintOutputsButton";
+
+// OutputPasteImportModal is ~360 LOC and only mounts when the user clicks
+// "Paste import" — keep it out of the initial bundle.
+const OutputPasteImportModal = dynamic(
+  () => import("./OutputPasteImportModal").then((mod) => mod.OutputPasteImportModal),
+  { ssr: false },
+);
 import {
   generateClientId,
   shouldAutoCalculate,

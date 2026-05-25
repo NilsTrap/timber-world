@@ -7,6 +7,32 @@ import { usePersistedTab } from "@/hooks/usePersistedTab";
 import { OrdersTable, type OrdersTableHandle, type OrderColumn } from "./OrdersTable";
 import { OrderPricesTable } from "./OrderPricesTable";
 
+// Module-level constants — moving them out of the component body so every
+// render doesn't allocate new arrays and re-render every child that holds
+// them by reference.
+const SALES_COLUMNS: OrderColumn[] = [
+  "customer", "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
+  "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice", "totalKg",
+  "advanceInvoiceNumber", "invoiceNumber", "packageNumber", "transportInvoiceNumber", "transportPrice", "files", "status",
+];
+
+const PRODUCTION_COLUMNS: OrderColumn[] = [
+  "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
+  "type", "treadLength", "treads", "winders", "quarters", "totalPieces",
+  "treadM3", "winderM3", "quarterM3", "totalProducedM3", "usedMaterialM3", "wasteM3", "wastePercent",
+  "productionMaterial", "productionFinishing", "productionTotal", "productionInvoiceNumber", "productionPaymentDate",
+  "woodArt", "woodArtCnc", "woodArtTotal", "woodArtInvoiceNumber", "woodArtPaymentDate", "files", "status",
+];
+
+const ANALYTICS_COLUMNS: OrderColumn[] = [
+  "customer", "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
+  "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice",
+  "invoicedM3", "usedM3", "diffM3", "diffPercent", "plMaterial",
+  "invoicedWork", "usedWork", "diffWork", "diffWorkPercent", "plWork",
+  "invoicedTransport", "usedTransport", "diffTransport", "diffTransportPercent", "plTransport",
+  "plMaterials", "plTotal", "plPercentFromInvoice", "status",
+];
+
 interface OrdersPageClientProps {
   isAdmin: boolean;
   canSelectCustomer: boolean;
@@ -59,29 +85,6 @@ export function OrdersPageClient({
   }, [checkFilters]);
 
   const showTab = (tab: string) => visibleTabs.includes(tab);
-
-  const SALES_COLUMNS: OrderColumn[] = [
-    "customer", "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
-    "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice", "totalKg",
-    "advanceInvoiceNumber", "invoiceNumber", "packageNumber", "transportInvoiceNumber", "transportPrice", "files", "status",
-  ];
-
-  const PRODUCTION_COLUMNS: OrderColumn[] = [
-    "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
-    "type", "treadLength", "treads", "winders", "quarters", "totalPieces",
-    "treadM3", "winderM3", "quarterM3", "totalProducedM3", "usedMaterialM3", "wasteM3", "wastePercent",
-    "productionMaterial", "productionFinishing", "productionTotal", "productionInvoiceNumber", "productionPaymentDate",
-    "woodArt", "woodArtCnc", "woodArtTotal", "woodArtInvoiceNumber", "woodArtPaymentDate", "files", "status",
-  ];
-
-  const ANALYTICS_COLUMNS: OrderColumn[] = [
-    "customer", "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
-    "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice",
-    "invoicedM3", "usedM3", "diffM3", "diffPercent", "plMaterial",
-    "invoicedWork", "usedWork", "diffWork", "diffWorkPercent", "plWork",
-    "invoicedTransport", "usedTransport", "diffTransport", "diffTransportPercent", "plTransport",
-    "plMaterials", "plTotal", "plPercentFromInvoice", "status",
-  ];
 
   const orgKey = userOrganisationId ?? "admin";
   const commonProps = {

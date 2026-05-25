@@ -1,0 +1,15 @@
+-- Paired rollback for 20260522000003_rls_orders.sql.
+--
+-- This file is intentionally suffixed `.disabled` so the migration runner
+-- does not pick it up. To roll back the orders RLS work, rename it to
+-- end in `.sql` and run `supabase db push`. Or run the contents manually
+-- via the Supabase SQL editor / management API.
+--
+-- After rollback, the orders table reverts to fully open access for any
+-- authenticated user (the pre-2026-05-22 state).
+
+DROP POLICY IF EXISTS orders_select_authenticated ON public.orders;
+DROP POLICY IF EXISTS orders_insert_authenticated ON public.orders;
+DROP POLICY IF EXISTS orders_update_authenticated ON public.orders;
+DROP POLICY IF EXISTS orders_delete_authenticated ON public.orders;
+ALTER TABLE public.orders DISABLE ROW LEVEL SECURITY;

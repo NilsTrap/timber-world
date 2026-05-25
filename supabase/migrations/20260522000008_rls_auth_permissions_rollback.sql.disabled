@@ -1,0 +1,25 @@
+-- Paired rollback for 20260522000007. Rename to .sql + supabase db push.
+
+DROP POLICY IF EXISTS modules_select ON public.modules;
+DROP POLICY IF EXISTS modules_admin_write ON public.modules;
+ALTER TABLE public.modules DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS organisations_select ON public.organisations;
+DROP POLICY IF EXISTS organisations_admin_write ON public.organisations;
+ALTER TABLE public.organisations DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS portal_users_select ON public.portal_users;
+DROP POLICY IF EXISTS portal_users_admin_write ON public.portal_users;
+ALTER TABLE public.portal_users DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS organization_memberships_select ON public.organization_memberships;
+DROP POLICY IF EXISTS organization_memberships_admin_write ON public.organization_memberships;
+ALTER TABLE public.organization_memberships DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS user_modules_select ON public.user_modules;
+DROP POLICY IF EXISTS user_modules_admin_write ON public.user_modules;
+ALTER TABLE public.user_modules DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS organization_modules_select ON public.organization_modules;
+DROP POLICY IF EXISTS organization_modules_admin_write ON public.organization_modules;
+ALTER TABLE public.organization_modules DISABLE ROW LEVEL SECURITY;

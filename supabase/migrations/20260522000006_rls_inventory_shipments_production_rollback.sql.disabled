@@ -1,0 +1,19 @@
+-- Paired rollback for 20260522000005. Rename to .sql to apply.
+
+DROP POLICY IF EXISTS inventory_packages_select_authenticated ON public.inventory_packages;
+DROP POLICY IF EXISTS inventory_packages_insert_authenticated ON public.inventory_packages;
+DROP POLICY IF EXISTS inventory_packages_update_authenticated ON public.inventory_packages;
+DROP POLICY IF EXISTS inventory_packages_delete_authenticated ON public.inventory_packages;
+ALTER TABLE public.inventory_packages DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS shipments_select_authenticated ON public.shipments;
+DROP POLICY IF EXISTS shipments_insert_authenticated ON public.shipments;
+DROP POLICY IF EXISTS shipments_update_authenticated ON public.shipments;
+DROP POLICY IF EXISTS shipments_delete_authenticated ON public.shipments;
+ALTER TABLE public.shipments DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS portal_production_entries_select_authenticated ON public.portal_production_entries;
+DROP POLICY IF EXISTS portal_production_entries_insert_authenticated ON public.portal_production_entries;
+DROP POLICY IF EXISTS portal_production_entries_update_authenticated ON public.portal_production_entries;
+DROP POLICY IF EXISTS portal_production_entries_delete_authenticated ON public.portal_production_entries;
+ALTER TABLE public.portal_production_entries DISABLE ROW LEVEL SECURITY;

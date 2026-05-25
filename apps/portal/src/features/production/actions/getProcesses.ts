@@ -17,20 +17,23 @@ export async function getProcesses(): Promise<ActionResult<Process[]>> {
   }
 
   const supabase = await createClient();
+  const orgId = session.currentOrganizationId || session.organisationId || null;
 
-  const { data, error } = await (supabase as any)
-    .from("ref_processes")
-    .select("id, code, value, sort_order, work_unit, work_formula, price, pallet_price")
-    .eq("is_active", true)
-    .order("value", { ascending: true });
+  // Fire the processes query and the org-exclusions lookup in parallel —
+  // both depend only on orgId, no data dependency between them.
+  const [{ data, error }, exclusions] = await Promise.all([
+    (supabase as any)
+      .from("ref_processes")
+      .select("id, code, value, sort_order, work_unit, work_formula, price, pallet_price")
+      .eq("is_active", true)
+      .order("value", { ascending: true }),
+    getOrgExcludedRefValues(orgId),
+  ]);
 
   if (error) {
     return { success: false, error: error.message };
   }
 
-  // Filter out excluded processes for this org
-  const orgId = session.currentOrganizationId || session.organisationId || null;
-  const exclusions = await getOrgExcludedRefValues(orgId);
   const excludedProcesses = exclusions.get("ref_processes");
 
   const processes: Process[] = (data ?? [])
@@ -69,37 +72,41 @@ export async function getProcessesWithNotes(
     return { success: false, error: "No organization context" };
   }
 
-  // Fetch all active processes
-  const { data: processesData, error: processesError } = await (supabase as any)
+  // Fire the three independent fetches in parallel: processes list,
+  // org-scoped notes, and the exclusions map all only depend on orgId.
+  const processesPromise = (supabase as any)
     .from("ref_processes")
     .select("id, code, value, sort_order, work_unit, work_formula, price, pallet_price")
     .eq("is_active", true)
     .order("value", { ascending: true });
 
+  const notesPromise = orgId
+    ? (supabase as any)
+        .from("organization_process_notes")
+        .select("id, process_id, notes")
+        .eq("organization_id", orgId)
+    : Promise.resolve({ data: [] as Array<{ id: string; process_id: string; notes: string }>, error: null });
+
+  const exclusionsPromise = getOrgExcludedRefValues(orgId || null);
+
+  const [
+    { data: processesData, error: processesError },
+    { data: notesData, error: notesError },
+    exclusions,
+  ] = await Promise.all([processesPromise, notesPromise, exclusionsPromise]);
+
   if (processesError) {
     return { success: false, error: processesError.message };
   }
-
-  // Fetch notes for the organization (if orgId is available)
-  let notesMap = new Map<string, { id: string; notes: string }>();
-
-  if (orgId) {
-    const { data: notesData, error: notesError } = await (supabase as any)
-      .from("organization_process_notes")
-      .select("id, process_id, notes")
-      .eq("organization_id", orgId);
-
-    if (notesError) {
-      return { success: false, error: notesError.message };
-    }
-
-    for (const note of notesData ?? []) {
-      notesMap.set(note.process_id, { id: note.id, notes: note.notes });
-    }
+  if (notesError) {
+    return { success: false, error: notesError.message };
   }
 
-  // Filter out excluded processes for this org
-  const exclusions = await getOrgExcludedRefValues(orgId || null);
+  const notesMap = new Map<string, { id: string; notes: string }>();
+  for (const note of (notesData ?? []) as Array<{ id: string; process_id: string; notes: string }>) {
+    notesMap.set(note.process_id, { id: note.id, notes: note.notes });
+  }
+
   const excludedProcesses = exclusions.get("ref_processes");
   const filteredProcesses = excludedProcesses
     ? (processesData ?? []).filter((row: any) => !excludedProcesses.has(row.id))
