@@ -11,13 +11,13 @@ import { OrderPricesTable } from "./OrderPricesTable";
 // render doesn't allocate new arrays and re-render every child that holds
 // them by reference.
 const SALES_COLUMNS: OrderColumn[] = [
-  "customer", "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
+  "purchaseOrderNr", "projectNumber", "customer", "seller", "producer", "dateReceived", "plannedDate", "dateLoaded",
   "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice", "totalKg",
   "advanceInvoiceNumber", "invoiceNumber", "packageNumber", "transportInvoiceNumber", "transportPrice", "files", "status",
 ];
 
 const PRODUCTION_COLUMNS: OrderColumn[] = [
-  "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
+  "purchaseOrderNr", "projectNumber", "seller", "producer", "dateReceived", "plannedDate", "dateLoaded",
   "type", "treadLength", "treads", "winders", "quarters", "totalPieces",
   "treadM3", "winderM3", "quarterM3", "totalProducedM3", "usedMaterialM3", "wasteM3", "wastePercent",
   "productionMaterial", "productionFinishing", "productionTotal", "productionInvoiceNumber", "productionPaymentDate",
@@ -25,7 +25,7 @@ const PRODUCTION_COLUMNS: OrderColumn[] = [
 ];
 
 const ANALYTICS_COLUMNS: OrderColumn[] = [
-  "customer", "seller", "producer", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
+  "purchaseOrderNr", "projectNumber", "customer", "seller", "producer", "dateReceived", "plannedDate", "dateLoaded",
   "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice",
   "invoicedM3", "usedM3", "diffM3", "diffPercent", "plMaterial",
   "invoicedWork", "usedWork", "diffWork", "diffWorkPercent", "plWork",

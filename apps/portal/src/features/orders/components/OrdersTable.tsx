@@ -99,7 +99,7 @@ export type OrderColumn =
 
 /** All columns shown by default */
 const ALL_COLUMNS: OrderColumn[] = [
-  "customer", "seller", "dateReceived", "plannedDate", "dateLoaded", "purchaseOrderNr", "projectNumber",
+  "purchaseOrderNr", "projectNumber", "customer", "seller", "dateReceived", "plannedDate", "dateLoaded",
   "type", "treadLength", "treads", "winders", "quarters", "totalPieces", "totalPrice", "files", "status",
 ];
 
@@ -849,7 +849,17 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
           <Table className="w-auto table-fixed">
             <TableHeader className="bg-card sticky top-0 z-10 [&_tr:first-child]:rounded-t-lg [&_tr:first-child_th:first-child]:rounded-tl-lg [&_tr:first-child_th:last-child]:rounded-tr-lg">
               <TableRow>
-                <TableHead className="w-6 px-0" />
+                <TableHead className="w-6 px-0 sticky left-0 z-20 bg-card" />
+                {show("purchaseOrderNr") && (
+                <TableHead className="text-sm px-2 w-24 sticky left-6 z-20 bg-card">
+                  {headerWithMenu("purchaseOrderNr", <span className="flex flex-col leading-tight"><span>Purchase</span><span>Order Nr</span></span>)}
+                </TableHead>
+                )}
+                {show("projectNumber") && (
+                <TableHead className="text-sm px-2 w-20 sticky left-[120px] z-20 bg-card border-r">
+                  {headerWithMenu("projectNumber", <span className="flex flex-col leading-tight"><span>Project</span><span>Number</span></span>)}
+                </TableHead>
+                )}
                 {show("customer") && (
                 <TableHead className="text-sm px-2 w-28 whitespace-nowrap">
                   {headerWithMenu("customer", "Customer")}
@@ -874,16 +884,6 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                 {show("dateLoaded") && (
                 <TableHead className="text-sm px-2 w-24">
                   {headerWithMenu("dateLoaded", <span className="flex flex-col leading-tight"><span>Date</span><span>Loaded</span></span>)}
-                </TableHead>
-                )}
-                {show("purchaseOrderNr") && (
-                <TableHead className="text-sm px-2 w-24">
-                  {headerWithMenu("purchaseOrderNr", <span className="flex flex-col leading-tight"><span>Purchase</span><span>Order Nr</span></span>)}
-                </TableHead>
-                )}
-                {show("projectNumber") && (
-                <TableHead className="text-sm px-2 w-20">
-                  {headerWithMenu("projectNumber", <span className="flex flex-col leading-tight"><span>Project</span><span>Number</span></span>)}
                 </TableHead>
                 )}
                 {show("type") && (
@@ -1137,7 +1137,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   className={`transition-colors cursor-pointer ${order.status === "cancelled" ? "bg-red-50 hover:bg-red-100" : "hover:bg-accent/50"}`}
                   onClick={() => router.push(tab === "list" ? `/orders/${order.id}` : `/orders/${order.id}?tab=${tab}`)}
                 >
-                  <TableCell className="px-0 py-0 w-6">
+                  <TableCell className={`px-0 py-0 w-6 sticky left-0 z-[2] ${order.status === "cancelled" ? "bg-red-50" : "bg-white dark:bg-zinc-950"}`}>
                     <button
                       className="flex items-center justify-center w-6 h-full text-muted-foreground hover:text-foreground transition-colors"
                       onClick={(e) => { e.stopPropagation(); router.push(tab === "list" ? `/orders/${order.id}` : `/orders/${order.id}?tab=${tab}`); }}
@@ -1146,6 +1146,34 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       <ChevronRight className="h-3.5 w-3.5" />
                     </button>
                   </TableCell>
+                  {show("purchaseOrderNr") && (
+                  <TableCell className={`px-2 text-sm sticky left-6 z-[2] ${order.status === "cancelled" ? "bg-red-50" : "bg-white dark:bg-zinc-950"}`}>
+                    {tab === "production" ? (
+                      <span className={!order.name ? "text-muted-foreground" : ""}>{order.name || "-"}</span>
+                    ) : (
+                    <EditableCell
+                      value={order.name}
+                      placeholder="-"
+                      onSave={(val) => saveField(order.id, { name: val })}
+
+                    />
+                    )}
+                  </TableCell>
+                  )}
+                  {show("projectNumber") && (
+                  <TableCell className={`px-2 text-sm whitespace-nowrap sticky left-[120px] z-[2] border-r shadow-[1px_0_0_0_rgba(0,0,0,0.08)] ${order.status === "cancelled" ? "bg-red-50" : "bg-white dark:bg-zinc-950"}`}>
+                    {tab === "production" ? (
+                      <span className={!order.projectNumber ? "text-muted-foreground" : ""}>{order.projectNumber || "-"}</span>
+                    ) : (
+                    <EditableCell
+                      value={order.projectNumber || ""}
+                      placeholder={emptyLabel(order.status)}
+                      onSave={(val) => saveField(order.id, { projectNumber: val || null })}
+
+                    />
+                    )}
+                  </TableCell>
+                  )}
                   {show("customer") && (
                   <TableCell className="px-2 text-sm">
                     {canSelectCustomer ? (
@@ -1225,34 +1253,6 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       type="date"
                       placeholder={emptyLabel(order.status)}
                       onSave={(val) => saveField(order.id, { dateLoaded: val || null })}
-
-                    />
-                    )}
-                  </TableCell>
-                  )}
-                  {show("purchaseOrderNr") && (
-                  <TableCell className="px-2 text-sm">
-                    {tab === "production" ? (
-                      <span className={!order.name ? "text-muted-foreground" : ""}>{order.name || "-"}</span>
-                    ) : (
-                    <EditableCell
-                      value={order.name}
-                      placeholder="-"
-                      onSave={(val) => saveField(order.id, { name: val })}
-
-                    />
-                    )}
-                  </TableCell>
-                  )}
-                  {show("projectNumber") && (
-                  <TableCell className="px-2 text-sm whitespace-nowrap">
-                    {tab === "production" ? (
-                      <span className={!order.projectNumber ? "text-muted-foreground" : ""}>{order.projectNumber || "-"}</span>
-                    ) : (
-                    <EditableCell
-                      value={order.projectNumber || ""}
-                      placeholder={emptyLabel(order.status)}
-                      onSave={(val) => saveField(order.id, { projectNumber: val || null })}
 
                     />
                     )}
