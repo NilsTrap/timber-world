@@ -21,15 +21,39 @@ export interface CatalogCategory {
   productCount?: number;
 }
 
-export interface CategoryField {
+export interface CatalogField {
   id: string;
-  categoryId: string;
   fieldKey: string;
   fieldLabel: string;
   fieldType: FieldType;
   unit: string | null;
-  appliesTo: AppliesTo;
   refTable: string | null;
+  options?: FieldOption[];
+}
+
+export interface FieldAssignment {
+  id: string;
+  categoryId: string;
+  fieldId: string;
+  appliesTo: AppliesTo;
+  showInFilter: boolean;
+  showInDetail: boolean;
+  showInPriceList: boolean;
+  isRequired: boolean;
+  sortOrder: number;
+  field?: CatalogField;
+}
+
+/** Combined view used by components: field definition + per-category assignment settings */
+export interface CategoryField {
+  id: string;
+  assignmentId: string;
+  fieldKey: string;
+  fieldLabel: string;
+  fieldType: FieldType;
+  unit: string | null;
+  refTable: string | null;
+  appliesTo: AppliesTo;
   showInFilter: boolean;
   showInDetail: boolean;
   showInPriceList: boolean;
@@ -141,13 +165,18 @@ export interface SaveCategoryInput {
 
 export interface SaveFieldInput {
   id?: string;
-  categoryId: string;
   fieldKey: string;
   fieldLabel: string;
   fieldType: FieldType;
   unit?: string | null;
-  appliesTo: AppliesTo;
   refTable?: string | null;
+}
+
+export interface SaveFieldAssignmentInput {
+  id?: string;
+  categoryId: string;
+  fieldId: string;
+  appliesTo: AppliesTo;
   showInFilter?: boolean;
   showInDetail?: boolean;
   showInPriceList?: boolean;

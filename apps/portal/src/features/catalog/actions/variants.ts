@@ -49,20 +49,20 @@ function toFieldValue(row: any): VariantFieldValue {
     optionId: row.option_id,
     valueText: row.value_text,
     valueNumber: row.value_number,
-    field: row.catalog_category_fields ? {
-      id: row.catalog_category_fields.id,
-      categoryId: row.catalog_category_fields.category_id,
-      fieldKey: row.catalog_category_fields.field_key,
-      fieldLabel: row.catalog_category_fields.field_label,
-      fieldType: row.catalog_category_fields.field_type,
-      unit: row.catalog_category_fields.unit,
-      appliesTo: row.catalog_category_fields.applies_to,
-      refTable: row.catalog_category_fields.ref_table,
-      showInFilter: row.catalog_category_fields.show_in_filter,
-      showInDetail: row.catalog_category_fields.show_in_detail,
-      showInPriceList: row.catalog_category_fields.show_in_price_list,
-      isRequired: row.catalog_category_fields.is_required,
-      sortOrder: row.catalog_category_fields.sort_order,
+    field: row.catalog_fields ? {
+      id: row.catalog_fields.id,
+      categoryId: row.catalog_fields.category_id,
+      fieldKey: row.catalog_fields.field_key,
+      fieldLabel: row.catalog_fields.field_label,
+      fieldType: row.catalog_fields.field_type,
+      unit: row.catalog_fields.unit,
+      appliesTo: row.catalog_fields.applies_to,
+      refTable: row.catalog_fields.ref_table,
+      showInFilter: row.catalog_fields.show_in_filter,
+      showInDetail: row.catalog_fields.show_in_detail,
+      showInPriceList: row.catalog_fields.show_in_price_list,
+      isRequired: row.catalog_fields.is_required,
+      sortOrder: row.catalog_fields.sort_order,
     } : undefined,
     option: row.catalog_field_options ? {
       id: row.catalog_field_options.id,
@@ -94,7 +94,7 @@ export async function getVariants(
       catalog_variant_images(id, variant_id, storage_path, alt_text, is_primary, sort_order),
       catalog_variant_field_values(
         id, variant_id, field_id, option_id, value_text, value_number,
-        catalog_category_fields(id, field_key, field_label, field_type, unit, applies_to),
+        catalog_fields(id, field_key, field_label, field_type, unit, applies_to),
         catalog_field_options(id, value, label)
       )
     `)
@@ -190,7 +190,7 @@ export async function saveVariant(
       catalog_variant_images(id, variant_id, storage_path, alt_text, is_primary, sort_order),
       catalog_variant_field_values(
         id, variant_id, field_id, option_id, value_text, value_number,
-        catalog_category_fields(id, field_key, field_label, field_type, unit, applies_to),
+        catalog_fields(id, field_key, field_label, field_type, unit, applies_to),
         catalog_field_options(id, value, label)
       )
     `)

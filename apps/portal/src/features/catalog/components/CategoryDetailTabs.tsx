@@ -11,13 +11,16 @@ import { toast } from "sonner";
 import {
   saveCategory,
   deleteCategory,
-  saveCategoryField,
-  deleteCategoryField,
+  getAllFields,
+  saveField,
+  saveFieldAssignment,
+  removeFieldAssignment,
   saveFieldOption,
   deleteFieldOption,
 } from "../actions";
 import type {
   CatalogCategory,
+  CatalogField,
   CategoryField,
   FieldOption,
   CatalogProduct,
@@ -125,149 +128,188 @@ function FieldsTab({
   fields: CategoryField[];
   onFieldsChange: (fields: CategoryField[]) => void;
 }) {
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showAssignForm, setShowAssignForm] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [allGlobalFields, setAllGlobalFields] = useState<CatalogField[]>([]);
+  const [selectedFieldId, setSelectedFieldId] = useState("");
+  const [assignAppliesTo, setAssignAppliesTo] = useState<AppliesTo>("variant");
+  const [assignFilter, setAssignFilter] = useState(false);
+  const [assignDetail, setAssignDetail] = useState(true);
+  const [assignPriceList, setAssignPriceList] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // New field form state
+  // For creating new global fields inline
+  const [showNewField, setShowNewField] = useState(false);
   const [newKey, setNewKey] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [newType, setNewType] = useState<FieldType>("text");
-  const [newAppliesTo, setNewAppliesTo] = useState<AppliesTo>("variant");
   const [newUnit, setNewUnit] = useState("");
-  const [newFilter, setNewFilter] = useState(false);
-  const [newDetail, setNewDetail] = useState(true);
-  const [newPriceList, setNewPriceList] = useState(false);
-  const [saving, setSaving] = useState(false);
 
-  const resetForm = () => {
-    setNewKey(""); setNewLabel(""); setNewType("text"); setNewAppliesTo("variant");
-    setNewUnit(""); setNewFilter(false); setNewDetail(true); setNewPriceList(false);
-    setShowForm(false);
+  const loadGlobalFields = async () => {
+    const result = await getAllFields();
+    if (result.success) setAllGlobalFields(result.data);
   };
 
-  const handleSaveField = async () => {
-    if (!newKey.trim() || !newLabel.trim()) {
-      toast.error("Key and label are required");
-      return;
-    }
+  const handleOpenAssign = async () => {
+    await loadGlobalFields();
+    setShowAssignForm(true);
+  };
+
+  const handleAssign = async () => {
+    if (!selectedFieldId) { toast.error("Select a field"); return; }
     setSaving(true);
-    const result = await saveCategoryField({
-      id: editingId ?? undefined,
+    const result = await saveFieldAssignment({
       categoryId,
+      fieldId: selectedFieldId,
+      appliesTo: assignAppliesTo,
+      showInFilter: assignFilter,
+      showInDetail: assignDetail,
+      showInPriceList: assignPriceList,
+      sortOrder: fields.length,
+    });
+    setSaving(false);
+    if (result.success) {
+      toast.success("Field assigned");
+      setShowAssignForm(false);
+      setSelectedFieldId("");
+      // Reload to get full field data with options
+      const { getCategoryFields } = await import("../actions/fields");
+      const refreshed = await getCategoryFields(categoryId);
+      if (refreshed.success) onFieldsChange(refreshed.data);
+    } else {
+      toast.error(result.error);
+    }
+  };
+
+  const handleCreateAndAssign = async () => {
+    if (!newKey.trim() || !newLabel.trim()) { toast.error("Key and label required"); return; }
+    setSaving(true);
+    const fieldResult = await saveField({
       fieldKey: newKey.trim().toLowerCase().replace(/\s+/g, "_"),
       fieldLabel: newLabel.trim(),
       fieldType: newType,
-      appliesTo: newAppliesTo,
       unit: newUnit.trim() || null,
-      showInFilter: newFilter,
-      showInDetail: newDetail,
-      showInPriceList: newPriceList,
-      sortOrder: editingId ? undefined : fields.length,
+    });
+    if (!fieldResult.success) { setSaving(false); toast.error(fieldResult.error); return; }
+
+    const assignResult = await saveFieldAssignment({
+      categoryId,
+      fieldId: fieldResult.data.id,
+      appliesTo: assignAppliesTo,
+      showInFilter: assignFilter,
+      showInDetail: assignDetail,
+      showInPriceList: assignPriceList,
+      sortOrder: fields.length,
     });
     setSaving(false);
+    if (assignResult.success) {
+      toast.success("Field created and assigned");
+      setShowAssignForm(false);
+      setShowNewField(false);
+      setNewKey(""); setNewLabel(""); setNewType("text"); setNewUnit("");
+      const { getCategoryFields } = await import("../actions/fields");
+      const refreshed = await getCategoryFields(categoryId);
+      if (refreshed.success) onFieldsChange(refreshed.data);
+    } else {
+      toast.error(assignResult.error);
+    }
+  };
 
+  const handleRemoveAssignment = async (assignmentId: string) => {
+    if (!confirm("Remove this field from the category? The global field and its options remain intact.")) return;
+    const result = await removeFieldAssignment(assignmentId);
     if (result.success) {
-      toast.success(editingId ? "Field updated" : "Field created");
-      if (editingId) {
-        onFieldsChange(fields.map((f) => (f.id === editingId ? result.data : f)));
-      } else {
-        onFieldsChange([...fields, result.data]);
-      }
-      resetForm();
-      setEditingId(null);
+      toast.success("Field removed from category");
+      onFieldsChange(fields.filter((f) => f.assignmentId !== assignmentId));
     } else {
       toast.error(result.error);
     }
   };
 
-  const handleDeleteField = async (id: string) => {
-    if (!confirm("Delete this field and all its options? This cannot be undone.")) return;
-    const result = await deleteCategoryField(id);
-    if (result.success) {
-      toast.success("Field deleted");
-      onFieldsChange(fields.filter((f) => f.id !== id));
-    } else {
-      toast.error(result.error);
-    }
-  };
-
-  const startEdit = (field: CategoryField) => {
-    setEditingId(field.id);
-    setNewKey(field.fieldKey);
-    setNewLabel(field.fieldLabel);
-    setNewType(field.fieldType);
-    setNewAppliesTo(field.appliesTo);
-    setNewUnit(field.unit || "");
-    setNewFilter(field.showInFilter);
-    setNewDetail(field.showInDetail);
-    setNewPriceList(field.showInPriceList);
-    setShowForm(true);
-  };
+  const assignedFieldIds = new Set(fields.map((f) => f.id));
+  const availableFields = allGlobalFields.filter((f) => !assignedFieldIds.has(f.id));
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Define the attributes for products and variants in this category
+          Assign global fields to this category. Fields can be reused across categories.
         </p>
-        {!showForm && (
-          <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }}>
-            <Plus className="h-4 w-4 mr-1" /> Add Field
+        {!showAssignForm && (
+          <Button size="sm" onClick={handleOpenAssign}>
+            <Plus className="h-4 w-4 mr-1" /> Assign Field
           </Button>
         )}
       </div>
 
-      {showForm && (
+      {showAssignForm && (
         <div className="rounded-lg border bg-card p-5 space-y-4">
-          <h3 className="font-semibold">{editingId ? "Edit Field" : "New Field"}</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Key</label>
-              <Input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="wood_species" className="text-sm" />
+          <h3 className="font-semibold">Assign Field to Category</h3>
+
+          {!showNewField ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Select Field</label>
+                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={selectedFieldId} onChange={(e) => setSelectedFieldId(e.target.value)}>
+                    <option value="">— pick a field —</option>
+                    {availableFields.map((f) => <option key={f.id} value={f.id}>{f.fieldLabel} ({f.fieldKey})</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Applies To</label>
+                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={assignAppliesTo} onChange={(e) => setAssignAppliesTo(e.target.value as AppliesTo)}>
+                    <option value="product">Product</option>
+                    <option value="variant">Variant</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={assignFilter} onChange={(e) => setAssignFilter(e.target.checked)} /> Filter
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={assignDetail} onChange={(e) => setAssignDetail(e.target.checked)} /> Detail
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" checked={assignPriceList} onChange={(e) => setAssignPriceList(e.target.checked)} /> Price List
+                </label>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleAssign} disabled={saving || !selectedFieldId}>{saving ? "Assigning..." : "Assign"}</Button>
+                <Button size="sm" variant="outline" onClick={() => setShowNewField(true)}>Create New Field</Button>
+                <Button size="sm" variant="outline" onClick={() => setShowAssignForm(false)}>Cancel</Button>
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Label</label>
-              <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Species" className="text-sm" />
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">Create a new global field and assign it to this category</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Key</label>
+                  <Input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="wood_species" className="text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Label</label>
+                  <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Species" className="text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Type</label>
+                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={newType} onChange={(e) => setNewType(e.target.value as FieldType)}>
+                    {FIELD_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Unit</label>
+                  <Input value={newUnit} onChange={(e) => setNewUnit(e.target.value)} placeholder="mm" className="text-sm" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleCreateAndAssign} disabled={saving}>{saving ? "Creating..." : "Create & Assign"}</Button>
+                <Button size="sm" variant="outline" onClick={() => setShowNewField(false)}>Back to list</Button>
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Type</label>
-              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={newType} onChange={(e) => setNewType(e.target.value as FieldType)}>
-                {FIELD_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Applies To</label>
-              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={newAppliesTo} onChange={(e) => setNewAppliesTo(e.target.value as AppliesTo)}>
-                <option value="product">Product</option>
-                <option value="variant">Variant</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Unit (optional)</label>
-              <Input value={newUnit} onChange={(e) => setNewUnit(e.target.value)} placeholder="mm" className="text-sm" />
-            </div>
-            <label className="flex items-center gap-2 text-sm cursor-pointer pt-5">
-              <input type="checkbox" checked={newFilter} onChange={(e) => setNewFilter(e.target.checked)} />
-              Show in Filter
-            </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer pt-5">
-              <input type="checkbox" checked={newDetail} onChange={(e) => setNewDetail(e.target.checked)} />
-              Show in Detail
-            </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer pt-5">
-              <input type="checkbox" checked={newPriceList} onChange={(e) => setNewPriceList(e.target.checked)} />
-              Show in Price List
-            </label>
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handleSaveField} disabled={saving}>
-              {saving ? "Saving..." : editingId ? "Update" : "Add"}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => { resetForm(); setEditingId(null); }}>Cancel</Button>
-          </div>
+          )}
         </div>
       )}
 
@@ -306,10 +348,7 @@ function FieldsTab({
                     {expandedId === field.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </Button>
                 )}
-                <Button variant="ghost" size="icon" onClick={() => startEdit(field)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => handleDeleteField(field.id)}>
+                <Button variant="ghost" size="icon" onClick={() => handleRemoveAssignment(field.assignmentId)} title="Remove from category">
                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                 </Button>
               </div>

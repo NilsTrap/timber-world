@@ -5,32 +5,14 @@ import { getSession, isAdmin } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type {
   ActionResult,
+  CatalogField,
   CategoryField,
   FieldOption,
+  FieldAssignment,
   SaveFieldInput,
+  SaveFieldAssignmentInput,
   SaveFieldOptionInput,
 } from "../types";
-
-function toField(row: any): CategoryField {
-  return {
-    id: row.id,
-    categoryId: row.category_id,
-    fieldKey: row.field_key,
-    fieldLabel: row.field_label,
-    fieldType: row.field_type,
-    unit: row.unit,
-    appliesTo: row.applies_to,
-    refTable: row.ref_table,
-    showInFilter: row.show_in_filter,
-    showInDetail: row.show_in_detail,
-    showInPriceList: row.show_in_price_list,
-    isRequired: row.is_required,
-    sortOrder: row.sort_order,
-    options: row.catalog_field_options
-      ? row.catalog_field_options.map(toOption)
-      : undefined,
-  };
-}
 
 function toOption(row: any): FieldOption {
   return {
@@ -46,46 +28,125 @@ function toOption(row: any): FieldOption {
   };
 }
 
-export async function getCategoryFields(
-  categoryId: string
-): Promise<ActionResult<CategoryField[]>> {
-  const session = await getSession();
-  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
-
-  const supabase = await createClient();
-
-  const { data, error } = await (supabase as any)
-    .from("catalog_category_fields")
-    .select("*, catalog_field_options(*)")
-    .eq("category_id", categoryId)
-    .order("sort_order", { ascending: true });
-
-  if (error) {
-    console.error("getCategoryFields error:", error);
-    return { success: false, error: error.message };
-  }
-
-  return { success: true, data: (data || []).map(toField) };
+function toGlobalField(row: any): CatalogField {
+  return {
+    id: row.id,
+    fieldKey: row.field_key,
+    fieldLabel: row.field_label,
+    fieldType: row.field_type,
+    unit: row.unit,
+    refTable: row.ref_table,
+    options: row.catalog_field_options?.map(toOption),
+  };
 }
 
-export async function saveCategoryField(
-  input: SaveFieldInput
-): Promise<ActionResult<CategoryField>> {
+function toCategoryField(assignmentRow: any): CategoryField {
+  const f = assignmentRow.catalog_fields;
+  return {
+    id: f.id,
+    assignmentId: assignmentRow.id,
+    fieldKey: f.field_key,
+    fieldLabel: f.field_label,
+    fieldType: f.field_type,
+    unit: f.unit,
+    refTable: f.ref_table,
+    appliesTo: assignmentRow.applies_to,
+    showInFilter: assignmentRow.show_in_filter,
+    showInDetail: assignmentRow.show_in_detail,
+    showInPriceList: assignmentRow.show_in_price_list,
+    isRequired: assignmentRow.is_required,
+    sortOrder: assignmentRow.sort_order,
+    options: f.catalog_field_options?.map(toOption),
+  };
+}
+
+// ---- Global Fields ----
+
+export async function getAllFields(): Promise<ActionResult<CatalogField[]>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
 
   const supabase = await createClient();
+  const { data, error } = await (supabase as any)
+    .from("catalog_fields")
+    .select("*, catalog_field_options(*)")
+    .order("field_label", { ascending: true });
 
+  if (error) return { success: false, error: error.message };
+  return { success: true, data: (data || []).map(toGlobalField) };
+}
+
+export async function saveField(input: SaveFieldInput): Promise<ActionResult<CatalogField>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const supabase = await createClient();
   const payload = {
-    category_id: input.categoryId,
     field_key: input.fieldKey,
     field_label: input.fieldLabel,
     field_type: input.fieldType,
     unit: input.unit ?? null,
-    applies_to: input.appliesTo,
     ref_table: input.refTable ?? null,
+  };
+
+  let result;
+  if (input.id) {
+    result = await (supabase as any).from("catalog_fields").update(payload).eq("id", input.id).select("*, catalog_field_options(*)").single();
+  } else {
+    result = await (supabase as any).from("catalog_fields").insert(payload).select("*, catalog_field_options(*)").single();
+  }
+
+  if (result.error) {
+    if (result.error.code === "23505") return { success: false, error: `Field key "${input.fieldKey}" already exists`, code: "DUPLICATE" };
+    return { success: false, error: result.error.message };
+  }
+
+  revalidatePath("/admin/catalog");
+  return { success: true, data: toGlobalField(result.data) };
+}
+
+export async function deleteField(id: string): Promise<ActionResult<null>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const supabase = await createClient();
+  const { error } = await (supabase as any).from("catalog_fields").delete().eq("id", id);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/admin/catalog");
+  return { success: true, data: null };
+}
+
+// ---- Category Field Assignments ----
+
+export async function getCategoryFields(categoryId: string): Promise<ActionResult<CategoryField[]>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const supabase = await createClient();
+  const { data, error } = await (supabase as any)
+    .from("catalog_category_field_assignments")
+    .select("*, catalog_fields(*, catalog_field_options(*))")
+    .eq("category_id", categoryId)
+    .order("sort_order", { ascending: true });
+
+  if (error) return { success: false, error: error.message };
+  return { success: true, data: (data || []).map(toCategoryField) };
+}
+
+export async function saveFieldAssignment(input: SaveFieldAssignmentInput): Promise<ActionResult<FieldAssignment>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const supabase = await createClient();
+  const payload = {
+    category_id: input.categoryId,
+    field_id: input.fieldId,
+    applies_to: input.appliesTo,
     show_in_filter: input.showInFilter ?? false,
     show_in_detail: input.showInDetail ?? true,
     show_in_price_list: input.showInPriceList ?? false,
@@ -95,61 +156,50 @@ export async function saveCategoryField(
 
   let result;
   if (input.id) {
-    result = await (supabase as any)
-      .from("catalog_category_fields")
-      .update(payload)
-      .eq("id", input.id)
-      .select("*, catalog_field_options(*)")
-      .single();
+    result = await (supabase as any).from("catalog_category_field_assignments").update(payload).eq("id", input.id).select().single();
   } else {
-    result = await (supabase as any)
-      .from("catalog_category_fields")
-      .insert(payload)
-      .select("*, catalog_field_options(*)")
-      .single();
+    result = await (supabase as any).from("catalog_category_field_assignments").insert(payload).select().single();
   }
 
   if (result.error) {
-    console.error("saveCategoryField error:", result.error);
-    if (result.error.code === "23505") {
-      return { success: false, error: `Field key "${input.fieldKey}" already exists in this category`, code: "DUPLICATE" };
-    }
+    if (result.error.code === "23505") return { success: false, error: "This field is already assigned to this category", code: "DUPLICATE" };
     return { success: false, error: result.error.message };
   }
 
   revalidatePath("/admin/catalog");
-  return { success: true, data: toField(result.data) };
+  return { success: true, data: {
+    id: result.data.id,
+    categoryId: result.data.category_id,
+    fieldId: result.data.field_id,
+    appliesTo: result.data.applies_to,
+    showInFilter: result.data.show_in_filter,
+    showInDetail: result.data.show_in_detail,
+    showInPriceList: result.data.show_in_price_list,
+    isRequired: result.data.is_required,
+    sortOrder: result.data.sort_order,
+  }};
 }
 
-export async function deleteCategoryField(id: string): Promise<ActionResult<null>> {
+export async function removeFieldAssignment(id: string): Promise<ActionResult<null>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
 
   const supabase = await createClient();
-  const { error } = await (supabase as any)
-    .from("catalog_category_fields")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    console.error("deleteCategoryField error:", error);
-    return { success: false, error: error.message };
-  }
-
+  const { error } = await (supabase as any).from("catalog_category_field_assignments").delete().eq("id", id);
+  if (error) return { success: false, error: error.message };
   revalidatePath("/admin/catalog");
   return { success: true, data: null };
 }
 
-export async function saveFieldOption(
-  input: SaveFieldOptionInput
-): Promise<ActionResult<FieldOption>> {
+// ---- Field Options ----
+
+export async function saveFieldOption(input: SaveFieldOptionInput): Promise<ActionResult<FieldOption>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
 
   const supabase = await createClient();
-
   const payload = {
     field_id: input.fieldId,
     ref_value_id: input.refValueId ?? null,
@@ -162,25 +212,13 @@ export async function saveFieldOption(
 
   let result;
   if (input.id) {
-    result = await (supabase as any)
-      .from("catalog_field_options")
-      .update(payload)
-      .eq("id", input.id)
-      .select()
-      .single();
+    result = await (supabase as any).from("catalog_field_options").update(payload).eq("id", input.id).select().single();
   } else {
-    result = await (supabase as any)
-      .from("catalog_field_options")
-      .insert(payload)
-      .select()
-      .single();
+    result = await (supabase as any).from("catalog_field_options").insert(payload).select().single();
   }
 
   if (result.error) {
-    console.error("saveFieldOption error:", result.error);
-    if (result.error.code === "23505") {
-      return { success: false, error: `Option value "${input.value}" already exists for this field`, code: "DUPLICATE" };
-    }
+    if (result.error.code === "23505") return { success: false, error: `Option "${input.value}" already exists`, code: "DUPLICATE" };
     return { success: false, error: result.error.message };
   }
 
@@ -194,16 +232,8 @@ export async function deleteFieldOption(id: string): Promise<ActionResult<null>>
   if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
 
   const supabase = await createClient();
-  const { error } = await (supabase as any)
-    .from("catalog_field_options")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    console.error("deleteFieldOption error:", error);
-    return { success: false, error: error.message };
-  }
-
+  const { error } = await (supabase as any).from("catalog_field_options").delete().eq("id", id);
+  if (error) return { success: false, error: error.message };
   revalidatePath("/admin/catalog");
   return { success: true, data: null };
 }
