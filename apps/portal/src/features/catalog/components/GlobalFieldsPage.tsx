@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, ChevronDown, ChevronRight, Pencil } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Pencil, List, Hash, Type, ToggleLeft, Search } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
 import { saveField, deleteField, saveFieldOption, deleteFieldOption } from "../actions/fields";
@@ -15,8 +15,19 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "boolean", label: "Yes/No" },
 ];
 
+const TYPE_ICON: Record<string, typeof List> = {
+  select: List,
+  number: Hash,
+  text: Type,
+  boolean: ToggleLeft,
+};
+
+interface FieldWithAssignments extends CatalogField {
+  assignments?: { categoryId: string; categoryName: string; appliesTo: string }[];
+}
+
 interface Props {
-  fields: CatalogField[];
+  fields: FieldWithAssignments[];
 }
 
 export function GlobalFieldsPage({ fields: initialFields }: Props) {
@@ -25,12 +36,27 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState<string>("all");
+  const [filterAppliesTo, setFilterAppliesTo] = useState<string>("all");
 
   const [key, setKey] = useState("");
   const [label, setLabel] = useState("");
   const [type, setType] = useState<FieldType>("text");
   const [unit, setUnit] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const filteredFields = useMemo(() => {
+    return fields.filter((f) => {
+      if (search && !f.fieldLabel.toLowerCase().includes(search.toLowerCase()) && !f.fieldKey.toLowerCase().includes(search.toLowerCase())) return false;
+      if (filterType !== "all" && f.fieldType !== filterType) return false;
+      if (filterAppliesTo !== "all") {
+        const hasMatch = f.assignments?.some((a) => a.appliesTo === filterAppliesTo);
+        if (!hasMatch) return false;
+      }
+      return true;
+    });
+  }, [fields, search, filterType, filterAppliesTo]);
 
   const resetForm = () => {
     setKey(""); setLabel(""); setType("text"); setUnit("");
@@ -56,9 +82,9 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
     if (result.success) {
       toast.success(editingId ? "Field updated" : "Field created");
       if (editingId) {
-        setFields(fields.map((f) => f.id === editingId ? result.data : f));
+        setFields(fields.map((f) => f.id === editingId ? { ...result.data, assignments: (f as FieldWithAssignments).assignments } : f));
       } else {
-        setFields([...fields, result.data]);
+        setFields([...fields, { ...result.data, assignments: [] }]);
       }
       resetForm();
     } else {
@@ -89,6 +115,40 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
             <Plus className="h-4 w-4 mr-2" /> New Field
           </Button>
         )}
+      </div>
+
+      {/* Search & Filters */}
+      <div className="flex gap-3 items-center">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search fields..."
+            className="pl-9"
+          />
+        </div>
+        <select
+          className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+        >
+          <option value="all">All types</option>
+          <option value="select">Select</option>
+          <option value="number">Number</option>
+          <option value="text">Text</option>
+          <option value="boolean">Boolean</option>
+        </select>
+        <select
+          className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+          value={filterAppliesTo}
+          onChange={(e) => setFilterAppliesTo(e.target.value)}
+        >
+          <option value="all">All levels</option>
+          <option value="product">Product-level</option>
+          <option value="variant">Variant-level</option>
+        </select>
+        <span className="text-sm text-muted-foreground">{filteredFields.length} of {fields.length}</span>
       </div>
 
       {showForm && (
@@ -122,47 +182,63 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
       )}
 
       <div className="space-y-2">
-        {fields.map((field) => (
-          <div key={field.id}>
-            <div className="rounded-lg border bg-card px-4 py-3 flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">{field.fieldLabel}</span>
-                  <span className="text-xs text-muted-foreground font-mono">{field.fieldKey}</span>
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-muted">{field.fieldType}</span>
-                  {field.unit && <span className="text-xs text-muted-foreground">({field.unit})</span>}
+        {filteredFields.map((field) => {
+          const Icon = TYPE_ICON[field.fieldType] || Type;
+          const fa = field as FieldWithAssignments;
+          return (
+            <div key={field.id}>
+              <div className="rounded-lg border bg-card px-4 py-3 flex items-center gap-3">
+                <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center shrink-0">
+                  <Icon className="h-4 w-4 text-muted-foreground" />
                 </div>
-                {field.options && field.options.length > 0 && (
-                  <div className="text-xs text-muted-foreground mt-0.5">{field.options.length} options</div>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                {field.fieldType === "select" && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedId(expandedId === field.id ? null : field.id)}>
-                    {expandedId === field.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">{field.fieldLabel}</span>
+                    <span className="text-xs text-muted-foreground font-mono">{field.fieldKey}</span>
+                    {field.unit && <span className="text-xs text-muted-foreground">({field.unit})</span>}
+                  </div>
+                  <div className="flex gap-2 mt-0.5 flex-wrap">
+                    {fa.assignments && fa.assignments.length > 0 ? (
+                      fa.assignments.map((a, i) => (
+                        <span key={i} className={`text-xs px-1.5 py-0.5 rounded ${a.appliesTo === "product" ? "bg-blue-50 text-blue-700" : "bg-green-50 text-green-700"}`}>
+                          {a.categoryName} ({a.appliesTo})
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">Not assigned to any category</span>
+                    )}
+                    {field.options && field.options.length > 0 && (
+                      <span className="text-xs text-muted-foreground">{field.options.length} options</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  {field.fieldType === "select" && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedId(expandedId === field.id ? null : field.id)}>
+                      {expandedId === field.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(field)}>
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                )}
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(field)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(field.id)}>
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(field.id)}>
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
+                </div>
               </div>
-            </div>
 
-            {expandedId === field.id && field.fieldType === "select" && (
-              <FieldOptionsPanel
-                field={field}
-                onUpdate={(updated) => setFields(fields.map((f) => f.id === updated.id ? updated : f))}
-              />
-            )}
-          </div>
-        ))}
-        {fields.length === 0 && !showForm && (
+              {expandedId === field.id && field.fieldType === "select" && (
+                <FieldOptionsPanel
+                  field={field}
+                  onUpdate={(updated) => setFields(fields.map((f) => f.id === updated.id ? { ...updated, assignments: (f as FieldWithAssignments).assignments } : f))}
+                />
+              )}
+            </div>
+          );
+        })}
+        {filteredFields.length === 0 && (
           <div className="rounded-lg border bg-card p-8 text-center">
-            <p className="text-muted-foreground mb-3">No fields defined yet.</p>
-            <Button size="sm" onClick={() => setShowForm(true)}><Plus className="h-4 w-4 mr-1" /> Create First Field</Button>
+            <p className="text-muted-foreground">{search || filterType !== "all" || filterAppliesTo !== "all" ? "No fields match your filters." : "No fields defined yet."}</p>
           </div>
         )}
       </div>
@@ -212,7 +288,7 @@ function FieldOptionsPanel({ field, onUpdate }: { field: CatalogField; onUpdate:
   };
 
   return (
-    <div className="ml-6 mt-1 mb-2 rounded-lg border bg-muted/30 p-4 space-y-3">
+    <div className="ml-11 mt-1 mb-2 rounded-lg border bg-muted/30 p-4 space-y-3">
       <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Options for &quot;{field.fieldLabel}&quot;
       </h4>

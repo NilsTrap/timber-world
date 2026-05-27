@@ -70,11 +70,22 @@ export async function getAllFields(): Promise<ActionResult<CatalogField[]>> {
   const supabase = await createClient();
   const { data, error } = await (supabase as any)
     .from("catalog_fields")
-    .select("*, catalog_field_options(*)")
+    .select("*, catalog_field_options(*), catalog_category_field_assignments(id, applies_to, catalog_categories(id, name))")
     .order("field_label", { ascending: true });
 
   if (error) return { success: false, error: error.message };
-  return { success: true, data: (data || []).map(toGlobalField) };
+
+  const fields = (data || []).map((row: any) => {
+    const base = toGlobalField(row);
+    const assignments = (row.catalog_category_field_assignments || []).map((a: any) => ({
+      categoryId: a.catalog_categories?.id,
+      categoryName: a.catalog_categories?.name,
+      appliesTo: a.applies_to as string,
+    }));
+    return { ...base, assignments };
+  });
+
+  return { success: true, data: fields };
 }
 
 export async function saveField(input: SaveFieldInput): Promise<ActionResult<CatalogField>> {
