@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, Trash2, Pencil, X, Copy } from "lucide-react";
@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { saveProduct, duplicateProduct, deleteProduct } from "../actions/products";
 import { getVariants, saveVariant, deleteVariant } from "../actions/variants";
 import { uploadProductImage, deleteProductImage, uploadVariantImage, deleteVariantImage } from "../actions/images";
+import { getVariantPackages, saveVariantPackage, deleteVariantPackage, type VariantPackage } from "../actions/packaging";
 import type {
   CatalogProduct,
   CatalogVariant,
@@ -292,6 +293,7 @@ export function ProductDetailContent({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
+                  <th className="w-10 px-3 py-2"></th>
                   <th className="text-left px-3 py-2 font-medium">Thickness</th>
                   <th className="text-left px-3 py-2 font-medium">Width</th>
                   <th className="text-left px-3 py-2 font-medium">Length</th>
@@ -306,6 +308,17 @@ export function ProductDetailContent({
                   const mainPrice = v[priceKey] as number | null;
                   return (
                     <tr key={v.id} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="px-3 py-2">
+                        {v.images && v.images.length > 0 && v.images[0] ? (
+                          <img
+                            src={`https://fyzrtqsnmnizoxgcqsjc.supabase.co/storage/v1/object/public/catalog/${v.images[0]!.storagePath}`}
+                            alt=""
+                            className="w-8 h-8 rounded object-cover"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded bg-muted" />
+                        )}
+                      </td>
                       <td className="px-3 py-2">{v.thicknessMm ? `${v.thicknessMm}mm` : "—"}</td>
                       <td className="px-3 py-2">{v.widthMm ? `${v.widthMm}mm` : "—"}</td>
                       <td className="px-3 py-2">
@@ -547,6 +560,11 @@ function VariantForm({
         <VariantImageSection variantId={variant.id} initialImages={variant.images || []} />
       )}
 
+      {/* Packaging (only for existing variants) */}
+      {variant && (
+        <VariantPackagingSection variantId={variant.id} />
+      )}
+
       <div className="flex gap-2">
         <Button size="sm" onClick={handleSave} disabled={saving}>
           {saving ? "Saving..." : variant ? "Update Variant" : "Create Variant"}
@@ -614,6 +632,110 @@ function VariantImageSection({ variantId, initialImages }: { variantId: string; 
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VariantPackagingSection({ variantId }: { variantId: string }) {
+  const [packages, setPackages] = useState<VariantPackage[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [pkgName, setPkgName] = useState("Standard Pack");
+  const [pieces, setPieces] = useState("");
+  const [areaM2, setAreaM2] = useState("");
+  const [priceCents, setPriceCents] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getVariantPackages(variantId).then((r) => {
+      if (r.success) setPackages(r.data);
+      setLoaded(true);
+    });
+  }, [variantId]);
+
+  const handleAdd = async () => {
+    if (!pieces || parseInt(pieces) <= 0) { toast.error("Pieces required"); return; }
+    setSaving(true);
+    const result = await saveVariantPackage({
+      variantId,
+      name: pkgName.trim() || "Standard Pack",
+      piecesPerPackage: parseInt(pieces),
+      areaM2: areaM2 ? parseFloat(areaM2) : null,
+      packagePriceCents: priceCents ? Math.round(parseFloat(priceCents) * 100) : null,
+      isDefault: packages.length === 0,
+    });
+    setSaving(false);
+    if (result.success) {
+      setPackages([...packages, result.data]);
+      setShowForm(false);
+      setPkgName("Standard Pack"); setPieces(""); setAreaM2(""); setPriceCents("");
+      toast.success("Package added");
+    } else {
+      toast.error(result.error);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const result = await deleteVariantPackage(id);
+    if (result.success) {
+      setPackages(packages.filter((p) => p.id !== id));
+      toast.success("Package removed");
+    }
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Packaging ({packages.length})</h4>
+        {!showForm && (
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowForm(true)}>
+            <Plus className="h-3 w-3 mr-1" /> Add Package
+          </Button>
+        )}
+      </div>
+
+      {packages.map((pkg) => (
+        <div key={pkg.id} className="flex items-center gap-3 text-sm rounded border px-3 py-2">
+          <span className="font-medium">{pkg.name}</span>
+          <span className="text-muted-foreground">{pkg.piecesPerPackage} pcs</span>
+          {pkg.areaM2 && <span className="text-muted-foreground">{pkg.areaM2} m²</span>}
+          {pkg.packagePriceCents != null && <span className="text-green-700 font-medium">£{(pkg.packagePriceCents / 100).toFixed(2)}</span>}
+          {pkg.isDefault && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">Default</span>}
+          <div className="flex-1" />
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(pkg.id)}>
+            <Trash2 className="h-3 w-3 text-destructive" />
+          </Button>
+        </div>
+      ))}
+
+      {showForm && (
+        <div className="rounded border bg-muted/30 p-3 space-y-2">
+          <div className="grid grid-cols-4 gap-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Name</label>
+              <Input value={pkgName} onChange={(e) => setPkgName(e.target.value)} className="h-8 text-xs" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Pieces per pack</label>
+              <Input type="number" value={pieces} onChange={(e) => setPieces(e.target.value)} className="h-8 text-xs" placeholder="10" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Area (m²)</label>
+              <Input type="number" step="0.01" value={areaM2} onChange={(e) => setAreaM2(e.target.value)} className="h-8 text-xs" placeholder="Auto or manual" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Price (£)</label>
+              <Input type="number" step="0.01" value={priceCents} onChange={(e) => setPriceCents(e.target.value)} className="h-8 text-xs" placeholder="Auto or manual" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={saving}>{saving ? "Adding..." : "Add"}</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowForm(false)}>Cancel</Button>
+          </div>
         </div>
       )}
     </div>

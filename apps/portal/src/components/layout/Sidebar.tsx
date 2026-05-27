@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { Button } from "@timber/ui";
@@ -24,6 +24,8 @@ export interface NavItem {
   iconName: IconName;
   /** Optional badge count to display */
   badge?: number;
+  /** Sub-navigation items (shown when parent is active) */
+  children?: { href: string; label: string }[];
 }
 
 interface SidebarProps {
@@ -164,6 +166,9 @@ export function Sidebar({
                 isCollapsed={isCollapsed}
                 badge={item.href === "/shipments" ? shipmentBadge : item.badge}
               />
+              {item.children && !isCollapsed && (
+                <SidebarChildren parentHref={item.href} children={item.children} />
+              )}
             </li>
           ))}
         </ul>
@@ -213,5 +218,37 @@ export function Sidebar({
         </Button>
       </div>
     </aside>
+  );
+}
+
+function SidebarChildren({ parentHref, children }: { parentHref: string; children: { href: string; label: string }[] }) {
+  const pathname = usePathname();
+  const isParentActive = pathname.startsWith(parentHref);
+
+  if (!isParentActive) return null;
+
+  return (
+    <ul className="ml-8 mt-0.5 space-y-0.5">
+      {children.map((child) => {
+        const isActive = child.href === parentHref
+          ? pathname === parentHref
+          : pathname.startsWith(child.href);
+        return (
+          <li key={child.href}>
+            <Link
+              href={child.href}
+              className={cn(
+                "block px-3 py-1.5 text-xs rounded-md transition-colors",
+                isActive
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              )}
+            >
+              {child.label}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
