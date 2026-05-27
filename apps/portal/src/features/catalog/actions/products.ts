@@ -86,7 +86,7 @@ export async function getProducts(
       catalog_product_images(id, storage_path, is_primary, sort_order),
       catalog_product_field_values(
         id, product_id, field_id, option_id, value_text, value_number,
-        catalog_fields(id, field_key, field_label, field_type, unit, applies_to),
+        catalog_fields(id, field_key, field_label, field_type, unit),
         catalog_field_options(id, value, label)
       )
     `)
@@ -118,7 +118,7 @@ export async function getProduct(
       catalog_product_images(id, product_id, storage_path, alt_text, is_primary, sort_order),
       catalog_product_field_values(
         id, product_id, field_id, option_id, value_text, value_number,
-        catalog_fields(id, category_id, field_key, field_label, field_type, unit, applies_to, ref_table, show_in_filter, show_in_detail, show_in_price_list, is_required, sort_order),
+        catalog_fields(id, field_key, field_label, field_type, unit, ref_table),
         catalog_field_options(id, field_id, ref_value_id, value, label, description, description_image_path, sort_order, is_active)
       )
     `)

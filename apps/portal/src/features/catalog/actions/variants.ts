@@ -87,7 +87,7 @@ export async function getVariants(
       catalog_variant_images(id, variant_id, storage_path, alt_text, is_primary, sort_order),
       catalog_variant_field_values(
         id, variant_id, field_id, option_id, value_text, value_number,
-        catalog_fields(id, field_key, field_label, field_type, unit, applies_to),
+        catalog_fields(id, field_key, field_label, field_type, unit),
         catalog_field_options(id, value, label)
       )
     `)
@@ -183,7 +183,7 @@ export async function saveVariant(
       catalog_variant_images(id, variant_id, storage_path, alt_text, is_primary, sort_order),
       catalog_variant_field_values(
         id, variant_id, field_id, option_id, value_text, value_number,
-        catalog_fields(id, field_key, field_label, field_type, unit, applies_to),
+        catalog_fields(id, field_key, field_label, field_type, unit),
         catalog_field_options(id, value, label)
       )
     `)
