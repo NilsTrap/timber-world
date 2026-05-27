@@ -49,18 +49,11 @@ function toFieldValue(row: any): ProductFieldValue {
     valueNumber: row.value_number,
     field: row.catalog_fields ? {
       id: row.catalog_fields.id,
-      categoryId: row.catalog_fields.category_id,
       fieldKey: row.catalog_fields.field_key,
       fieldLabel: row.catalog_fields.field_label,
       fieldType: row.catalog_fields.field_type,
       unit: row.catalog_fields.unit,
-      appliesTo: row.catalog_fields.applies_to,
       refTable: row.catalog_fields.ref_table,
-      showInFilter: row.catalog_fields.show_in_filter,
-      showInDetail: row.catalog_fields.show_in_detail,
-      showInPriceList: row.catalog_fields.show_in_price_list,
-      isRequired: row.catalog_fields.is_required,
-      sortOrder: row.catalog_fields.sort_order,
     } : undefined,
     option: row.catalog_field_options ? {
       id: row.catalog_field_options.id,

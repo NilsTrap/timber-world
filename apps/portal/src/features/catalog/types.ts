@@ -105,7 +105,7 @@ export interface ProductFieldValue {
   optionId: string | null;
   valueText: string | null;
   valueNumber: number | null;
-  field?: CategoryField;
+  field?: CatalogField;
   option?: FieldOption;
 }
 
@@ -147,7 +147,7 @@ export interface VariantFieldValue {
   optionId: string | null;
   valueText: string | null;
   valueNumber: number | null;
-  field?: CategoryField;
+  field?: CatalogField;
   option?: FieldOption;
 }
 
