@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import { Button } from "@timber/ui";
 import { getOrder } from "../actions/getOrder";
 import { getOrderPackages } from "../actions/getOrderPackages";
 import { getStaircaseCodes } from "../actions/getStaircaseCodes";
@@ -163,22 +164,11 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
   return (
     <div className="space-y-6">
-      {/* Back link */}
-      <Link
-        href="/orders"
-        onClick={() => sessionStorage.removeItem(ORDER_LAST_ENTRY_KEY)}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to orders
-      </Link>
-
-      {/* Header — title + stacked meta on the left, status badge + thumbnail on the right */}
+      {/* Header — back button + title + stacked meta on the left, status badge + thumbnail on the right */}
       {(() => {
         const thumbnailCategory = tab === "list" ? "customer" : "production";
         const thumbnailFile = orderFiles.find((f) => f.isThumbnail && f.category === thumbnailCategory);
         const isPdf = thumbnailFile && (thumbnailFile.mimeType === "application/pdf" || thumbnailFile.fileName.toLowerCase().endsWith(".pdf"));
-        // Per-tab field visibility: customer info is hidden on production; producer is hidden on list.
         const showCustomer = tab !== "production";
         const showProducer = tab !== "list";
         const metaRows: Array<{ label: string; value: string }> = [];
@@ -198,7 +188,15 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
         return (
           <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-start">
             <div className="flex-1 min-w-0">
-              <h1 className="text-3xl font-semibold tracking-tight">{order.name}</h1>
+              <div className="flex items-center gap-4">
+                <Button variant="ghost" size="icon" asChild className="shrink-0">
+                  <Link href="/orders" onClick={() => sessionStorage.removeItem(ORDER_LAST_ENTRY_KEY)}>
+                    <ArrowLeft className="h-4 w-4" />
+                    <span className="sr-only">Back to orders</span>
+                  </Link>
+                </Button>
+                <h1 className="text-3xl font-semibold tracking-tight">{order.name}</h1>
+              </div>
               <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
                 {metaRows.map((row) => (
                   <div key={row.label} className="contents">

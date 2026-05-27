@@ -2,11 +2,12 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { cn } from "../utils";
+import { Button } from "./button";
 
 /* =============================================================================
  * PageHeader
  *
- * Standard page header with back link, title, subtitle, and actions area.
+ * Standard page header with icon back-button beside the title, plus actions.
  * Use this at the top of every detail/edit page.
  *
  * @example
@@ -23,8 +24,10 @@ import { cn } from "../utils";
 interface PageHeaderProps {
   /** URL for the back link */
   backHref: string;
-  /** Label for the back link (default: "Back") */
+  /** Accessible label for the back button (default: "Back") */
   backLabel?: string;
+  /** Optional onClick handler (e.g. to clear sessionStorage) */
+  onBack?: () => void;
   /** Page title (h1) */
   title: string;
   /** Subtitle text below title */
@@ -41,6 +44,7 @@ interface PageHeaderProps {
 export function PageHeader({
   backHref,
   backLabel = "Back",
+  onBack,
   title,
   subtitle,
   extraInfo,
@@ -49,28 +53,26 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <div className={cn("space-y-6", className)}>
-      <Link
-        href={backHref}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        {backLabel}
-      </Link>
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
+    <div className={cn("flex items-center justify-between gap-4", className)}>
+      <div className="flex items-center gap-4 min-w-0">
+        <Button variant="ghost" size="icon" asChild className="shrink-0">
+          <Link href={backHref} onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" />
+            <span className="sr-only">{backLabel}</span>
+          </Link>
+        </Button>
+        <div className="min-w-0">
+          <h1 className="text-3xl font-semibold tracking-tight truncate">{title}</h1>
           {subtitle && <p className="text-muted-foreground">{subtitle}</p>}
           {extraInfo}
         </div>
-        {(actions || badge) && (
-          <div className="flex items-center gap-3">
-            {actions}
-            {badge}
-          </div>
-        )}
       </div>
+      {(actions || badge) && (
+        <div className="flex items-center gap-3 shrink-0">
+          {actions}
+          {badge}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,47 @@
+import type { Metadata } from "next";
+import { redirect, notFound } from "next/navigation";
+import { getSession, isAdmin } from "@/lib/auth";
+import { getCategory } from "@/features/catalog/actions/categories";
+import { getCategoryFields } from "@/features/catalog/actions/fields";
+import { getProduct } from "@/features/catalog/actions/products";
+import { getVariants } from "@/features/catalog/actions/variants";
+import { ProductDetailContent } from "@/features/catalog/components/ProductDetailContent";
+
+export const metadata: Metadata = { title: "Product Detail" };
+export const dynamic = "force-dynamic";
+
+interface Props {
+  params: Promise<{ categoryId: string; productId: string }>;
+}
+
+export default async function ProductDetailPage({ params }: Props) {
+  const { categoryId, productId } = await params;
+  const session = await getSession();
+  if (!session) redirect("/login");
+  if (!isAdmin(session)) redirect("/dashboard");
+
+  const [catResult, fieldsResult, productResult, variantsResult] = await Promise.all([
+    getCategory(categoryId),
+    getCategoryFields(categoryId),
+    getProduct(productId),
+    getVariants(productId),
+  ]);
+
+  if (!catResult.success || !productResult.success) notFound();
+
+  const allFields = fieldsResult.success ? fieldsResult.data : [];
+  const productFields = allFields.filter((f: any) => f.appliesTo === "product");
+  const variantFields = allFields.filter((f: any) => f.appliesTo === "variant");
+
+  return (
+    <ProductDetailContent
+      product={productResult.data}
+      categoryId={categoryId}
+      categoryName={catResult.data.name}
+      primaryUnit={catResult.data.primaryUnit}
+      productFields={productFields}
+      variantFields={variantFields}
+      variants={variantsResult.success ? variantsResult.data : []}
+    />
+  );
+}
