@@ -3,10 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Layers } from "lucide-react";
+import { Plus, Layers, Copy } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
-import { saveCategory } from "../actions/categories";
+import { saveCategory, duplicateCategory } from "../actions/categories";
 import type { CatalogCategory, PrimaryUnit } from "../types";
 
 const UNIT_LABELS: Record<PrimaryUnit, string> = {
@@ -134,10 +134,29 @@ export function CatalogPageContent({ categories }: Props) {
               {cat.description && (
                 <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{cat.description}</p>
               )}
-              <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
-                <span>{cat.fieldCount ?? 0} fields</span>
-                <span>{cat.productCount ?? 0} products</span>
-                <span>{UNIT_LABELS[cat.primaryUnit]}</span>
+              <div className="flex items-center justify-between mt-3">
+                <div className="flex gap-4 text-xs text-muted-foreground">
+                  <span>{cat.fieldCount ?? 0} fields</span>
+                  <span>{cat.productCount ?? 0} products</span>
+                  <span>{UNIT_LABELS[cat.primaryUnit]}</span>
+                </div>
+                <button
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const result = await duplicateCategory(cat.id);
+                    if (result.success) {
+                      toast.success(`Duplicated as "${result.data.name}"`);
+                      router.refresh();
+                    } else {
+                      toast.error(result.error);
+                    }
+                  }}
+                  className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  title="Duplicate category"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
               </div>
             </Link>
           ))}

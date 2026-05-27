@@ -207,6 +207,105 @@ export async function saveProduct(
   return getProduct(productId);
 }
 
+export async function duplicateProduct(id: string): Promise<ActionResult<CatalogProduct>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const supabase = await createClient();
+
+  const { data: source, error: fetchErr } = await (supabase as any)
+    .from("catalog_products")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (fetchErr || !source) return { success: false, error: "Product not found" };
+
+  const { data: newProd, error: insertErr } = await (supabase as any)
+    .from("catalog_products")
+    .insert({
+      category_id: source.category_id,
+      slug: source.slug + "-copy",
+      name: source.name + " (Copy)",
+      description: source.description,
+      is_active: false,
+      sort_order: source.sort_order + 1,
+    })
+    .select()
+    .single();
+
+  if (insertErr) return { success: false, error: insertErr.message };
+
+  const { data: fieldValues } = await (supabase as any)
+    .from("catalog_product_field_values")
+    .select("*")
+    .eq("product_id", id);
+
+  if (fieldValues && fieldValues.length > 0) {
+    const newFvs = fieldValues.map((fv: any) => ({
+      product_id: newProd.id,
+      field_id: fv.field_id,
+      option_id: fv.option_id,
+      value_text: fv.value_text,
+      value_number: fv.value_number,
+    }));
+    await (supabase as any).from("catalog_product_field_values").insert(newFvs);
+  }
+
+  const { data: variants } = await (supabase as any)
+    .from("catalog_variants")
+    .select("*")
+    .eq("product_id", id);
+
+  if (variants && variants.length > 0) {
+    for (const v of variants) {
+      const { data: newVariant } = await (supabase as any)
+        .from("catalog_variants")
+        .insert({
+          product_id: newProd.id,
+          sku: v.sku ? v.sku + "-copy" : null,
+          thickness_mm: v.thickness_mm,
+          width_mm: v.width_mm,
+          length_mm: v.length_mm,
+          length_min_mm: v.length_min_mm,
+          length_max_mm: v.length_max_mm,
+          price_m2_cents: v.price_m2_cents,
+          price_m3_cents: v.price_m3_cents,
+          price_piece_cents: v.price_piece_cents,
+          price_linear_m_cents: v.price_linear_m_cents,
+          currency: v.currency,
+          is_active: v.is_active,
+          sort_order: v.sort_order,
+        })
+        .select()
+        .single();
+
+      if (newVariant) {
+        const { data: vfvs } = await (supabase as any)
+          .from("catalog_variant_field_values")
+          .select("*")
+          .eq("variant_id", v.id);
+
+        if (vfvs && vfvs.length > 0) {
+          await (supabase as any).from("catalog_variant_field_values").insert(
+            vfvs.map((fv: any) => ({
+              variant_id: newVariant.id,
+              field_id: fv.field_id,
+              option_id: fv.option_id,
+              value_text: fv.value_text,
+              value_number: fv.value_number,
+            }))
+          );
+        }
+      }
+    }
+  }
+
+  revalidatePath("/admin/catalog");
+  return getProduct(newProd.id);
+}
+
 export async function deleteProduct(id: string): Promise<ActionResult<null>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };

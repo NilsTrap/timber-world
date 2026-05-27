@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Trash2, Pencil, X } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Pencil, X, Copy } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
-import { saveProduct, deleteProduct } from "../actions/products";
+import { saveProduct, duplicateProduct, deleteProduct } from "../actions/products";
 import { getVariants, saveVariant, deleteVariant } from "../actions/variants";
+import { uploadProductImage, deleteProductImage } from "../actions/images";
 import type {
   CatalogProduct,
   CatalogVariant,
@@ -46,6 +47,8 @@ export function ProductDetailContent({
   const [saving, setSaving] = useState(false);
   const [showVariantForm, setShowVariantForm] = useState(false);
   const [editingVariant, setEditingVariant] = useState<CatalogVariant | null>(null);
+  const [images, setImages] = useState(product.images || []);
+  const [uploading, setUploading] = useState(false);
 
   // Product-level field values state
   const [fieldValues, setFieldValues] = useState<Record<string, { optionId?: string; valueText?: string; valueNumber?: number }>>(
@@ -139,6 +142,17 @@ export function ProductDetailContent({
           <h1 className="text-3xl font-semibold tracking-tight">{product.name}</h1>
           <p className="text-muted-foreground">{categoryName}</p>
         </div>
+        <Button variant="outline" onClick={async () => {
+          const result = await duplicateProduct(product.id);
+          if (result.success) {
+            toast.success(`Duplicated as "${result.data.name}"`);
+            router.push(`/admin/catalog/${categoryId}/products/${result.data.id}`);
+          } else {
+            toast.error(result.error);
+          }
+        }}>
+          <Copy className="h-4 w-4 mr-2" /> Duplicate
+        </Button>
         <Button variant="outline" className="text-destructive" onClick={handleDeleteProduct}>
           <Trash2 className="h-4 w-4 mr-2" /> Delete
         </Button>
@@ -156,10 +170,15 @@ export function ProductDetailContent({
             <label className="text-sm font-medium">Slug</label>
             <Input value={slug} onChange={(e) => setSlug(e.target.value)} />
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Description</label>
-            <Input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Optional description" />
-          </div>
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Description</label>
+          <textarea
+            className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            placeholder="Product description — supports multiple lines"
+          />
         </div>
 
         {/* Dynamic product-level fields */}
@@ -182,6 +201,70 @@ export function ProductDetailContent({
         <Button onClick={handleSaveProduct} disabled={saving}>
           {saving ? "Saving..." : "Save Product"}
         </Button>
+      </div>
+
+      {/* Images */}
+      <div className="rounded-lg border bg-card p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Images ({images.length})</h2>
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setUploading(true);
+                const fd = new FormData();
+                fd.append("file", file);
+                const result = await uploadProductImage(product.id, fd);
+                setUploading(false);
+                if (result.success) {
+                  setImages([...images, result.data]);
+                  toast.success("Image uploaded");
+                } else {
+                  toast.error(result.error);
+                }
+                e.target.value = "";
+              }}
+            />
+            <Button size="sm" asChild disabled={uploading}>
+              <span><Plus className="h-4 w-4 mr-1" /> {uploading ? "Uploading..." : "Upload Image"}</span>
+            </Button>
+          </label>
+        </div>
+        {images.length > 0 ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {images.map((img) => {
+              const url = `https://fyzrtqsnmnizoxgcqsjc.supabase.co/storage/v1/object/public/catalog/${img.storagePath}`;
+              return (
+                <div key={img.id} className="relative group rounded-lg overflow-hidden border">
+                  <img src={url} alt={img.altText || ""} className="w-full aspect-square object-cover" />
+                  {img.isPrimary && (
+                    <span className="absolute top-1 left-1 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded">Primary</span>
+                  )}
+                  <button
+                    onClick={async () => {
+                      const result = await deleteProductImage(img.id);
+                      if (result.success) {
+                        setImages(images.filter((i) => i.id !== img.id));
+                        toast.success("Image removed");
+                      } else {
+                        toast.error(result.error);
+                      }
+                    }}
+                    className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No images yet. Upload product photos to show in the catalog.</p>
+        )}
       </div>
 
       {/* Variants */}

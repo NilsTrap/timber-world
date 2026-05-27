@@ -124,6 +124,60 @@ export async function saveCategory(input: SaveCategoryInput): Promise<ActionResu
   return { success: true, data: toCategory(result.data) };
 }
 
+export async function duplicateCategory(id: string): Promise<ActionResult<CatalogCategory>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const supabase = await createClient();
+
+  const { data: source, error: fetchErr } = await (supabase as any)
+    .from("catalog_categories")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (fetchErr || !source) return { success: false, error: "Category not found" };
+
+  const { data: newCat, error: insertErr } = await (supabase as any)
+    .from("catalog_categories")
+    .insert({
+      slug: source.slug + "-copy",
+      name: source.name + " (Copy)",
+      description: source.description,
+      image_storage_path: source.image_storage_path,
+      primary_unit: source.primary_unit,
+      is_active: false,
+      sort_order: source.sort_order + 1,
+    })
+    .select()
+    .single();
+
+  if (insertErr) return { success: false, error: insertErr.message };
+
+  const { data: assignments } = await (supabase as any)
+    .from("catalog_category_field_assignments")
+    .select("*")
+    .eq("category_id", id);
+
+  if (assignments && assignments.length > 0) {
+    const newAssignments = assignments.map((a: any) => ({
+      category_id: newCat.id,
+      field_id: a.field_id,
+      applies_to: a.applies_to,
+      show_in_filter: a.show_in_filter,
+      show_in_detail: a.show_in_detail,
+      show_in_price_list: a.show_in_price_list,
+      is_required: a.is_required,
+      sort_order: a.sort_order,
+    }));
+    await (supabase as any).from("catalog_category_field_assignments").insert(newAssignments);
+  }
+
+  revalidatePath("/admin/catalog");
+  return { success: true, data: toCategory({ ...newCat, field_count: assignments?.length ?? 0, product_count: 0 }) };
+}
+
 export async function deleteCategory(id: string): Promise<ActionResult<null>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
