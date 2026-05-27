@@ -96,6 +96,92 @@ export async function deleteProductImage(id: string): Promise<ActionResult<null>
   return { success: true, data: null };
 }
 
+export async function uploadVariantImage(
+  variantId: string,
+  formData: FormData
+): Promise<ActionResult<VariantImage>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const file = formData.get("file") as File | null;
+  if (!file) return { success: false, error: "No file provided" };
+  if (!ALLOWED_TYPES.includes(file.type)) return { success: false, error: "Invalid file type." };
+  if (file.size > MAX_SIZE) return { success: false, error: "File too large. Maximum 10MB." };
+
+  const supabase = await createClient();
+  const fileExt = file.name.split(".").pop() || "jpg";
+  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+  const storagePath = `variants/${variantId}/${fileName}`;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const { error: uploadError } = await supabase.storage
+    .from("catalog")
+    .upload(storagePath, arrayBuffer, { contentType: file.type });
+
+  if (uploadError) return { success: false, error: "Upload failed: " + uploadError.message };
+
+  const { data: existing } = await (supabase as any)
+    .from("catalog_variant_images")
+    .select("id")
+    .eq("variant_id", variantId);
+
+  const { data, error } = await (supabase as any)
+    .from("catalog_variant_images")
+    .insert({
+      variant_id: variantId,
+      storage_path: storagePath,
+      alt_text: file.name,
+      is_primary: !existing || existing.length === 0,
+      sort_order: existing?.length ?? 0,
+    })
+    .select()
+    .single();
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/admin/catalog");
+  return {
+    success: true,
+    data: {
+      id: data.id,
+      variantId: data.variant_id,
+      storagePath: data.storage_path,
+      altText: data.alt_text,
+      isPrimary: data.is_primary,
+      sortOrder: data.sort_order,
+    },
+  };
+}
+
+export async function deleteVariantImage(id: string): Promise<ActionResult<null>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const supabase = await createClient();
+
+  const { data: img } = await (supabase as any)
+    .from("catalog_variant_images")
+    .select("storage_path")
+    .eq("id", id)
+    .single();
+
+  if (img?.storage_path) {
+    await supabase.storage.from("catalog").remove([img.storage_path]);
+  }
+
+  const { error } = await (supabase as any)
+    .from("catalog_variant_images")
+    .delete()
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/admin/catalog");
+  return { success: true, data: null };
+}
+
 export async function uploadCategoryImage(
   categoryId: string,
   formData: FormData

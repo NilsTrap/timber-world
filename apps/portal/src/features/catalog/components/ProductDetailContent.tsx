@@ -8,7 +8,7 @@ import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
 import { saveProduct, duplicateProduct, deleteProduct } from "../actions/products";
 import { getVariants, saveVariant, deleteVariant } from "../actions/variants";
-import { uploadProductImage, deleteProductImage } from "../actions/images";
+import { uploadProductImage, deleteProductImage, uploadVariantImage, deleteVariantImage } from "../actions/images";
 import type {
   CatalogProduct,
   CatalogVariant,
@@ -542,12 +542,80 @@ function VariantForm({
         </div>
       )}
 
+      {/* Variant images (only for existing variants) */}
+      {variant && (
+        <VariantImageSection variantId={variant.id} initialImages={variant.images || []} />
+      )}
+
       <div className="flex gap-2">
         <Button size="sm" onClick={handleSave} disabled={saving}>
           {saving ? "Saving..." : variant ? "Update Variant" : "Create Variant"}
         </Button>
         <Button size="sm" variant="outline" onClick={onCancel}>Cancel</Button>
       </div>
+    </div>
+  );
+}
+
+function VariantImageSection({ variantId, initialImages }: { variantId: string; initialImages: any[] }) {
+  const [images, setImages] = useState(initialImages);
+  const [uploading, setUploading] = useState(false);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Variant Images ({images.length})</h4>
+        <label className="inline-flex items-center gap-1 cursor-pointer">
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setUploading(true);
+              const fd = new FormData();
+              fd.append("file", file);
+              const result = await uploadVariantImage(variantId, fd);
+              setUploading(false);
+              if (result.success) {
+                setImages([...images, result.data]);
+                toast.success("Image uploaded");
+              } else {
+                toast.error(result.error);
+              }
+              e.target.value = "";
+            }}
+          />
+          <Button size="sm" variant="outline" className="h-7 text-xs" asChild disabled={uploading}>
+            <span><Plus className="h-3 w-3 mr-1" /> {uploading ? "Uploading..." : "Upload"}</span>
+          </Button>
+        </label>
+      </div>
+      {images.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          {images.map((img: any) => {
+            const url = `https://fyzrtqsnmnizoxgcqsjc.supabase.co/storage/v1/object/public/catalog/${img.storagePath}`;
+            return (
+              <div key={img.id} className="relative group w-16 h-16 rounded border overflow-hidden">
+                <img src={url} alt="" className="w-full h-full object-cover" />
+                <button
+                  onClick={async () => {
+                    const result = await deleteVariantImage(img.id);
+                    if (result.success) {
+                      setImages(images.filter((i: any) => i.id !== img.id));
+                      toast.success("Removed");
+                    }
+                  }}
+                  className="absolute inset-0 bg-red-500/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
