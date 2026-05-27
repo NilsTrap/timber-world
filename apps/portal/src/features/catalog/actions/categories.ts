@@ -35,7 +35,7 @@ export async function getCategories(): Promise<ActionResult<CatalogCategory[]>> 
 
   const { data, error } = await (supabase as any)
     .from("catalog_categories")
-    .select("*, catalog_category_fields(id), catalog_products(id)")
+    .select("*, catalog_category_field_assignments(id), catalog_products(id)")
     .order("sort_order", { ascending: true });
 
   if (error) {
@@ -45,7 +45,7 @@ export async function getCategories(): Promise<ActionResult<CatalogCategory[]>> 
 
   const categories = (data || []).map((row: any) => ({
     ...row,
-    field_count: row.catalog_category_fields?.length ?? 0,
+    field_count: row.catalog_category_field_assignments?.length ?? 0,
     product_count: row.catalog_products?.length ?? 0,
   })).map(toCategory);
 
@@ -61,7 +61,7 @@ export async function getCategory(id: string): Promise<ActionResult<CatalogCateg
 
   const { data, error } = await (supabase as any)
     .from("catalog_categories")
-    .select("*, catalog_category_fields(id), catalog_products(id)")
+    .select("*, catalog_category_field_assignments(id), catalog_products(id)")
     .eq("id", id)
     .single();
 
@@ -74,7 +74,7 @@ export async function getCategory(id: string): Promise<ActionResult<CatalogCateg
     success: true,
     data: toCategory({
       ...data,
-      field_count: data.catalog_category_fields?.length ?? 0,
+      field_count: data.catalog_category_field_assignments?.length ?? 0,
       product_count: data.catalog_products?.length ?? 0,
     }),
   };
