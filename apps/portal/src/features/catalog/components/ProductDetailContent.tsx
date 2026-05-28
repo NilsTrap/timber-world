@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, Trash2, Pencil, X, Copy } from "lucide-react";
@@ -9,14 +9,16 @@ import { toast } from "sonner";
 import { saveProduct, duplicateProduct, deleteProduct } from "../actions/products";
 import { getVariants, saveVariant, deleteVariant } from "../actions/variants";
 import { uploadProductImage, deleteProductImage, uploadVariantImage, deleteVariantImage } from "../actions/images";
-import { getVariantPackages, saveVariantPackage, deleteVariantPackage, type VariantPackage } from "../actions/packaging";
+import { VariantPackagingSection } from "./VariantPackagingSection";
 import type {
   CatalogProduct,
   CatalogVariant,
   CategoryField,
   FieldOption,
   PricingUnit,
+  CatalogCurrency,
 } from "../types";
+import type { CurrencyPriceMap } from "../actions/currencies";
 import { effectiveRateEurCents, computeQuantity, lineTotalCents, formatMoney } from "../pricing";
 
 interface Props {
@@ -28,6 +30,8 @@ interface Props {
   productFields: CategoryField[];
   variantFields: CategoryField[];
   variants: CatalogVariant[];
+  altCurrencies: CatalogCurrency[];
+  currencyPrices: CurrencyPriceMap;
 }
 
 export function ProductDetailContent({
@@ -39,6 +43,8 @@ export function ProductDetailContent({
   productFields,
   variantFields,
   variants: initialVariants,
+  altCurrencies,
+  currencyPrices,
 }: Props) {
   const router = useRouter();
   const [product, setProduct] = useState(initialProduct);
@@ -49,6 +55,13 @@ export function ProductDetailContent({
   const [basePrice, setBasePrice] = useState(product.basePriceEurCents != null ? (product.basePriceEurCents / 100).toString() : "");
   const unitSymbol = unit?.symbol ?? "unit";
   const calcMethod = unit?.calcMethod ?? "per_piece";
+
+  // Effective converted rate for a variant in a derived currency: variant -> product -> category.
+  const effCurrency = (variantId: string, code: string) =>
+    currencyPrices[`variant:${variantId}`]?.[code]?.priceCents ??
+    currencyPrices[`product:${product.id}`]?.[code]?.priceCents ??
+    currencyPrices[`category:${categoryId}`]?.[code]?.priceCents ??
+    null;
   const [saving, setSaving] = useState(false);
   const [showVariantForm, setShowVariantForm] = useState(false);
   const [editingVariant, setEditingVariant] = useState<CatalogVariant | null>(null);
@@ -305,6 +318,9 @@ export function ProductDetailContent({
                   <th className="text-left px-3 py-2 font-medium">Width</th>
                   <th className="text-left px-3 py-2 font-medium">Length</th>
                   <th className="text-right px-3 py-2 font-medium">€/{unitSymbol}</th>
+                  {altCurrencies.map((c) => (
+                    <th key={c.code} className="text-right px-3 py-2 font-medium">{c.symbol}/{unitSymbol}</th>
+                  ))}
                   <th className="text-right px-3 py-2 font-medium">Total (€)</th>
                   <th className="text-center px-3 py-2 font-medium">Active</th>
                   <th className="px-3 py-2 w-20"></th>
@@ -342,6 +358,16 @@ export function ProductDetailContent({
                         {formatMoney(rate, "€")}
                         {inherited && rate != null && <span className="ml-1 text-[10px] text-muted-foreground">inh.</span>}
                       </td>
+                      {altCurrencies.map((c) => {
+                        const cents = effCurrency(v.id, c.code);
+                        const isManual = currencyPrices[`variant:${v.id}`]?.[c.code]?.isManual;
+                        return (
+                          <td key={c.code} className="px-3 py-2 text-right">
+                            {cents != null ? formatMoney(cents, c.symbol) : <span className="text-muted-foreground">—</span>}
+                            {isManual && <span className="ml-1 text-[10px] text-primary" title="Manually set">✎</span>}
+                          </td>
+                        );
+                      })}
                       <td className="px-3 py-2 text-right">
                         {total != null ? formatMoney(total, "€") : <span className="text-amber-600" title="Missing dimensions for this unit">n/a</span>}
                       </td>
@@ -642,106 +668,3 @@ function VariantImageSection({ variantId, initialImages }: { variantId: string; 
   );
 }
 
-function VariantPackagingSection({ variantId }: { variantId: string }) {
-  const [packages, setPackages] = useState<VariantPackage[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [pkgName, setPkgName] = useState("Standard Pack");
-  const [pieces, setPieces] = useState("");
-  const [areaM2, setAreaM2] = useState("");
-  const [priceCents, setPriceCents] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    getVariantPackages(variantId).then((r) => {
-      if (r.success) setPackages(r.data);
-      setLoaded(true);
-    });
-  }, [variantId]);
-
-  const handleAdd = async () => {
-    if (!pieces || parseInt(pieces) <= 0) { toast.error("Pieces required"); return; }
-    setSaving(true);
-    const result = await saveVariantPackage({
-      variantId,
-      name: pkgName.trim() || "Standard Pack",
-      piecesPerPackage: parseInt(pieces),
-      areaM2: areaM2 ? parseFloat(areaM2) : null,
-      packagePriceCents: priceCents ? Math.round(parseFloat(priceCents) * 100) : null,
-      isDefault: packages.length === 0,
-    });
-    setSaving(false);
-    if (result.success) {
-      setPackages([...packages, result.data]);
-      setShowForm(false);
-      setPkgName("Standard Pack"); setPieces(""); setAreaM2(""); setPriceCents("");
-      toast.success("Package added");
-    } else {
-      toast.error(result.error);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    const result = await deleteVariantPackage(id);
-    if (result.success) {
-      setPackages(packages.filter((p) => p.id !== id));
-      toast.success("Package removed");
-    }
-  };
-
-  if (!loaded) return null;
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Packaging ({packages.length})</h4>
-        {!showForm && (
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowForm(true)}>
-            <Plus className="h-3 w-3 mr-1" /> Add Package
-          </Button>
-        )}
-      </div>
-
-      {packages.map((pkg) => (
-        <div key={pkg.id} className="flex items-center gap-3 text-sm rounded border px-3 py-2">
-          <span className="font-medium">{pkg.name}</span>
-          <span className="text-muted-foreground">{pkg.piecesPerPackage} pcs</span>
-          {pkg.areaM2 && <span className="text-muted-foreground">{pkg.areaM2} m²</span>}
-          {pkg.packagePriceCents != null && <span className="text-green-700 font-medium">£{(pkg.packagePriceCents / 100).toFixed(2)}</span>}
-          {pkg.isDefault && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">Default</span>}
-          <div className="flex-1" />
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(pkg.id)}>
-            <Trash2 className="h-3 w-3 text-destructive" />
-          </Button>
-        </div>
-      ))}
-
-      {showForm && (
-        <div className="rounded border bg-muted/30 p-3 space-y-2">
-          <div className="grid grid-cols-4 gap-2">
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Name</label>
-              <Input value={pkgName} onChange={(e) => setPkgName(e.target.value)} className="h-8 text-xs" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Pieces per pack</label>
-              <Input type="number" value={pieces} onChange={(e) => setPieces(e.target.value)} className="h-8 text-xs" placeholder="10" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Area (m²)</label>
-              <Input type="number" step="0.01" value={areaM2} onChange={(e) => setAreaM2(e.target.value)} className="h-8 text-xs" placeholder="Auto or manual" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Price (£)</label>
-              <Input type="number" step="0.01" value={priceCents} onChange={(e) => setPriceCents(e.target.value)} className="h-8 text-xs" placeholder="Auto or manual" />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={saving}>{saving ? "Adding..." : "Add"}</Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowForm(false)}>Cancel</Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}

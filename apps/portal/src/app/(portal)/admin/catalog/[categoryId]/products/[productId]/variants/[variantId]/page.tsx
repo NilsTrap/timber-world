@@ -6,6 +6,7 @@ import { getCategoryFields } from "@/features/catalog/actions/fields";
 import { getProduct } from "@/features/catalog/actions/products";
 import { getVariants } from "@/features/catalog/actions/variants";
 import { getPricingUnits } from "@/features/catalog/actions/pricingUnits";
+import { getCurrencies, getCatalogCurrencyPrices } from "@/features/catalog/actions/currencies";
 import { VariantDetailPage } from "@/features/catalog/components/VariantDetailPage";
 
 export const metadata: Metadata = { title: "Variant Detail" };
@@ -42,6 +43,12 @@ export default async function VariantPage({ params }: Props) {
   const units = unitsResult.success ? unitsResult.data : [];
   const unit = units.find((u) => u.code === catResult.data.primaryUnit) ?? null;
 
+  const [currenciesResult, pricesResult] = await Promise.all([
+    getCurrencies(),
+    getCatalogCurrencyPrices([variantId, productId, categoryId]),
+  ]);
+  const altCurrencies = (currenciesResult.success ? currenciesResult.data : []).filter((c) => !c.isBase && c.isActive);
+
   return (
     <VariantDetailPage
       variant={variant}
@@ -52,6 +59,8 @@ export default async function VariantPage({ params }: Props) {
       productBasePriceEurCents={productResult.data.basePriceEurCents}
       categoryDefaultPriceEurCents={catResult.data.defaultPriceEurCents}
       variantFields={variantFields}
+      altCurrencies={altCurrencies}
+      currencyPrices={pricesResult.success ? pricesResult.data : {}}
     />
   );
 }

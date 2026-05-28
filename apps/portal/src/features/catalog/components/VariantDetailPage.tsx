@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
@@ -8,9 +8,10 @@ import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
 import { saveVariant, deleteVariant } from "../actions/variants";
 import { uploadVariantImage, deleteVariantImage } from "../actions/images";
-import { getVariantPackages, saveVariantPackage, deleteVariantPackage, type VariantPackage } from "../actions/packaging";
+import { VariantPackagingSection } from "./VariantPackagingSection";
+import { setVariantCurrencyOverride, type CurrencyPriceMap } from "../actions/currencies";
 import { effectiveRateEurCents, computeQuantity, lineTotalCents, formatMoney } from "../pricing";
-import type { CatalogVariant, CategoryField, PricingUnit } from "../types";
+import type { CatalogVariant, CategoryField, PricingUnit, CatalogCurrency } from "../types";
 
 interface Props {
   variant: CatalogVariant;
@@ -21,9 +22,11 @@ interface Props {
   productBasePriceEurCents: number | null;
   categoryDefaultPriceEurCents: number | null;
   variantFields: CategoryField[];
+  altCurrencies: CatalogCurrency[];
+  currencyPrices: CurrencyPriceMap;
 }
 
-export function VariantDetailPage({ variant: initialVariant, categoryId, productId, productName, unit, productBasePriceEurCents, categoryDefaultPriceEurCents, variantFields }: Props) {
+export function VariantDetailPage({ variant: initialVariant, categoryId, productId, productName, unit, productBasePriceEurCents, categoryDefaultPriceEurCents, variantFields, altCurrencies, currencyPrices }: Props) {
   const router = useRouter();
   const [variant, setVariant] = useState(initialVariant);
   const [thickness, setThickness] = useState(variant.thicknessMm?.toString() || "");
@@ -47,17 +50,18 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
   });
   const previewTotal = lineTotalCents(previewRate, previewQty);
 
+  // Effective converted rate + manual flag per derived currency (variant -> product -> category).
+  const currencyInfo = (code: string) => {
+    const v = currencyPrices[`variant:${variant.id}`]?.[code];
+    const effCents = v?.priceCents
+      ?? currencyPrices[`product:${productId}`]?.[code]?.priceCents
+      ?? currencyPrices[`category:${categoryId}`]?.[code]?.priceCents
+      ?? null;
+    return { effCents, manualCents: v?.isManual ? v.priceCents : null };
+  };
+
   const [images, setImages] = useState(variant.images || []);
   const [uploading, setUploading] = useState(false);
-
-  const [packages, setPackages] = useState<VariantPackage[]>([]);
-  const [packagesLoaded, setPackagesLoaded] = useState(false);
-  const [showPkgForm, setShowPkgForm] = useState(false);
-  const [pkgName, setPkgName] = useState("Standard Pack");
-  const [pkgPieces, setPkgPieces] = useState("");
-  const [pkgArea, setPkgArea] = useState("");
-  const [pkgPrice, setPkgPrice] = useState("");
-  const [pkgSaving, setPkgSaving] = useState(false);
 
   const [fieldValues, setFieldValues] = useState<Record<string, { optionId?: string; valueText?: string; valueNumber?: number }>>(
     () => {
@@ -68,13 +72,6 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
       return map;
     }
   );
-
-  useEffect(() => {
-    getVariantPackages(variant.id).then((r) => {
-      if (r.success) setPackages(r.data);
-      setPackagesLoaded(true);
-    });
-  }, [variant.id]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -187,6 +184,30 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
           </label>
         </div>
 
+        {/* Other currencies — auto-converted, manually overridable */}
+        {altCurrencies.length > 0 && (
+          <div className="pt-2 space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Other currencies (per {unitSymbol})
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {altCurrencies.map((c) => {
+                const { effCents, manualCents } = currencyInfo(c.code);
+                return (
+                  <VariantCurrencyRow
+                    key={c.code}
+                    variantId={variant.id}
+                    currency={c}
+                    effCents={effCents}
+                    manualCents={manualCents}
+                    unitSymbol={unitSymbol}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Dynamic variant-level fields (dimensions handled above) */}
         {nonDimensionFields.length > 0 && (
           <>
@@ -272,83 +293,8 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
       </div>
 
       {/* Packaging Card */}
-      <div className="rounded-lg border bg-card p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Packaging ({packages.length})</h2>
-          {!showPkgForm && (
-            <Button size="sm" onClick={() => setShowPkgForm(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Add Package
-            </Button>
-          )}
-        </div>
-
-        {packages.map((pkg) => (
-          <div key={pkg.id} className="flex items-center gap-3 text-sm rounded-lg border px-4 py-3">
-            <span className="font-medium">{pkg.name}</span>
-            <span className="text-muted-foreground">{pkg.piecesPerPackage} pcs</span>
-            {pkg.areaM2 && <span className="text-muted-foreground">{pkg.areaM2} m²</span>}
-            {pkg.packagePriceCents != null && <span className="text-green-700 font-medium">£{(pkg.packagePriceCents / 100).toFixed(2)}</span>}
-            {pkg.isDefault && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">Default</span>}
-            <div className="flex-1" />
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={async () => {
-              const result = await deleteVariantPackage(pkg.id);
-              if (result.success) { setPackages(packages.filter((p) => p.id !== pkg.id)); toast.success("Package removed"); }
-            }}>
-              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-            </Button>
-          </div>
-        ))}
-
-        {!packagesLoaded && <p className="text-sm text-muted-foreground">Loading...</p>}
-        {packagesLoaded && packages.length === 0 && !showPkgForm && (
-          <p className="text-sm text-muted-foreground">No packages defined. Add package configurations for this variant.</p>
-        )}
-
-        {showPkgForm && (
-          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-            <h3 className="text-sm font-semibold">New Package</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Name</label>
-                <Input value={pkgName} onChange={(e) => setPkgName(e.target.value)} className="text-sm" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Pieces per pack</label>
-                <Input type="number" value={pkgPieces} onChange={(e) => setPkgPieces(e.target.value)} className="text-sm" placeholder="10" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Area (m²)</label>
-                <Input type="number" step="0.01" value={pkgArea} onChange={(e) => setPkgArea(e.target.value)} className="text-sm" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Price (£)</label>
-                <Input type="number" step="0.01" value={pkgPrice} onChange={(e) => setPkgPrice(e.target.value)} className="text-sm" />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={async () => {
-                if (!pkgPieces || parseInt(pkgPieces) <= 0) { toast.error("Pieces required"); return; }
-                setPkgSaving(true);
-                const result = await saveVariantPackage({
-                  variantId: variant.id,
-                  name: pkgName.trim() || "Standard Pack",
-                  piecesPerPackage: parseInt(pkgPieces),
-                  areaM2: pkgArea ? parseFloat(pkgArea) : null,
-                  packagePriceCents: pkgPrice ? Math.round(parseFloat(pkgPrice) * 100) : null,
-                  isDefault: packages.length === 0,
-                });
-                setPkgSaving(false);
-                if (result.success) {
-                  setPackages([...packages, result.data]);
-                  setShowPkgForm(false);
-                  setPkgName("Standard Pack"); setPkgPieces(""); setPkgArea(""); setPkgPrice("");
-                  toast.success("Package added");
-                } else { toast.error(result.error); }
-              }} disabled={pkgSaving}>{pkgSaving ? "Adding..." : "Add Package"}</Button>
-              <Button size="sm" variant="outline" onClick={() => setShowPkgForm(false)}>Cancel</Button>
-            </div>
-          </div>
-        )}
+      <div className="rounded-lg border bg-card p-5">
+        <VariantPackagingSection variantId={variant.id} />
       </div>
     </div>
   );
@@ -378,6 +324,51 @@ function DynamicField({ field, value, onChange }: { field: CategoryField; value?
     <div className="space-y-1">
       <label className="text-xs font-medium">{field.fieldLabel}</label>
       <Input className="h-9 text-sm" value={value?.valueText || ""} onChange={(e) => onChange({ valueText: e.target.value })} />
+    </div>
+  );
+}
+
+function VariantCurrencyRow({
+  variantId, currency, effCents, manualCents, unitSymbol,
+}: {
+  variantId: string;
+  currency: CatalogCurrency;
+  effCents: number | null;
+  manualCents: number | null;
+  unitSymbol: string;
+}) {
+  const [value, setValue] = useState(manualCents != null ? (manualCents / 100).toString() : "");
+  const [saving, setSaving] = useState(false);
+  const autoHint = effCents != null ? `${currency.symbol}${(effCents / 100).toFixed(2)}` : "no rate yet";
+
+  const handleSave = async () => {
+    setSaving(true);
+    const cents = value.trim() ? Math.round(Number(value) * 100) : null;
+    const result = await setVariantCurrencyOverride(variantId, currency.code, cents);
+    setSaving(false);
+    if (result.success) toast.success(cents == null ? `${currency.code} override cleared` : `${currency.code} price set`);
+    else toast.error(result.error);
+  };
+
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium">
+        {currency.symbol} / {unitSymbol}
+        {manualCents == null && <span className="ml-1 text-[10px] text-muted-foreground">auto: {autoHint}</span>}
+      </label>
+      <div className="flex gap-1">
+        <Input
+          type="number"
+          step="0.01"
+          className="h-9 text-sm"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={`auto ${autoHint}`}
+        />
+        <Button size="sm" variant="outline" className="h-9 shrink-0" onClick={handleSave} disabled={saving}>
+          {saving ? "…" : "Set"}
+        </Button>
+      </div>
     </div>
   );
 }

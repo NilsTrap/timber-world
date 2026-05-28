@@ -133,8 +133,16 @@ export async function updateCurrencyPrices(
     return Math.round(applyCharmRounding(major, rule) * 100);
   };
 
-  // 2. Collect every EUR price across categories / products / variants.
-  const rows: { entity_type: string; entity_id: string; currency_code: string; price_cents: number }[] = [];
+  // 2. Preserve manual overrides — collect which entities are hand-set.
+  const { data: manualRows } = await (supabase as any)
+    .from("catalog_currency_prices")
+    .select("entity_type, entity_id")
+    .eq("currency_code", code)
+    .eq("is_manual", true);
+  const manual = new Set((manualRows || []).map((r: any) => `${r.entity_type}:${r.entity_id}`));
+
+  // 3. Collect every EUR price across categories / products / variants.
+  const rows: { entity_type: string; entity_id: string; currency_code: string; price_cents: number; is_manual: boolean }[] = [];
 
   const [{ data: cats }, { data: prods }, { data: vars }] = await Promise.all([
     (supabase as any).from("catalog_categories").select("id, default_price_eur_cents").not("default_price_eur_cents", "is", null),
@@ -142,17 +150,79 @@ export async function updateCurrencyPrices(
     (supabase as any).from("catalog_variants").select("id, price_eur_cents").not("price_eur_cents", "is", null),
   ]);
 
-  for (const c of cats || []) rows.push({ entity_type: "category", entity_id: c.id, currency_code: code, price_cents: convert(c.default_price_eur_cents) });
-  for (const p of prods || []) rows.push({ entity_type: "product", entity_id: p.id, currency_code: code, price_cents: convert(p.base_price_eur_cents) });
-  for (const v of vars || []) rows.push({ entity_type: "variant", entity_id: v.id, currency_code: code, price_cents: convert(v.price_eur_cents) });
+  const add = (type: string, id: string, eurCents: number) => {
+    if (manual.has(`${type}:${id}`)) return; // keep hand-set override
+    rows.push({ entity_type: type, entity_id: id, currency_code: code, price_cents: convert(eurCents), is_manual: false });
+  };
+  for (const c of cats || []) add("category", c.id, c.default_price_eur_cents);
+  for (const p of prods || []) add("product", p.id, p.base_price_eur_cents);
+  for (const v of vars || []) add("variant", v.id, v.price_eur_cents);
 
-  // 3. Replace this currency's derived prices.
-  await (supabase as any).from("catalog_currency_prices").delete().eq("currency_code", code);
+  // 4. Replace only the auto-computed prices; manual overrides stay.
+  await (supabase as any).from("catalog_currency_prices").delete().eq("currency_code", code).eq("is_manual", false);
   if (rows.length > 0) {
     const { error: insErr } = await (supabase as any).from("catalog_currency_prices").insert(rows);
     if (insErr) return { success: false, error: insErr.message };
   }
 
-  revalidatePath("/admin/catalog/currencies");
+  revalidatePath("/admin/catalog");
   return { success: true, data: { rate, updated: rows.length, fetchedAt } };
+}
+
+export interface CurrencyPriceEntry {
+  priceCents: number;
+  isManual: boolean;
+}
+/** Map of `${entityType}:${entityId}` -> { currencyCode -> {priceCents,isManual} }. */
+export type CurrencyPriceMap = Record<string, Record<string, CurrencyPriceEntry>>;
+
+export async function getCatalogCurrencyPrices(entityIds: string[]): Promise<ActionResult<CurrencyPriceMap>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (entityIds.length === 0) return { success: true, data: {} };
+
+  const supabase = await createClient();
+  const { data, error } = await (supabase as any)
+    .from("catalog_currency_prices")
+    .select("entity_type, entity_id, currency_code, price_cents, is_manual")
+    .in("entity_id", entityIds);
+
+  if (error) return { success: false, error: error.message };
+  const map: CurrencyPriceMap = {};
+  for (const r of data || []) {
+    const key = `${r.entity_type}:${r.entity_id}`;
+    (map[key] ??= {})[r.currency_code] = { priceCents: r.price_cents, isManual: r.is_manual };
+  }
+  return { success: true, data: map };
+}
+
+/** Hand-set (or clear) a variant's price in a derived currency. null clears it. */
+export async function setVariantCurrencyOverride(
+  variantId: string,
+  currencyCode: string,
+  priceCents: number | null
+): Promise<ActionResult<null>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const supabase = await createClient();
+  if (priceCents == null) {
+    const { error } = await (supabase as any)
+      .from("catalog_currency_prices")
+      .delete()
+      .match({ entity_type: "variant", entity_id: variantId, currency_code: currencyCode });
+    if (error) return { success: false, error: error.message };
+  } else {
+    const { error } = await (supabase as any)
+      .from("catalog_currency_prices")
+      .upsert({
+        entity_type: "variant", entity_id: variantId, currency_code: currencyCode,
+        price_cents: priceCents, is_manual: true,
+      }, { onConflict: "entity_type,entity_id,currency_code" });
+    if (error) return { success: false, error: error.message };
+  }
+  revalidatePath("/admin/catalog");
+  return { success: true, data: null };
 }
