@@ -11,7 +11,7 @@ const NAV = [
   { href: "/profile", label: "Account", icon: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" },
 ];
 
-export function BottomNav() {
+export function BottomNav({ cartCount = 0 }: { cartCount?: number }) {
   const pathname = usePathname();
 
   return (
@@ -26,13 +26,20 @@ export function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 text-[10px] font-medium uppercase tracking-wide transition-colors ${
+              className={`relative flex flex-col items-center gap-0.5 px-4 py-1.5 text-[10px] font-medium uppercase tracking-wide transition-colors ${
                 isActive ? "text-[var(--forest-green)]" : "text-[var(--charcoal-light)]"
               }`}
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                <path d={item.icon} />
-              </svg>
+              <span className="relative">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                  <path d={item.icon} />
+                </svg>
+                {item.href === "/cart" && cartCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                    {cartCount > 99 ? "99+" : cartCount}
+                  </span>
+                )}
+              </span>
               {item.label}
             </Link>
           );

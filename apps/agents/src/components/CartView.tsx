@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { updateCartItem, removeCartItem, placeOrder } from "@/app/(app)/cart/actions";
+import { getCart, updateCartItem, removeCartItem, placeOrder } from "@/app/(app)/cart/actions";
 import type { CartOrder } from "@/lib/orderTypes";
 import { gbp } from "@/lib/pricing";
 
@@ -20,22 +20,26 @@ export function CartView({ order: initial }: { order: CartOrder | null }) {
 
   const items = order?.items ?? [];
 
-  const refresh = () => router.refresh();
+  const reload = async () => {
+    const c = await getCart();
+    if (c.success) setOrder(c.data);
+    router.refresh(); // keep the cart badge in the nav in sync
+  };
 
   const changeQty = async (itemId: string, qty: number, discountPct: number) => {
     if (qty < 1) return;
     setBusy(true);
     const r = await updateCartItem({ itemId, quantityPackages: qty, discountPct });
+    if (r.success) await reload(); else toast.error(r.error);
     setBusy(false);
-    if (r.success) refresh(); else toast.error(r.error);
   };
 
   const remove = async (itemId: string) => {
+    if (!confirm("Remove this item from your cart?")) return;
     setBusy(true);
     const r = await removeCartItem(itemId);
+    if (r.success) { await reload(); toast.success("Removed"); } else toast.error(r.error);
     setBusy(false);
-    if (r.success) { setOrder((o) => o ? { ...o, items: o.items.filter((i) => i.id !== itemId) } : o); refresh(); }
-    else toast.error(r.error);
   };
 
   const place = async () => {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BottomNav } from "@/components/BottomNav";
 import { LogoutButton } from "@/components/LogoutButton";
 import { createClient } from "@/lib/supabase/server";
+import { getCart } from "./cart/actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -41,6 +42,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     );
   }
 
+  const cartResult = await getCart();
+  const cartCount = cartResult.success && cartResult.data ? cartResult.data.items.length : 0;
+
   return (
     <div className="min-h-dvh pb-16">
       <header className="sticky top-0 z-50 px-4 py-3 shadow-sm" style={{ background: "var(--forest-green)" }}>
@@ -60,7 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {children}
       </main>
 
-      <BottomNav />
+      <BottomNav cartCount={cartCount} />
     </div>
   );
 }

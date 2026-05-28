@@ -26,9 +26,10 @@ export default async function CatalogPage() {
             className="rounded-xl bg-white overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
           >
             {cat.image_storage_path ? (
-              <div
-                className="aspect-[4/3] bg-cover bg-center"
-                style={{ backgroundImage: `url('${supabaseUrl}/storage/v1/object/public/catalog/${cat.image_storage_path}')` }}
+              <img
+                src={`${supabaseUrl}/storage/v1/object/public/catalog/${cat.image_storage_path}`}
+                alt={cat.name}
+                className="w-full aspect-[4/3] object-cover"
               />
             ) : (
               <div className="aspect-[4/3] flex items-center justify-center" style={{ background: "linear-gradient(135deg, #E8D5B7, #C4A87C)" }}>
@@ -37,9 +38,9 @@ export default async function CatalogPage() {
                 </svg>
               </div>
             )}
-            <div className="p-3">
-              <div className="font-semibold text-sm">{cat.name}</div>
-              <div className="text-xs text-[var(--charcoal-light)] mt-0.5">
+            <div className="p-3.5">
+              <div className="font-semibold text-base">{cat.name}</div>
+              <div className="text-sm text-[var(--charcoal-light)] mt-0.5">
                 {cat.catalog_products?.length || 0} products
               </div>
             </div>

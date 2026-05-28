@@ -7,13 +7,7 @@ export function ImageGallery({ images, alt = "" }: { images: string[]; alt?: str
   const ref = useRef<HTMLDivElement>(null);
   const [idx, setIdx] = useState(0);
 
-  if (images.length === 0) {
-    return (
-      <div className="rounded-xl aspect-[4/3] flex items-center justify-center" style={{ background: "linear-gradient(135deg, #E8D5B7, #C4A87C)" }}>
-        <svg viewBox="0 0 120 90" fill="none" className="w-24 opacity-20"><rect x="5" y="5" width="110" height="80" rx="4" stroke="#8B6914" strokeWidth="2"/></svg>
-      </div>
-    );
-  }
+  if (images.length === 0) return null;
 
   const onScroll = () => {
     const el = ref.current;

@@ -51,6 +51,16 @@ export default async function CategoryProductsPage({ params }: Props) {
   const rawProducts = productsResult.data || [];
   const assignments = assignmentsResult.data || [];
 
+  // GBP price map (variant -> product -> category) for per-product price ranges.
+  const allVariantIds = rawProducts.flatMap((p: any) => (p.catalog_variants || []).map((v: any) => v.id));
+  const { data: gbpRows } = await (supabase as any)
+    .from("catalog_currency_prices")
+    .select("entity_type, entity_id, price_cents")
+    .eq("currency_code", "GBP")
+    .in("entity_id", [categoryId, ...rawProducts.map((p: any) => p.id), ...allVariantIds]);
+  const priceMap: Record<string, number> = {};
+  for (const r of gbpRows || []) priceMap[`${r.entity_type}:${r.entity_id}`] = r.price_cents;
+
   // Build product cards with field values keyed by field_key
   const products: ProductCard[] = rawProducts.map((p: any) => {
     const fieldValues: Record<string, string> = {};
@@ -60,12 +70,17 @@ export default async function CategoryProductsPage({ params }: Props) {
       if (key && label) fieldValues[key] = label;
     });
     const primaryImage = (p.catalog_product_images || []).find((img: any) => img.is_primary);
+    const rates = (p.catalog_variants || [])
+      .map((v: any) => priceMap[`variant:${v.id}`] ?? priceMap[`product:${p.id}`] ?? priceMap[`category:${categoryId}`] ?? null)
+      .filter((x: any): x is number => x != null);
     return {
       id: p.id,
       name: p.name,
       variantCount: p.catalog_variants?.length || 0,
       fieldValues,
       imagePath: primaryImage?.storage_path || null,
+      priceMinCents: rates.length ? Math.min(...rates) : null,
+      priceMaxCents: rates.length ? Math.max(...rates) : null,
     };
   });
 
@@ -84,7 +99,9 @@ export default async function CategoryProductsPage({ params }: Props) {
     })
     .filter((f: FilterableField) => f.options.length > 1); // only show filters with >1 choice
 
-  const unitLabels: Record<string, string> = { m2: "£/m²", m3: "£/m³", piece: "£/pc", linear_m: "£/m" };
+  const { data: unitRow } = await (supabase as any)
+    .from("catalog_pricing_units").select("symbol").eq("code", category.primary_unit).maybeSingle();
+  const unitSymbol = unitRow?.symbol ?? "unit";
 
   return (
     <div className="space-y-4">
@@ -102,7 +119,7 @@ export default async function CategoryProductsPage({ params }: Props) {
         categoryId={categoryId}
         products={products}
         filters={filters}
-        unitLabel={unitLabels[category.primary_unit] || ""}
+        unitSymbol={unitSymbol}
         supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL!}
       />
     </div>

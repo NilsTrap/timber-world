@@ -2,6 +2,8 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { gbp } from "@/lib/pricing";
+import { thumbUrl } from "@/lib/images";
 
 export interface ProductCard {
   id: string;
@@ -9,6 +11,8 @@ export interface ProductCard {
   variantCount: number;
   fieldValues: Record<string, string>;
   imagePath: string | null;
+  priceMinCents: number | null;
+  priceMaxCents: number | null;
 }
 
 export interface FilterableField {
@@ -21,11 +25,11 @@ interface Props {
   categoryId: string;
   products: ProductCard[];
   filters: FilterableField[];
-  unitLabel: string;
+  unitSymbol: string;
   supabaseUrl: string;
 }
 
-export function CategoryProductsClient({ categoryId, products, filters, unitLabel, supabaseUrl }: Props) {
+export function CategoryProductsClient({ categoryId, products, filters, unitSymbol }: Props) {
   const [active, setActive] = useState<Record<string, string>>({});
 
   const filtered = useMemo(() => {
@@ -93,7 +97,7 @@ export function CategoryProductsClient({ categoryId, products, filters, unitLabe
       )}
 
       {/* Results count */}
-      <div className="text-xs text-[var(--charcoal-light)]">
+      <div className="text-sm text-[var(--charcoal-light)]">
         {filtered.length} product{filtered.length !== 1 ? "s" : ""}
         {hasActiveFilters && ` (filtered from ${products.length})`}
       </div>
@@ -101,38 +105,41 @@ export function CategoryProductsClient({ categoryId, products, filters, unitLabe
       {/* Product list */}
       <div className="space-y-3">
         {filtered.map((product) => {
-          const fieldLabels = Object.values(product.fieldValues);
+          const chips = Object.values(product.fieldValues);
+          const thumb = product.imagePath ? thumbUrl(product.imagePath, 160) : null;
+          const range = product.priceMinCents != null
+            ? (product.priceMaxCents !== product.priceMinCents
+                ? `${gbp(product.priceMinCents)} – ${gbp(product.priceMaxCents)}`
+                : gbp(product.priceMinCents))
+            : null;
           return (
             <Link
               key={product.id}
               href={`/catalog/${categoryId}/${product.id}`}
-              className="flex gap-3 rounded-xl bg-white p-3 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+              className="flex items-center gap-3 rounded-xl bg-white p-3.5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
             >
-              <div className="w-20 h-20 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden"
-                style={{ background: "linear-gradient(135deg, #E8D5B7, #C4A87C)" }}>
-                {product.imagePath ? (
-                  <img
-                    src={`${supabaseUrl}/storage/v1/object/public/catalog/${product.imagePath}`}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <svg viewBox="0 0 40 30" fill="none" className="w-8 opacity-25">
-                    <rect x="2" y="2" width="36" height="26" rx="2" stroke="#8B6914" strokeWidth="1"/>
-                  </svg>
-                )}
-              </div>
+              {thumb && (
+                <img src={thumb} alt="" className="w-20 h-20 rounded-lg object-cover shrink-0" />
+              )}
 
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm">{product.name}</div>
-                <div className="text-xs text-[var(--charcoal-light)] mt-0.5">
-                  {fieldLabels.join(" · ")}
-                </div>
-                <div className="flex items-center gap-3 mt-1.5">
-                  <span className="text-xs font-medium text-[var(--forest-green)]">
-                    {product.variantCount} variant{product.variantCount !== 1 ? "s" : ""}
-                  </span>
-                  <span className="text-xs text-[var(--charcoal-light)]">{unitLabel}</span>
+                <div className="font-semibold text-base">{product.name}</div>
+                {chips.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {chips.map((c, i) => (
+                      <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-[var(--warm-cream-dark)] text-[var(--charcoal)]">{c}</span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center gap-2 mt-2 text-sm">
+                  {range ? (
+                    <span className="font-semibold text-[var(--forest-green)]">
+                      {range}<span className="text-xs font-normal text-[var(--charcoal-light)]"> /{unitSymbol}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[var(--charcoal-light)]">Price on request</span>
+                  )}
+                  <span className="text-[var(--charcoal-light)]">· {product.variantCount} variant{product.variantCount !== 1 ? "s" : ""}</span>
                 </div>
               </div>
 

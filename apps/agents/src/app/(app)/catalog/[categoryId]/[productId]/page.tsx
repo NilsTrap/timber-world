@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ImageGallery } from "@/components/ImageGallery";
+import { ExpandableText } from "@/components/ExpandableText";
 import { imageUrl, thumbUrl } from "@/lib/images";
 import { computeQuantity, commissionPctForDiscount, gbp, type CalcMethod, type CommissionConfig } from "@/lib/pricing";
 
@@ -127,7 +128,7 @@ export default async function ProductDetailPage({ params }: Props) {
       {product.description && (
         <div>
           <h2 className="text-sm font-semibold mb-1">Description</h2>
-          <p className="text-sm text-[var(--charcoal-light)] leading-relaxed whitespace-pre-line">{product.description}</p>
+          <ExpandableText text={product.description} />
         </div>
       )}
 
