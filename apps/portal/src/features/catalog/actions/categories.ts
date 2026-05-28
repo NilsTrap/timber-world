@@ -17,6 +17,7 @@ function toCategory(row: any): CatalogCategory {
     description: row.description,
     imageStoragePath: row.image_storage_path,
     primaryUnit: row.primary_unit,
+    defaultPriceEurCents: row.default_price_eur_cents ?? null,
     isActive: row.is_active,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
@@ -92,6 +93,7 @@ export async function saveCategory(input: SaveCategoryInput): Promise<ActionResu
     name: input.name,
     description: input.description ?? null,
     primary_unit: input.primaryUnit,
+    default_price_eur_cents: input.defaultPriceEurCents ?? null,
     is_active: input.isActive ?? true,
     sort_order: input.sortOrder ?? 0,
   };
@@ -147,6 +149,7 @@ export async function duplicateCategory(id: string): Promise<ActionResult<Catalo
       description: source.description,
       image_storage_path: source.image_storage_path,
       primary_unit: source.primary_unit,
+      default_price_eur_cents: source.default_price_eur_cents,
       is_active: false,
       sort_order: source.sort_order + 1,
     })

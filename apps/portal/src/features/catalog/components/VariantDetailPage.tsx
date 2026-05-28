@@ -9,29 +9,43 @@ import { toast } from "sonner";
 import { saveVariant, deleteVariant } from "../actions/variants";
 import { uploadVariantImage, deleteVariantImage } from "../actions/images";
 import { getVariantPackages, saveVariantPackage, deleteVariantPackage, type VariantPackage } from "../actions/packaging";
-import type { CatalogVariant, CategoryField, PrimaryUnit } from "../types";
+import { effectiveRateEurCents, computeQuantity, lineTotalCents, formatMoney } from "../pricing";
+import type { CatalogVariant, CategoryField, PricingUnit } from "../types";
 
 interface Props {
   variant: CatalogVariant;
   categoryId: string;
   productId: string;
   productName: string;
-  primaryUnit: PrimaryUnit;
+  unit: PricingUnit | null;
+  productBasePriceEurCents: number | null;
+  categoryDefaultPriceEurCents: number | null;
   variantFields: CategoryField[];
 }
 
-export function VariantDetailPage({ variant: initialVariant, categoryId, productId, productName, primaryUnit, variantFields }: Props) {
+export function VariantDetailPage({ variant: initialVariant, categoryId, productId, productName, unit, productBasePriceEurCents, categoryDefaultPriceEurCents, variantFields }: Props) {
   const router = useRouter();
   const [variant, setVariant] = useState(initialVariant);
   const [thickness, setThickness] = useState(variant.thicknessMm?.toString() || "");
   const [width, setWidth] = useState(variant.widthMm?.toString() || "");
   const [length, setLength] = useState(variant.lengthMm?.toString() || "");
-  const [priceM2, setPriceM2] = useState(variant.priceM2Cents != null ? (variant.priceM2Cents / 100).toString() : "");
-  const [priceM3, setPriceM3] = useState(variant.priceM3Cents != null ? (variant.priceM3Cents / 100).toString() : "");
-  const [pricePiece, setPricePiece] = useState(variant.pricePieceCents != null ? (variant.pricePieceCents / 100).toString() : "");
+  const [price, setPrice] = useState(variant.priceEurCents != null ? (variant.priceEurCents / 100).toString() : "");
   const [sku, setSku] = useState(variant.sku || "");
   const [active, setActive] = useState(variant.isActive);
   const [saving, setSaving] = useState(false);
+
+  const unitSymbol = unit?.symbol ?? "unit";
+  const calcMethod = unit?.calcMethod ?? "per_piece";
+  const nonDimensionFields = variantFields.filter((f) => !f.dimensionRole);
+  // Live preview from the edited inputs.
+  const previewOverride = price ? Math.round(Number(price) * 100) : null;
+  const previewRate = effectiveRateEurCents(previewOverride, productBasePriceEurCents, categoryDefaultPriceEurCents);
+  const previewQty = computeQuantity(calcMethod, {
+    widthMm: width ? Number(width) : null,
+    lengthMm: length ? Number(length) : null,
+    thicknessMm: thickness ? Number(thickness) : null,
+  });
+  const previewTotal = lineTotalCents(previewRate, previewQty);
 
   const [images, setImages] = useState(variant.images || []);
   const [uploading, setUploading] = useState(false);
@@ -78,9 +92,7 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
       thicknessMm: thickness ? Number(thickness) : null,
       widthMm: width ? Number(width) : null,
       lengthMm: length ? Number(length) : null,
-      priceM2Cents: priceM2 ? Math.round(Number(priceM2) * 100) : null,
-      priceM3Cents: priceM3 ? Math.round(Number(priceM3) * 100) : null,
-      pricePieceCents: pricePiece ? Math.round(Number(pricePiece) * 100) : null,
+      priceEurCents: price ? Math.round(Number(price) * 100) : null,
       isActive: active,
       fieldValues: fvArray,
     });
@@ -151,18 +163,23 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
             <Input className="text-sm" value={sku} onChange={(e) => setSku(e.target.value)} />
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div className="space-y-1">
-            <label className="text-xs font-medium">Price / m²</label>
-            <Input type="number" step="0.01" className="text-sm" value={priceM2} onChange={(e) => setPriceM2(e.target.value)} placeholder="£" />
+            <label className="text-xs font-medium">Price (€ / {unitSymbol})</label>
+            <Input type="number" step="0.01" className="text-sm" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="blank = inherit product" />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium">Price / m³</label>
-            <Input type="number" step="0.01" className="text-sm" value={priceM3} onChange={(e) => setPriceM3(e.target.value)} placeholder="£" />
+            <label className="text-xs font-medium">Effective rate</label>
+            <div className="h-9 flex items-center text-sm">
+              {formatMoney(previewRate, "€")}{previewRate != null && <span className="text-muted-foreground">/{unitSymbol}</span>}
+              {!price && previewRate != null && <span className="ml-1 text-[10px] text-muted-foreground">inherited</span>}
+            </div>
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium">Price / piece</label>
-            <Input type="number" step="0.01" className="text-sm" value={pricePiece} onChange={(e) => setPricePiece(e.target.value)} placeholder="£" />
+            <label className="text-xs font-medium">Computed total</label>
+            <div className="h-9 flex items-center text-sm font-medium">
+              {previewTotal != null ? formatMoney(previewTotal, "€") : <span className="text-amber-600 text-xs">needs dimensions</span>}
+            </div>
           </div>
           <label className="flex items-center gap-2 text-sm cursor-pointer pt-5">
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
@@ -170,12 +187,12 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
           </label>
         </div>
 
-        {/* Dynamic variant-level fields */}
-        {variantFields.length > 0 && (
+        {/* Dynamic variant-level fields (dimensions handled above) */}
+        {nonDimensionFields.length > 0 && (
           <>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pt-2">Variant Attributes</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {variantFields.map((field) => (
+              {nonDimensionFields.map((field) => (
                 <DynamicField
                   key={field.id}
                   field={field}

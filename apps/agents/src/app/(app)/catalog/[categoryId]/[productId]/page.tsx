@@ -8,14 +8,29 @@ interface Props {
   params: Promise<{ categoryId: string; productId: string }>;
 }
 
+type CalcMethod = "per_piece" | "area" | "volume" | "length";
+
+function computeQuantity(method: CalcMethod, v: any): number | null {
+  const w = v.width_mm != null ? v.width_mm / 1000 : null;
+  const l = v.length_mm != null ? v.length_mm / 1000 : null;
+  const t = v.thickness_mm != null ? v.thickness_mm / 1000 : null;
+  switch (method) {
+    case "per_piece": return 1;
+    case "length": return l;
+    case "area": return w != null && l != null ? w * l : null;
+    case "volume": return w != null && l != null && t != null ? w * l * t : null;
+    default: return null;
+  }
+}
+
 export default async function ProductDetailPage({ params }: Props) {
   const { categoryId, productId } = await params;
   const supabase = await createClient();
 
-  const [catResult, productResult, variantsResult, fieldsResult] = await Promise.all([
-    (supabase as any).from("catalog_categories").select("id, name, primary_unit").eq("id", categoryId).single(),
+  const [catResult, productResult, variantsResult] = await Promise.all([
+    (supabase as any).from("catalog_categories").select("id, name, primary_unit, default_price_eur_cents").eq("id", categoryId).single(),
     (supabase as any).from("catalog_products").select(`
-      id, name, description,
+      id, name, description, base_price_eur_cents,
       catalog_product_images(id, storage_path, alt_text, is_primary, sort_order),
       catalog_product_field_values(
         catalog_fields(field_label),
@@ -23,12 +38,9 @@ export default async function ProductDetailPage({ params }: Props) {
       )
     `).eq("id", productId).single(),
     (supabase as any).from("catalog_variants").select(`
-      id, thickness_mm, width_mm, length_mm, price_m2_cents, price_m3_cents, price_piece_cents, is_active,
+      id, thickness_mm, width_mm, length_mm, price_eur_cents, is_active,
       catalog_variant_images(id, storage_path)
     `).eq("product_id", productId).eq("is_active", true).order("sort_order"),
-    (supabase as any).from("catalog_category_field_assignments")
-      .select("applies_to, catalog_fields(field_label, field_type, unit)")
-      .eq("category_id", categoryId),
   ]);
 
   if (!catResult.data || !productResult.data) notFound();
@@ -36,21 +48,30 @@ export default async function ProductDetailPage({ params }: Props) {
   const category = catResult.data;
   const product = productResult.data;
   const variants = variantsResult.data || [];
+
+  const unitResult = await (supabase as any)
+    .from("catalog_pricing_units").select("symbol, calc_method").eq("code", category.primary_unit).single();
+  const unitSymbol = unitResult.data?.symbol ?? "unit";
+  const calcMethod: CalcMethod = unitResult.data?.calc_method ?? "per_piece";
+
   const images = (product.catalog_product_images || []).sort((a: any, b: any) => a.sort_order - b.sort_order);
   const specs = (product.catalog_product_field_values || []).map((fv: any) => ({
     label: fv.catalog_fields?.field_label,
     value: fv.catalog_field_options?.label,
   })).filter((s: any) => s.label && s.value);
 
-  const unitLabels: Record<string, string> = { m2: "£/m²", m3: "£/m³", piece: "£/pc", linear_m: "£/m" };
-  const priceKey = category.primary_unit === "m2" ? "price_m2_cents"
-    : category.primary_unit === "m3" ? "price_m3_cents"
-    : "price_piece_cents";
+  const rows = variants.map((v: any) => {
+    const rate = v.price_eur_cents ?? product.base_price_eur_cents ?? category.default_price_eur_cents ?? null;
+    const qty = computeQuantity(calcMethod, v);
+    const total = rate != null && qty != null ? Math.round(rate * qty) : null;
+    return { v, rate, total };
+  });
 
-  const prices = variants.map((v: any) => v[priceKey]).filter(Boolean);
-  const minPrice = prices.length ? Math.min(...prices) : null;
-  const maxPrice = prices.length ? Math.max(...prices) : null;
+  const rates = rows.map((r: any) => r.rate).filter((x: any) => x != null) as number[];
+  const minRate = rates.length ? Math.min(...rates) : null;
+  const maxRate = rates.length ? Math.max(...rates) : null;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const fmt = (cents: number) => `€${(cents / 100).toFixed(2)}`;
 
   return (
     <div className="space-y-4">
@@ -93,13 +114,13 @@ export default async function ProductDetailPage({ params }: Props) {
       </div>
 
       {/* Price summary */}
-      {minPrice != null && (
+      {minRate != null && (
         <div className="rounded-xl p-4 text-white" style={{ background: "var(--forest-green)" }}>
           <div className="text-xs uppercase tracking-wide text-white/60 font-semibold">Price Range</div>
           <div className="text-xl font-bold mt-1">
-            £{(minPrice / 100).toFixed(2)}
-            {maxPrice && maxPrice !== minPrice ? ` – £${(maxPrice / 100).toFixed(2)}` : ""}
-            <span className="text-sm font-normal text-white/60 ml-1">{unitLabels[category.primary_unit]}</span>
+            {fmt(minRate)}
+            {maxRate && maxRate !== minRate ? ` – ${fmt(maxRate)}` : ""}
+            <span className="text-sm font-normal text-white/60 ml-1">/{unitSymbol}</span>
           </div>
           <div className="text-xs text-white/50 mt-1">{variants.length} variants available</div>
         </div>
@@ -134,27 +155,24 @@ export default async function ProductDetailPage({ params }: Props) {
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-white" style={{ background: "var(--forest-green)" }}>
                 <th className="px-3 py-2.5 font-semibold">Size (mm)</th>
-                <th className="px-3 py-2.5 font-semibold text-right">{unitLabels[category.primary_unit]}</th>
-                <th className="px-3 py-2.5 font-semibold text-right">£/piece</th>
+                <th className="px-3 py-2.5 font-semibold text-right">€/{unitSymbol}</th>
+                <th className="px-3 py-2.5 font-semibold text-right">Total</th>
               </tr>
             </thead>
             <tbody>
-              {variants.map((v: any) => {
-                const mainPrice = v[priceKey];
-                return (
-                  <tr key={v.id} className="border-t border-gray-100">
-                    <td className="px-3 py-2.5">
-                      <span className="font-semibold">{v.thickness_mm}</span> × {v.width_mm} × {v.length_mm}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-semibold text-[var(--forest-green)]">
-                      {mainPrice ? `£${(mainPrice / 100).toFixed(2)}` : "—"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right">
-                      {v.price_piece_cents ? `£${(v.price_piece_cents / 100).toFixed(2)}` : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
+              {rows.map(({ v, rate, total }: any) => (
+                <tr key={v.id} className="border-t border-gray-100">
+                  <td className="px-3 py-2.5">
+                    <span className="font-semibold">{v.thickness_mm}</span> × {v.width_mm} × {v.length_mm}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-semibold text-[var(--forest-green)]">
+                    {rate != null ? fmt(rate) : "—"}
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    {total != null ? fmt(total) : "—"}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

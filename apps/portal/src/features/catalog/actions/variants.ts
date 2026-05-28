@@ -20,11 +20,7 @@ function toVariant(row: any): CatalogVariant {
     lengthMm: row.length_mm,
     lengthMinMm: row.length_min_mm,
     lengthMaxMm: row.length_max_mm,
-    priceM2Cents: row.price_m2_cents,
-    priceM3Cents: row.price_m3_cents,
-    pricePieceCents: row.price_piece_cents,
-    priceLinearMCents: row.price_linear_m_cents,
-    currency: row.currency,
+    priceEurCents: row.price_eur_cents ?? null,
     isActive: row.is_active,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
@@ -56,6 +52,8 @@ function toFieldValue(row: any): VariantFieldValue {
       fieldType: row.catalog_fields.field_type,
       unit: row.catalog_fields.unit,
       refTable: row.catalog_fields.ref_table,
+      isSystem: row.catalog_fields.is_system ?? false,
+      dimensionRole: row.catalog_fields.dimension_role ?? null,
     } : undefined,
     option: row.catalog_field_options ? {
       id: row.catalog_field_options.id,
@@ -87,7 +85,7 @@ export async function getVariants(
       catalog_variant_images(id, variant_id, storage_path, alt_text, is_primary, sort_order),
       catalog_variant_field_values(
         id, variant_id, field_id, option_id, value_text, value_number,
-        catalog_fields(id, field_key, field_label, field_type, unit),
+        catalog_fields(id, field_key, field_label, field_type, unit, is_system, dimension_role),
         catalog_field_options(id, value, label)
       )
     `)
@@ -119,11 +117,7 @@ export async function saveVariant(
     length_mm: input.lengthMm ?? null,
     length_min_mm: input.lengthMinMm ?? null,
     length_max_mm: input.lengthMaxMm ?? null,
-    price_m2_cents: input.priceM2Cents ?? null,
-    price_m3_cents: input.priceM3Cents ?? null,
-    price_piece_cents: input.pricePieceCents ?? null,
-    price_linear_m_cents: input.priceLinearMCents ?? null,
-    currency: input.currency ?? "GBP",
+    price_eur_cents: input.priceEurCents ?? null,
     is_active: input.isActive ?? true,
     sort_order: input.sortOrder ?? 0,
   };
@@ -183,7 +177,7 @@ export async function saveVariant(
       catalog_variant_images(id, variant_id, storage_path, alt_text, is_primary, sort_order),
       catalog_variant_field_values(
         id, variant_id, field_id, option_id, value_text, value_number,
-        catalog_fields(id, field_key, field_label, field_type, unit),
+        catalog_fields(id, field_key, field_label, field_type, unit, is_system, dimension_role),
         catalog_field_options(id, value, label)
       )
     `)

@@ -5,6 +5,7 @@ import { getCategory } from "@/features/catalog/actions/categories";
 import { getCategoryFields } from "@/features/catalog/actions/fields";
 import { getProduct } from "@/features/catalog/actions/products";
 import { getVariants } from "@/features/catalog/actions/variants";
+import { getPricingUnits } from "@/features/catalog/actions/pricingUnits";
 import { VariantDetailPage } from "@/features/catalog/components/VariantDetailPage";
 
 export const metadata: Metadata = { title: "Variant Detail" };
@@ -20,11 +21,12 @@ export default async function VariantPage({ params }: Props) {
   if (!session) redirect("/login");
   if (!isAdmin(session)) redirect("/dashboard");
 
-  const [catResult, fieldsResult, productResult, variantsResult] = await Promise.all([
+  const [catResult, fieldsResult, productResult, variantsResult, unitsResult] = await Promise.all([
     getCategory(categoryId),
     getCategoryFields(categoryId),
     getProduct(productId),
     getVariants(productId),
+    getPricingUnits(),
   ]);
 
   if (!catResult.success || !productResult.success) notFound();
@@ -37,6 +39,8 @@ export default async function VariantPage({ params }: Props) {
 
   const allFields = fieldsResult.success ? fieldsResult.data : [];
   const variantFields = allFields.filter((f: any) => f.appliesTo === "variant");
+  const units = unitsResult.success ? unitsResult.data : [];
+  const unit = units.find((u) => u.code === catResult.data.primaryUnit) ?? null;
 
   return (
     <VariantDetailPage
@@ -44,7 +48,9 @@ export default async function VariantPage({ params }: Props) {
       categoryId={categoryId}
       productId={productId}
       productName={productResult.data.name}
-      primaryUnit={catResult.data.primaryUnit}
+      unit={unit}
+      productBasePriceEurCents={productResult.data.basePriceEurCents}
+      categoryDefaultPriceEurCents={catResult.data.defaultPriceEurCents}
       variantFields={variantFields}
     />
   );

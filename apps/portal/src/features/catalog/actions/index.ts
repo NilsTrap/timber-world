@@ -5,3 +5,5 @@ export { getAllProducts } from "./allProducts";
 export { getVariants, saveVariant, deleteVariant } from "./variants";
 export { uploadProductImage, deleteProductImage, uploadVariantImage, deleteVariantImage, uploadCategoryImage } from "./images";
 export { getPackagingTypes, savePackagingType, deletePackagingType } from "./packagingTypes";
+export { getPricingUnits, savePricingUnit, deletePricingUnit } from "./pricingUnits";
+export { getCurrencies, saveCurrency, deleteCurrency, updateCurrencyPrices } from "./currencies";

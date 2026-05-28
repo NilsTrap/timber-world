@@ -36,6 +36,8 @@ function toGlobalField(row: any): CatalogField {
     fieldType: row.field_type,
     unit: row.unit,
     refTable: row.ref_table,
+    isSystem: row.is_system ?? false,
+    dimensionRole: row.dimension_role ?? null,
     options: row.catalog_field_options?.map(toOption),
   };
 }
@@ -50,6 +52,8 @@ function toCategoryField(assignmentRow: any): CategoryField {
     fieldType: f.field_type,
     unit: f.unit,
     refTable: f.ref_table,
+    isSystem: f.is_system ?? false,
+    dimensionRole: f.dimension_role ?? null,
     appliesTo: assignmentRow.applies_to,
     showInFilter: assignmentRow.show_in_filter,
     showInDetail: assignmentRow.show_in_detail,
@@ -94,6 +98,27 @@ export async function saveField(input: SaveFieldInput): Promise<ActionResult<Cat
   if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
 
   const supabase = await createClient();
+
+  // System (dimension) fields: protect key + type from edits; only label/unit may change.
+  if (input.id) {
+    const { data: existing } = await (supabase as any)
+      .from("catalog_fields")
+      .select("is_system, field_key, field_type")
+      .eq("id", input.id)
+      .single();
+    if (existing?.is_system) {
+      const { data, error } = await (supabase as any)
+        .from("catalog_fields")
+        .update({ field_label: input.fieldLabel, unit: input.unit ?? null })
+        .eq("id", input.id)
+        .select("*, catalog_field_options(*)")
+        .single();
+      if (error) return { success: false, error: error.message };
+      revalidatePath("/admin/catalog");
+      return { success: true, data: toGlobalField(data) };
+    }
+  }
+
   const payload = {
     field_key: input.fieldKey,
     field_label: input.fieldLabel,
@@ -124,6 +149,16 @@ export async function deleteField(id: string): Promise<ActionResult<null>> {
   if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
 
   const supabase = await createClient();
+
+  const { data: existing } = await (supabase as any)
+    .from("catalog_fields")
+    .select("is_system")
+    .eq("id", id)
+    .single();
+  if (existing?.is_system) {
+    return { success: false, error: "System fields (dimensions) cannot be deleted — pricing depends on them.", code: "SYSTEM_FIELD" };
+  }
+
   const { error } = await (supabase as any).from("catalog_fields").delete().eq("id", id);
   if (error) return { success: false, error: error.message };
   revalidatePath("/admin/catalog");

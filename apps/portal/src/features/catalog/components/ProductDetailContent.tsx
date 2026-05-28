@@ -15,16 +15,16 @@ import type {
   CatalogVariant,
   CategoryField,
   FieldOption,
-  PrimaryUnit,
+  PricingUnit,
 } from "../types";
-
-const UNIT_LABELS: Record<string, string> = { m2: "£/m²", m3: "£/m³", piece: "£/pc", linear_m: "£/m" };
+import { effectiveRateEurCents, computeQuantity, lineTotalCents, formatMoney } from "../pricing";
 
 interface Props {
   product: CatalogProduct;
   categoryId: string;
   categoryName: string;
-  primaryUnit: PrimaryUnit;
+  unit: PricingUnit | null;
+  categoryDefaultPriceEurCents: number | null;
   productFields: CategoryField[];
   variantFields: CategoryField[];
   variants: CatalogVariant[];
@@ -34,7 +34,8 @@ export function ProductDetailContent({
   product: initialProduct,
   categoryId,
   categoryName,
-  primaryUnit,
+  unit,
+  categoryDefaultPriceEurCents,
   productFields,
   variantFields,
   variants: initialVariants,
@@ -45,6 +46,9 @@ export function ProductDetailContent({
   const [name, setName] = useState(product.name);
   const [desc, setDesc] = useState(product.description || "");
   const [slug, setSlug] = useState(product.slug);
+  const [basePrice, setBasePrice] = useState(product.basePriceEurCents != null ? (product.basePriceEurCents / 100).toString() : "");
+  const unitSymbol = unit?.symbol ?? "unit";
+  const calcMethod = unit?.calcMethod ?? "per_piece";
   const [saving, setSaving] = useState(false);
   const [showVariantForm, setShowVariantForm] = useState(false);
   const [editingVariant, setEditingVariant] = useState<CatalogVariant | null>(null);
@@ -77,6 +81,7 @@ export function ProductDetailContent({
       name: name.trim(),
       slug: slug.trim(),
       description: desc.trim() || null,
+      basePriceEurCents: basePrice ? Math.round(Number(basePrice) * 100) : null,
       fieldValues: fvArray,
     });
     setSaving(false);
@@ -127,8 +132,6 @@ export function ProductDetailContent({
     }
   };
 
-  const priceKey = `price${primaryUnit === "m2" ? "M2" : primaryUnit === "m3" ? "M3" : primaryUnit === "piece" ? "Piece" : "LinearM"}Cents` as keyof CatalogVariant;
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -170,6 +173,10 @@ export function ProductDetailContent({
           <div className="space-y-1">
             <label className="text-sm font-medium">Slug</label>
             <Input value={slug} onChange={(e) => setSlug(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Base price (€ / {unitSymbol})</label>
+            <Input type="number" step="0.01" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="applies to all variants unless overridden" />
           </div>
         </div>
         <div className="space-y-1">
@@ -280,7 +287,7 @@ export function ProductDetailContent({
         {(showVariantForm || editingVariant) && (
           <VariantForm
             productId={product.id}
-            primaryUnit={primaryUnit}
+            unit={unit}
             variantFields={variantFields}
             variant={editingVariant}
             onSave={handleSaveVariant}
@@ -297,15 +304,18 @@ export function ProductDetailContent({
                   <th className="text-left px-3 py-2 font-medium">Thickness</th>
                   <th className="text-left px-3 py-2 font-medium">Width</th>
                   <th className="text-left px-3 py-2 font-medium">Length</th>
-                  <th className="text-right px-3 py-2 font-medium">{UNIT_LABELS[primaryUnit] || "Price"}</th>
-                  <th className="text-right px-3 py-2 font-medium">£/piece</th>
+                  <th className="text-right px-3 py-2 font-medium">€/{unitSymbol}</th>
+                  <th className="text-right px-3 py-2 font-medium">Total (€)</th>
                   <th className="text-center px-3 py-2 font-medium">Active</th>
                   <th className="px-3 py-2 w-20"></th>
                 </tr>
               </thead>
               <tbody>
                 {variants.map((v) => {
-                  const mainPrice = v[priceKey] as number | null;
+                  const rate = effectiveRateEurCents(v.priceEurCents, product.basePriceEurCents, categoryDefaultPriceEurCents);
+                  const qty = computeQuantity(calcMethod, v);
+                  const total = lineTotalCents(rate, qty);
+                  const inherited = v.priceEurCents == null;
                   return (
                     <tr key={v.id} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-3 py-2">
@@ -329,10 +339,11 @@ export function ProductDetailContent({
                             : "—"}
                       </td>
                       <td className="px-3 py-2 text-right font-medium">
-                        {mainPrice != null ? `£${(mainPrice / 100).toFixed(2)}` : "—"}
+                        {formatMoney(rate, "€")}
+                        {inherited && rate != null && <span className="ml-1 text-[10px] text-muted-foreground">inh.</span>}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        {v.pricePieceCents != null ? `£${(v.pricePieceCents / 100).toFixed(2)}` : "—"}
+                        {total != null ? formatMoney(total, "€") : <span className="text-amber-600" title="Missing dimensions for this unit">n/a</span>}
                       </td>
                       <td className="px-3 py-2 text-center">
                         {v.isActive ? <span className="text-green-600">✓</span> : <span className="text-muted-foreground">—</span>}
@@ -437,14 +448,14 @@ function DynamicField({
 
 function VariantForm({
   productId,
-  primaryUnit,
+  unit,
   variantFields,
   variant,
   onSave,
   onCancel,
 }: {
   productId: string;
-  primaryUnit: PrimaryUnit;
+  unit: PricingUnit | null;
   variantFields: CategoryField[];
   variant: CatalogVariant | null;
   onSave: (input: any) => Promise<any>;
@@ -453,12 +464,13 @@ function VariantForm({
   const [thickness, setThickness] = useState(variant?.thicknessMm?.toString() || "");
   const [width, setWidth] = useState(variant?.widthMm?.toString() || "");
   const [length, setLength] = useState(variant?.lengthMm?.toString() || "");
-  const [priceM2, setPriceM2] = useState(variant?.priceM2Cents != null ? (variant.priceM2Cents / 100).toString() : "");
-  const [priceM3, setPriceM3] = useState(variant?.priceM3Cents != null ? (variant.priceM3Cents / 100).toString() : "");
-  const [pricePiece, setPricePiece] = useState(variant?.pricePieceCents != null ? (variant.pricePieceCents / 100).toString() : "");
+  const [price, setPrice] = useState(variant?.priceEurCents != null ? (variant.priceEurCents / 100).toString() : "");
   const [sku, setSku] = useState(variant?.sku || "");
   const [active, setActive] = useState(variant?.isActive ?? true);
   const [saving, setSaving] = useState(false);
+
+  // Dimensions are dedicated columns; hide their (system) fields from the generic list.
+  const nonDimensionFields = variantFields.filter((f) => !f.dimensionRole);
 
   const [fieldValues, setFieldValues] = useState<Record<string, { optionId?: string; valueText?: string; valueNumber?: number }>>(
     () => {
@@ -486,9 +498,7 @@ function VariantForm({
       thicknessMm: thickness ? Number(thickness) : null,
       widthMm: width ? Number(width) : null,
       lengthMm: length ? Number(length) : null,
-      priceM2Cents: priceM2 ? Math.round(Number(priceM2) * 100) : null,
-      priceM3Cents: priceM3 ? Math.round(Number(priceM3) * 100) : null,
-      pricePieceCents: pricePiece ? Math.round(Number(pricePiece) * 100) : null,
+      priceEurCents: price ? Math.round(Number(price) * 100) : null,
       isActive: active,
       fieldValues: fvArray,
     });
@@ -523,16 +533,8 @@ function VariantForm({
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="space-y-1">
-          <label className="text-xs font-medium">Price / m²</label>
-          <Input type="number" step="0.01" className="h-9 text-sm" value={priceM2} onChange={(e) => setPriceM2(e.target.value)} placeholder="£" />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium">Price / m³</label>
-          <Input type="number" step="0.01" className="h-9 text-sm" value={priceM3} onChange={(e) => setPriceM3(e.target.value)} placeholder="£" />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium">Price / piece</label>
-          <Input type="number" step="0.01" className="h-9 text-sm" value={pricePiece} onChange={(e) => setPricePiece(e.target.value)} placeholder="£" />
+          <label className="text-xs font-medium">Price (€ / {unit?.symbol ?? "unit"})</label>
+          <Input type="number" step="0.01" className="h-9 text-sm" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="blank = inherit product price" />
         </div>
         <label className="flex items-center gap-2 text-sm cursor-pointer pt-5">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
@@ -540,12 +542,12 @@ function VariantForm({
         </label>
       </div>
 
-      {/* Dynamic variant-level fields */}
-      {variantFields.length > 0 && (
+      {/* Dynamic variant-level fields (dimensions handled above) */}
+      {nonDimensionFields.length > 0 && (
         <div>
           <h4 className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Variant Attributes</h4>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {variantFields.map((field) => (
+            {nonDimensionFields.map((field) => (
               <DynamicField
                 key={field.id}
                 field={field}

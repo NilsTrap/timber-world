@@ -18,6 +18,7 @@ function toProduct(row: any): CatalogProduct {
     slug: row.slug,
     name: row.name,
     description: row.description,
+    basePriceEurCents: row.base_price_eur_cents ?? null,
     isActive: row.is_active,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
@@ -54,6 +55,8 @@ function toFieldValue(row: any): ProductFieldValue {
       fieldType: row.catalog_fields.field_type,
       unit: row.catalog_fields.unit,
       refTable: row.catalog_fields.ref_table,
+      isSystem: row.catalog_fields.is_system ?? false,
+      dimensionRole: row.catalog_fields.dimension_role ?? null,
     } : undefined,
     option: row.catalog_field_options ? {
       id: row.catalog_field_options.id,
@@ -86,7 +89,7 @@ export async function getProducts(
       catalog_product_images(id, storage_path, is_primary, sort_order),
       catalog_product_field_values(
         id, product_id, field_id, option_id, value_text, value_number,
-        catalog_fields(id, field_key, field_label, field_type, unit),
+        catalog_fields(id, field_key, field_label, field_type, unit, is_system, dimension_role),
         catalog_field_options(id, value, label)
       )
     `)
@@ -118,7 +121,7 @@ export async function getProduct(
       catalog_product_images(id, product_id, storage_path, alt_text, is_primary, sort_order),
       catalog_product_field_values(
         id, product_id, field_id, option_id, value_text, value_number,
-        catalog_fields(id, field_key, field_label, field_type, unit, ref_table),
+        catalog_fields(id, field_key, field_label, field_type, unit, ref_table, is_system, dimension_role),
         catalog_field_options(id, field_id, ref_value_id, value, label, description, description_image_path, sort_order, is_active)
       )
     `)
@@ -147,6 +150,7 @@ export async function saveProduct(
     slug: input.slug,
     name: input.name,
     description: input.description ?? null,
+    base_price_eur_cents: input.basePriceEurCents ?? null,
     is_active: input.isActive ?? true,
     sort_order: input.sortOrder ?? 0,
   };
@@ -229,6 +233,7 @@ export async function duplicateProduct(id: string): Promise<ActionResult<Catalog
       slug: source.slug + "-copy",
       name: source.name + " (Copy)",
       description: source.description,
+      base_price_eur_cents: source.base_price_eur_cents,
       is_active: false,
       sort_order: source.sort_order + 1,
     })
@@ -270,11 +275,7 @@ export async function duplicateProduct(id: string): Promise<ActionResult<Catalog
           length_mm: v.length_mm,
           length_min_mm: v.length_min_mm,
           length_max_mm: v.length_max_mm,
-          price_m2_cents: v.price_m2_cents,
-          price_m3_cents: v.price_m3_cents,
-          price_piece_cents: v.price_piece_cents,
-          price_linear_m_cents: v.price_linear_m_cents,
-          currency: v.currency,
+          price_eur_cents: v.price_eur_cents,
           is_active: v.is_active,
           sort_order: v.sort_order,
         })

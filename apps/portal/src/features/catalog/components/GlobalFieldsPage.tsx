@@ -151,13 +151,16 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
         <span className="text-sm text-muted-foreground">{filteredFields.length} of {fields.length}</span>
       </div>
 
-      {showForm && (
+      {showForm && (() => {
+        const editingField = fields.find((f) => f.id === editingId);
+        const lockSystem = !!editingField?.isSystem;
+        return (
         <div className="rounded-lg border bg-card p-5 space-y-4">
-          <h3 className="font-semibold">{editingId ? "Edit Field" : "New Field"}</h3>
+          <h3 className="font-semibold">{editingId ? "Edit Field" : "New Field"}{lockSystem && <span className="ml-2 text-xs font-normal text-amber-700">System field — key &amp; type are locked</span>}</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-medium">Key</label>
-              <Input value={key} onChange={(e) => setKey(e.target.value)} placeholder="wood_species" className="text-sm" />
+              <Input value={key} onChange={(e) => setKey(e.target.value)} placeholder="wood_species" className="text-sm" disabled={lockSystem} />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">Label</label>
@@ -165,7 +168,7 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">Type</label>
-              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={type} onChange={(e) => setType(e.target.value as FieldType)}>
+              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={type} onChange={(e) => setType(e.target.value as FieldType)} disabled={lockSystem}>
                 {FIELD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
@@ -179,7 +182,8 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
             <Button size="sm" variant="outline" onClick={resetForm}>Cancel</Button>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       <div className="space-y-2">
         {filteredFields.map((field) => {
@@ -196,6 +200,11 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
                     <span className="font-medium text-sm">{field.fieldLabel}</span>
                     <span className="text-xs text-muted-foreground font-mono">{field.fieldKey}</span>
                     {field.unit && <span className="text-xs text-muted-foreground">({field.unit})</span>}
+                    {field.isSystem && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium" title="System dimension field — pricing depends on it">
+                        System · {field.dimensionRole}
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2 mt-0.5 flex-wrap">
                     {fa.assignments && fa.assignments.length > 0 ? (
@@ -221,9 +230,11 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(field)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(field.id)}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
+                  {!field.isSystem && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(field.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  )}
                 </div>
               </div>
 

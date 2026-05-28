@@ -26,6 +26,7 @@ import type {
   FieldOption,
   CatalogProduct,
   PrimaryUnit,
+  PricingUnit,
   FieldType,
   AppliesTo,
 } from "../types";
@@ -34,14 +35,8 @@ interface Props {
   category: CatalogCategory;
   fields: CategoryField[];
   products: CatalogProduct[];
+  pricingUnits: PricingUnit[];
 }
-
-const UNIT_OPTIONS: { value: PrimaryUnit; label: string }[] = [
-  { value: "m2", label: "Per m²" },
-  { value: "m3", label: "Per m³" },
-  { value: "piece", label: "Per piece" },
-  { value: "linear_m", label: "Per linear meter" },
-];
 
 const FIELD_TYPE_OPTIONS: { value: FieldType; label: string }[] = [
   { value: "select", label: "Select (dropdown)" },
@@ -50,16 +45,16 @@ const FIELD_TYPE_OPTIONS: { value: FieldType; label: string }[] = [
   { value: "boolean", label: "Yes/No" },
 ];
 
-export function CategoryDetailTabs({ category, fields: initialFields, products: initialProducts }: Props) {
+export function CategoryDetailTabs({ category, fields: initialFields, products: initialProducts, pricingUnits }: Props) {
   const router = useRouter();
-  const [tab, setTab] = useState<"fields" | "products" | "settings">("fields");
+  const [tab, setTab] = useState<"category" | "products" | "fields">("category");
   const [fields, setFields] = useState(initialFields);
   const [products] = useState(initialProducts);
 
   const tabs = [
-    { id: "fields" as const, label: "Fields", count: fields.length },
+    { id: "category" as const, label: "Category" },
     { id: "products" as const, label: "Products", count: products.length },
-    { id: "settings" as const, label: "Settings" },
+    { id: "fields" as const, label: "Fields", count: fields.length },
   ];
 
   return (
@@ -109,8 +104,8 @@ export function CategoryDetailTabs({ category, fields: initialFields, products: 
       {tab === "products" && (
         <ProductsTab categoryId={category.id} products={products} />
       )}
-      {tab === "settings" && (
-        <SettingsTab category={category} />
+      {tab === "category" && (
+        <SettingsTab category={category} pricingUnits={pricingUnits} />
       )}
     </div>
   );
@@ -540,20 +535,27 @@ function ProductsTab({ categoryId, products }: { categoryId: string; products: C
 // Settings Tab
 // ============================================================================
 
-function SettingsTab({ category }: { category: CatalogCategory }) {
+function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pricingUnits: PricingUnit[] }) {
   const router = useRouter();
   const [name, setName] = useState(category.name);
   const [slug, setSlug] = useState(category.slug);
   const [desc, setDesc] = useState(category.description || "");
   const [unit, setUnit] = useState<PrimaryUnit>(category.primaryUnit);
+  const [defaultPrice, setDefaultPrice] = useState(
+    category.defaultPriceEurCents != null ? (category.defaultPriceEurCents / 100).toString() : ""
+  );
   const [active, setActive] = useState(category.isActive);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deletionInfo, setDeletionInfo] = useState<{ productCount: number; variantCount: number } | null>(null);
 
+  const selectedUnit = pricingUnits.find((u) => u.code === unit);
+  const initialDefaultPrice = category.defaultPriceEurCents != null ? (category.defaultPriceEurCents / 100).toString() : "";
+
   const hasChanges = name !== category.name || slug !== category.slug ||
-    desc !== (category.description || "") || unit !== category.primaryUnit || active !== category.isActive;
+    desc !== (category.description || "") || unit !== category.primaryUnit ||
+    defaultPrice !== initialDefaultPrice || active !== category.isActive;
 
   const handleSave = async () => {
     setSaving(true);
@@ -563,6 +565,7 @@ function SettingsTab({ category }: { category: CatalogCategory }) {
       slug: slug.trim(),
       description: desc.trim() || null,
       primaryUnit: unit,
+      defaultPriceEurCents: defaultPrice ? Math.round(Number(defaultPrice) * 100) : null,
       isActive: active,
     });
     setSaving(false);
@@ -613,15 +616,27 @@ function SettingsTab({ category }: { category: CatalogCategory }) {
             onChange={(e) => setDesc(e.target.value)}
           />
         </div>
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Primary Pricing Unit</label>
-          <select
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={unit}
-            onChange={(e) => setUnit(e.target.value as PrimaryUnit)}
-          >
-            {UNIT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Primary Pricing Unit</label>
+            <select
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+            >
+              {pricingUnits.map((u) => <option key={u.code} value={u.code}>{u.name} ({u.symbol})</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Default price (€ / {selectedUnit?.symbol ?? "unit"})</label>
+            <Input
+              type="number"
+              step="0.01"
+              value={defaultPrice}
+              onChange={(e) => setDefaultPrice(e.target.value)}
+              placeholder="optional — applies to products with no price"
+            />
+          </div>
         </div>
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />

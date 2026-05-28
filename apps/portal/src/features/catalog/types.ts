@@ -2,9 +2,22 @@ export type ActionResult<T> =
   | { success: true; data: T }
   | { success: false; error: string; code?: string };
 
-export type PrimaryUnit = "m2" | "m3" | "piece" | "linear_m";
+/** Pricing-unit code (admin-managed in catalog_pricing_units). */
+export type PrimaryUnit = string;
+export type CalcMethod = "per_piece" | "area" | "volume" | "length";
 export type FieldType = "select" | "number" | "text" | "boolean";
 export type AppliesTo = "product" | "variant";
+export type DimensionRole = "width" | "length" | "thickness";
+
+export interface PricingUnit {
+  id: string;
+  code: string;
+  name: string;
+  symbol: string;
+  calcMethod: CalcMethod;
+  isActive: boolean;
+  sortOrder: number;
+}
 
 export interface CatalogCategory {
   id: string;
@@ -13,6 +26,7 @@ export interface CatalogCategory {
   description: string | null;
   imageStoragePath: string | null;
   primaryUnit: PrimaryUnit;
+  defaultPriceEurCents: number | null;
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
@@ -28,6 +42,8 @@ export interface CatalogField {
   fieldType: FieldType;
   unit: string | null;
   refTable: string | null;
+  isSystem: boolean;
+  dimensionRole: DimensionRole | null;
   options?: FieldOption[];
 }
 
@@ -53,6 +69,8 @@ export interface CategoryField {
   fieldType: FieldType;
   unit: string | null;
   refTable: string | null;
+  isSystem: boolean;
+  dimensionRole: DimensionRole | null;
   appliesTo: AppliesTo;
   showInFilter: boolean;
   showInDetail: boolean;
@@ -80,6 +98,7 @@ export interface CatalogProduct {
   slug: string;
   name: string;
   description: string | null;
+  basePriceEurCents: number | null;
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
@@ -118,11 +137,7 @@ export interface CatalogVariant {
   lengthMm: number | null;
   lengthMinMm: number | null;
   lengthMaxMm: number | null;
-  priceM2Cents: number | null;
-  priceM3Cents: number | null;
-  pricePieceCents: number | null;
-  priceLinearMCents: number | null;
-  currency: string;
+  priceEurCents: number | null;
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
@@ -159,6 +174,7 @@ export interface SaveCategoryInput {
   name: string;
   description?: string | null;
   primaryUnit: PrimaryUnit;
+  defaultPriceEurCents?: number | null;
   isActive?: boolean;
   sortOrder?: number;
 }
@@ -201,6 +217,7 @@ export interface SaveProductInput {
   slug: string;
   name: string;
   description?: string | null;
+  basePriceEurCents?: number | null;
   isActive?: boolean;
   sortOrder?: number;
   fieldValues?: { fieldId: string; optionId?: string | null; valueText?: string | null; valueNumber?: number | null }[];
@@ -215,12 +232,33 @@ export interface SaveVariantInput {
   lengthMm?: number | null;
   lengthMinMm?: number | null;
   lengthMaxMm?: number | null;
-  priceM2Cents?: number | null;
-  priceM3Cents?: number | null;
-  pricePieceCents?: number | null;
-  priceLinearMCents?: number | null;
-  currency?: string;
+  priceEurCents?: number | null;
   isActive?: boolean;
   sortOrder?: number;
   fieldValues?: { fieldId: string; optionId?: string | null; valueText?: string | null; valueNumber?: number | null }[];
+}
+
+// ---- Currencies ----
+
+export interface CatalogCurrency {
+  code: string;
+  name: string;
+  symbol: string;
+  isBase: boolean;
+  exchangeRate: number | null;
+  rateSource: string | null;
+  rateFetchedAt: string | null;
+  roundingRule: RoundingRule | null;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface RoundingBand {
+  upTo: number | null;
+  endings?: number[];
+  stepEnding?: { step: number; minus: number };
+}
+
+export interface RoundingRule {
+  bands: RoundingBand[];
 }

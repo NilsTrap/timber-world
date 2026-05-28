@@ -7,25 +7,20 @@ import { Plus, Layers, Copy } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
 import { saveCategory, duplicateCategory } from "../actions/categories";
-import type { CatalogCategory, PrimaryUnit } from "../types";
-
-const UNIT_LABELS: Record<PrimaryUnit, string> = {
-  m2: "m²",
-  m3: "m³",
-  piece: "piece",
-  linear_m: "linear m",
-};
+import type { CatalogCategory, PrimaryUnit, PricingUnit } from "../types";
 
 interface Props {
   categories: CatalogCategory[];
+  pricingUnits: PricingUnit[];
 }
 
-export function CatalogPageContent({ categories }: Props) {
+export function CatalogPageContent({ categories, pricingUnits }: Props) {
   const router = useRouter();
+  const unitSymbol = (code: string) => pricingUnits.find((u) => u.code === code)?.symbol ?? code;
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
-  const [unit, setUnit] = useState<PrimaryUnit>("m2");
+  const [unit, setUnit] = useState<PrimaryUnit>(pricingUnits[0]?.code ?? "m2");
   const [saving, setSaving] = useState(false);
 
   const handleCreate = async () => {
@@ -86,12 +81,9 @@ export function CatalogPageContent({ categories }: Props) {
               <select
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={unit}
-                onChange={(e) => setUnit(e.target.value as PrimaryUnit)}
+                onChange={(e) => setUnit(e.target.value)}
               >
-                <option value="m2">Per m²</option>
-                <option value="m3">Per m³</option>
-                <option value="piece">Per piece</option>
-                <option value="linear_m">Per linear meter</option>
+                {pricingUnits.map((u) => <option key={u.code} value={u.code}>{u.name} ({u.symbol})</option>)}
               </select>
             </div>
           </div>
@@ -138,7 +130,7 @@ export function CatalogPageContent({ categories }: Props) {
                 <div className="flex gap-4 text-xs text-muted-foreground">
                   <span>{cat.fieldCount ?? 0} fields</span>
                   <span>{cat.productCount ?? 0} products</span>
-                  <span>{UNIT_LABELS[cat.primaryUnit]}</span>
+                  <span>{unitSymbol(cat.primaryUnit)}</span>
                 </div>
                 <button
                   onClick={async (e) => {

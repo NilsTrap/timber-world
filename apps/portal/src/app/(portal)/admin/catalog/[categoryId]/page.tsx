@@ -4,6 +4,7 @@ import { getSession, isAdmin } from "@/lib/auth";
 import { getCategory } from "@/features/catalog/actions/categories";
 import { getCategoryFields } from "@/features/catalog/actions/fields";
 import { getProducts } from "@/features/catalog/actions/products";
+import { getPricingUnits } from "@/features/catalog/actions/pricingUnits";
 import { CategoryDetailTabs } from "@/features/catalog/components/CategoryDetailTabs";
 
 export const metadata: Metadata = { title: "Category Detail" };
@@ -19,10 +20,11 @@ export default async function CategoryDetailPage({ params }: Props) {
   if (!session) redirect("/login");
   if (!isAdmin(session)) redirect("/dashboard");
 
-  const [catResult, fieldsResult, productsResult] = await Promise.all([
+  const [catResult, fieldsResult, productsResult, unitsResult] = await Promise.all([
     getCategory(categoryId),
     getCategoryFields(categoryId),
     getProducts(categoryId),
+    getPricingUnits(),
   ]);
 
   if (!catResult.success) notFound();
@@ -32,6 +34,7 @@ export default async function CategoryDetailPage({ params }: Props) {
       category={catResult.data}
       fields={fieldsResult.success ? fieldsResult.data : []}
       products={productsResult.success ? productsResult.data : []}
+      pricingUnits={unitsResult.success ? unitsResult.data : []}
     />
   );
 }
