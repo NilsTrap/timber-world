@@ -24,6 +24,7 @@ interface ModuleNavItem extends NavItem {
  */
 const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
   { href: "/admin/agents", label: "Agents", iconName: "Contact" },
+  { href: "/admin/agent-orders", label: "Agent Orders", iconName: "ClipboardList" },
   { href: "/admin/catalog", label: "Catalog", iconName: "Layers", children: [
     { href: "/admin/catalog", label: "Categories" },
     { href: "/admin/catalog/products", label: "Products" },
