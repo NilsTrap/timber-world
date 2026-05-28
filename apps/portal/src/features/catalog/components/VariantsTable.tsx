@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { saveVariant, deleteVariant } from "../actions/variants";
 import { assignVariantPackaging, removeVariantPackaging } from "../actions/packaging";
 import { applyCharmRounding } from "../charmRounding";
-import { effectiveRateEurCents, computeQuantity, lineTotalCents, computeStock, formatMoney } from "../pricing";
+import { effectiveRateEurCents, computeQuantity, lineTotalCents, computeStock, formatMoney, formatQty } from "../pricing";
 import type {
   CatalogVariant, CatalogCurrency, PricingUnit, SaveVariantInput, StockUnit,
 } from "../types";
@@ -167,7 +167,7 @@ export function VariantsTable({
                       <option value="piece">pc</option>
                       <option value="package">pkg</option>
                     </select>
-                    {stock.baseQty != null && <span className="text-[10px] text-muted-foreground whitespace-nowrap">= {stock.baseQty} {unitSymbol}</span>}
+                    {stock.baseQty != null && <span className="text-[10px] text-muted-foreground whitespace-nowrap">= {formatQty(stock.baseQty)} {unitSymbol}</span>}
                   </div>
                 </td>
                 <td className="px-1 py-1">

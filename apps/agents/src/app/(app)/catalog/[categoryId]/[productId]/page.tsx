@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ImageGallery } from "@/components/ImageGallery";
 import { ExpandableText } from "@/components/ExpandableText";
 import { imageUrl, thumbUrl } from "@/lib/images";
-import { computeQuantity, commissionPctForDiscount, gbp, type CalcMethod, type CommissionConfig } from "@/lib/pricing";
+import { computeQuantity, commissionPctForDiscount, gbp, fmtQty, type CalcMethod, type CommissionConfig } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -152,7 +152,7 @@ export default async function ProductDetailPage({ params }: Props) {
                 {rate != null ? (
                   <>
                     <div className="text-sm font-semibold text-[var(--forest-green)]">{gbp(rate)}<span className="text-xs font-normal text-[var(--charcoal-light)]">/{unitSymbol}</span></div>
-                    {perPack != null && <div className="text-xs text-[var(--charcoal-light)]">{perPack} {unitSymbol} / pack</div>}
+                    {perPack != null && <div className="text-xs text-[var(--charcoal-light)]">{fmtQty(perPack)} {unitSymbol} / pack</div>}
                   </>
                 ) : (
                   <div className="text-xs text-[var(--charcoal-light)]">price on request</div>

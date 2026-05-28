@@ -4,7 +4,7 @@ import { getVariantOrderContext } from "@/app/(app)/cart/actions";
 import { VariantOrderForm } from "@/components/VariantOrderForm";
 import { ImageGallery } from "@/components/ImageGallery";
 import { imageUrl } from "@/lib/images";
-import { gbp } from "@/lib/pricing";
+import { gbp, fmtQty } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +59,7 @@ export default async function VariantDetailPage({ params }: Props) {
       <div className="rounded-xl bg-white border border-gray-100 divide-y divide-gray-100 text-sm">
         <div className="flex justify-between px-4 py-2.5">
           <span className="text-[var(--charcoal-light)]">In stock</span>
-          <span className="font-medium">{c.stockPackages != null ? `${c.stockPackages} pkg${c.stockBaseQty != null ? ` · ${c.stockBaseQty} ${c.unitSymbol}` : ""}` : "—"}</span>
+          <span className="font-medium">{c.stockPackages != null ? `${c.stockPackages} pkg${c.stockBaseQty != null ? ` · ${fmtQty(c.stockBaseQty)} ${c.unitSymbol}` : ""}` : "—"}</span>
         </div>
         <div className="flex justify-between px-4 py-2.5">
           <span className="text-[var(--charcoal-light)]">Packaging</span>
@@ -67,7 +67,7 @@ export default async function VariantDetailPage({ params }: Props) {
         </div>
         <div className="flex justify-between px-4 py-2.5">
           <span className="text-[var(--charcoal-light)]">Per package</span>
-          <span className="font-medium">{c.baseQtyPerPackage} {c.unitSymbol}</span>
+          <span className="font-medium">{fmtQty(c.baseQtyPerPackage)} {c.unitSymbol}</span>
         </div>
         <div className="flex justify-between px-4 py-2.5">
           <span className="text-[var(--charcoal-light)]">Unit price</span>

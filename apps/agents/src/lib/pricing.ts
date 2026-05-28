@@ -54,3 +54,9 @@ export function gbp(cents: number | null | undefined): string {
   if (cents == null) return "—";
   return `£${(cents / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+/** Format a quantity for display: max 2 decimals, no trailing zeros (avoids float artifacts like 9.299999…). */
+export function fmtQty(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return n.toLocaleString("en-GB", { maximumFractionDigits: 2 });
+}

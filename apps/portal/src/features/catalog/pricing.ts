@@ -89,6 +89,12 @@ export function formatMoney(cents: number | null | undefined, symbol: string): s
   return `${symbol}${(cents / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** Format a quantity for display: max 2 decimals, no trailing zeros. */
+export function formatQty(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return n.toLocaleString("en-GB", { maximumFractionDigits: 2 });
+}
+
 function mm(v: number | null | undefined): number | null {
   return v == null ? null : v / 1000;
 }

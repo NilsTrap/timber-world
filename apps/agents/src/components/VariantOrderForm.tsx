@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { addToCart } from "@/app/(app)/cart/actions";
-import { commissionPctForDiscount, clampDiscount, gbp, type CommissionConfig } from "@/lib/pricing";
+import { commissionPctForDiscount, clampDiscount, gbp, fmtQty, type CommissionConfig } from "@/lib/pricing";
 
 interface Props {
   variantId: string;
@@ -50,7 +50,7 @@ export function VariantOrderForm({ variantId, packagePriceCents, commission, sho
           <button onClick={() => setQty((q) => q + 1)} className="w-9 h-9 rounded-lg border border-gray-200 text-lg font-semibold">+</button>
         </div>
       </div>
-      <div className="text-xs text-[var(--charcoal-light)] -mt-2">{(baseQtyPerPackage * Math.max(1, qty)).toFixed(2)} {unitSymbol} total</div>
+      <div className="text-xs text-[var(--charcoal-light)] -mt-2">{fmtQty(baseQtyPerPackage * Math.max(1, qty))} {unitSymbol} total</div>
 
       {maxDiscount > 0 && (
         <div className="space-y-1">
