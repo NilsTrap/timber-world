@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 import { getVariantOrderContext } from "@/app/(app)/cart/actions";
 import { VariantOrderForm } from "@/components/VariantOrderForm";
+import { ImageGallery } from "@/components/ImageGallery";
+import { imageUrl } from "@/lib/images";
 import { gbp } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +14,13 @@ interface Props {
 
 export default async function VariantDetailPage({ params }: Props) {
   const { categoryId, productId, variantId } = await params;
-  const result = await getVariantOrderContext(variantId);
+  const supabase = await createClient();
+
+  const [result, imagesResult] = await Promise.all([
+    getVariantOrderContext(variantId),
+    (supabase as any).from("catalog_variant_images")
+      .select("storage_path, is_primary, sort_order").eq("variant_id", variantId),
+  ]);
 
   const back = (
     <Link href={`/catalog/${categoryId}/${productId}`} className="inline-flex items-center gap-1 text-sm text-[var(--charcoal-light)]">
@@ -30,10 +39,16 @@ export default async function VariantDetailPage({ params }: Props) {
   }
 
   const c = result.data;
+  const images = (imagesResult.data || [])
+    .sort((a: any, b: any) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || a.sort_order - b.sort_order)
+    .map((img: any) => imageUrl(img.storage_path)!)
+    .filter(Boolean);
 
   return (
     <div className="space-y-4">
       {back}
+
+      {images.length > 0 && <ImageGallery images={images} alt={c.productName} />}
 
       <div>
         <h1 className="text-xl font-bold">{c.productName}</h1>
@@ -52,7 +67,7 @@ export default async function VariantDetailPage({ params }: Props) {
         </div>
         <div className="flex justify-between px-4 py-2.5">
           <span className="text-[var(--charcoal-light)]">Per package</span>
-          <span className="font-medium">{c.baseQtyPerPackage} {c.unitSymbol} · {gbp(c.packagePriceCents)}</span>
+          <span className="font-medium">{c.baseQtyPerPackage} {c.unitSymbol}</span>
         </div>
         <div className="flex justify-between px-4 py-2.5">
           <span className="text-[var(--charcoal-light)]">Unit price</span>
