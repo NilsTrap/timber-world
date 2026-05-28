@@ -178,6 +178,28 @@ export async function duplicateCategory(id: string): Promise<ActionResult<Catalo
   return { success: true, data: toCategory({ ...newCat, field_count: assignments?.length ?? 0, product_count: 0 }) };
 }
 
+export async function getCategoryDeletionInfo(
+  id: string
+): Promise<ActionResult<{ productCount: number; variantCount: number }>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const supabase = await createClient();
+
+  const { data: products } = await (supabase as any)
+    .from("catalog_products")
+    .select("id, catalog_variants(id)")
+    .eq("category_id", id);
+
+  const productCount = products?.length ?? 0;
+  const variantCount = (products || []).reduce(
+    (sum: number, p: any) => sum + (p.catalog_variants?.length ?? 0), 0
+  );
+
+  return { success: true, data: { productCount, variantCount } };
+}
+
 export async function deleteCategory(id: string): Promise<ActionResult<null>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
@@ -185,6 +207,38 @@ export async function deleteCategory(id: string): Promise<ActionResult<null>> {
 
   const supabase = await createClient();
 
+  // Cascade delete: variants → products → category.
+  // (Field values and images cascade automatically via ON DELETE CASCADE.)
+  const { data: products } = await (supabase as any)
+    .from("catalog_products")
+    .select("id")
+    .eq("category_id", id);
+
+  const productIds = (products || []).map((p: any) => p.id);
+
+  if (productIds.length > 0) {
+    // Delete variants first (RESTRICT on product FK)
+    const { error: variantErr } = await (supabase as any)
+      .from("catalog_variants")
+      .delete()
+      .in("product_id", productIds);
+    if (variantErr) {
+      console.error("deleteCategory variants error:", variantErr);
+      return { success: false, error: variantErr.message };
+    }
+
+    // Then products (RESTRICT on category FK)
+    const { error: productErr } = await (supabase as any)
+      .from("catalog_products")
+      .delete()
+      .eq("category_id", id);
+    if (productErr) {
+      console.error("deleteCategory products error:", productErr);
+      return { success: false, error: productErr.message };
+    }
+  }
+
+  // Finally the category (field assignments cascade automatically)
   const { error } = await (supabase as any)
     .from("catalog_categories")
     .delete()
@@ -192,9 +246,6 @@ export async function deleteCategory(id: string): Promise<ActionResult<null>> {
 
   if (error) {
     console.error("deleteCategory error:", error);
-    if (error.code === "23503") {
-      return { success: false, error: "Cannot delete: category has products. Remove all products first.", code: "HAS_CHILDREN" };
-    }
     return { success: false, error: error.message };
   }
 

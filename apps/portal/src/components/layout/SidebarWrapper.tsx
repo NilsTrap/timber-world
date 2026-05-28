@@ -28,6 +28,7 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
     { href: "/admin/catalog", label: "Categories" },
     { href: "/admin/catalog/products", label: "Products" },
     { href: "/admin/catalog/fields", label: "Fields" },
+    { href: "/admin/catalog/packaging", label: "Packaging" },
   ]},
   { href: "/admin/marketing", label: "CMS", iconName: "Image" },
   { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp" },

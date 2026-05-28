@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import {
   saveCategory,
   deleteCategory,
+  getCategoryDeletionInfo,
   getAllFields,
   saveField,
   saveFieldAssignment,
@@ -548,6 +549,8 @@ function SettingsTab({ category }: { category: CatalogCategory }) {
   const [active, setActive] = useState(category.isActive);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deletionInfo, setDeletionInfo] = useState<{ productCount: number; variantCount: number } | null>(null);
 
   const hasChanges = name !== category.name || slug !== category.slug ||
     desc !== (category.description || "") || unit !== category.primaryUnit || active !== category.isActive;
@@ -571,8 +574,13 @@ function SettingsTab({ category }: { category: CatalogCategory }) {
     }
   };
 
+  const openDeleteConfirm = async () => {
+    const info = await getCategoryDeletionInfo(category.id);
+    setDeletionInfo(info.success ? info.data : { productCount: 0, variantCount: 0 });
+    setConfirmOpen(true);
+  };
+
   const handleDelete = async () => {
-    if (!confirm(`Delete category "${category.name}"? This cannot be undone.`)) return;
     setDeleting(true);
     const result = await deleteCategory(category.id);
     setDeleting(false);
@@ -581,6 +589,7 @@ function SettingsTab({ category }: { category: CatalogCategory }) {
       router.push("/admin/catalog");
     } else {
       toast.error(result.error);
+      setConfirmOpen(false);
     }
   };
 
@@ -626,13 +635,58 @@ function SettingsTab({ category }: { category: CatalogCategory }) {
       <div className="rounded-lg border border-destructive/30 bg-card p-5">
         <h3 className="font-semibold text-destructive mb-2">Danger Zone</h3>
         <p className="text-sm text-muted-foreground mb-3">
-          Deleting a category removes all its fields and options. Products must be removed first.
+          Deleting a category permanently removes the category, its field assignments,
+          and <strong>all products and variants inside it</strong>.
         </p>
-        <Button variant="outline" className="text-destructive border-destructive/30" onClick={handleDelete} disabled={deleting}>
+        <Button variant="outline" className="text-destructive border-destructive/30" onClick={openDeleteConfirm} disabled={deleting}>
           <Trash2 className="h-4 w-4 mr-2" />
-          {deleting ? "Deleting..." : "Delete Category"}
+          Delete Category
         </Button>
       </div>
+
+      {/* Confirmation dialog */}
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !deleting && setConfirmOpen(false)}>
+          <div className="bg-card rounded-lg shadow-xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                <Trash2 className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg">Delete &quot;{category.name}&quot;?</h3>
+                <p className="text-sm text-muted-foreground mt-1">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            {deletionInfo && deletionInfo.productCount > 0 ? (
+              <div className="rounded-lg bg-destructive/5 border border-destructive/20 p-4 text-sm">
+                <p className="font-medium text-destructive">
+                  This will permanently delete:
+                </p>
+                <ul className="mt-2 space-y-1 text-foreground">
+                  <li>• The category and its field assignments</li>
+                  <li>• <strong>{deletionInfo.productCount}</strong> product{deletionInfo.productCount !== 1 ? "s" : ""}</li>
+                  <li>• <strong>{deletionInfo.variantCount}</strong> variant{deletionInfo.variantCount !== 1 ? "s" : ""} (with their prices, images, and field values)</li>
+                </ul>
+                <p className="mt-2 text-muted-foreground">
+                  All product data inside this category will be lost irreversibly.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                This category has no products. The category and its field assignments will be removed.
+              </p>
+            )}
+
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={deleting}>Cancel</Button>
+              <Button className="bg-destructive text-white hover:bg-destructive/90" onClick={handleDelete} disabled={deleting}>
+                {deleting ? "Deleting..." : "Delete Everything"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
