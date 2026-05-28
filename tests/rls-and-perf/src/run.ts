@@ -6,7 +6,8 @@
  *   --mode=baseline   Run all snapshot suites, write to baseline/ (use after verifying)
  *   --mode=diff       Compare current/ against baseline/, exit 1 if any diff
  *   --mode=negative   Run cross-tenant negative probes, exit 1 if any leak
- *   --mode=all        snapshot + diff + negative (the CI default)
+ *   --mode=positive   Run positive write-path checks, exit 1 if any fail
+ *   --mode=all        snapshot + diff + negative + positive (the CI default)
  */
 
 import { TEST_USERS } from "./config.js";
@@ -15,9 +16,10 @@ import { runInventorySuite } from "./suites/inventory.js";
 import { runProductionSuite } from "./suites/production.js";
 import { runShipmentsSuite } from "./suites/shipments.js";
 import { runNegativeSuite, type ProbeResult } from "./suites/cross-tenant-negative.js";
+import { runPositiveSuite, type PositiveResult } from "./suites/positive-write.js";
 import { diffSnapshot, type SnapshotPath } from "./lib/snapshot.js";
 
-type Mode = "snapshot" | "baseline" | "diff" | "negative" | "all";
+type Mode = "snapshot" | "baseline" | "diff" | "negative" | "positive" | "all";
 
 const SUITES = ["orders", "inventory", "production", "shipments"] as const;
 const SUITE_CASES: Record<(typeof SUITES)[number], string[]> = {
@@ -30,7 +32,7 @@ const SUITE_CASES: Record<(typeof SUITES)[number], string[]> = {
 function parseMode(): Mode {
   const arg = process.argv.find((a) => a.startsWith("--mode="));
   const m = arg?.split("=")[1] ?? "all";
-  if (!["snapshot", "baseline", "diff", "negative", "all"].includes(m)) {
+  if (!["snapshot", "baseline", "diff", "negative", "positive", "all"].includes(m)) {
     throw new Error(`Unknown mode: ${m}`);
   }
   return m as Mode;
@@ -87,6 +89,24 @@ function summarizeNegative(results: ProbeResult[]): { leaks: number; report: str
   return { leaks, report: lines.join("\n") };
 }
 
+async function runPositive(): Promise<PositiveResult[]> {
+  console.log("→ Running positive write-path checks...");
+  return runPositiveSuite();
+}
+
+function summarizePositive(results: PositiveResult[]): { failures: number; report: string } {
+  const failures = results.filter((r) => r.outcome === "failed").length;
+  const lines: string[] = [
+    `Positive write results: ${results.length} checks, ${results.length - failures} ok, ${failures} failed`,
+  ];
+  for (const r of results) {
+    const icon = r.outcome === "failed" ? "✗ FAILED " : "✓ ok     ";
+    lines.push(`  ${icon}  ${r.userKey} / ${r.caseName} (${r.detail})`);
+    if (r.errorMessage) lines.push(`            error: ${r.errorMessage}`);
+  }
+  return { failures, report: lines.join("\n") };
+}
+
 async function main(): Promise<void> {
   const mode = parseMode();
 
@@ -118,6 +138,14 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (mode === "positive") {
+    const results = await runPositive();
+    const { failures, report } = summarizePositive(results);
+    console.log(report);
+    if (failures > 0) process.exit(1);
+    return;
+  }
+
   // "all" — full CI run
   await runSnapshots("current");
   const { differences, details } = runDiff();
@@ -128,8 +156,13 @@ async function main(): Promise<void> {
   const { leaks, report } = summarizeNegative(results);
   console.log(report);
 
+  const positiveResults = await runPositive();
+  const { failures, report: positiveReport } = summarizePositive(positiveResults);
+  console.log(positiveReport);
+
   const failOnLeak = process.env.NEGATIVE_TESTS_FAIL_ON_LEAK === "true";
   if (differences > 0) process.exit(1);
+  if (failures > 0) process.exit(1);
   if (leaks > 0 && failOnLeak) process.exit(1);
 }
 

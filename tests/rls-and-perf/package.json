@@ -7,7 +7,8 @@
     "snapshot": "tsx src/run.ts --mode=snapshot",
     "diff": "tsx src/run.ts --mode=diff",
     "baseline": "tsx src/run.ts --mode=baseline",
-    "negative": "tsx src/run.ts --mode=negative"
+    "negative": "tsx src/run.ts --mode=negative",
+    "positive": "tsx src/run.ts --mode=positive"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"

@@ -6,6 +6,7 @@ Verifies the multi-tenant security boundary and protects against regression whil
 
 - **Positive snapshot tests** — for each seeded test user, capture what they can read across orders / inventory / production / shipments. Re-run after any change; differences are flagged. Used to confirm that RLS hardening doesn't accidentally hide rows the user should still see.
 - **Cross-tenant negative tests** — explicit probes ("User from Org A reads Org B's data"). Today most of these will *leak* (because RLS is permissive). After RLS hardening, every probe must return `blocked`. This is the test that proves the security work actually worked.
+- **Positive write-path tests** (`positive-write.ts`) — for full-access org users, insert each core entity (order / inventory package / shipment) in the user's *own* org and assert success, then clean up. Confirms RLS `WITH CHECK` doesn't over-block legitimate writes. The `orders.create-own-org` case inserts an order *without* a `code` to guard the 2026-05-28 order-code DEFAULT fix. Any failure is exit-1 in CI. See `docs/decisions/2026-05-28-write-path-testing-and-error-monitoring.md`.
 
 The suites query Supabase directly with the test user's auth token — they don't go through the Next.js server-action plumbing. That keeps them fast and isolates them from app-side changes; what they measure is what the database returns to that user, which is exactly what RLS controls.
 
@@ -20,6 +21,7 @@ pnpm baseline                 # capture baseline (do this BEFORE RLS changes)
 pnpm snapshot                 # capture current (do this AFTER each change)
 pnpm diff                     # compare current vs baseline, exit 1 on diff
 pnpm negative                 # run cross-tenant probes
+pnpm positive                 # run positive write-path checks, exit 1 on any failure
 ```
 
 `pnpm tsx src/run.ts --mode=all` runs everything (CI default).
