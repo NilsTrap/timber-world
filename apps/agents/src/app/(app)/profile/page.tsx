@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LogoutButton } from "@/components/LogoutButton";
+import { CommissionToggle } from "@/components/CommissionToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,12 @@ export default async function ProfilePage() {
           </p>
         )}
       </div>
+
+      {agent && (
+        <div className="rounded-xl bg-white p-5 shadow-sm border border-gray-100">
+          <CommissionToggle initial={!!agent.show_commissions} />
+        </div>
+      )}
 
       <LogoutButton />
     </div>
