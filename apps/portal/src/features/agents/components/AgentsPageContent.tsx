@@ -23,18 +23,17 @@ export function AgentsPageContent({ agents: initialAgents }: Props) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
-  const [region, setRegion] = useState("");
   const [saving, setSaving] = useState(false);
 
   const resetForm = () => {
-    setEmail(""); setPassword(""); setFirstName(""); setLastName(""); setPhone(""); setRegion("");
+    setEmail(""); setPassword(""); setFirstName(""); setLastName(""); setPhone("");
     setShowForm(false); setEditing(null);
   };
 
   const startEdit = (a: Agent) => {
     setEditing(a);
     setFirstName(a.firstName); setLastName(a.lastName);
-    setPhone(a.phone || ""); setRegion(a.region || "");
+    setPhone(a.phone || "");
     setShowForm(true);
   };
 
@@ -43,7 +42,7 @@ export function AgentsPageContent({ agents: initialAgents }: Props) {
       setSaving(true);
       const result = await updateAgent({
         id: editing.id, firstName, lastName,
-        phone: phone || null, region: region || null,
+        phone: phone || null,
       });
       setSaving(false);
       if (result.success) {
@@ -61,7 +60,7 @@ export function AgentsPageContent({ agents: initialAgents }: Props) {
       setSaving(true);
       const result = await createAgent({
         email: email.trim(), password, firstName: firstName.trim(),
-        lastName: lastName.trim(), phone: phone || undefined, region: region || undefined,
+        lastName: lastName.trim(), phone: phone || undefined,
       });
       setSaving(false);
       if (result.success) {
@@ -156,15 +155,9 @@ export function AgentsPageContent({ agents: initialAgents }: Props) {
               </div>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Phone</label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+44 ..." />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Region</label>
-              <Input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="South East" />
-            </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Phone</label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+44 ..." />
           </div>
           <div className="flex gap-2">
             <Button onClick={handleSave} disabled={saving}>
@@ -198,7 +191,7 @@ export function AgentsPageContent({ agents: initialAgents }: Props) {
             <tr className="border-b bg-muted/50">
               <th className="text-left px-4 py-2.5 font-medium">Name</th>
               <th className="text-left px-4 py-2.5 font-medium">Email</th>
-              <th className="text-left px-4 py-2.5 font-medium">Region</th>
+              <th className="text-left px-4 py-2.5 font-medium">Phone</th>
               <th className="text-left px-4 py-2.5 font-medium">Tier</th>
               <th className="text-center px-4 py-2.5 font-medium">Status</th>
               <th className="px-4 py-2.5 w-24"></th>
@@ -209,7 +202,7 @@ export function AgentsPageContent({ agents: initialAgents }: Props) {
               <tr key={a.id} className="border-b last:border-0 hover:bg-muted/30">
                 <td className="px-4 py-2.5 font-medium">{`${a.firstName} ${a.lastName}`.trim() || "—"}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">{a.email}</td>
-                <td className="px-4 py-2.5 text-muted-foreground">{a.region || "—"}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{a.phone || "—"}</td>
                 <td className="px-4 py-2.5 capitalize">{a.commissionTier}</td>
                 <td className="px-4 py-2.5 text-center">
                   <button

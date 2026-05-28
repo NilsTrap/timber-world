@@ -216,3 +216,19 @@ export async function uploadCategoryImage(
   revalidatePath("/admin/catalog");
   return { success: true, data: { imageUrl: urlData?.publicUrl || "" } };
 }
+
+export async function removeCategoryImage(categoryId: string): Promise<ActionResult<null>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const supabase = await createClient();
+  const { data: cat } = await (supabase as any)
+    .from("catalog_categories").select("image_storage_path").eq("id", categoryId).single();
+  if (cat?.image_storage_path) {
+    await supabase.storage.from("catalog").remove([cat.image_storage_path]);
+  }
+  await (supabase as any).from("catalog_categories").update({ image_storage_path: null }).eq("id", categoryId);
+  revalidatePath("/admin/catalog");
+  return { success: true, data: null };
+}

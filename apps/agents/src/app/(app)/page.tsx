@@ -6,10 +6,11 @@ export default async function HomePage() {
 
   const { data: categories } = await (supabase as any)
     .from("catalog_categories")
-    .select("id, name, slug, catalog_products(id)")
+    .select("id, name, slug, image_storage_path, catalog_products(id)")
     .eq("is_active", true)
     .order("sort_order");
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const totalProducts = (categories || []).reduce(
     (sum: number, c: any) => sum + (c.catalog_products?.length || 0), 0
   );
@@ -41,9 +42,14 @@ export default async function HomePage() {
             <Link
               key={cat.id}
               href={`/catalog/${cat.id}`}
-              className="flex items-center justify-between rounded-xl bg-white p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+              className="flex items-center gap-3 rounded-xl bg-white p-3 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
             >
-              <div>
+              {cat.image_storage_path ? (
+                <div className="w-14 h-14 rounded-lg bg-cover bg-center shrink-0" style={{ backgroundImage: `url('${supabaseUrl}/storage/v1/object/public/catalog/${cat.image_storage_path}')` }} />
+              ) : (
+                <div className="w-14 h-14 rounded-lg shrink-0" style={{ background: "linear-gradient(135deg, #E8D5B7, #C4A87C)" }} />
+              )}
+              <div className="flex-1 min-w-0">
                 <div className="font-semibold">{cat.name}</div>
                 <div className="text-xs text-[var(--charcoal-light)] mt-0.5">
                   {cat.catalog_products?.length || 0} products

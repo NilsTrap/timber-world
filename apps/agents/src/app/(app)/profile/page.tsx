@@ -31,7 +31,6 @@ export default async function ProfilePage() {
               {agent ? `${agent.first_name} ${agent.last_name}`.trim() || "Agent" : "Agent"}
             </div>
             <div className="text-sm text-[var(--charcoal-light)]">{user.email}</div>
-            {agent?.region && <div className="text-xs text-[var(--charcoal-light)] mt-0.5">{agent.region}</div>}
           </div>
         </div>
 

@@ -18,6 +18,8 @@ import {
   removeFieldAssignment,
   saveFieldOption,
   deleteFieldOption,
+  uploadCategoryImage,
+  removeCategoryImage,
 } from "../actions";
 import type {
   CatalogCategory,
@@ -541,28 +543,42 @@ function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pr
   const [slug, setSlug] = useState(category.slug);
   const [desc, setDesc] = useState(category.description || "");
   const [unit, setUnit] = useState<PrimaryUnit>(category.primaryUnit);
-  const [defaultPrice, setDefaultPrice] = useState(
-    category.defaultPriceEurCents != null ? (category.defaultPriceEurCents / 100).toString() : ""
-  );
   const [active, setActive] = useState(category.isActive);
   const pctStr = (v: number | null) => (v != null ? String(v) : "");
   const [commStd, setCommStd] = useState(pctStr(category.commissionStandardPct));
   const [commMaxDisc, setCommMaxDisc] = useState(pctStr(category.commissionMaxDiscountPct));
   const [commDisc, setCommDisc] = useState(pctStr(category.commissionDiscountedPct));
+  const [imagePath, setImagePath] = useState<string | null>(category.imageStoragePath);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deletionInfo, setDeletionInfo] = useState<{ productCount: number; variantCount: number } | null>(null);
 
-  const selectedUnit = pricingUnits.find((u) => u.code === unit);
-  const initialDefaultPrice = category.defaultPriceEurCents != null ? (category.defaultPriceEurCents / 100).toString() : "";
+  const imageUrl = imagePath ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/catalog/${imagePath}` : null;
 
   const hasChanges = name !== category.name || slug !== category.slug ||
     desc !== (category.description || "") || unit !== category.primaryUnit ||
-    defaultPrice !== initialDefaultPrice || active !== category.isActive ||
+    active !== category.isActive ||
     commStd !== pctStr(category.commissionStandardPct) ||
     commMaxDisc !== pctStr(category.commissionMaxDiscountPct) ||
     commDisc !== pctStr(category.commissionDiscountedPct);
+
+  const handleImageUpload = async (file: File) => {
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const result = await uploadCategoryImage(category.id, fd);
+    setUploading(false);
+    if (result.success) { setImagePath(`categories/${category.id}.${file.name.split(".").pop() || "jpg"}`); toast.success("Image uploaded"); }
+    else toast.error(result.error);
+  };
+
+  const handleImageRemove = async () => {
+    const result = await removeCategoryImage(category.id);
+    if (result.success) { setImagePath(null); toast.success("Image removed"); }
+    else toast.error(result.error);
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -572,7 +588,6 @@ function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pr
       slug: slug.trim(),
       description: desc.trim() || null,
       primaryUnit: unit,
-      defaultPriceEurCents: defaultPrice ? Math.round(Number(defaultPrice) * 100) : null,
       commissionStandardPct: commStd.trim() ? Number(commStd) : null,
       commissionMaxDiscountPct: commMaxDisc.trim() ? Number(commMaxDisc) : null,
       commissionDiscountedPct: commDisc.trim() ? Number(commDisc) : null,
@@ -626,27 +641,36 @@ function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pr
             onChange={(e) => setDesc(e.target.value)}
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Primary Pricing Unit</label>
-            <select
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-            >
-              {pricingUnits.map((u) => <option key={u.code} value={u.code}>{u.name} ({u.symbol})</option>)}
-            </select>
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Category Image</label>
+          <p className="text-xs text-muted-foreground">Shown on the agent app catalog with the category name.</p>
+          <div className="flex items-center gap-3 mt-1">
+            {imageUrl ? (
+              <img src={imageUrl} alt={name} className="h-20 w-28 rounded-md object-cover border" />
+            ) : (
+              <div className="h-20 w-28 rounded-md border bg-muted flex items-center justify-center text-xs text-muted-foreground">No image</div>
+            )}
+            <div className="flex flex-col gap-2">
+              <label className="inline-flex">
+                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); e.target.value = ""; }} />
+                <Button size="sm" asChild disabled={uploading}>
+                  <span>{uploading ? "Uploading..." : imageUrl ? "Replace" : "Upload Image"}</span>
+                </Button>
+              </label>
+              {imageUrl && <Button size="sm" variant="outline" className="text-destructive" onClick={handleImageRemove}>Remove</Button>}
+            </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Default price (€ / {selectedUnit?.symbol ?? "unit"})</label>
-            <Input
-              type="number"
-              step="0.01"
-              value={defaultPrice}
-              onChange={(e) => setDefaultPrice(e.target.value)}
-              placeholder="optional — applies to products with no price"
-            />
-          </div>
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Primary Pricing Unit</label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+          >
+            {pricingUnits.map((u) => <option key={u.code} value={u.code}>{u.name} ({u.symbol})</option>)}
+          </select>
         </div>
         <div className="space-y-2 rounded-md border bg-muted/20 p-3">
           <div className="text-sm font-medium">Agent commission</div>
