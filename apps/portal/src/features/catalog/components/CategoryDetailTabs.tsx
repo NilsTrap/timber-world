@@ -545,6 +545,10 @@ function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pr
     category.defaultPriceEurCents != null ? (category.defaultPriceEurCents / 100).toString() : ""
   );
   const [active, setActive] = useState(category.isActive);
+  const pctStr = (v: number | null) => (v != null ? String(v) : "");
+  const [commStd, setCommStd] = useState(pctStr(category.commissionStandardPct));
+  const [commMaxDisc, setCommMaxDisc] = useState(pctStr(category.commissionMaxDiscountPct));
+  const [commDisc, setCommDisc] = useState(pctStr(category.commissionDiscountedPct));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -555,7 +559,10 @@ function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pr
 
   const hasChanges = name !== category.name || slug !== category.slug ||
     desc !== (category.description || "") || unit !== category.primaryUnit ||
-    defaultPrice !== initialDefaultPrice || active !== category.isActive;
+    defaultPrice !== initialDefaultPrice || active !== category.isActive ||
+    commStd !== pctStr(category.commissionStandardPct) ||
+    commMaxDisc !== pctStr(category.commissionMaxDiscountPct) ||
+    commDisc !== pctStr(category.commissionDiscountedPct);
 
   const handleSave = async () => {
     setSaving(true);
@@ -566,6 +573,9 @@ function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pr
       description: desc.trim() || null,
       primaryUnit: unit,
       defaultPriceEurCents: defaultPrice ? Math.round(Number(defaultPrice) * 100) : null,
+      commissionStandardPct: commStd.trim() ? Number(commStd) : null,
+      commissionMaxDiscountPct: commMaxDisc.trim() ? Number(commMaxDisc) : null,
+      commissionDiscountedPct: commDisc.trim() ? Number(commDisc) : null,
       isActive: active,
     });
     setSaving(false);
@@ -636,6 +646,24 @@ function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pr
               onChange={(e) => setDefaultPrice(e.target.value)}
               placeholder="optional — applies to products with no price"
             />
+          </div>
+        </div>
+        <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+          <div className="text-sm font-medium">Agent commission</div>
+          <p className="text-xs text-muted-foreground">Percentages only. Money is computed from the sale price. Commission scales linearly between the standard rate (no discount) and the discounted rate (at max discount).</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Standard %</label>
+              <Input type="number" step="0.1" value={commStd} onChange={(e) => setCommStd(e.target.value)} placeholder="e.g. 20" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Max discount %</label>
+              <Input type="number" step="0.1" value={commMaxDisc} onChange={(e) => setCommMaxDisc(e.target.value)} placeholder="e.g. 20" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Commission % at max discount</label>
+              <Input type="number" step="0.1" value={commDisc} onChange={(e) => setCommDisc(e.target.value)} placeholder="e.g. 10" />
+            </div>
           </div>
         </div>
         <label className="flex items-center gap-2 text-sm cursor-pointer">

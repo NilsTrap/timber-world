@@ -19,6 +19,8 @@ export interface Agent {
   region: string | null;
   commissionTier: string;
   isActive: boolean;
+  applicationStatus: string;
+  showCommissions: boolean;
   createdAt: string;
 }
 
@@ -33,8 +35,44 @@ function toAgent(row: any): Agent {
     region: row.region,
     commissionTier: row.commission_tier,
     isActive: row.is_active,
+    applicationStatus: row.application_status ?? "approved",
+    showCommissions: row.show_commissions ?? false,
     createdAt: row.created_at,
   };
+}
+
+export async function approveAgent(id: string): Promise<ActionResult<Agent>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const admin = createAdminClient();
+  const { data, error } = await (admin as any)
+    .from("agent_users")
+    .update({ application_status: "approved", is_active: true })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/admin/agents");
+  return { success: true, data: toAgent(data) };
+}
+
+export async function rejectAgent(id: string): Promise<ActionResult<Agent>> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+
+  const admin = createAdminClient();
+  const { data, error } = await (admin as any)
+    .from("agent_users")
+    .update({ application_status: "rejected", is_active: false })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/admin/agents");
+  return { success: true, data: toAgent(data) };
 }
 
 export async function getAgents(): Promise<ActionResult<Agent[]>> {

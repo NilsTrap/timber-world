@@ -86,6 +86,10 @@ export default function LoginPage() {
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
+
+          <p className="text-center text-sm text-[var(--charcoal-light)]">
+            New here? <a href="/register" className="font-semibold text-[var(--forest-green)]">Apply to become an agent</a>
+          </p>
         </form>
 
         <p className="text-center text-white/40 text-xs mt-6">

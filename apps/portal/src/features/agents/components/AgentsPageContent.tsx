@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Trash2, Pencil, X } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
-import { createAgent, updateAgent, deleteAgent, type Agent } from "../actions/agents";
+import { createAgent, updateAgent, deleteAgent, approveAgent, rejectAgent, type Agent } from "../actions/agents";
 
 interface Props {
   agents: Agent[];
@@ -95,6 +95,25 @@ export function AgentsPageContent({ agents: initialAgents }: Props) {
     }
   };
 
+  const handleApprove = async (a: Agent) => {
+    const result = await approveAgent(a.id);
+    if (result.success) {
+      setAgents(agents.map((x) => x.id === a.id ? result.data : x));
+      toast.success(`${a.email} approved`);
+    } else { toast.error(result.error); }
+  };
+
+  const handleReject = async (a: Agent) => {
+    if (!confirm(`Reject ${a.email}'s application?`)) return;
+    const result = await rejectAgent(a.id);
+    if (result.success) {
+      setAgents(agents.map((x) => x.id === a.id ? result.data : x));
+      toast.success(`${a.email} rejected`);
+    } else { toast.error(result.error); }
+  };
+
+  const pending = agents.filter((a) => a.applicationStatus === "pending");
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -153,6 +172,23 @@ export function AgentsPageContent({ agents: initialAgents }: Props) {
             </Button>
             <Button variant="outline" onClick={resetForm}>Cancel</Button>
           </div>
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50/60 p-4 space-y-2">
+          <h3 className="font-semibold text-amber-800">Pending applications ({pending.length})</h3>
+          {pending.map((a) => (
+            <div key={a.id} className="flex items-center gap-3 rounded-md bg-card border px-3 py-2 text-sm">
+              <div className="flex-1 min-w-0">
+                <span className="font-medium">{`${a.firstName} ${a.lastName}`.trim() || a.email}</span>
+                <span className="text-muted-foreground ml-2">{a.email}</span>
+                {a.phone && <span className="text-muted-foreground ml-2">· {a.phone}</span>}
+              </div>
+              <Button size="sm" onClick={() => handleApprove(a)}>Approve</Button>
+              <Button size="sm" variant="outline" className="text-destructive" onClick={() => handleReject(a)}>Reject</Button>
+            </div>
+          ))}
         </div>
       )}
 

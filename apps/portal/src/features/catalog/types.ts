@@ -28,6 +28,9 @@ export interface CatalogCategory {
   imageStoragePath: string | null;
   primaryUnit: PrimaryUnit;
   defaultPriceEurCents: number | null;
+  commissionStandardPct: number | null;
+  commissionMaxDiscountPct: number | null;
+  commissionDiscountedPct: number | null;
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
@@ -186,6 +189,9 @@ export interface SaveCategoryInput {
   description?: string | null;
   primaryUnit: PrimaryUnit;
   defaultPriceEurCents?: number | null;
+  commissionStandardPct?: number | null;
+  commissionMaxDiscountPct?: number | null;
+  commissionDiscountedPct?: number | null;
   isActive?: boolean;
   sortOrder?: number;
 }
