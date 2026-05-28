@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { CategoryProductsClient, type FilterableField, type ProductCard } from "@/components/CategoryProductsClient";
 
 export const dynamic = "force-dynamic";
 
@@ -20,19 +21,68 @@ export default async function CategoryProductsPage({ params }: Props) {
 
   if (!category) notFound();
 
-  const { data: products } = await (supabase as any)
-    .from("catalog_products")
-    .select(`
-      id, name, slug, description, is_active,
-      catalog_variants(id),
-      catalog_product_field_values(
-        catalog_field_options(label)
-      ),
-      catalog_product_images(storage_path, is_primary)
-    `)
-    .eq("category_id", categoryId)
-    .eq("is_active", true)
-    .order("sort_order");
+  const [productsResult, assignmentsResult] = await Promise.all([
+    (supabase as any)
+      .from("catalog_products")
+      .select(`
+        id, name, slug, description, is_active,
+        catalog_variants(id),
+        catalog_product_field_values(
+          catalog_fields(field_key, field_label),
+          catalog_field_options(label)
+        ),
+        catalog_product_images(storage_path, is_primary)
+      `)
+      .eq("category_id", categoryId)
+      .eq("is_active", true)
+      .order("sort_order"),
+    (supabase as any)
+      .from("catalog_category_field_assignments")
+      .select(`
+        applies_to, sort_order,
+        catalog_fields(id, field_key, field_label, field_type,
+          catalog_field_options(label, sort_order)
+        )
+      `)
+      .eq("category_id", categoryId)
+      .order("sort_order"),
+  ]);
+
+  const rawProducts = productsResult.data || [];
+  const assignments = assignmentsResult.data || [];
+
+  // Build product cards with field values keyed by field_key
+  const products: ProductCard[] = rawProducts.map((p: any) => {
+    const fieldValues: Record<string, string> = {};
+    (p.catalog_product_field_values || []).forEach((fv: any) => {
+      const key = fv.catalog_fields?.field_key;
+      const label = fv.catalog_field_options?.label;
+      if (key && label) fieldValues[key] = label;
+    });
+    const primaryImage = (p.catalog_product_images || []).find((img: any) => img.is_primary);
+    return {
+      id: p.id,
+      name: p.name,
+      variantCount: p.catalog_variants?.length || 0,
+      fieldValues,
+      imagePath: primaryImage?.storage_path || null,
+    };
+  });
+
+  // Build filterable fields from product-level select fields
+  const filters: FilterableField[] = assignments
+    .filter((a: any) => a.applies_to === "product" && a.catalog_fields?.field_type === "select")
+    .map((a: any) => {
+      const f = a.catalog_fields;
+      // Only include options actually used by products in this category
+      const usedValues = new Set(products.map((p) => p.fieldValues[f.field_key]).filter(Boolean));
+      const options = (f.catalog_field_options || [])
+        .sort((x: any, y: any) => x.sort_order - y.sort_order)
+        .map((o: any) => o.label)
+        .filter((label: string) => usedValues.has(label));
+      return { fieldKey: f.field_key, fieldLabel: f.field_label, options };
+    })
+    .filter((f: FilterableField) => f.options.length > 1); // only show filters with >1 choice
 
   const unitLabels: Record<string, string> = { m2: "£/m²", m3: "£/m³", piece: "£/pc", linear_m: "£/m" };
 
@@ -48,63 +98,13 @@ export default async function CategoryProductsPage({ params }: Props) {
         {category.description && <p className="text-sm text-[var(--charcoal-light)] mt-1">{category.description}</p>}
       </div>
 
-      {/* Product list */}
-      <div className="space-y-3">
-        {(products || []).map((product: any) => {
-          const variantCount = product.catalog_variants?.length || 0;
-          const fieldLabels = (product.catalog_product_field_values || [])
-            .map((fv: any) => fv.catalog_field_options?.label)
-            .filter(Boolean);
-          const primaryImage = (product.catalog_product_images || []).find((img: any) => img.is_primary);
-
-          return (
-            <Link
-              key={product.id}
-              href={`/catalog/${categoryId}/${product.id}`}
-              className="flex gap-3 rounded-xl bg-white p-3 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
-            >
-              {/* Thumbnail */}
-              <div className="w-20 h-20 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden"
-                style={{ background: "linear-gradient(135deg, #E8D5B7, #C4A87C)" }}>
-                {primaryImage ? (
-                  <img
-                    src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/catalog/${primaryImage.storage_path}`}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <svg viewBox="0 0 40 30" fill="none" className="w-8 opacity-25">
-                    <rect x="2" y="2" width="36" height="26" rx="2" stroke="#8B6914" strokeWidth="1"/>
-                  </svg>
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm">{product.name}</div>
-                <div className="text-xs text-[var(--charcoal-light)] mt-0.5">
-                  {fieldLabels.join(" · ")}
-                </div>
-                <div className="flex items-center gap-3 mt-1.5">
-                  <span className="text-xs font-medium text-[var(--forest-green)]">
-                    {variantCount} variant{variantCount !== 1 ? "s" : ""}
-                  </span>
-                  <span className="text-xs text-[var(--charcoal-light)]">{unitLabels[category.primary_unit] || ""}</span>
-                </div>
-              </div>
-
-              <svg viewBox="0 0 24 24" fill="none" stroke="var(--charcoal-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 self-center flex-shrink-0">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </Link>
-          );
-        })}
-
-        {(!products || products.length === 0) && (
-          <div className="text-center py-12 text-[var(--charcoal-light)]">
-            No products available in this category yet.
-          </div>
-        )}
-      </div>
+      <CategoryProductsClient
+        categoryId={categoryId}
+        products={products}
+        filters={filters}
+        unitLabel={unitLabels[category.primary_unit] || ""}
+        supabaseUrl={process.env.NEXT_PUBLIC_SUPABASE_URL!}
+      />
     </div>
   );
 }
