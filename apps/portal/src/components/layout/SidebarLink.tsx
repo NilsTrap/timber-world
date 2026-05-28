@@ -26,6 +26,7 @@ import {
   TrendingUp,
   Layers,
   ClipboardList,
+  BookOpen,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   TrendingUp,
   Layers,
   ClipboardList,
+  BookOpen,
 };
 
 export type IconName = keyof typeof ICON_MAP;
