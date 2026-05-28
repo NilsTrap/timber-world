@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { recomputeEntityCurrencies } from "../recomputeCurrencies";
 import type {
   ActionResult,
   CatalogCategory,
@@ -122,6 +123,7 @@ export async function saveCategory(input: SaveCategoryInput): Promise<ActionResu
     return { success: false, error: result.error.message };
   }
 
+  await recomputeEntityCurrencies("category", result.data.id, payload.default_price_eur_cents);
   revalidatePath("/admin/catalog");
   return { success: true, data: toCategory(result.data) };
 }

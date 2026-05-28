@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Trash2, Pencil, X, Copy } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, X, Copy } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
 import { saveProduct, duplicateProduct, deleteProduct } from "../actions/products";
 import { getVariants, saveVariant, deleteVariant } from "../actions/variants";
 import { uploadProductImage, deleteProductImage, uploadVariantImage, deleteVariantImage } from "../actions/images";
 import { VariantPackagingSection } from "./VariantPackagingSection";
+import { VariantsTable } from "./VariantsTable";
 import type {
   CatalogProduct,
   CatalogVariant,
@@ -19,7 +20,7 @@ import type {
   CatalogCurrency,
 } from "../types";
 import type { CurrencyPriceMap } from "../actions/currencies";
-import { effectiveRateEurCents, computeQuantity, lineTotalCents, formatMoney } from "../pricing";
+import type { PackagingType } from "../actions/packagingTypes";
 
 interface Props {
   product: CatalogProduct;
@@ -32,6 +33,7 @@ interface Props {
   variants: CatalogVariant[];
   altCurrencies: CatalogCurrency[];
   currencyPrices: CurrencyPriceMap;
+  packagingTypes: PackagingType[];
 }
 
 export function ProductDetailContent({
@@ -45,23 +47,17 @@ export function ProductDetailContent({
   variants: initialVariants,
   altCurrencies,
   currencyPrices,
+  packagingTypes,
 }: Props) {
   const router = useRouter();
   const [product, setProduct] = useState(initialProduct);
   const [variants, setVariants] = useState(initialVariants);
+  const [cPrices, setCPrices] = useState<CurrencyPriceMap>(currencyPrices);
   const [name, setName] = useState(product.name);
   const [desc, setDesc] = useState(product.description || "");
   const [slug, setSlug] = useState(product.slug);
   const [basePrice, setBasePrice] = useState(product.basePriceEurCents != null ? (product.basePriceEurCents / 100).toString() : "");
   const unitSymbol = unit?.symbol ?? "unit";
-  const calcMethod = unit?.calcMethod ?? "per_piece";
-
-  // Effective converted rate for a variant in a derived currency: variant -> product -> category.
-  const effCurrency = (variantId: string, code: string) =>
-    currencyPrices[`variant:${variantId}`]?.[code]?.priceCents ??
-    currencyPrices[`product:${product.id}`]?.[code]?.priceCents ??
-    currencyPrices[`category:${categoryId}`]?.[code]?.priceCents ??
-    null;
   const [saving, setSaving] = useState(false);
   const [showVariantForm, setShowVariantForm] = useState(false);
   const [editingVariant, setEditingVariant] = useState<CatalogVariant | null>(null);
@@ -132,17 +128,6 @@ export function ProductDetailContent({
       toast.error(result.error);
     }
     return result;
-  };
-
-  const handleDeleteVariant = async (id: string) => {
-    if (!confirm("Delete this variant?")) return;
-    const result = await deleteVariant(id);
-    if (result.success) {
-      setVariants(variants.filter((v) => v.id !== id));
-      toast.success("Variant deleted");
-    } else {
-      toast.error(result.error);
-    }
   };
 
   return (
@@ -309,89 +294,19 @@ export function ProductDetailContent({
         )}
 
         {variants.length > 0 && (
-          <div className="rounded-lg border bg-card overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="w-10 px-3 py-2"></th>
-                  <th className="text-left px-3 py-2 font-medium">Thickness</th>
-                  <th className="text-left px-3 py-2 font-medium">Width</th>
-                  <th className="text-left px-3 py-2 font-medium">Length</th>
-                  <th className="text-right px-3 py-2 font-medium">€/{unitSymbol}</th>
-                  {altCurrencies.map((c) => (
-                    <th key={c.code} className="text-right px-3 py-2 font-medium">{c.symbol}/{unitSymbol}</th>
-                  ))}
-                  <th className="text-right px-3 py-2 font-medium">Total (€)</th>
-                  <th className="text-center px-3 py-2 font-medium">Active</th>
-                  <th className="px-3 py-2 w-20"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {variants.map((v) => {
-                  const rate = effectiveRateEurCents(v.priceEurCents, product.basePriceEurCents, categoryDefaultPriceEurCents);
-                  const qty = computeQuantity(calcMethod, v);
-                  const total = lineTotalCents(rate, qty);
-                  const inherited = v.priceEurCents == null;
-                  return (
-                    <tr key={v.id} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="px-3 py-2">
-                        {v.images && v.images.length > 0 && v.images[0] ? (
-                          <img
-                            src={`https://fyzrtqsnmnizoxgcqsjc.supabase.co/storage/v1/object/public/catalog/${v.images[0]!.storagePath}`}
-                            alt=""
-                            className="w-8 h-8 rounded object-cover"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded bg-muted" />
-                        )}
-                      </td>
-                      <td className="px-3 py-2">{v.thicknessMm ? `${v.thicknessMm}mm` : "—"}</td>
-                      <td className="px-3 py-2">{v.widthMm ? `${v.widthMm}mm` : "—"}</td>
-                      <td className="px-3 py-2">
-                        {v.lengthMm
-                          ? `${v.lengthMm}mm`
-                          : v.lengthMinMm && v.lengthMaxMm
-                            ? `${v.lengthMinMm}–${v.lengthMaxMm}mm`
-                            : "—"}
-                      </td>
-                      <td className="px-3 py-2 text-right font-medium">
-                        {formatMoney(rate, "€")}
-                        {inherited && rate != null && <span className="ml-1 text-[10px] text-muted-foreground">inh.</span>}
-                      </td>
-                      {altCurrencies.map((c) => {
-                        const cents = effCurrency(v.id, c.code);
-                        const isManual = currencyPrices[`variant:${v.id}`]?.[c.code]?.isManual;
-                        return (
-                          <td key={c.code} className="px-3 py-2 text-right">
-                            {cents != null ? formatMoney(cents, c.symbol) : <span className="text-muted-foreground">—</span>}
-                            {isManual && <span className="ml-1 text-[10px] text-primary" title="Manually set">✎</span>}
-                          </td>
-                        );
-                      })}
-                      <td className="px-3 py-2 text-right">
-                        {total != null ? formatMoney(total, "€") : <span className="text-amber-600" title="Missing dimensions for this unit">n/a</span>}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {v.isActive ? <span className="text-green-600">✓</span> : <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
-                            <Link href={`/admin/catalog/${categoryId}/products/${product.id}/variants/${v.id}`}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Link>
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteVariant(v.id)}>
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <VariantsTable
+            categoryId={categoryId}
+            productId={product.id}
+            productBasePriceEurCents={product.basePriceEurCents}
+            categoryDefaultPriceEurCents={categoryDefaultPriceEurCents}
+            unit={unit}
+            variants={variants}
+            setVariants={setVariants}
+            altCurrencies={altCurrencies}
+            currencyPrices={cPrices}
+            setCurrencyPrices={setCPrices}
+            packagingTypes={packagingTypes}
+          />
         )}
       </div>
     </div>

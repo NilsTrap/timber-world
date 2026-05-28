@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { recomputeEntityCurrencies } from "../recomputeCurrencies";
 import type {
   ActionResult,
   CatalogProduct,
@@ -207,6 +208,7 @@ export async function saveProduct(
     }
   }
 
+  await recomputeEntityCurrencies("product", productId, payload.base_price_eur_cents);
   revalidatePath("/admin/catalog");
   return getProduct(productId);
 }

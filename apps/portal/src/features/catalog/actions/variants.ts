@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { recomputeEntityCurrencies } from "../recomputeCurrencies";
 import type {
   ActionResult,
   CatalogVariant,
@@ -21,6 +22,8 @@ function toVariant(row: any): CatalogVariant {
     lengthMinMm: row.length_min_mm,
     lengthMaxMm: row.length_max_mm,
     priceEurCents: row.price_eur_cents ?? null,
+    stockQuantity: row.stock_quantity != null ? Number(row.stock_quantity) : null,
+    stockUnit: row.stock_unit ?? "piece",
     isActive: row.is_active,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
@@ -34,6 +37,18 @@ function toVariant(row: any): CatalogVariant {
       isPrimary: img.is_primary,
       sortOrder: img.sort_order,
     })),
+    defaultPackaging: toDefaultPackaging(row.catalog_variant_packaging_assignments),
+  };
+}
+
+function toDefaultPackaging(assignments: any[]): any {
+  const def = (assignments || []).find((a: any) => a.is_default) ?? (assignments || [])[0];
+  if (!def) return null;
+  return {
+    assignmentId: def.id,
+    packagingTypeId: def.packaging_type_id,
+    name: def.catalog_packaging_types?.name ?? "",
+    piecesPerPackage: def.catalog_packaging_types?.pieces_per_package ?? 0,
   };
 }
 
@@ -87,6 +102,10 @@ export async function getVariants(
         id, variant_id, field_id, option_id, value_text, value_number,
         catalog_fields(id, field_key, field_label, field_type, unit, is_system, dimension_role),
         catalog_field_options(id, value, label)
+      ),
+      catalog_variant_packaging_assignments(
+        id, packaging_type_id, is_default,
+        catalog_packaging_types(name, pieces_per_package)
       )
     `)
     .eq("product_id", productId)
@@ -118,6 +137,8 @@ export async function saveVariant(
     length_min_mm: input.lengthMinMm ?? null,
     length_max_mm: input.lengthMaxMm ?? null,
     price_eur_cents: input.priceEurCents ?? null,
+    stock_quantity: input.stockQuantity ?? null,
+    stock_unit: input.stockUnit ?? "piece",
     is_active: input.isActive ?? true,
     sort_order: input.sortOrder ?? 0,
   };
@@ -168,6 +189,7 @@ export async function saveVariant(
     }
   }
 
+  await recomputeEntityCurrencies("variant", variantId, payload.price_eur_cents);
   revalidatePath("/admin/catalog");
 
   const { data: fullVariant, error: fetchError } = await (supabase as any)
@@ -179,6 +201,10 @@ export async function saveVariant(
         id, variant_id, field_id, option_id, value_text, value_number,
         catalog_fields(id, field_key, field_label, field_type, unit, is_system, dimension_role),
         catalog_field_options(id, value, label)
+      ),
+      catalog_variant_packaging_assignments(
+        id, packaging_type_id, is_default,
+        catalog_packaging_types(name, pieces_per_package)
       )
     `)
     .eq("id", variantId)

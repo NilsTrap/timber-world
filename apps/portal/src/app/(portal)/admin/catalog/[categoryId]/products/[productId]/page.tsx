@@ -7,6 +7,7 @@ import { getProduct } from "@/features/catalog/actions/products";
 import { getVariants } from "@/features/catalog/actions/variants";
 import { getPricingUnits } from "@/features/catalog/actions/pricingUnits";
 import { getCurrencies, getCatalogCurrencyPrices } from "@/features/catalog/actions/currencies";
+import { getPackagingTypes } from "@/features/catalog/actions/packagingTypes";
 import { ProductDetailContent } from "@/features/catalog/components/ProductDetailContent";
 
 export const metadata: Metadata = { title: "Product Detail" };
@@ -39,11 +40,13 @@ export default async function ProductDetailPage({ params }: Props) {
   const unit = units.find((u) => u.code === catResult.data.primaryUnit) ?? null;
   const variants = variantsResult.success ? variantsResult.data : [];
 
-  const [currenciesResult, pricesResult] = await Promise.all([
+  const [currenciesResult, pricesResult, packagingResult] = await Promise.all([
     getCurrencies(),
     getCatalogCurrencyPrices([categoryId, productId, ...variants.map((v) => v.id)]),
+    getPackagingTypes(),
   ]);
   const altCurrencies = (currenciesResult.success ? currenciesResult.data : []).filter((c) => !c.isBase && c.isActive);
+  const packagingTypes = (packagingResult.success ? packagingResult.data : []).filter((p) => p.isActive);
 
   return (
     <ProductDetailContent
@@ -57,6 +60,7 @@ export default async function ProductDetailPage({ params }: Props) {
       variants={variants}
       altCurrencies={altCurrencies}
       currencyPrices={pricesResult.success ? pricesResult.data : {}}
+      packagingTypes={packagingTypes}
     />
   );
 }

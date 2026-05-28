@@ -8,6 +8,7 @@ export type CalcMethod = "per_piece" | "area" | "volume" | "length";
 export type FieldType = "select" | "number" | "text" | "boolean";
 export type AppliesTo = "product" | "variant";
 export type DimensionRole = "width" | "length" | "thickness";
+export type StockUnit = "piece" | "package";
 
 export interface PricingUnit {
   id: string;
@@ -138,12 +139,22 @@ export interface CatalogVariant {
   lengthMinMm: number | null;
   lengthMaxMm: number | null;
   priceEurCents: number | null;
+  stockQuantity: number | null;
+  stockUnit: StockUnit;
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
   fieldValues?: VariantFieldValue[];
   images?: VariantImage[];
+  defaultPackaging?: VariantDefaultPackaging | null;
+}
+
+export interface VariantDefaultPackaging {
+  assignmentId: string;
+  packagingTypeId: string;
+  name: string;
+  piecesPerPackage: number;
 }
 
 export interface VariantImage {
@@ -233,6 +244,8 @@ export interface SaveVariantInput {
   lengthMinMm?: number | null;
   lengthMaxMm?: number | null;
   priceEurCents?: number | null;
+  stockQuantity?: number | null;
+  stockUnit?: StockUnit;
   isActive?: boolean;
   sortOrder?: number;
   fieldValues?: { fieldId: string; optionId?: string | null; valueText?: string | null; valueNumber?: number | null }[];

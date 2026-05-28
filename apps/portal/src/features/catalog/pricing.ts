@@ -1,4 +1,4 @@
-import type { CalcMethod } from "./types";
+import type { CalcMethod, StockUnit } from "./types";
 
 export interface Dimensions {
   widthMm?: number | null;
@@ -45,6 +45,43 @@ export function effectiveRateEurCents(
 export function lineTotalCents(rateCents: number | null, quantity: number | null): number | null {
   if (rateCents == null || quantity == null) return null;
   return Math.round(rateCents * quantity);
+}
+
+export interface StockBreakdown {
+  pieces: number | null;
+  packages: number | null;
+  baseQty: number | null; // total in the category's base unit (m²/m³/m/pcs)
+}
+
+/** Resolve a variant's stock into pieces, packages, and base-unit total. */
+export function computeStock(opts: {
+  calcMethod: CalcMethod;
+  stockQuantity: number | null;
+  stockUnit: StockUnit;
+  piecesPerPackage: number | null;
+  dims: Dimensions;
+}): StockBreakdown {
+  const { calcMethod, stockQuantity, stockUnit, piecesPerPackage, dims } = opts;
+  if (stockQuantity == null) return { pieces: null, packages: null, baseQty: null };
+
+  const ppp = piecesPerPackage && piecesPerPackage > 0 ? piecesPerPackage : null;
+  let pieces: number | null;
+  let packages: number | null;
+  if (stockUnit === "package") {
+    packages = stockQuantity;
+    pieces = ppp != null ? stockQuantity * ppp : null;
+  } else {
+    pieces = stockQuantity;
+    packages = ppp != null ? round2plain(stockQuantity / ppp) : null;
+  }
+
+  const perPiece = computeQuantity(calcMethod, dims);
+  const baseQty = pieces != null && perPiece != null ? round4(pieces * perPiece) : (calcMethod === "per_piece" ? pieces : null);
+  return { pieces, packages, baseQty };
+}
+
+function round2plain(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 export function formatMoney(cents: number | null | undefined, symbol: string): string {
