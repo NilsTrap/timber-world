@@ -106,6 +106,7 @@ export function VariantsTable({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-muted/50 text-xs">
+            <th className="text-left px-2 py-2 font-medium">SKU</th>
             <th className="text-left px-2 py-2 font-medium">Thick</th>
             <th className="text-left px-2 py-2 font-medium">Width</th>
             <th className="text-left px-2 py-2 font-medium">Length</th>
@@ -129,6 +130,7 @@ export function VariantsTable({
             });
             return (
               <tr key={v.id} className="border-b last:border-0 align-middle">
+                <td className="px-2 py-1 font-mono text-xs text-muted-foreground whitespace-nowrap">{v.sku || "—"}</td>
                 <td className="px-1 py-1"><input type="number" defaultValue={v.thicknessMm ?? ""} className={cellInput} onBlur={(e) => saveScalar(v, { thicknessMm: num(e.target.value) })} /></td>
                 <td className="px-1 py-1"><input type="number" defaultValue={v.widthMm ?? ""} className={cellInput} onBlur={(e) => saveScalar(v, { widthMm: num(e.target.value) })} /></td>
                 <td className="px-1 py-1"><input type="number" defaultValue={v.lengthMm ?? ""} className={cellInput} onBlur={(e) => saveScalar(v, { lengthMm: num(e.target.value) })} /></td>
