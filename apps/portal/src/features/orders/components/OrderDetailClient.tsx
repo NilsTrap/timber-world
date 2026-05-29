@@ -225,7 +225,10 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
       {/* Ordered Products - DataEntryTable */}
       <OrderProductsSection
         orderId={orderId}
-        organisationId={order.customerOrganisationId}
+        // Packages belong to the manufacturer (seller) who manages the order, not the
+        // end customer. inventory_packages RLS requires the inserting user to be in this
+        // org, and the customer is often empty / a different org — using it breaks inserts.
+        organisationId={order.sellerOrganisationId ?? order.customerOrganisationId}
         initialPackages={orderedPackages}
         dropdowns={dropdowns}
         staircaseCodes={staircaseCodes}
@@ -241,7 +244,7 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
           subtitle={`${producedPackages.length} packages · ${totalProducedPieces} pcs · ${totalProducedVolume.toFixed(4)} m³`}
           packages={producedPackages}
           orderId={orderId}
-          organisationId={order.customerOrganisationId}
+          organisationId={order.sellerOrganisationId ?? order.customerOrganisationId}
           editable={false}
           onChanged={loadData}
         />
