@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getVariantOrderContext } from "@/app/(app)/cart/actions";
+import { getVariantOrderContext, getVariantPublicContext } from "@/app/(app)/cart/actions";
 import { VariantOrderForm } from "@/components/VariantOrderForm";
 import { ImageGallery } from "@/components/ImageGallery";
 import { imageUrl } from "@/lib/images";
@@ -16,8 +16,17 @@ export default async function VariantDetailPage({ params }: Props) {
   const { categoryId, productId, variantId } = await params;
   const supabase = await createClient();
 
+  // Approved agents get the order form; everyone else browses read-only.
+  const { data: { user } } = await supabase.auth.getUser();
+  let canOrder = false;
+  if (user) {
+    const { data: agent } = await (supabase as any)
+      .from("agent_users").select("application_status, is_active").eq("auth_user_id", user.id).maybeSingle();
+    canOrder = agent?.application_status === "approved" && agent?.is_active === true;
+  }
+
   const [result, imagesResult] = await Promise.all([
-    getVariantOrderContext(variantId),
+    canOrder ? getVariantOrderContext(variantId) : getVariantPublicContext(variantId),
     (supabase as any).from("catalog_variant_images")
       .select("storage_path, is_primary, sort_order").eq("variant_id", variantId),
   ]);
@@ -75,14 +84,32 @@ export default async function VariantDetailPage({ params }: Props) {
         </div>
       </div>
 
-      <VariantOrderForm
-        variantId={variantId}
-        packagePriceCents={c.packagePriceCents}
-        unitSymbol={c.unitSymbol}
-        baseQtyPerPackage={c.baseQtyPerPackage}
-        commission={c.commission}
-        showCommissions={c.showCommissions}
-      />
+      {canOrder ? (
+        <VariantOrderForm
+          variantId={variantId}
+          packagePriceCents={c.packagePriceCents}
+          unitSymbol={c.unitSymbol}
+          baseQtyPerPackage={c.baseQtyPerPackage}
+          commission={c.commission}
+          showCommissions={c.showCommissions}
+        />
+      ) : (
+        <div className="rounded-xl bg-white border border-gray-100 p-4 text-center space-y-3">
+          <p className="text-sm text-[var(--charcoal-light)]">
+            Log in as a Timber agent to place orders, set discounts and earn commission.
+          </p>
+          <Link
+            href="/login"
+            className="inline-block w-full py-3 rounded-xl text-sm font-semibold text-white"
+            style={{ background: "var(--forest-green)" }}
+          >
+            Log in to order
+          </Link>
+          <Link href="/register" className="block text-sm font-semibold text-[var(--forest-green)]">
+            Apply to become an agent
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

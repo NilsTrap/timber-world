@@ -45,7 +45,7 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-white">Timber Agents</h1>
-          <p className="text-white/60 text-sm mt-1">Sign in to access the product catalog</p>
+          <p className="text-white/60 text-sm mt-1">Sign in to place orders and earn commission</p>
         </div>
 
         {/* Form */}
@@ -91,6 +91,10 @@ export default function LoginPage() {
             New here? <a href="/register" className="font-semibold text-[var(--forest-green)]">Apply to become an agent</a>
           </p>
         </form>
+
+        <p className="text-center mt-5">
+          <a href="/catalog" className="text-sm font-semibold text-white/80 hover:text-white">← Browse the catalog</a>
+        </p>
 
         <p className="text-center text-white/40 text-xs mt-6">
           © 2026 Timber Agents. Contact your administrator for access.

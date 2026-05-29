@@ -149,6 +149,33 @@ export async function getVariantOrderContext(variantId: string): Promise<Result<
   };
 }
 
+/** Display-only context for the public (signed-out) catalog — price/stock/packaging, no ordering. */
+export async function getVariantPublicContext(variantId: string): Promise<Result<VariantOrderContext>> {
+  const supabase = await createClient();
+  const ctx = await loadPricing(supabase, variantId);
+  if (!ctx.success) return ctx;
+  const c = ctx.data;
+
+  let stockPackages: number | null = null;
+  let stockBaseQty: number | null = null;
+  if (c.stockQuantity != null) {
+    const pieces = c.stockUnit === "package" ? c.stockQuantity * c.piecesPerPackage : c.stockQuantity;
+    stockPackages = c.piecesPerPackage > 0 ? Math.round((pieces / c.piecesPerPackage) * 100) / 100 : null;
+    stockBaseQty = Math.round(pieces * c.perPieceQty * 100) / 100;
+  }
+
+  return {
+    success: true,
+    data: {
+      productId: c.productId, categoryId: c.categoryId, productName: c.productName, variantLabel: c.variantLabel, sku: c.sku,
+      packagingName: c.packagingName, piecesPerPackage: c.piecesPerPackage, baseQtyPerPackage: c.baseQtyPerPackage, unitSymbol: c.unitSymbol,
+      gbpRateCents: c.gbpRateCents, packagePriceCents: Math.round(c.gbpRateCents * c.baseQtyPerPackage),
+      commission: c.commission, showCommissions: false,
+      stockPackages, stockBaseQty,
+    },
+  };
+}
+
 function lineAmounts(ctx: PricingCtx, quantityPackages: number, discountPct: number) {
   const packagePriceCents = Math.round(ctx.gbpRateCents * ctx.baseQtyPerPackage);
   const lineSubtotal = packagePriceCents * quantityPackages;

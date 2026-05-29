@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { gbp } from "@/lib/pricing";
 
@@ -15,6 +16,9 @@ const STATUS_STYLES: Record<string, string> = {
 export default async function HomePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+
+  // Signed-out visitors land on the public catalog instead of the agent dashboard.
+  if (!user) redirect("/catalog");
 
   const { data: agent } = await (supabase as any)
     .from("agent_users")
