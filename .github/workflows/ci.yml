@@ -71,6 +71,13 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
       NEXT_PUBLIC_APP_URL: http://localhost:3001
+      # E2E login credentials — must match real users seeded in the staging DB.
+      # Set these as repo secrets; without them the suite falls back to invalid
+      # placeholders and every login will fail.
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_ORG_EMAIL: ${{ secrets.E2E_ORG_EMAIL }}
+      E2E_ORG_PASSWORD: ${{ secrets.E2E_ORG_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

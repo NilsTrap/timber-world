@@ -18,8 +18,9 @@ export default defineConfig({
     baseURL: "http://localhost:3001",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
-    // Run with visible browser window (not headless)
-    headless: false,
+    // Headless in CI (the runner has no display server, so a headed browser
+    // cannot launch); headed locally for debugging.
+    headless: !!process.env.CI,
     // Slow down actions for better visibility
     // launchOptions: { slowMo: 500 },
   },
