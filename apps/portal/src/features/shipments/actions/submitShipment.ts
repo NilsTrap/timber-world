@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth";
 import type { ActionResult, ShipmentStatus } from "../types";
 
@@ -87,15 +88,29 @@ export async function submitShipmentForAcceptance(
   const newStatus = isToExternal ? "completed" : "pending";
   const now = new Date().toISOString();
 
-  // If auto-completing to external org, transfer package ownership first
+  // If shipping TO an external org, transfer package ownership now — the
+  // shipment auto-completes because an external org has no portal login to
+  // Accept. This is a privileged CROSS-ORG write: the sender assigns packages
+  // to an org it is not a member of, so the owner-only RLS WITH CHECK would
+  // reject it on the normal (RLS-bound) client. We use the service-role admin
+  // client, but ONLY after the checks above prove the caller is the legitimate
+  // sender (isOwner) of a draft shipment whose destination is genuinely
+  // external. The destination org is read from the shipment row (never from
+  // caller input) and the write is scoped to packages on THIS shipment that
+  // the sender still owns, so it can never reassign arbitrary inventory.
   if (isToExternal) {
+    if (!isOwner) {
+      // Only the sending org may push its own inventory out to an external org.
+      return { success: false, error: "Access denied", code: "FORBIDDEN" };
+    }
+
+    const admin = createAdminClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: transferError } = await (supabase as any)
+    const { error: transferError } = await (admin as any)
       .from("inventory_packages")
-      .update({
-        organisation_id: shipment.to_organisation_id,
-      })
-      .eq("shipment_id", shipmentId);
+      .update({ organisation_id: shipment.to_organisation_id })
+      .eq("shipment_id", shipmentId)
+      .eq("organisation_id", shipment.from_organisation_id);
 
     if (transferError) {
       console.error("Failed to transfer packages:", transferError);
@@ -119,15 +134,19 @@ export async function submitShipmentForAcceptance(
 
   if (updateError) {
     console.error("Failed to submit shipment:", updateError);
-    // If we transferred packages but failed to update shipment, rollback
+    // If we transferred packages but failed to update the shipment, roll back.
+    // Must also use the admin client: the packages are now owned by the
+    // external org (which the caller is not a member of), so the RLS-bound
+    // client could not restore them. Scope to packages on this shipment now
+    // owned by the external org so only the rows we just moved are reverted.
     if (isToExternal) {
+      const admin = createAdminClient();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
+      await (admin as any)
         .from("inventory_packages")
-        .update({
-          organisation_id: shipment.from_organisation_id,
-        })
-        .eq("shipment_id", shipmentId);
+        .update({ organisation_id: shipment.from_organisation_id })
+        .eq("shipment_id", shipmentId)
+        .eq("organisation_id", shipment.to_organisation_id);
     }
     return { success: false, error: "Failed to submit shipment", code: "UPDATE_FAILED" };
   }
