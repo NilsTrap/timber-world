@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth";
 import type { ActionResult, ShipmentStatus } from "../types";
 
@@ -72,6 +73,16 @@ export async function acceptShipment(
   const now = new Date().toISOString();
   const receiverOrgId = session.organisationId;
 
+  // Privileged transfer client. The packages on an incoming shipment are owned
+  // by the SENDER until acceptance; the receiver is not a member of the sender's
+  // org, so the owner-only RLS USING clause on inventory_packages would silently
+  // filter out every row on a normal client and update ZERO packages (no error),
+  // leaving a "completed" shipment with untransferred inventory. We use the
+  // service-role admin client for the package reads/writes below — but only
+  // AFTER the checks above proved the caller is the to-party (receiver) of a
+  // pending shipment, and every write is scoped strictly by shipment_id.
+  const admin = createAdminClient();
+
   // Phase 1: Transfer packages to receiver's organization FIRST
   // This is the more critical operation - if it fails, shipment stays pending
   //
@@ -80,7 +91,7 @@ export async function acceptShipment(
   // Strategy: fetch shipment packages, find collisions, renumber before transferring.
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: shipmentPackages, error: fetchPkgError } = await (supabase as any)
+  const { data: shipmentPackages, error: fetchPkgError } = await (admin as any)
     .from("inventory_packages")
     .select("id, package_number")
     .eq("shipment_id", shipmentId);
@@ -133,7 +144,7 @@ export async function acceptShipment(
           allReceiverNumbers.add(newNumber);
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: renumberErr } = await (supabase as any)
+          const { error: renumberErr } = await (admin as any)
             .from("inventory_packages")
             .update({ package_number: newNumber })
             .eq("id", pkg.id);
@@ -147,17 +158,28 @@ export async function acceptShipment(
     }
   }
 
-  // Now bulk-transfer all packages to the receiver org (no more collisions)
+  // Now bulk-transfer all packages to the receiver org (no more collisions).
+  // Admin client (see note above) + .select() so we can verify rows actually
+  // moved and fail loudly rather than completing a shipment whose inventory
+  // never transferred.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updatePackagesError } = await (supabase as any)
+  const { data: transferred, error: updatePackagesError } = await (admin as any)
     .from("inventory_packages")
     .update({
       organisation_id: receiverOrgId,
     })
-    .eq("shipment_id", shipmentId);
+    .eq("shipment_id", shipmentId)
+    .select("id");
 
   if (updatePackagesError) {
     console.error("Failed to transfer packages:", updatePackagesError);
+    return { success: false, error: "Failed to transfer inventory", code: "TRANSFER_FAILED" };
+  }
+
+  // Guard against the silent-zero-rows failure mode: if the shipment has
+  // packages but none transferred, do NOT mark it completed.
+  if (shipmentPackages.length > 0 && (transferred?.length ?? 0) === 0) {
+    console.error(`Accept transferred 0 of ${shipmentPackages.length} packages for shipment ${shipmentId}`);
     return { success: false, error: "Failed to transfer inventory", code: "TRANSFER_FAILED" };
   }
 
@@ -175,9 +197,11 @@ export async function acceptShipment(
 
   if (updateShipmentError) {
     console.error("Failed to update shipment status:", updateShipmentError);
-    // Rollback: Transfer packages back to sender
+    // Rollback: transfer packages back to sender. Must use the admin client —
+    // the packages are now owned by the receiver, and setting them back to the
+    // sender org would fail the owner-only RLS WITH CHECK on a normal client.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    await (admin as any)
       .from("inventory_packages")
       .update({
         organisation_id: shipment.from_organisation_id,

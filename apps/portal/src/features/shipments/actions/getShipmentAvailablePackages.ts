@@ -104,7 +104,12 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
   }
 
   // Query 1: Shipment-sourced packages (shipped to this organisation's facility)
-  // Only include packages from shipments that have been accepted or completed
+  // Only include packages from shipments that have been accepted or completed.
+  // IMPORTANT: also require inventory_packages.organisation_id = orgId. The
+  // shipment status alone is not proof of ownership — if an acceptance ever
+  // completes without transferring (or the row is otherwise stuck owned by the
+  // sender), this query would otherwise list packages the org cannot actually
+  // ship out, and "Add" would reject them with "No valid packages to add".
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: shipmentData, error: shipmentError } = await (supabase as any)
     .from("inventory_packages")
@@ -135,6 +140,7 @@ export async function getShipmentAvailablePackages(): Promise<ActionResult<Shipm
       ref_fsc!inventory_packages_fsc_id_fkey(value),
       ref_quality!inventory_packages_quality_id_fkey(value)
     `)
+    .eq("organisation_id", orgId)
     .eq("shipments.to_organisation_id", orgId)
     .in("shipments.status", ["accepted", "completed"])
     .in("status", ["available", "produced"])
