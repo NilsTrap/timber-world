@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
 
@@ -19,7 +19,7 @@ export async function removeOrderPackage(
 
   if (!isAdmin(session)) {
     const userOrgId = session.currentOrganizationId || session.organisationId;
-    const canCreate = await orgHasModule(userOrgId, "orders.create");
+    const canCreate = (await getUserEnabledModules(session.portalUserId ?? "", userOrgId)).has("orders.create");
     if (!canCreate) {
       return { success: false, error: "Permission denied", code: "FORBIDDEN" };
     }

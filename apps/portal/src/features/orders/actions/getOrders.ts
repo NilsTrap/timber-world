@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import type { Order, ActionResult } from "../types";
 
 /**
@@ -31,7 +31,7 @@ export async function getOrders(options?: {
   // 2. For non-admin users, check if their org has orders feature enabled
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasOrdersModule = await orgHasModule(orgId, "orders.view");
+    const hasOrdersModule = (await getUserEnabledModules(session.portalUserId ?? "", orgId)).has("orders.view");
     if (!hasOrdersModule) {
       return {
         success: false,

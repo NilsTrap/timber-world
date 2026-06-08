@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { createOrderSchema } from "../schemas";
 import type { Order, ActionResult } from "../types";
 import { logOrderActivity } from "./logOrderActivity";
@@ -38,7 +38,8 @@ export async function createOrder(input: {
   // 2. Non-admin users: check orders.create module
   if (!isAdmin(session)) {
     const userOrgId = session.currentOrganizationId || session.organisationId;
-    const canCreate = await orgHasModule(userOrgId, "orders.create");
+    const userModules = await getUserEnabledModules(session.portalUserId ?? "", userOrgId);
+    const canCreate = userModules.has("orders.create");
     if (!canCreate) {
       return {
         success: false,
@@ -49,7 +50,7 @@ export async function createOrder(input: {
 
     // If creating for a different org, check customer-select module
     if (input.customerOrganisationId !== userOrgId) {
-      const canSelectCustomer = await orgHasModule(userOrgId, "orders.customer-select");
+      const canSelectCustomer = userModules.has("orders.customer-select");
       if (!canSelectCustomer) {
         return {
           success: false,

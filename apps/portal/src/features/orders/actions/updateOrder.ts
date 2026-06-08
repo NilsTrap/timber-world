@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { updateOrderSchema } from "../schemas";
 import type { Order, ActionResult } from "../types";
 import { isValidUUID } from "../types";
@@ -86,9 +86,10 @@ export async function updateOrder(
   ]);
   if (!isAdmin(session)) {
     const userOrgId = session.currentOrganizationId || session.organisationId;
-    const canCreate = await orgHasModule(userOrgId, "orders.create");
+    const userModules = await getUserEnabledModules(session.portalUserId ?? "", userOrgId);
+    const canCreate = userModules.has("orders.create");
     if (!canCreate) {
-      const canProductionEdit = await orgHasModule(userOrgId, "orders.tab.production.edit");
+      const canProductionEdit = userModules.has("orders.tab.production.edit");
       if (!canProductionEdit) {
         return {
           success: false,

@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { updateOrderStatusSchema } from "../schemas";
 import type { Order, OrderStatus, ActionResult } from "../types";
 import { isValidUUID } from "../types";
@@ -31,7 +31,7 @@ export async function updateOrderStatus(
   // 2. Check permission: admin or orders.create module
   if (!isAdmin(session)) {
     const userOrgId = session.currentOrganizationId || session.organisationId;
-    const canCreate = await orgHasModule(userOrgId, "orders.create");
+    const canCreate = (await getUserEnabledModules(session.portalUserId ?? "", userOrgId)).has("orders.create");
     if (!canCreate) {
       return {
         success: false,

@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 
 interface CustomerOption {
   id: string;
@@ -49,7 +49,7 @@ export async function getCustomerOptions(): Promise<ActionResult<CustomerOption[
 
   // Non-admin: check module permission
   const userOrgId = session.currentOrganizationId || session.organisationId;
-  const canSelect = await orgHasModule(userOrgId, "orders.customer-select");
+  const canSelect = (await getUserEnabledModules(session.portalUserId ?? "", userOrgId)).has("orders.customer-select");
   if (!canSelect) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }

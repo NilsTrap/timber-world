@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 export interface StaircaseCode {
@@ -27,6 +27,14 @@ export async function getStaircaseCodes(): Promise<ActionResult<StaircaseCode[]>
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  }
+
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("orders.tab.prices")) {
+      return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    }
   }
 
   const supabase = await createClient();

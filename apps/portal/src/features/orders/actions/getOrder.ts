@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import type { Order, ActionResult } from "../types";
 import { isValidUUID } from "../types";
 
@@ -46,7 +46,7 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
     if (data.customer_organisation_id !== orgId && data.seller_organisation_id !== orgId && data.producer_organisation_id !== orgId) {
       return { success: false, error: "Permission denied", code: "FORBIDDEN" };
     }
-    const hasModule = await orgHasModule(orgId, "orders.view");
+    const hasModule = (await getUserEnabledModules(session.portalUserId ?? "", orgId)).has("orders.view");
     if (!hasModule) {
       return { success: false, error: "Orders feature not enabled", code: "FEATURE_DISABLED" };
     }

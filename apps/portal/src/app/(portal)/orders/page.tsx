@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { OrdersPageClient } from "@/features/orders/components";
 import type { SessionUser } from "@/lib/auth/getSession";
 
@@ -40,12 +40,9 @@ async function OrdersBody({ session }: { session: SessionUser }) {
   if (userIsAdmin) {
     visibleTabs = [...allTabs];
   } else {
-    const [customerSelect, ...tabChecks] = await Promise.all([
-      orgHasModule(userOrgId, "orders.customer-select"),
-      ...allTabs.map((tab) => orgHasModule(userOrgId, `orders.tab.${tab}`)),
-    ]);
-    canSelectCustomer = customerSelect;
-    visibleTabs = allTabs.filter((_, i) => tabChecks[i]);
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", userOrgId);
+    canSelectCustomer = mods.has("orders.customer-select");
+    visibleTabs = allTabs.filter((tab) => mods.has(`orders.tab.${tab}`));
     if (visibleTabs.length === 0) visibleTabs = ["list"];
   }
 
@@ -70,7 +67,7 @@ export default async function OrdersPage() {
 
   // Module gate runs before render so notFound() can trigger early.
   if (!userIsAdmin) {
-    const hasOrdersModule = await orgHasModule(userOrgId, "orders.view");
+    const hasOrdersModule = (await getUserEnabledModules(session.portalUserId ?? "", userOrgId)).has("orders.view");
     if (!hasOrdersModule) notFound();
   }
 
