@@ -14,6 +14,10 @@ export interface Organisation {
   isActive: boolean;
   /** External organisations don't use the platform - they're suppliers/customers */
   isExternal: boolean;
+  /** Supply-chain role flags (independent, any combination) */
+  isCustomer: boolean;
+  isManufacturer: boolean;
+  isProducer: boolean;
   legalAddress: string | null;
   vatNumber: string | null;
   registrationNumber: string | null;

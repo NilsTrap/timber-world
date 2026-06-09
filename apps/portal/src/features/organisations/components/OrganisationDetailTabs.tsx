@@ -40,6 +40,7 @@ import { TradingPartnersTab } from "./TradingPartnersTab";
 import { ReferenceDataManager } from "@/features/reference-data";
 import {
   toggleOrganisationExternal,
+  setOrganisationRole,
   updateOrganisation,
   getDeliveryAddresses,
   saveDeliveryAddress,
@@ -63,6 +64,12 @@ export function OrganisationDetailTabs({
 }: OrganisationDetailTabsProps) {
   const [isExternal, setIsExternal] = useState(organisation.isExternal);
   const [isTogglingExternal, setIsTogglingExternal] = useState(false);
+
+  // Supply-chain role flags (independent multi-select)
+  const [isCustomer, setIsCustomer] = useState(organisation.isCustomer);
+  const [isManufacturer, setIsManufacturer] = useState(organisation.isManufacturer);
+  const [isProducer, setIsProducer] = useState(organisation.isProducer);
+  const [isTogglingRole, setIsTogglingRole] = useState(false);
 
   // Editable fields (name/code inline editing)
   const [name, setName] = useState(organisation.name);
@@ -129,6 +136,23 @@ export function OrganisationDetailTabs({
       toast.error(result.error);
     }
     setIsTogglingExternal(false);
+  };
+
+  const handleRoleToggle = async (
+    role: "customer" | "manufacturer" | "producer",
+    current: boolean
+  ) => {
+    setIsTogglingRole(true);
+    const newValue = !current;
+    const result = await setOrganisationRole(organisation.id, role, newValue);
+    if (result.success) {
+      if (role === "customer") setIsCustomer(result.data.enabled);
+      else if (role === "manufacturer") setIsManufacturer(result.data.enabled);
+      else setIsProducer(result.data.enabled);
+    } else {
+      toast.error(result.error);
+    }
+    setIsTogglingRole(false);
   };
 
   const startEditing = (field: "name" | "code") => {
@@ -422,6 +446,37 @@ export function OrganisationDetailTabs({
                       className="rounded-l-none"
                     >
                       External
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Roles
+                  </label>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <Button
+                      variant={isCustomer ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleRoleToggle("customer", isCustomer)}
+                      disabled={isTogglingRole}
+                    >
+                      Customer
+                    </Button>
+                    <Button
+                      variant={isManufacturer ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleRoleToggle("manufacturer", isManufacturer)}
+                      disabled={isTogglingRole}
+                    >
+                      Manufacturer
+                    </Button>
+                    <Button
+                      variant={isProducer ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleRoleToggle("producer", isProducer)}
+                      disabled={isTogglingRole}
+                    >
+                      Producer
                     </Button>
                   </div>
                 </div>
