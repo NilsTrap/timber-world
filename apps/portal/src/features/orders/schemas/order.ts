@@ -19,6 +19,7 @@ export const createOrderSchema = z.object({
     .optional()
     .transform((val) => val || null),
   customerOrganisationId: z.string().uuid("Invalid organisation").nullable().optional().transform((val) => val || null),
+  sellerOrganisationId: z.string().uuid("Invalid organisation").nullable().optional().transform((val) => val || null),
   dateReceived: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
   dateLoaded: z
     .string()

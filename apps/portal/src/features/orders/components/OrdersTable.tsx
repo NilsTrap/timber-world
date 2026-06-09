@@ -31,7 +31,7 @@ import {
   ColumnHeaderMenu,
   type ColumnSortState,
 } from "@timber/ui";
-import { getOrders, createOrder, deleteOrder, updateOrder, updateOrderStatus, getCustomerOptions } from "../actions";
+import { getOrders, createOrder, deleteOrder, updateOrder, updateOrderStatus, getCustomerOptions, getOrderPartyOptions, type OrderPartyOptions } from "../actions";
 import { useScrollRestore } from "@/hooks/useScrollRestore";
 import type { Order, OrderStatus } from "../types";
 import { getStatusBadgeVariant, getStatusLabel, ORDER_STATUSES } from "../types";
@@ -283,6 +283,9 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
   useEffect(() => { latestOrdersRef.current = orders; }, [orders]);
   const [isLoading, setIsLoading] = useState(true);
   const [organisations, setOrganisations] = useState<OrganisationOption[]>([]);
+  // Role-aware party options: which orgs the current user may assign as Customer
+  // / Manufacturer, plus their own org info to decide which slot is auto-filled.
+  const [partyOptions, setPartyOptions] = useState<OrderPartyOptions | null>(null);
   const scrollRef = useScrollRestore(`orders-${tab}-scroll`);
 
   // Delete confirmation state
@@ -317,6 +320,10 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
         if (result.success) setOrganisations(result.data ?? []);
       });
     }
+    // Role-aware party options drive the Customer / Manufacturer cells.
+    getOrderPartyOptions().then((result) => {
+      if (result.success) setPartyOptions(result.data);
+    });
   }, [canSelectCustomer, isAdmin]);
 
   // --- ColumnHeaderMenu sort/filter ---
@@ -656,13 +663,19 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
         // Only update the field that was saved + updatedAt, preserving everything else
         const updates: Record<string, unknown> = { ...field, updatedAt: result.data.updatedAt };
 
-        // Resolve display names for org fields
+        // Resolve display names for org fields. Look in the general org list
+        // first, then fall back to the role-aware party option lists (customer-
+        // and manufacturer-side users only have the latter loaded).
+        const findOrg = (id: unknown) =>
+          organisations.find((o) => o.id === id) ??
+          partyOptions?.customerOptions.find((o) => o.id === id) ??
+          partyOptions?.manufacturerOptions.find((o) => o.id === id);
         if (field.customerOrganisationId) {
-          const org = organisations.find((o) => o.id === field.customerOrganisationId);
+          const org = findOrg(field.customerOrganisationId);
           if (org) { updates.customerOrganisationName = org.name; updates.customerOrganisationCode = org.code; }
         }
         if (field.sellerOrganisationId !== undefined) {
-          const org = organisations.find((o) => o.id === field.sellerOrganisationId);
+          const org = findOrg(field.sellerOrganisationId);
           updates.sellerOrganisationName = org?.name ?? undefined;
           updates.sellerOrganisationCode = org?.code ?? undefined;
         }
@@ -687,7 +700,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
         toast.error(result.error);
       }
     },
-    [organisations]
+    [organisations, partyOptions, tab]
   );
 
   // Save a production m³ field and recalculate derived values locally.
@@ -1176,11 +1189,13 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   )}
                   {show("customer") && (
                   <TableCell className="px-2 text-sm">
-                    {canSelectCustomer ? (
+                    {/* Manufacturer-side users + admins pick the Customer; customer-side
+                        users see their own org read-only. Production tab is always read-only. */}
+                    {tab !== "production" && (isAdmin || partyOptions?.userIsManufacturer) ? (
                       <EditableSelectCell
                         value={order.customerOrganisationId || ""}
                         displayValue={order.customerOrganisationName || "-"}
-                        options={organisations}
+                        options={partyOptions?.customerOptions ?? []}
                         onSave={(val) => saveField(order.id, { customerOrganisationId: val })}
                       />
                     ) : (
@@ -1190,11 +1205,13 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   )}
                   {show("seller") && (
                   <TableCell className="px-2 text-sm whitespace-nowrap">
-                    {organisations.length > 0 ? (
+                    {/* Customer-side users + admins pick the Manufacturer; manufacturer-side
+                        users see their own org read-only. Production tab is always read-only. */}
+                    {tab !== "production" && (isAdmin || !partyOptions?.userIsManufacturer) ? (
                       <EditableSelectCell
                         value={order.sellerOrganisationId || ""}
                         displayValue={order.sellerOrganisationName || "-"}
-                        options={organisations}
+                        options={partyOptions?.manufacturerOptions ?? []}
                         onSave={(val) => saveField(order.id, { sellerOrganisationId: val || null })}
                       />
                     ) : (

@@ -8,6 +8,8 @@ export { getOrderPackages } from "./getOrderPackages";
 export { addOrderPackage } from "./addOrderPackage";
 export { removeOrderPackage } from "./removeOrderPackage";
 export { getCustomerOptions } from "./getCustomerOptions";
+export { getOrderPartyOptions } from "./getOrderPartyOptions";
+export type { OrderPartyOptions } from "./getOrderPartyOptions";
 export { getStaircaseCodes } from "./getStaircaseCodes";
 export type { StaircaseCode } from "./getStaircaseCodes";
 export { saveOrderProducts } from "./saveOrderProducts";
