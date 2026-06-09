@@ -36,7 +36,7 @@ export async function createOrder(input: {
     };
   }
 
-  // 2. Non-admin users: check orders.create module
+  // 2. Non-admin users: check orders.view module
   if (!isAdmin(session)) {
     const userOrgId = session.currentOrganizationId || session.organisationId;
     const userModules = await getUserEnabledModules(session.portalUserId ?? "", userOrgId);

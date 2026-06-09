@@ -16,6 +16,7 @@ export interface OrderPartyOptions {
   userIsManufacturer: boolean;
   customerOptions: PartyOption[];
   manufacturerOptions: PartyOption[];
+  producerOptions: PartyOption[];
 }
 
 /**
@@ -80,6 +81,16 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
       return { success: false, error: "Failed to fetch manufacturer organisations", code: "QUERY_FAILED" };
     }
 
+    const { data: producerOrgs, error: producerErr } = await client
+      .from("organisations")
+      .select("id, code, name")
+      .eq("is_active", true)
+      .eq("is_producer", true)
+      .order("code");
+    if (producerErr) {
+      return { success: false, error: "Failed to fetch producer organisations", code: "QUERY_FAILED" };
+    }
+
     return {
       success: true,
       data: {
@@ -88,6 +99,7 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
         userIsManufacturer,
         customerOptions: (customerOrgs ?? []) as PartyOption[],
         manufacturerOptions: (manufacturerOrgs ?? []) as PartyOption[],
+        producerOptions: (producerOrgs ?? []) as PartyOption[],
       },
     };
   }
@@ -111,6 +123,7 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
         userIsManufacturer,
         customerOptions: [],
         manufacturerOptions: [],
+        producerOptions: [],
       },
     };
   }
@@ -121,7 +134,7 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
 
   const { data: partnerOrgs, error: orgsError } = await client
     .from("organisations")
-    .select("id, code, name, is_customer, is_manufacturer, is_active")
+    .select("id, code, name, is_customer, is_manufacturer, is_producer, is_active")
     .in("id", partnerIds)
     .eq("is_active", true)
     .order("code");
@@ -130,13 +143,14 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
     return { success: false, error: "Failed to fetch organisations", code: "QUERY_FAILED" };
   }
 
-  type PartnerOrgRow = PartyOption & { is_customer: boolean; is_manufacturer: boolean; is_active: boolean };
+  type PartnerOrgRow = PartyOption & { is_customer: boolean; is_manufacturer: boolean; is_producer: boolean; is_active: boolean };
   const rows = (partnerOrgs ?? []) as PartnerOrgRow[];
 
   const toOption = (o: PartnerOrgRow): PartyOption => ({ id: o.id, code: o.code, name: o.name });
 
   const customerOptions = rows.filter((o) => o.is_customer === true).map(toOption);
   const manufacturerOptions = rows.filter((o) => o.is_manufacturer === true).map(toOption);
+  const producerOptions = rows.filter((o) => o.is_producer === true).map(toOption);
 
   return {
     success: true,
@@ -146,6 +160,7 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
       userIsManufacturer,
       customerOptions,
       manufacturerOptions,
+      producerOptions,
     },
   };
 }

@@ -189,7 +189,7 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
           metaRows.push({ label: "Manufacturer", value: order.sellerOrganisationName });
         }
         if (showProducer && order.producerOrganisationName) {
-          metaRows.push({ label: "Workshop", value: order.producerOrganisationName });
+          metaRows.push({ label: "Producer", value: order.producerOrganisationName });
         }
         metaRows.push({ label: "Received", value: order.dateReceived });
         if (order.dateLoaded) {

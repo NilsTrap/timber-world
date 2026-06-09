@@ -63,7 +63,7 @@ export async function updateOrder(
   }
 
   // 2. Check permission. Two gates:
-  //    - admin OR orders.create  → can edit every field in `input`
+  //    - admin OR orders.view  → can edit every field in `input`
   //    - orders.tab.production.edit → can edit ONLY production-tab fields below
   //      (date loaded, planned date, production m³ / material / finishing / wood art
   //      and their invoice + payment metadata). Reject any other field with FORBIDDEN.

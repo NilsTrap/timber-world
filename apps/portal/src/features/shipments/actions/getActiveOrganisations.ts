@@ -1,14 +1,15 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import type { ActionResult, OrganisationOption } from "../types";
 
 /**
  * Get Active Organisations
  *
- * Fetches all active organisations for use in form dropdowns.
- * Allowed for admins and non-admin users with orders.customer-select module.
+ * Fetches organisations for use in form dropdowns.
+ * - Admins: all active organisations.
+ * - Non-admins: only their active trading partners.
  */
 export async function getActiveOrganisations(): Promise<ActionResult<OrganisationOption[]>> {
   const session = await getSession();
@@ -16,27 +17,57 @@ export async function getActiveOrganisations(): Promise<ActionResult<Organisatio
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  if (!isAdmin(session)) {
-    const userOrgId = session.currentOrganizationId || session.organisationId;
-    const canSelectCustomer = await orgHasModule(userOrgId, "orders.customer-select");
-    if (!canSelectCustomer) {
-      return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = supabase as any;
+
+  // Admins see all active organisations
+  if (isAdmin(session)) {
+    const { data, error } = await client
+      .from("organisations")
+      .select("id, code, name")
+      .eq("is_active", true)
+      .order("code");
+
+    if (error) {
+      console.error("Failed to fetch organisations:", error);
+      return { success: false, error: "Failed to fetch organisations", code: "QUERY_FAILED" };
     }
+
+    return { success: true, data: data as OrganisationOption[] };
   }
 
-  const supabase = await createClient();
+  // Non-admin: only the user's active trading partners
+  const userOrgId = session.currentOrganizationId || session.organisationId;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const { data: partners, error: partnersError } = await client
+    .from("organisation_trading_partners")
+    .select("partner_organisation_id")
+    .eq("organisation_id", userOrgId);
+
+  if (partnersError) {
+    return { success: false, error: "Failed to fetch trading partners", code: "QUERY_FAILED" };
+  }
+
+  if (!partners || partners.length === 0) {
+    return { success: true, data: [] };
+  }
+
+  const partnerIds = partners.map(
+    (p: { partner_organisation_id: string }) => p.partner_organisation_id
+  );
+
+  const { data: orgs, error: orgsError } = await client
     .from("organisations")
     .select("id, code, name")
+    .in("id", partnerIds)
     .eq("is_active", true)
     .order("code");
 
-  if (error) {
-    console.error("Failed to fetch organisations:", error);
+  if (orgsError) {
+    console.error("Failed to fetch organisations:", orgsError);
     return { success: false, error: "Failed to fetch organisations", code: "QUERY_FAILED" };
   }
 
-  return { success: true, data: data as OrganisationOption[] };
+  return { success: true, data: orgs as OrganisationOption[] };
 }

@@ -28,7 +28,7 @@ export async function updateOrderStatus(
     };
   }
 
-  // 2. Check permission: admin or orders.create module
+  // 2. Check permission: admin or orders.view module
   if (!isAdmin(session)) {
     const userOrgId = session.currentOrganizationId || session.organisationId;
     const canCreate = (await getUserEnabledModules(session.portalUserId ?? "", userOrgId)).has("orders.view");

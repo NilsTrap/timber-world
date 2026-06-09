@@ -882,7 +882,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                 <TableHead className="text-sm px-2 w-40 whitespace-nowrap">{headerWithMenu("seller", "Manufacturer")}</TableHead>
                 )}
                 {show("producer") && (
-                <TableHead className="text-sm px-2">{headerWithMenu("producer", "Workshop")}</TableHead>
+                <TableHead className="text-sm px-2">{headerWithMenu("producer", "Producer")}</TableHead>
                 )}
                 {show("dateReceived") && (
                 <TableHead className="text-sm px-2 w-24">
@@ -1221,13 +1221,11 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   )}
                   {show("producer") && (
                   <TableCell className="px-2 text-sm whitespace-nowrap">
-                    {tab === "production" ? (
-                      <span className={!order.producerOrganisationName ? "text-muted-foreground" : ""}>{order.producerOrganisationName || "-"}</span>
-                    ) : organisations.length > 0 ? (
+                    {tab === "sales" ? (
                       <EditableSelectCell
                         value={order.producerOrganisationId || ""}
                         displayValue={order.producerOrganisationName || "-"}
-                        options={organisations}
+                        options={partyOptions?.producerOptions ?? []}
                         onSave={(val) => saveField(order.id, { producerOrganisationId: val || null })}
                       />
                     ) : (
