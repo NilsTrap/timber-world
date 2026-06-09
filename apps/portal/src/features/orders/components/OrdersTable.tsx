@@ -1797,6 +1797,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     {show("plPercentFromInvoice") && <td className={`px-2 py-2 text-right ${color(s.plPercent)}`}>{fmtPct(s.plPercent)}</td>}
                     {show("files") && <td className="px-2 py-2" />}
                     {show("status") && <td className="px-2 py-2" />}
+                    {isAdmin && <td className="px-2 py-2" />}
                   </tr>
                 </tfoot>
               );

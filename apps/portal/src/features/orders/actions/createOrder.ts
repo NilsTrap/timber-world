@@ -5,6 +5,7 @@ import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { createOrderSchema } from "../schemas";
 import type { Order, ActionResult } from "../types";
 import { logOrderActivity } from "./logOrderActivity";
+import { isAllowedOrderParty } from "./_validateOrderParty";
 
 /**
  * Create Order
@@ -106,6 +107,18 @@ export async function createOrder(input: {
     } else {
       customerOrgId = userOrgId;
       sellerOrgId = inputSellerOrgId;
+    }
+
+    // Validate the picked counterparty is one of the user's trading partners
+    // with the correct role (the own-org slot above is forced and trusted).
+    if (userIsManufacturer) {
+      if (customerOrgId && !(await isAllowedOrderParty(client, userOrgId, customerOrgId, "is_customer"))) {
+        return { success: false, error: "Selected customer is not an allowed trading partner", code: "FORBIDDEN" };
+      }
+    } else {
+      if (sellerOrgId && !(await isAllowedOrderParty(client, userOrgId, sellerOrgId, "is_manufacturer"))) {
+        return { success: false, error: "Selected manufacturer is not an allowed trading partner", code: "FORBIDDEN" };
+      }
     }
   }
 

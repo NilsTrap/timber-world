@@ -6,6 +6,7 @@ import { updateOrderSchema } from "../schemas";
 import type { Order, ActionResult } from "../types";
 import { isValidUUID } from "../types";
 import { logOrderActivity } from "./logOrderActivity";
+import { isAllowedOrderParty } from "./_validateOrderParty";
 
 /**
  * Update Order
@@ -200,6 +201,22 @@ export async function updateOrder(
     updateData.wood_art_invoice_number = parsed.data.woodArtInvoiceNumber;
   if (parsed.data.woodArtPaymentDate !== undefined)
     updateData.wood_art_payment_date = parsed.data.woodArtPaymentDate;
+
+  // Non-admins may only set order parties to their own trading partners (with
+  // the right role). Clearing (null) is allowed. Admins are unrestricted.
+  if (!isAdmin(session)) {
+    const userOrgId = session.currentOrganizationId || session.organisationId;
+    const partyChecks: Array<[string, "is_customer" | "is_manufacturer" | "is_producer"]> = [
+      ["customer_organisation_id", "is_customer"],
+      ["seller_organisation_id", "is_manufacturer"],
+      ["producer_organisation_id", "is_producer"],
+    ];
+    for (const [field, role] of partyChecks) {
+      if (updateData[field] && !(await isAllowedOrderParty(client, userOrgId, updateData[field], role))) {
+        return { success: false, error: "Selected party is not an allowed trading partner", code: "FORBIDDEN" };
+      }
+    }
+  }
 
   // 6. Update order
   const { data, error } = await client
