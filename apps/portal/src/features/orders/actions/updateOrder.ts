@@ -64,11 +64,11 @@ export async function updateOrder(
 
   // 2. Check permission. Two gates:
   //    - admin OR orders.view  → can edit every field in `input`
-  //    - orders.tab.production.edit → can edit ONLY production-tab fields below
+  //    - orders.tab.production → can edit ONLY production-tab fields below
   //      (date loaded, planned date, production m³ / material / finishing / wood art
   //      and their invoice + payment metadata). Reject any other field with FORBIDDEN.
-  // The production-edit gate lets finishing-workshop orgs record their numbers on
-  // shared orders without seeing or touching pricing / customer data.
+  // Anyone who can see the Production tab may record its numbers on shared orders;
+  // the field whitelist still stops them touching pricing / customer data.
   const PRODUCTION_EDIT_FIELDS = new Set<string>([
     "dateLoaded",
     "plannedDate",
@@ -90,7 +90,7 @@ export async function updateOrder(
     const userModules = await getUserEnabledModules(session.portalUserId ?? "", userOrgId);
     const canCreate = userModules.has("orders.view");
     if (!canCreate) {
-      const canProductionEdit = userModules.has("orders.tab.production.edit");
+      const canProductionEdit = userModules.has("orders.tab.production");
       if (!canProductionEdit) {
         return {
           success: false,

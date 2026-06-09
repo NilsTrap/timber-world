@@ -146,8 +146,8 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   // Ordered Products are inherently customer/sales data and must never be edited
   // from the Production tab — even when the order itself is in draft. The Production
   // tab is reserved for production-side metrics (m³, costs, invoice/payment) and
-  // showing editable dropdowns there causes confusion and triggers permission errors
-  // for workshop users who only hold orders.tab.production.edit.
+  // showing editable dropdowns there causes confusion for producer users who only
+  // hold the Production tab (orders.tab.production) and may edit production fields only.
   const productsReadOnly = !isEditable || tab === "production";
 
   // Split packages by status
