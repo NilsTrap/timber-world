@@ -105,7 +105,9 @@ Platform admins (super admins) skip all checks.
 - `module_presets` - Named presets for bulk module assignment
 
 ### Sub-Module Pattern
-Each module has fine-grained capabilities: `orders.view`, `orders.create`, `orders.customer-select`, `orders.pricing`, `orders.production-status`
+Each module has fine-grained sub-modules. For Orders the live ones are `orders.view` (see Orders + the List) and the per-tab toggles `orders.tab.list` / `orders.tab.prices` / `orders.tab.sales` / `orders.tab.production` / `orders.tab.analytics`, plus `orders.tab.production.edit` (lets producer/workshop users edit ONLY the production-tab fields of an order — date loaded, planned date, production m³/material/finishing, production + wood-art invoices/payments — and nothing else).
+
+**Order action permissions (as of 2026-06-09):** create / edit / cancel are gated on `orders.view` (anyone who can see the orders list); **delete is admin-only**. The old `orders.create` and `orders.customer-select` sub-modules were **removed** — order parties are now driven by the company-role system (see Party Naming below), not per-user checkboxes. Orders gates use the two-layer `getUserEnabledModules` (org ∩ user); admins bypass via `isAdmin` (role === "admin").
 
 ### Code Pattern
 ```typescript
@@ -435,10 +437,12 @@ The DB columns are `customer_organisation_id`, `seller_organisation_id`, `produc
 | DB column / TS field | UI label | Role |
 |---|---|---|
 | `customer_organisation_*` | **Customer** | End buyer (e.g. DDC) |
-| `seller_organisation_*` | **Manufacturer** | The orchestrator who owns materials, hires the workshop, sells to the customer (e.g. Wood and Good). Uses "Manufacturer" in the OEM / brand-owner sense — not literally swinging the saw. |
-| `producer_organisation_*` | **Workshop** | The finishing subcontractor (e.g. Wood ART). Does CNC, gluing, finishing — not raw-material production. |
+| `seller_organisation_*` | **Manufacturer** | The orchestrator who owns materials, hires the producer, sells to the customer (e.g. Wood and Good, Timber International). Uses "Manufacturer" in the OEM / brand-owner sense — not literally swinging the saw. |
+| `producer_organisation_*` | **Producer** | The finishing subcontractor (e.g. Wood ART). Does CNC, gluing, finishing — not raw-material production. (UI label renamed from "Workshop" → "Producer" on 2026-06-09.) |
 
-The "Production Files" section in order detail is labelled **"Workshop Files"** for the same reason. The schema names were left alone deliberately (renaming would be a much bigger change). When adding new UI strings, use the user-facing terminology.
+The "Production Files" section in order detail is labelled **"Producer Files"** for the same reason. The schema names were left alone deliberately (renaming would be a much bigger change). When adding new UI strings, use the user-facing terminology.
+
+**Company roles (2026-06-09):** `organisations` has `is_customer` / `is_manufacturer` / `is_producer` flags — multi-role, set in the org-details "Roles" toggle. They drive Add-Order behaviour: a **Manufacturer**-flagged org's user is auto-assigned as the order's Manufacturer and picks the Customer; a non-manufacturer (customer-side) org's user is auto-assigned as the Customer and picks the Manufacturer; the **Producer** is picked on the **Sales tab** (read-only elsewhere). Counterparty pick-lists are the user's **trading partners** filtered by the matching role (`getOrderPartyOptions`), enforced server-side by `_validateOrderParty.ts`. Admins pick freely. The flags are **Orders-only for now** — not wired into RLS or other features.
 
 ### Production Entry Date Semantics
 
