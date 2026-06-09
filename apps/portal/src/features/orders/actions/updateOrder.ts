@@ -87,7 +87,7 @@ export async function updateOrder(
   if (!isAdmin(session)) {
     const userOrgId = session.currentOrganizationId || session.organisationId;
     const userModules = await getUserEnabledModules(session.portalUserId ?? "", userOrgId);
-    const canCreate = userModules.has("orders.create");
+    const canCreate = userModules.has("orders.view");
     if (!canCreate) {
       const canProductionEdit = userModules.has("orders.tab.production.edit");
       if (!canProductionEdit) {

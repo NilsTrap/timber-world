@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
 
@@ -24,17 +24,11 @@ export async function deleteOrder(
     };
   }
 
-  // 2. Check permission: admin or orders.create module
+  // 2. Deleting an order is admin-only. Non-admins use Cancel (set status to
+  // "cancelled") instead — an order accumulates files, prices, and invoices
+  // and must never be casually removed.
   if (!isAdmin(session)) {
-    const userOrgId = session.currentOrganizationId || session.organisationId;
-    const canCreate = (await getUserEnabledModules(session.portalUserId ?? "", userOrgId)).has("orders.create");
-    if (!canCreate) {
-      return {
-        success: false,
-        error: "Permission denied",
-        code: "FORBIDDEN",
-      };
-    }
+    return { success: false, error: "Only admins can delete orders. Use Cancel instead.", code: "FORBIDDEN" };
   }
 
   // 3. Validate order ID

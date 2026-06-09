@@ -1140,7 +1140,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   {headerWithMenu("status", "Status")}
                 </TableHead>
                 )}
-                <TableHead className="w-8 px-0" />
+                {isAdmin && <TableHead className="w-8 px-0" />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1741,6 +1741,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     )}
                   </TableCell>
                   )}
+                  {isAdmin && (
                   <TableCell className="px-0">
                     <Button
                       variant="ghost"
@@ -1751,6 +1752,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

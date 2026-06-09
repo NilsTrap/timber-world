@@ -39,7 +39,7 @@ export async function createOrder(input: {
   if (!isAdmin(session)) {
     const userOrgId = session.currentOrganizationId || session.organisationId;
     const userModules = await getUserEnabledModules(session.portalUserId ?? "", userOrgId);
-    const canCreate = userModules.has("orders.create");
+    const canCreate = userModules.has("orders.view");
     if (!canCreate) {
       return {
         success: false,
