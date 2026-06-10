@@ -858,7 +858,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
           </Button>
         </div>
       ) : (<>
-        <div ref={scrollRef} className="rounded-lg border max-h-[calc(100vh-10rem)] overflow-auto">
+        <div ref={scrollRef} className="rounded-lg border max-h-[calc(100vh-10rem)] overflow-auto pb-3">
           <Table className="w-auto table-auto [&_td]:px-1 [&_td]:py-0.5 [&_td]:h-[1.65rem] [&_td]:text-xs [&_th]:px-1 [&_th]:h-8 [&_th]:text-xs [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
             <TableHeader className="bg-card sticky top-0 z-10 [&_tr:first-child]:rounded-t-lg [&_tr:first-child_th:first-child]:rounded-tl-lg [&_tr:first-child_th:last-child]:rounded-tr-lg">
               <TableRow>
