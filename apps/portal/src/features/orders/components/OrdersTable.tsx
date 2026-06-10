@@ -175,7 +175,7 @@ function EditableCell({
       : (value || placeholder || "-");
     return (
       <span
-        className={`cursor-text rounded py-0.5 px-0.5 block w-full min-h-[1.75rem] flex items-center hover:bg-muted/60 hover:ring-1 hover:ring-muted-foreground/20 transition-colors ${!value ? "text-muted-foreground" : ""}${align === "right" ? " justify-end" : ""}`}
+        className={`cursor-text rounded py-0.5 px-0.5 block w-full min-h-[1.4rem] flex items-center hover:bg-muted/60 hover:ring-1 hover:ring-muted-foreground/20 transition-colors ${!value ? "text-muted-foreground" : ""}${align === "right" ? " justify-end" : ""}`}
         onClick={(e) => { e.stopPropagation(); setActive(true); }}
       >
         {display}
@@ -200,7 +200,7 @@ function EditableCell({
         if (e.key === "Escape") { setDraft(value); setActive(false); }
       }}
       onClick={(e) => e.stopPropagation()}
-      className={`h-7 text-sm px-1 py-0 w-full${align === "right" ? " text-right" : ""}`}
+      className={`h-6 text-xs px-1 py-0 w-full${align === "right" ? " text-right" : ""}`}
     />
   );
 }
@@ -227,7 +227,7 @@ function EditableSelectCell({
   if (!active) {
     return (
       <span
-        className={`cursor-text rounded py-0.5 px-0.5 block w-full min-h-[1.75rem] flex items-center hover:bg-muted/60 hover:ring-1 hover:ring-muted-foreground/20 transition-colors line-clamp-2 ${!displayValue ? "text-muted-foreground" : ""}`}
+        className={`cursor-text rounded py-0.5 px-0.5 block w-full min-h-[1.4rem] flex items-center hover:bg-muted/60 hover:ring-1 hover:ring-muted-foreground/20 transition-colors line-clamp-2 ${!displayValue ? "text-muted-foreground" : ""}`}
         onClick={(e) => { e.stopPropagation(); setActive(true); }}
       >
         {displayValue || "-"}
@@ -242,7 +242,7 @@ function EditableSelectCell({
       onChange={(e) => { onSave(e.target.value); setActive(false); }}
       onBlur={() => setActive(false)}
       onClick={(e) => e.stopPropagation()}
-      className="h-7 text-sm rounded-md border border-input bg-transparent px-1 py-0 w-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="h-6 text-xs rounded-md border border-input bg-transparent px-1 py-0 w-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       <option value="">Select...</option>
       {options.map((o) => (
@@ -859,33 +859,33 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
         </div>
       ) : (<>
         <div ref={scrollRef} className="rounded-lg border max-h-[calc(100vh-10rem)] overflow-auto">
-          <Table className="w-auto table-fixed">
+          <Table className="w-auto table-auto [&_td]:px-1 [&_td]:py-0.5 [&_td]:h-[1.65rem] [&_td]:text-xs [&_th]:px-1 [&_th]:h-8 [&_th]:text-xs [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
             <TableHeader className="bg-card sticky top-0 z-10 [&_tr:first-child]:rounded-t-lg [&_tr:first-child_th:first-child]:rounded-tl-lg [&_tr:first-child_th:last-child]:rounded-tr-lg">
               <TableRow>
-                <TableHead className="w-6 px-0 sticky left-0 z-20 bg-card" />
+                <TableHead className="w-6 min-w-[24px] max-w-[24px] px-0 sticky left-0 z-20 bg-card" />
                 {show("purchaseOrderNr") && (
-                <TableHead className="text-sm px-2 w-24 sticky left-6 z-20 bg-card">
+                <TableHead className="text-sm px-2 w-[96px] min-w-[96px] max-w-[96px] sticky left-6 z-20 bg-card">
                   {headerWithMenu("purchaseOrderNr", <span className="flex flex-col leading-tight"><span>Purchase</span><span>Order Nr</span></span>)}
                 </TableHead>
                 )}
                 {show("projectNumber") && (
-                <TableHead className="text-sm px-2 w-20 sticky left-[120px] z-20 bg-card border-r">
+                <TableHead className="text-sm px-2 w-[96px] min-w-[96px] max-w-[96px] sticky left-[120px] z-20 bg-card border-r">
                   {headerWithMenu("projectNumber", <span className="flex flex-col leading-tight"><span>Project</span><span>Number</span></span>)}
                 </TableHead>
                 )}
                 {show("customer") && (
-                <TableHead className="text-sm px-2 w-28 whitespace-nowrap">
+                <TableHead className="text-sm px-2 whitespace-nowrap">
                   {headerWithMenu("customer", "Customer")}
                 </TableHead>
                 )}
                 {show("seller") && (
-                <TableHead className="text-sm px-2 w-40 whitespace-nowrap">{headerWithMenu("seller", "Manufacturer")}</TableHead>
+                <TableHead className="text-sm px-2 whitespace-nowrap">{headerWithMenu("seller", "Manufacturer")}</TableHead>
                 )}
                 {show("producer") && (
                 <TableHead className="text-sm px-2">{headerWithMenu("producer", "Producer")}</TableHead>
                 )}
                 {show("dateReceived") && (
-                <TableHead className="text-sm px-2 w-24">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("dateReceived", <span className="flex flex-col leading-tight"><span>Date</span><span>Received</span></span>)}
                 </TableHead>
                 )}
@@ -895,125 +895,125 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                 </TableHead>
                 )}
                 {show("dateLoaded") && (
-                <TableHead className="text-sm px-2 w-24">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("dateLoaded", <span className="flex flex-col leading-tight"><span>Date</span><span>Loaded</span></span>)}
                 </TableHead>
                 )}
                 {show("type") && (
-                <TableHead className="text-sm px-2 w-16">{headerWithMenu("type", "Type")}</TableHead>
+                <TableHead className="text-sm px-2">{headerWithMenu("type", "Type")}</TableHead>
                 )}
                 {show("treadLength") && (
-                <TableHead className="text-sm px-2 w-24">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("treadLength", <span className="flex flex-col leading-tight"><span>Tread</span><span>Length</span></span>, true)}
                 </TableHead>
                 )}
                 {show("treads") && (
-                <TableHead className="text-sm px-2 text-right w-12">{headerWithMenu("treads", "Treads", true)}</TableHead>
+                <TableHead className="text-sm px-2 text-right">{headerWithMenu("treads", "Treads", true)}</TableHead>
                 )}
                 {show("winders") && (
-                <TableHead className="text-sm px-2 text-right w-12">{headerWithMenu("winders", "Winders", true)}</TableHead>
+                <TableHead className="text-sm px-2 text-right">{headerWithMenu("winders", "Winders", true)}</TableHead>
                 )}
                 {show("quarters") && (
-                <TableHead className="text-sm px-2 text-right w-12">{headerWithMenu("quarters", "Quarters", true)}</TableHead>
+                <TableHead className="text-sm px-2 text-right">{headerWithMenu("quarters", "Quarters", true)}</TableHead>
                 )}
                 {show("totalPieces") && (
-                <TableHead className="text-sm px-2 text-right w-14">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("totalPieces", <span className="flex flex-col leading-tight text-right"><span>Total</span><span>Pcs</span></span>, true)}
                 </TableHead>
                 )}
                 {show("totalPrice") && (
-                <TableHead className="text-sm px-2 text-right w-16">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("totalPrice", <span className="flex flex-col leading-tight text-right"><span>Total</span><span>£</span></span>, true)}
                 </TableHead>
                 )}
                 {show("totalKg") && (
-                <TableHead className="text-sm px-2 text-right w-16">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("totalKg", <span className="flex flex-col leading-tight text-right"><span>Total</span><span>kg</span></span>, true)}
                 </TableHead>
                 )}
                 {show("maxM3") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("maxM3", <span className="flex flex-col leading-tight text-right"><span>Max</span><span>m³</span></span>, true)}
                 </TableHead>
                 )}
                 {show("invoicedM3") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("invoicedM3", <span className="flex flex-col leading-tight text-right"><span>Invoiced</span><span>m³</span></span>, true)}
                 </TableHead>
                 )}
                 {show("usedM3") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("usedM3", <span className="flex flex-col leading-tight text-right"><span>Used</span><span>m³</span></span>, true)}
                 </TableHead>
                 )}
                 {show("diffM3") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("diffM3", <span className="flex flex-col leading-tight text-right"><span>Diff</span><span>m³</span></span>, true)}
                 </TableHead>
                 )}
                 {show("diffPercent") && (
-                <TableHead className="text-sm px-2 text-right w-16">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("diffPercent", <span className="flex flex-col leading-tight text-right"><span>Diff</span><span>%</span></span>, true)}
                 </TableHead>
                 )}
                 {show("plMaterial") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("plMaterial", <span className="flex flex-col leading-tight text-right whitespace-nowrap"><span>PL</span><span>m³</span></span>, true)}
                 </TableHead>
                 )}
                 {show("treadM3") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("treadM3", <span className="flex flex-col leading-tight text-right"><span>Tread</span><span>m³</span></span>, true)}
                 </TableHead>
                 )}
                 {show("winderM3") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("winderM3", <span className="flex flex-col leading-tight text-right"><span>Winder</span><span>m³</span></span>, true)}
                 </TableHead>
                 )}
                 {show("quarterM3") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("quarterM3", <span className="flex flex-col leading-tight text-right"><span>Quarter</span><span>m³</span></span>, true)}
                 </TableHead>
                 )}
                 {show("totalProducedM3") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("totalProducedM3", <span className="flex flex-col leading-tight text-right"><span>Total</span><span>m³</span></span>, true)}
                 </TableHead>
                 )}
                 {show("usedMaterialM3") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("usedMaterialM3", <span className="flex flex-col leading-tight text-right"><span>Used</span><span>m³</span></span>, true)}
                 </TableHead>
                 )}
                 {show("wasteM3") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("wasteM3", <span className="flex flex-col leading-tight text-right"><span>Waste</span><span>m³</span></span>, true)}
                 </TableHead>
                 )}
                 {show("wastePercent") && (
-                <TableHead className="text-sm px-2 text-right w-14">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("wastePercent", <span className="flex flex-col leading-tight text-right"><span>Waste</span><span>%</span></span>, true)}
                 </TableHead>
                 )}
                 {show("productionMaterial") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("productionMaterial", <span className="flex flex-col leading-tight text-right"><span>Material</span><span>Production</span></span>, true)}
                 </TableHead>
                 )}
                 {show("productionFinishing") && (
-                <TableHead className="text-sm px-2 text-right w-20">{headerWithMenu("productionFinishing", "Finishing", true)}</TableHead>
+                <TableHead className="text-sm px-2 text-right">{headerWithMenu("productionFinishing", "Finishing", true)}</TableHead>
                 )}
                 {show("productionTotal") && (
-                <TableHead className="text-sm px-2 text-right w-20">{headerWithMenu("productionTotal", "Total", true)}</TableHead>
+                <TableHead className="text-sm px-2 text-right">{headerWithMenu("productionTotal", "Total", true)}</TableHead>
                 )}
                 {show("productionInvoiceNumber") && (
-                <TableHead className="text-sm px-2 w-24">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("productionInvoiceNumber", <span className="flex flex-col leading-tight"><span>Invoice</span><span>Number</span></span>)}
                 </TableHead>
                 )}
                 {show("productionPaymentDate") && (
-                <TableHead className="text-sm px-2 w-24">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("productionPaymentDate", <span className="flex flex-col leading-tight"><span>Payment</span><span>Date</span></span>)}
                 </TableHead>
                 )}
@@ -1028,119 +1028,119 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                 </TableHead>
                 )}
                 {show("woodArtTotal") && (
-                <TableHead className="text-sm px-2 text-right w-24">{headerWithMenu("woodArtTotal", "Total", true)}</TableHead>
+                <TableHead className="text-sm px-2 text-right">{headerWithMenu("woodArtTotal", "Total", true)}</TableHead>
                 )}
                 {show("woodArtInvoiceNumber") && (
-                <TableHead className="text-sm px-2 w-28">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("woodArtInvoiceNumber", <span className="flex flex-col leading-tight"><span>Invoice</span><span>Number</span></span>)}
                 </TableHead>
                 )}
                 {show("woodArtPaymentDate") && (
-                <TableHead className="text-sm px-2 w-28">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("woodArtPaymentDate", <span className="flex flex-col leading-tight"><span>Payment</span><span>Date</span></span>)}
                 </TableHead>
                 )}
                 {show("advanceInvoiceNumber") && (
-                <TableHead className="text-sm px-2 w-24">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("advanceInvoiceNumber", <span className="flex flex-col leading-tight"><span>Advance</span><span>Invoice</span></span>)}
                 </TableHead>
                 )}
                 {show("invoiceNumber") && (
-                <TableHead className="text-sm px-2 w-24">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("invoiceNumber", <span className="flex flex-col leading-tight"><span>Invoice</span><span>Number</span></span>)}
                 </TableHead>
                 )}
                 {show("packageNumber") && (
-                <TableHead className="text-sm px-2 w-24">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("packageNumber", <span className="flex flex-col leading-tight"><span>Package</span><span>Number</span></span>)}
                 </TableHead>
                 )}
                 {show("transportInvoiceNumber") && (
-                <TableHead className="text-sm px-2 w-24">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("transportInvoiceNumber", <span className="flex flex-col leading-tight"><span>Transport</span><span>Invoice</span></span>)}
                 </TableHead>
                 )}
                 {show("transportPrice") && (
-                <TableHead className="text-sm px-2 w-20">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("transportPrice", <span className="flex flex-col leading-tight"><span>Transport</span><span>Price</span></span>)}
                 </TableHead>
                 )}
                 {show("invoicedWork") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("invoicedWork", <span className="flex flex-col leading-tight text-right"><span>Invoiced</span><span>Work</span></span>, true)}
                 </TableHead>
                 )}
                 {show("usedWork") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("usedWork", <span className="flex flex-col leading-tight text-right"><span>Used</span><span>Work</span></span>, true)}
                 </TableHead>
                 )}
                 {show("diffWork") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("diffWork", <span className="flex flex-col leading-tight text-right"><span>Diff</span><span>Work</span></span>, true)}
                 </TableHead>
                 )}
                 {show("diffWorkPercent") && (
-                <TableHead className="text-sm px-2 text-right w-16">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("diffWorkPercent", <span className="flex flex-col leading-tight text-right"><span>Diff</span><span>%</span></span>, true)}
                 </TableHead>
                 )}
                 {show("plWork") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("plWork", <span className="flex flex-col leading-tight text-right whitespace-nowrap"><span>PL</span><span>Work</span></span>, true)}
                 </TableHead>
                 )}
                 {show("invoicedTransport") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("invoicedTransport", <span className="flex flex-col leading-tight text-right"><span>Invoiced</span><span>Transport</span></span>, true)}
                 </TableHead>
                 )}
                 {show("usedTransport") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("usedTransport", <span className="flex flex-col leading-tight text-right"><span>Used</span><span>Transport</span></span>, true)}
                 </TableHead>
                 )}
                 {show("diffTransport") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("diffTransport", <span className="flex flex-col leading-tight text-right"><span>Diff</span><span>Transport</span></span>, true)}
                 </TableHead>
                 )}
                 {show("diffTransportPercent") && (
-                <TableHead className="text-sm px-2 text-right w-16">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("diffTransportPercent", <span className="flex flex-col leading-tight text-right"><span>Diff</span><span>%</span></span>, true)}
                 </TableHead>
                 )}
                 {show("plTransport") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("plTransport", <span className="flex flex-col leading-tight text-right whitespace-nowrap"><span>PL</span><span>Transport</span></span>, true)}
                 </TableHead>
                 )}
                 {show("plMaterials") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("plMaterials", <span className="flex flex-col leading-tight text-right whitespace-nowrap"><span>PL</span><span>Materials</span></span>, true)}
                 </TableHead>
                 )}
                 {show("plTotal") && (
-                <TableHead className="text-sm px-2 text-right w-20">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("plTotal", <span className="flex flex-col leading-tight text-right whitespace-nowrap"><span>PL</span><span>Total</span></span>, true)}
                 </TableHead>
                 )}
                 {show("plPercentFromInvoice") && (
-                <TableHead className="text-sm px-2 text-right w-16">
+                <TableHead className="text-sm px-2 text-right">
                   {headerWithMenu("plPercentFromInvoice", <span className="flex flex-col leading-tight text-right whitespace-nowrap"><span>%</span><span>Invoice</span></span>, true)}
                 </TableHead>
                 )}
                 {show("files") && (
-                <TableHead className="text-sm px-2 w-12 text-center">
+                <TableHead className="text-sm px-2 text-center">
                   Files
                 </TableHead>
                 )}
                 {show("status") && (
-                <TableHead className="text-sm px-2 w-20">
+                <TableHead className="text-sm px-2">
                   {headerWithMenu("status", "Status")}
                 </TableHead>
                 )}
-                {isAdmin && <TableHead className="w-8 px-0" />}
+                {isAdmin && <TableHead className="px-0" />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1150,7 +1150,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   className={`transition-colors cursor-pointer ${order.status === "cancelled" ? "bg-red-50 hover:bg-red-100" : "hover:bg-accent/50"}`}
                   onClick={() => router.push(tab === "list" ? `/orders/${order.id}` : `/orders/${order.id}?tab=${tab}`)}
                 >
-                  <TableCell className={`px-0 py-0 w-6 sticky left-0 z-[2] ${order.status === "cancelled" ? "bg-red-50" : "bg-white dark:bg-zinc-950"}`}>
+                  <TableCell className={`px-0 py-0 w-6 min-w-[24px] max-w-[24px] sticky left-0 z-[2] ${order.status === "cancelled" ? "bg-red-50" : "bg-white dark:bg-zinc-950"}`}>
                     <button
                       className="flex items-center justify-center w-6 h-full text-muted-foreground hover:text-foreground transition-colors"
                       onClick={(e) => { e.stopPropagation(); router.push(tab === "list" ? `/orders/${order.id}` : `/orders/${order.id}?tab=${tab}`); }}
@@ -1160,7 +1160,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     </button>
                   </TableCell>
                   {show("purchaseOrderNr") && (
-                  <TableCell className={`px-2 text-sm sticky left-6 z-[2] ${order.status === "cancelled" ? "bg-red-50" : "bg-white dark:bg-zinc-950"}`}>
+                  <TableCell className={`px-2 text-sm w-[96px] min-w-[96px] max-w-[96px] sticky left-6 z-[2] ${order.status === "cancelled" ? "bg-red-50" : "bg-white dark:bg-zinc-950"}`}>
                     {tab === "production" ? (
                       <span className={!order.name ? "text-muted-foreground" : ""}>{order.name || "-"}</span>
                     ) : (
@@ -1174,7 +1174,7 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                   </TableCell>
                   )}
                   {show("projectNumber") && (
-                  <TableCell className={`px-2 text-sm whitespace-nowrap sticky left-[120px] z-[2] border-r shadow-[1px_0_0_0_rgba(0,0,0,0.08)] ${order.status === "cancelled" ? "bg-red-50" : "bg-white dark:bg-zinc-950"}`}>
+                  <TableCell className={`px-2 text-sm whitespace-nowrap w-[96px] min-w-[96px] max-w-[96px] sticky left-[120px] z-[2] border-r shadow-[1px_0_0_0_rgba(0,0,0,0.08)] ${order.status === "cancelled" ? "bg-red-50" : "bg-white dark:bg-zinc-950"}`}>
                     {tab === "production" ? (
                       <span className={!order.projectNumber ? "text-muted-foreground" : ""}>{order.projectNumber || "-"}</span>
                     ) : (

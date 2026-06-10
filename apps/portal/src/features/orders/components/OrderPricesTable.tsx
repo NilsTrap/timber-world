@@ -58,7 +58,7 @@ export function OrderPricesTable() {
 
   return (
     <div className="rounded-lg border w-fit">
-      <Table className="w-auto">
+      <Table className="w-auto [&_td]:px-1 [&_td]:py-0.5 [&_td]:h-[1.65rem] [&_td]:text-xs [&_th]:px-1 [&_th]:h-8 [&_th]:text-xs">
         <TableHeader>
           <TableRow>
             <TableHead>Code</TableHead>
