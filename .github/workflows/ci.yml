@@ -65,7 +65,13 @@ jobs:
   playwright:
     runs-on: ubuntu-latest
     needs: type-check
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    # PARKED: the e2e suite needs staging test users + E2E_* secrets and the
+    # specs need updating to the current UI. Until then it just times out and
+    # burns ~90 min of CI per run, so it only runs on manual dispatch — NOT on
+    # push/PR. timeout-minutes caps it so it can never grind for an hour again.
+    # Re-enable on push by restoring the original `if:` once it's set up.
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 15
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
