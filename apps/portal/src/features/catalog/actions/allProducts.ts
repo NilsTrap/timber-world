@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 interface ProductWithCategory {
@@ -23,7 +23,11 @@ interface ProductWithCategory {
 export async function getAllProducts(): Promise<ActionResult<ProductWithCategory[]>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const supabase = await createClient();
 

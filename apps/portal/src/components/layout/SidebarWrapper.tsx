@@ -26,7 +26,7 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
   { href: "/admin/agents", label: "Agents", iconName: "Contact" },
   { href: "/admin/agent-orders", label: "Agent Orders", iconName: "ClipboardList" },
   { href: "/admin/agent-manual", label: "Agent Manual", iconName: "BookOpen" },
-  { href: "/admin/catalog", label: "Catalog", iconName: "Layers", children: [
+  { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", children: [
     { href: "/admin/catalog", label: "Categories" },
     { href: "/admin/catalog/products", label: "Products" },
     { href: "/admin/catalog/fields", label: "Fields" },
@@ -53,6 +53,17 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
  */
 function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
   return [
+    { href: "/admin/agents", label: "Agents", iconName: "Contact", requiresModule: "agents.view" },
+    { href: "/admin/agent-orders", label: "Agent Orders", iconName: "ClipboardList", requiresModule: "agent-orders.view" },
+    { href: "/admin/agent-manual", label: "Agent Manual", iconName: "BookOpen", requiresModule: "agent-manual.view" },
+    { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", requiresModule: "catalogue.view", children: [
+      { href: "/admin/catalog", label: "Categories" },
+      { href: "/admin/catalog/products", label: "Products" },
+      { href: "/admin/catalog/fields", label: "Fields" },
+      { href: "/admin/catalog/packaging", label: "Packaging" },
+      { href: "/admin/catalog/pricing-units", label: "Pricing Units" },
+      { href: "/admin/catalog/currencies", label: "Currencies" },
+    ]},
     { href: "/admin/marketing", label: "CMS", iconName: "Image", requiresModule: "marketing.view" },
     { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp", requiresModule: "competitor-pricing.view" },
     { href: "/admin/crm", label: "CRM", iconName: "Users", requiresModule: "crm.view" },

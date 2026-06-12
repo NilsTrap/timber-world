@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "../types";
 
@@ -34,7 +34,11 @@ function toAssignment(row: any): VariantPackaging {
 export async function getVariantPackaging(variantId: string): Promise<ActionResult<VariantPackaging[]>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const supabase = await createClient();
   const { data, error } = await (supabase as any)
@@ -59,7 +63,11 @@ export interface AssignPackagingInput {
 export async function assignVariantPackaging(input: AssignPackagingInput): Promise<ActionResult<VariantPackaging>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const supabase = await createClient();
 
@@ -90,7 +98,11 @@ export async function assignVariantPackaging(input: AssignPackagingInput): Promi
 export async function removeVariantPackaging(id: string): Promise<ActionResult<null>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const supabase = await createClient();
   const { error } = await (supabase as any).from("catalog_variant_packaging_assignments").delete().eq("id", id);

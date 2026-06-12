@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export type ActionResult<T> =
@@ -44,7 +44,11 @@ function toAgent(row: any): Agent {
 export async function approveAgent(id: string): Promise<ActionResult<Agent>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("agents.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const admin = createAdminClient();
   const { data, error } = await (admin as any)
@@ -61,7 +65,11 @@ export async function approveAgent(id: string): Promise<ActionResult<Agent>> {
 export async function rejectAgent(id: string): Promise<ActionResult<Agent>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("agents.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const admin = createAdminClient();
   const { data, error } = await (admin as any)
@@ -78,7 +86,11 @@ export async function rejectAgent(id: string): Promise<ActionResult<Agent>> {
 export async function getAgents(): Promise<ActionResult<Agent[]>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("agents.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const supabase = await createClient();
   const { data, error } = await (supabase as any)
@@ -103,7 +115,11 @@ export interface CreateAgentInput {
 export async function createAgent(input: CreateAgentInput): Promise<ActionResult<Agent>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("agents.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const admin = createAdminClient();
 
@@ -156,7 +172,11 @@ export interface UpdateAgentInput {
 export async function updateAgent(input: UpdateAgentInput): Promise<ActionResult<Agent>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("agents.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const admin = createAdminClient();
   const payload: any = {};
@@ -183,7 +203,11 @@ export async function updateAgent(input: UpdateAgentInput): Promise<ActionResult
 export async function deleteAgent(id: string): Promise<ActionResult<null>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("agents.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const admin = createAdminClient();
 

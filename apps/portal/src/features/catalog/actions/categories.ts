@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { recomputeEntityCurrencies } from "../recomputeCurrencies";
 import type {
@@ -34,7 +34,11 @@ function toCategory(row: any): CatalogCategory {
 export async function getCategories(): Promise<ActionResult<CatalogCategory[]>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const supabase = await createClient();
 
@@ -60,7 +64,11 @@ export async function getCategories(): Promise<ActionResult<CatalogCategory[]>> 
 export async function getCategory(id: string): Promise<ActionResult<CatalogCategory>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const supabase = await createClient();
 
@@ -88,7 +96,11 @@ export async function getCategory(id: string): Promise<ActionResult<CatalogCateg
 export async function saveCategory(input: SaveCategoryInput): Promise<ActionResult<CatalogCategory>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const supabase = await createClient();
 
@@ -137,7 +149,11 @@ export async function saveCategory(input: SaveCategoryInput): Promise<ActionResu
 export async function duplicateCategory(id: string): Promise<ActionResult<CatalogCategory>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const supabase = await createClient();
 
@@ -197,7 +213,11 @@ export async function getCategoryDeletionInfo(
 ): Promise<ActionResult<{ productCount: number; variantCount: number }>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const supabase = await createClient();
 
@@ -217,7 +237,11 @@ export async function getCategoryDeletionInfo(
 export async function deleteCategory(id: string): Promise<ActionResult<null>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
 
   const supabase = await createClient();
 

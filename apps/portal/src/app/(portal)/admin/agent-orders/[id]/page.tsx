@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@timber/ui";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { getAgentOrder } from "@/features/agent-orders/actions/agentOrders";
 import { AgentOrderActions } from "@/features/agent-orders/components/AgentOrderActions";
 
@@ -20,7 +20,11 @@ export default async function AgentOrderDetailPage({ params }: Props) {
   const { id } = await params;
   const session = await getSession();
   if (!session) redirect("/login");
-  if (!isAdmin(session)) redirect("/dashboard");
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("agent-orders.view")) redirect("/dashboard");
+  }
 
   const result = await getAgentOrder(id);
   if (!result.success) notFound();

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Agent Manual" };
 
@@ -20,7 +20,11 @@ const td = "px-3 py-2 align-top border-t";
 export default async function AgentManualPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (!isAdmin(session)) redirect("/dashboard");
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("agent-manual.view")) redirect("/dashboard");
+  }
 
   return (
     <div className="max-w-3xl space-y-8 pb-20">

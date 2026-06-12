@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { getAgentOrders } from "@/features/agent-orders/actions/agentOrders";
 
 export const metadata: Metadata = { title: "Agent Orders" };
@@ -31,7 +31,11 @@ interface Props {
 export default async function AgentOrdersPage({ searchParams }: Props) {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (!isAdmin(session)) redirect("/dashboard");
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("agent-orders.view")) redirect("/dashboard");
+  }
 
   const { status } = await searchParams;
   const active = status ?? "submitted";
