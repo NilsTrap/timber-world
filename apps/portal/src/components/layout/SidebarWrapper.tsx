@@ -23,6 +23,17 @@ interface ModuleNavItem extends NavItem {
  * Admin users see all items - feature filtering is for org-level access
  */
 const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
+  { href: "/admin/agents", label: "Agents", iconName: "Contact" },
+  { href: "/admin/agent-orders", label: "Agent Orders", iconName: "ClipboardList" },
+  { href: "/admin/agent-manual", label: "Agent Manual", iconName: "BookOpen" },
+  { href: "/admin/catalog", label: "Catalog", iconName: "Layers", children: [
+    { href: "/admin/catalog", label: "Categories" },
+    { href: "/admin/catalog/products", label: "Products" },
+    { href: "/admin/catalog/fields", label: "Fields" },
+    { href: "/admin/catalog/packaging", label: "Packaging" },
+    { href: "/admin/catalog/pricing-units", label: "Pricing Units" },
+    { href: "/admin/catalog/currencies", label: "Currencies" },
+  ]},
   { href: "/admin/marketing", label: "CMS", iconName: "Image" },
   { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp" },
   { href: "/admin/crm", label: "CRM", iconName: "Users" },

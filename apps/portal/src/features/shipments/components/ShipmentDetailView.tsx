@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { Button, Input } from "@timber/ui";
@@ -123,21 +124,21 @@ export function ShipmentDetailView({ shipment }: ShipmentDetailViewProps) {
 
   return (
     <div className="space-y-6">
-      {/* Back link */}
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => router.push("/admin/shipments?tab=list")}
-      >
-        <ArrowLeft className="h-4 w-4 mr-2" />
-        Back to Overview
-      </Button>
+      {/* Header with back button */}
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" asChild className="shrink-0">
+          <Link href="/admin/shipments?tab=list">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="sr-only">Back to Overview</span>
+          </Link>
+        </Button>
+        <h2 className="text-3xl font-semibold tracking-tight">
+          Shipment: <span className="font-mono">{shipment.shipmentCode}</span>
+        </h2>
+      </div>
 
       {/* Shipment Header (read-only) */}
       <div className="rounded-lg border bg-card p-6">
-        <h2 className="text-lg font-semibold mb-4">
-          Shipment: <span className="font-mono">{shipment.shipmentCode}</span>
-        </h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
           <div>
             <span className="text-muted-foreground">From:</span>{" "}

@@ -269,19 +269,15 @@ export function TrackingSetDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Back Link */}
-      <Link
-        href="/production?tab=tracking"
-        onClick={() => sessionStorage.removeItem(TRACKING_LAST_ENTRY_KEY)}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back
-      </Link>
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" asChild className="shrink-0">
+            <Link href="/production?tab=tracking" onClick={() => sessionStorage.removeItem(TRACKING_LAST_ENTRY_KEY)}>
+              <ArrowLeft className="h-4 w-4" />
+              <span className="sr-only">Back</span>
+            </Link>
+          </Button>
           {editingName ? (
             <div className="flex items-center gap-2">
               <input

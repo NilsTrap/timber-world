@@ -115,13 +115,15 @@ export function ProductionPlanDetailClient({ plan: initial }: Props) {
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/production?tab=plans"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to plans
-      </Link>
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" asChild className="shrink-0">
+          <Link href="/production?tab=plans">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="sr-only">Back to plans</span>
+          </Link>
+        </Button>
+        <h1 className="text-3xl font-semibold tracking-tight">Production Plan</h1>
+      </div>
 
       <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
         <div className="flex items-start justify-between gap-3">

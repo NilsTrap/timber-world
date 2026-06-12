@@ -124,27 +124,29 @@ export default async function ProductionEntryPage({
   return (
     <div className="space-y-6">
       <ProductionEntryMemory />
-      <ProductionBackLink href="/production" />
 
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {processName}
-          </h1>
-          <p className="text-muted-foreground mb-2">
-            Production date: {productionDate}
-          </p>
-          {isCorrection && correctsEntryId && originalEntryInfo && (
-            <p className="text-sm text-muted-foreground mt-1">
-              Corrects:{" "}
-              <Link
-                href={`/production/${correctsEntryId}`}
-                className="text-primary hover:underline"
-              >
-                {originalEntryInfo.processName} - {originalEntryInfo.productionDate}
-              </Link>
+        <div className="flex items-center gap-4">
+          <ProductionBackLink href="/production" />
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">
+              {processName}
+            </h1>
+            <p className="text-muted-foreground mb-2">
+              Production date: {productionDate}
             </p>
-          )}
+            {isCorrection && correctsEntryId && originalEntryInfo && (
+              <p className="text-sm text-muted-foreground mt-1">
+                Corrects:{" "}
+                <Link
+                  href={`/production/${correctsEntryId}`}
+                  className="text-primary hover:underline"
+                >
+                  {originalEntryInfo.processName} - {originalEntryInfo.productionDate}
+                </Link>
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           {isDraft && (
