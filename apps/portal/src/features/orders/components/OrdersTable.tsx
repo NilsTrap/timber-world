@@ -1797,6 +1797,13 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
                     {show("status") && <td className="px-2 py-2" />}
                     {isAdmin && <td className="px-2 py-2" />}
                   </tr>
+                  {/* Spacer strip inside the sticky footer: the macOS overlay
+                      horizontal scrollbar floats over this instead of the
+                      totals. Inline style beats the table-level [&_td] height
+                      and padding utilities. */}
+                  <tr aria-hidden="true">
+                    <td colSpan={99} style={{ height: 10, padding: 0 }} />
+                  </tr>
                 </tfoot>
               );
             })()}
