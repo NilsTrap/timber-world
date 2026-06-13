@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { formatDate } from "@/lib/utils";
-import { getSession, isSuperAdmin, isOrgUser } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin, isOrgUser, getUserEnabledModules } from "@/lib/auth";
 import {
   getProductionEntry,
   getAvailablePackages,
@@ -48,6 +48,18 @@ export default async function ProductionEntryPage({
   const { id } = await params;
   const { edit } = await searchParams;
   const session = await getSession();
+  if (!session) {
+    redirect("/login");
+  }
+  // Two-layer module gate: admins bypass; everyone else needs production.view
+  // (org-enabled AND user-enabled). Mirrors production/page.tsx deny behavior.
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("production.view")) {
+      notFound();
+    }
+  }
   const isUserSuperAdmin = isSuperAdmin(session);
   const isUserOrgUser = isOrgUser(session);
 

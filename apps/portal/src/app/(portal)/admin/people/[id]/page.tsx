@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@timber/ui";
-import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { getPersonById } from "@/features/organisations/actions/getPersonById";
 import { PersonDetailTabs } from "@/features/organisations/components/PersonDetailTabs";
 
@@ -38,8 +38,8 @@ export default async function PersonDetailPage({
 
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasModule = await orgHasModule(orgId, "organizations.view");
-    if (!hasModule) {
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("organizations.view")) {
       notFound();
     }
   }

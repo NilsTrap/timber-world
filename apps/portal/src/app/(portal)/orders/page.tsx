@@ -41,7 +41,6 @@ async function OrdersBody({ session }: { session: SessionUser }) {
     visibleTabs = [...allTabs];
   } else {
     const mods = await getUserEnabledModules(session.portalUserId ?? "", userOrgId);
-    canSelectCustomer = mods.has("orders.customer-select");
     visibleTabs = allTabs.filter((tab) => mods.has(`orders.tab.${tab}`));
     if (visibleTabs.length === 0) visibleTabs = ["list"];
   }

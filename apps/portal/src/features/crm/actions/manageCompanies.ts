@@ -3,7 +3,23 @@
 import { createCrmClient } from "../lib/supabase";
 import { formatPhoneInternational } from "../lib/formatPhone";
 import { revalidatePath } from "next/cache";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import type { CrmCompany, CrmContact, CompanyStatus } from "../types";
+
+/**
+ * Two-layer CRM permission gate (org ∩ user must have `crm.view`).
+ * Admins bypass. Returns an error message string when denied, otherwise null.
+ */
+async function assertCrmAccess(): Promise<string | null> {
+  const session = await getSession();
+  if (!session) return "Unauthorized";
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("crm.view")) return "Permission denied";
+  }
+  return null;
+}
 
 /**
  * Create a new company
@@ -11,6 +27,9 @@ import type { CrmCompany, CrmContact, CompanyStatus } from "../types";
 export async function createCompany(
   company: Partial<CrmCompany>
 ): Promise<{ success: true; data: CrmCompany } | { success: false; error: string }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const supabase = await createCrmClient();
   const country = company.country || "UK";
 
@@ -55,6 +74,9 @@ export async function updateCompany(
   id: string,
   updates: Partial<CrmCompany>
 ): Promise<{ success: true; data: CrmCompany } | { success: false; error: string }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const supabase = await createCrmClient();
 
   // If phone is being updated and country is provided, format the phone
@@ -105,6 +127,9 @@ export async function updateCompanyStatus(
   id: string,
   status: CompanyStatus
 ): Promise<{ success: true } | { success: false; error: string }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const supabase = await createCrmClient();
 
   const { error } = await supabase
@@ -127,6 +152,9 @@ export async function updateCompanyStatus(
 export async function deleteCompany(
   id: string
 ): Promise<{ success: true } | { success: false; error: string }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const supabase = await createCrmClient();
 
   const { error } = await supabase
@@ -149,6 +177,9 @@ export async function deleteCompany(
 export async function createContact(
   contact: Partial<CrmContact>
 ): Promise<{ success: true; data: CrmContact } | { success: false; error: string }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const supabase = await createCrmClient();
 
   // Get company's country for phone formatting
@@ -202,6 +233,9 @@ export async function updateContact(
   id: string,
   updates: Partial<CrmContact>
 ): Promise<{ success: true; data: CrmContact } | { success: false; error: string }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const supabase = await createCrmClient();
 
   const { data, error } = await supabase
@@ -237,6 +271,9 @@ export async function updateContact(
 export async function deleteContact(
   id: string
 ): Promise<{ success: true } | { success: false; error: string }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const supabase = await createCrmClient();
 
   const { error } = await supabase
@@ -260,6 +297,9 @@ export async function unsubscribeContact(
   id: string,
   reason?: string
 ): Promise<{ success: true } | { success: false; error: string }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const supabase = await createCrmClient();
 
   const { error } = await supabase
@@ -287,6 +327,9 @@ export async function unsubscribeContact(
 export async function requestContactDeletion(
   id: string
 ): Promise<{ success: true } | { success: false; error: string }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const supabase = await createCrmClient();
 
   const { error } = await supabase

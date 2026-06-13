@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, isSuperAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin, getUserEnabledModules } from "@/lib/auth";
 import {
   getProcesses,
   getDraftProductions,
@@ -34,11 +34,11 @@ export default async function ProductionPage({
 
   const userIsAdmin = isAdmin(session);
 
-  // Check org feature access for non-admin users
+  // Check org∩user module access for non-admin users
   if (!userIsAdmin) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasModule = await orgHasModule(orgId, "production.view");
-    if (!hasModule) {
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("production.view")) {
       notFound();
     }
   }

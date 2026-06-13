@@ -1,0 +1,528 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useParams, useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@timber/ui";
+import { ArrowLeft, Plus, Truck, Loader2, X } from "lucide-react";
+import { getOrgShipmentDetail } from "@/features/shipments/actions/getOrgShipmentDetail";
+import { cancelShipmentSubmission } from "@/features/shipments/actions/submitShipment";
+import type { ShipmentDetail, ShipmentStatus } from "@/features/shipments/types";
+import { formatDate } from "@/lib/utils";
+import { toast } from "sonner";
+import { ShipmentPackageSelector } from "@/features/shipments/components/ShipmentPackageSelector";
+import { SubmitShipmentDialog } from "@/features/shipments/components/SubmitShipmentDialog";
+import { AcceptRejectButtons } from "@/features/shipments/components/AcceptRejectButtons";
+import { DeleteShipmentDraftButton } from "@/features/shipments/components/DeleteShipmentDraftButton";
+import { ShipmentPalletTable } from "@/features/shipments/components/ShipmentPalletTable";
+import { IncomingShipmentPackageEditor } from "@/features/shipments/components/IncomingShipmentPackageEditor";
+import { PrintShipmentButton } from "@/features/shipments/components/PrintShipmentButton";
+import { PrintPackingListButton } from "@/features/shipments/components/PrintPackingListButton";
+import { PrintCmrButton } from "@/features/shipments/components/PrintCmrButton";
+import { updateShipmentDate } from "@/features/shipments/actions/updateShipmentDate";
+import { updateShipmentDelivery } from "@/features/shipments/actions/updateShipmentDelivery";
+import { getShipmentPrintData, type OrgPrintInfo } from "@/features/shipments/actions/getShipmentPrintData";
+
+const statusColors: Record<ShipmentStatus, string> = {
+  draft: "bg-yellow-100 text-yellow-800",
+  pending: "bg-orange-100 text-orange-800",
+  accepted: "bg-blue-100 text-blue-800",
+  completed: "bg-green-100 text-green-800",
+  rejected: "bg-red-100 text-red-800",
+};
+
+const statusLabels: Record<ShipmentStatus, string> = {
+  draft: "Draft",
+  pending: "On The Way",
+  accepted: "Accepted",
+  completed: "Completed",
+  rejected: "Rejected",
+};
+
+function formatVolume(vol: number | null): string {
+  if (vol === null || vol === 0) return "-";
+  return vol.toLocaleString("de-DE", {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  });
+}
+
+/**
+ * Shipment Detail Page (client body)
+ *
+ * Shows shipment details and allows managing packages for drafts.
+ * For pending shipments (incoming), shows accept/reject buttons.
+ * Rendered by the server-gated page.tsx.
+ */
+const SHIPMENT_LAST_ENTRY_KEY = "shipment-last-entry";
+
+export function ShipmentDetailClient() {
+  const params = useParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const shipmentId = params.id as string;
+
+  const [shipment, setShipment] = useState<ShipmentDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showPackageSelector, setShowPackageSelector] = useState(false);
+  const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [isReceiver, setIsReceiver] = useState(false);
+  const [liveVolume, setLiveVolume] = useState<number | null>(null);
+  const [livePackageCount, setLivePackageCount] = useState<number | null>(null);
+  const [isFromExternal, setIsFromExternal] = useState(false);
+  const [incomingSeq, setIncomingSeq] = useState<number | null>(null);
+  const editorSaveRef = useRef<(() => Promise<boolean>) | null>(null);
+  const [deliveryFromText, setDeliveryFromText] = useState<string>("");
+  const [deliveryToText, setDeliveryToText] = useState<string>("");
+  const [orgPrintData, setOrgPrintData] = useState<{ from: OrgPrintInfo; to: OrgPrintInfo } | null>(null);
+
+  // Remember this page for sidebar navigation
+  useEffect(() => {
+    sessionStorage.setItem(SHIPMENT_LAST_ENTRY_KEY, pathname);
+  }, [pathname]);
+
+  const fetchShipment = useCallback(async () => {
+    const result = await getOrgShipmentDetail(shipmentId);
+    if (result.success) {
+      const s = result.data.shipment;
+      setShipment(s);
+      setIsOwner(result.data.isOwner);
+      setIsReceiver(result.data.isReceiver);
+      setIsFromExternal(result.data.isFromExternal);
+      setIncomingSeq(result.data.incomingSeq);
+      setLiveVolume(null);
+      setLivePackageCount(null);
+      setDeliveryFromText(s.deliveryFromText ?? "");
+      setDeliveryToText(s.deliveryToText ?? "");
+      // Load org print data for address presets
+      getShipmentPrintData(shipmentId).then((pd) => {
+        if (pd.success) setOrgPrintData(pd.data);
+      });
+    } else {
+      // Clear stored entry so sidebar doesn't redirect here again
+      sessionStorage.removeItem(SHIPMENT_LAST_ENTRY_KEY);
+      toast.error(result.error);
+      router.push("/shipments");
+    }
+    setLoading(false);
+  }, [shipmentId, router]);
+
+  useEffect(() => {
+    fetchShipment();
+  }, [fetchShipment]);
+
+  const handlePackagesAdded = () => {
+    setShowPackageSelector(false);
+    fetchShipment();
+  };
+
+  const handleSubmitSuccess = () => {
+    setShowSubmitDialog(false);
+    fetchShipment();
+  };
+
+  const handleCancelSubmission = async () => {
+    if (!shipment) return;
+    setCanceling(true);
+    const result = await cancelShipmentSubmission(shipment.id);
+    if (result.success) {
+      toast.success("Submission cancelled - shipment returned to draft");
+      fetchShipment();
+    } else {
+      toast.error(result.error);
+    }
+    setCanceling(false);
+  };
+
+  const serverVolume = shipment?.packages.reduce(
+    (sum, pkg) => sum + Math.round((pkg.volumeM3 ?? 0) * 1000) / 1000,
+    0
+  ) ?? 0;
+  const totalVolume = liveVolume ?? serverVolume;
+  const packageCount = livePackageCount ?? (shipment?.packages.length ?? 0);
+
+  const handleTotalChange = useCallback((volume: number, count: number) => {
+    setLiveVolume(volume);
+    setLivePackageCount(count);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!shipment) {
+    return null;
+  }
+
+  const isDraft = shipment.status === "draft";
+  const isPending = shipment.status === "pending";
+  // For incoming shipments from external orgs, the receiver can edit the draft
+  const isIncomingFromExternal = isFromExternal && isReceiver;
+  const canEdit = isDraft && (isOwner || isIncomingFromExternal);
+  const canSubmit = isDraft && (isOwner || isIncomingFromExternal) && packageCount > 0;
+  const canReview = isPending && isReceiver;
+  const canCancel = isPending && isOwner;
+
+  return (
+    <div className="space-y-6">
+      {/* Back Link - clears remembered page so list shows normally */}
+      <Link
+        href="/shipments"
+        onClick={() => sessionStorage.removeItem(SHIPMENT_LAST_ENTRY_KEY)}
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Link>
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-semibold tracking-tight">
+          {shipment.shipmentCode}
+        </h1>
+        <div className="flex items-center gap-3">
+          {isDraft && (isOwner || isIncomingFromExternal) && (
+            <DeleteShipmentDraftButton
+              shipmentId={shipment.id}
+              shipmentCode={shipment.shipmentCode}
+            />
+          )}
+          {canSubmit && (
+            <Button onClick={async () => {
+              // Auto-save unsaved packages before showing submit dialog
+              if (editorSaveRef.current) {
+                const saved = await editorSaveRef.current();
+                if (!saved) return;
+              }
+              setShowSubmitDialog(true);
+            }}>
+              <Truck className="h-4 w-4 mr-2" />
+              On The Way
+            </Button>
+          )}
+          {canCancel && (
+            <Button variant="outline" onClick={handleCancelSubmission} disabled={canceling}>
+              {canceling ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Canceling...
+                </>
+              ) : (
+                <>
+                  <X className="h-4 w-4 mr-2" />
+                  Cancel
+                </>
+              )}
+            </Button>
+          )}
+          {canReview && (
+            <AcceptRejectButtons
+              shipmentId={shipment.id}
+              packageCount={shipment.packages.length}
+              totalVolume={totalVolume}
+              fromOrgName={shipment.fromOrganisationName}
+              onSuccess={fetchShipment}
+            />
+          )}
+          {shipment.packages.length > 0 && (
+            <>
+              <PrintPackingListButton
+                shipmentId={shipment.id}
+                shipmentCode={shipment.shipmentCode}
+                shipmentDate={shipment.shipmentDate}
+                packages={shipment.packages}
+              />
+              <PrintCmrButton
+                shipmentId={shipment.id}
+                shipmentCode={shipment.shipmentCode}
+                shipmentDate={shipment.shipmentDate}
+                packages={shipment.packages}
+              />
+              <PrintShipmentButton
+                shipmentCode={shipment.shipmentCode}
+                fromOrgName={shipment.fromOrganisationName}
+                toOrgName={shipment.toOrganisationName}
+                shipmentDate={formatDate(shipment.shipmentDate)}
+                packages={shipment.packages}
+              />
+            </>
+          )}
+          <span
+            className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColors[shipment.status]}`}
+          >
+            {statusLabels[shipment.status]}
+          </span>
+        </div>
+      </div>
+
+      {/* Summary Cards - same style as ProductionSummary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-sm text-muted-foreground">From</p>
+          <p className="text-xl font-semibold truncate">{shipment.fromOrganisationName}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-sm text-muted-foreground">To</p>
+          <p className="text-xl font-semibold truncate">{shipment.toOrganisationName}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-sm text-muted-foreground">Date</p>
+          {canEdit ? (
+            <input
+              type="date"
+              className="text-xl font-semibold bg-transparent border-none outline-none cursor-pointer w-full"
+              value={shipment.shipmentDate}
+              onChange={async (e) => {
+                const newDate = e.target.value;
+                if (!newDate) return;
+                const result = await updateShipmentDate(shipment.id, newDate);
+                if (result.success) {
+                  setShipment((prev) => prev ? { ...prev, shipmentDate: newDate } : prev);
+                } else {
+                  toast.error(result.error);
+                }
+              }}
+            />
+          ) : (
+            <p className="text-xl font-semibold">{formatDate(shipment.shipmentDate)}</p>
+          )}
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-sm text-muted-foreground">Total Volume</p>
+          <p className="text-xl font-semibold">{formatVolume(totalVolume)} m³</p>
+        </div>
+      </div>
+
+      {/* Delivery Addresses (for documents) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <DeliveryAddressCard
+          label="Delivery from"
+          value={deliveryFromText}
+          onChange={setDeliveryFromText}
+          onSave={(val) => updateShipmentDelivery(shipment.id, "delivery_from_text", val)}
+          addresses={orgPrintData?.from.deliveryAddresses ?? []}
+          orgLegalAddress={orgPrintData?.from.legalAddress}
+          orgName={shipment.fromOrganisationName}
+        />
+        <DeliveryAddressCard
+          label="Delivery to"
+          value={deliveryToText}
+          onChange={setDeliveryToText}
+          onSave={(val) => updateShipmentDelivery(shipment.id, "delivery_to_text", val)}
+          addresses={orgPrintData?.to.deliveryAddresses ?? []}
+          orgLegalAddress={orgPrintData?.to.legalAddress}
+          orgName={shipment.toOrganisationName}
+        />
+      </div>
+
+      {/* Notes & Rejection Reason */}
+      {(shipment.notes || (shipment.status === "rejected" && shipment.rejectionReason)) && (
+        <div className="rounded-lg border bg-card p-4">
+          {shipment.notes && (
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Notes</p>
+              <p className="text-sm">{shipment.notes}</p>
+            </div>
+          )}
+          {shipment.status === "rejected" && shipment.rejectionReason && (
+            <div className={shipment.notes ? "mt-4 pt-4 border-t" : ""}>
+              <p className="text-sm text-red-600 font-medium mb-1">Rejection Reason</p>
+              <p className="text-sm text-red-700">{shipment.rejectionReason}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Packages Section */}
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold">Packages</h2>
+
+        {/* For incoming external shipments: show editable package table */}
+        {isIncomingFromExternal && isDraft ? (
+          <IncomingShipmentPackageEditor
+            shipmentId={shipment.id}
+            shipmentCode={shipment.shipmentCode}
+            toOrgCode={shipment.toOrganisationCode}
+            incomingSeq={incomingSeq}
+            packages={shipment.packages}
+            onRefresh={fetchShipment}
+            onTotalChange={handleTotalChange}
+            onSaveRef={(fn) => { editorSaveRef.current = fn; }}
+          />
+        ) : (
+          <>
+            {/* Header with package count and add button */}
+            <div className="flex items-center justify-between">
+              <div>
+                {shipment.packages.length > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Total: {formatVolume(totalVolume)} m³
+                  </p>
+                )}
+              </div>
+              {canEdit && !isIncomingFromExternal && (
+                <Button variant="outline" size="sm" onClick={() => setShowPackageSelector(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Packages
+                </Button>
+              )}
+            </div>
+
+            {shipment.packages.length === 0 ? (
+              <div
+                className={`rounded-lg border bg-card p-6 text-center ${canEdit && !isIncomingFromExternal ? "cursor-pointer hover:border-primary/50 hover:bg-accent/50 transition-colors" : ""}`}
+                onClick={canEdit && !isIncomingFromExternal ? () => setShowPackageSelector(true) : undefined}
+              >
+                <p className="text-sm text-muted-foreground">
+                  {canEdit && !isIncomingFromExternal
+                    ? "No packages added yet. Click here to select packages from inventory."
+                    : "No packages in this shipment."}
+                </p>
+              </div>
+            ) : (
+              <ShipmentPalletTable
+                shipmentId={shipment.id}
+                packages={shipment.packages}
+                pallets={shipment.pallets}
+                canEdit={canEdit && !isIncomingFromExternal}
+                onRefresh={fetchShipment}
+              />
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Package Selector Dialog (for outgoing shipments) */}
+      {showPackageSelector && !isIncomingFromExternal && (
+        <ShipmentPackageSelector
+          shipmentId={shipment.id}
+          existingPackageIds={shipment.packages.map((p) => p.id)}
+          onClose={() => setShowPackageSelector(false)}
+          onPackagesAdded={handlePackagesAdded}
+        />
+      )}
+
+      {/* Submit Dialog */}
+      {showSubmitDialog && (
+        <SubmitShipmentDialog
+          shipmentId={shipment.id}
+          toOrgName={shipment.toOrganisationName}
+          packageCount={packageCount}
+          totalVolume={totalVolume}
+          onClose={() => setShowSubmitDialog(false)}
+          onSuccess={handleSubmitSuccess}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Delivery address card with preset selector and editable textarea */
+function DeliveryAddressCard({
+  label,
+  value,
+  onChange,
+  onSave,
+  addresses,
+  orgLegalAddress,
+  orgName,
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  onSave: (val: string) => Promise<unknown>;
+  addresses: { id: string; label: string; address: string; contactName: string | null; contactPhone: string | null; contactHours: string | null }[];
+  orgLegalAddress?: string | null;
+  orgName: string;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [savedValue, setSavedValue] = useState(value);
+
+  // Sync savedValue when parent reloads
+  useEffect(() => { setSavedValue(value); }, [value]);
+
+  const isDirty = value !== savedValue;
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(value);
+    setSavedValue(value);
+    setSaving(false);
+  };
+
+  const handleSelectAddress = async (addrId: string) => {
+    let newVal: string;
+    if (addrId === "__legal__") {
+      newVal = orgLegalAddress ?? "";
+    } else {
+      const addr = addresses.find((a) => a.id === addrId);
+      if (!addr) return;
+      const parts = [addr.address];
+      if (addr.contactName) parts.push(`Contact: ${addr.contactName}`);
+      if (addr.contactPhone) parts.push(`Phone: ${addr.contactPhone}`);
+      if (addr.contactHours) parts.push(`Hours: ${addr.contactHours}`);
+      newVal = parts.join("\n");
+    }
+    onChange(newVal);
+    setSaving(true);
+    await onSave(newVal);
+    setSavedValue(newVal);
+    setSaving(false);
+  };
+
+  const handleBlur = async () => {
+    if (value !== savedValue) {
+      setSaving(true);
+      await onSave(value);
+      setSavedValue(value);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border bg-card p-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        {(addresses.length > 0 || orgLegalAddress) && (
+          <select
+            className="text-xs border rounded px-1.5 py-0.5 bg-background"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) handleSelectAddress(e.target.value);
+            }}
+          >
+            <option value="">Fill from...</option>
+            {addresses.map((a) => (
+              <option key={a.id} value={a.id}>{a.label}</option>
+            ))}
+            {orgLegalAddress && <option value="__legal__">Legal address</option>}
+          </select>
+        )}
+      </div>
+      <textarea
+        className="w-full min-h-[100px] text-sm bg-transparent border rounded px-2 py-1.5 resize-y"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={handleBlur}
+        placeholder={`${orgName} delivery address...`}
+      />
+      {isDirty && (
+        <div className="flex justify-end">
+          <button
+            className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

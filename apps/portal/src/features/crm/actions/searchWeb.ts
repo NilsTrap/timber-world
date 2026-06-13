@@ -3,6 +3,22 @@
 import type { DiscoverySearchParams, DiscoveryResult, DiscoveryResponse } from "../types";
 import { createCrmClient } from "../lib/supabase";
 import { enrichCompanies } from "./enrichCompanies";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
+
+/**
+ * Two-layer CRM permission gate (org ∩ user must have `crm.view`).
+ * Admins bypass. Returns an error message string when denied, otherwise null.
+ */
+async function assertCrmAccess(): Promise<string | null> {
+  const session = await getSession();
+  if (!session) return "Unauthorized";
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("crm.view")) return "Permission denied";
+  }
+  return null;
+}
 
 const COUNTRY_NAMES: Record<string, string> = {
   UK: "United Kingdom",
@@ -37,6 +53,9 @@ const BRAVE_COUNTRY_CODES: Record<string, string> = {
 export async function searchWeb(
   params: DiscoverySearchParams
 ): Promise<{ success: true; data: DiscoveryResponse } | { success: false; error: string }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const apiKey = process.env.BRAVE_API_KEY;
   const countryName = COUNTRY_NAMES[params.country] || params.country;
 

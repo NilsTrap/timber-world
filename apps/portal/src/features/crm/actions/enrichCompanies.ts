@@ -3,8 +3,22 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { DiscoveryResult, CrmContact } from "../types";
 import { formatPhoneInternational } from "../lib/formatPhone";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 
 const anthropic = new Anthropic();
+
+/**
+ * Two-layer CRM permission gate (org ∩ user must have `crm.view`).
+ * Admins bypass. Returns true when access is allowed, false when denied.
+ */
+async function hasCrmAccess(): Promise<boolean> {
+  const session = await getSession();
+  if (!session) return false;
+  if (isAdmin(session)) return true;
+  const orgId = session.currentOrganizationId || session.organisationId;
+  const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+  return mods.has("crm.view");
+}
 
 /**
  * Enrich company data using Claude AI with web search
@@ -18,6 +32,15 @@ export async function enrichCompanies(
   searchCount: number;
   estimatedCost: string;
 }> {
+  if (!(await hasCrmAccess())) {
+    // Permission denied — return results unenriched (mirrors the no-API-key path).
+    return {
+      enrichedResults: results,
+      searchCount: 0,
+      estimatedCost: "$0.00",
+    };
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {

@@ -3,6 +3,7 @@
 import { createCrmClient } from "../lib/supabase";
 import { formatPhoneInternational } from "../lib/formatPhone";
 import { revalidatePath } from "next/cache";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import type {
   DiscoverySearchParams,
   DiscoveryResult,
@@ -17,11 +18,29 @@ import type {
 const COMPANIES_HOUSE_API = "https://api.company-information.service.gov.uk";
 
 /**
+ * Two-layer CRM permission gate (org ∩ user must have `crm.view`).
+ * Admins bypass. Returns an error message string when denied, otherwise null.
+ */
+async function assertCrmAccess(): Promise<string | null> {
+  const session = await getSession();
+  if (!session) return "Unauthorized";
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("crm.view")) return "Permission denied";
+  }
+  return null;
+}
+
+/**
  * Search Companies House for companies matching a query
  */
 export async function searchCompaniesHouse(
   params: DiscoverySearchParams
 ): Promise<{ success: true; data: DiscoveryResponse } | { success: false; error: string }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
 
   if (!apiKey) {
@@ -256,6 +275,9 @@ function formatOfficerRole(role: string): string {
 export async function importDiscoveredCompanies(
   results: DiscoveryResult[]
 ): Promise<{ success: true; imported: number } | { success: false; error: string }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const supabase = await createCrmClient();
   let importedCount = 0;
 

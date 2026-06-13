@@ -1,7 +1,23 @@
 "use server";
 
 import { createCrmClient } from "../lib/supabase";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import type { CrmCompany, CrmContact, CrmKeyword, CrmIndustry, CrmCompanyType } from "../types";
+
+/**
+ * Two-layer CRM permission gate (org ∩ user must have `crm.view`).
+ * Admins bypass. Returns an error message string when denied, otherwise null.
+ */
+async function assertCrmAccess(): Promise<string | null> {
+  const session = await getSession();
+  if (!session) return "Unauthorized";
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("crm.view")) return "Permission denied";
+  }
+  return null;
+}
 
 export type CompanyWithKeywords = CrmCompany & {
   keywords: CrmKeyword[];
@@ -17,6 +33,9 @@ type GetCompaniesResult =
  * Get all CRM companies with contact counts and keywords
  */
 export async function getCompanies(): Promise<GetCompaniesResult> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const supabase = await createCrmClient();
 
   const { data, error } = await supabase
@@ -80,6 +99,9 @@ export async function getCompanyById(id: string): Promise<{
   success: false;
   error: string;
 }> {
+  const denied = await assertCrmAccess();
+  if (denied) return { success: false, error: denied };
+
   const supabase = await createCrmClient();
 
   const { data: company, error: companyError } = await supabase

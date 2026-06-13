@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@timber/database/admin";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 export interface StockPriceRow {
@@ -21,6 +21,13 @@ export async function getStockPrices(): Promise<ActionResult<StockPriceRow[]>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  }
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("competitor-pricing.view")) {
+      return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    }
   }
 
   const supabase = await createClient();

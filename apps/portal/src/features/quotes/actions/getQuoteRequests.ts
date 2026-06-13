@@ -1,6 +1,7 @@
 "use server";
 
-import { createClient } from "@timber/database/server";
+import { createAdminClient } from "@timber/database";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 
 export interface QuoteRequest {
   id: string;
@@ -30,7 +31,19 @@ type ActionResult<T> =
 
 export async function getQuoteRequests(): Promise<ActionResult<QuoteRequest[]>> {
   try {
-    const supabase = await createClient();
+    const session = await getSession();
+    if (!session) {
+      return { success: false, error: "Not authenticated" };
+    }
+    if (!isAdmin(session)) {
+      const orgId = session.currentOrganizationId || session.organisationId;
+      const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+      if (!mods.has("quotes.view")) {
+        return { success: false, error: "Permission denied" };
+      }
+    }
+
+    const supabase = createAdminClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any)
@@ -55,7 +68,19 @@ export async function updateQuoteRequestStatus(
   status: string
 ): Promise<ActionResult<void>> {
   try {
-    const supabase = await createClient();
+    const session = await getSession();
+    if (!session) {
+      return { success: false, error: "Not authenticated" };
+    }
+    if (!isAdmin(session)) {
+      const orgId = session.currentOrganizationId || session.organisationId;
+      const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+      if (!mods.has("quotes.view")) {
+        return { success: false, error: "Permission denied" };
+      }
+    }
+
+    const supabase = createAdminClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)

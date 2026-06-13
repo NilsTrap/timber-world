@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { getOrganisationById } from "@/features/organisations/actions/getOrganisationById";
 import { OrganisationDetailTabs } from "@/features/organisations/components/OrganisationDetailTabs";
 import { OrganisationEntryMemory } from "@/features/organisations/components/OrganisationEntryMemory";
@@ -43,8 +43,8 @@ export default async function OrganisationDetailPage({
 
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasModule = await orgHasModule(orgId, "organizations.view");
-    if (!hasModule) {
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("organizations.view")) {
       notFound();
     }
   }

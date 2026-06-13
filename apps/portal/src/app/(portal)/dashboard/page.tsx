@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, isSuperAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin, getUserEnabledModules } from "@/lib/auth";
 import { AccessDeniedHandler } from "@/components/AccessDeniedHandler";
 import { getOrgUserMetrics, getAdminMetrics } from "@/features/dashboard/actions";
 import { OrgUserDashboardMetrics } from "@/features/dashboard/components/OrgUserDashboardMetrics";
@@ -94,11 +94,11 @@ export default async function DashboardPage({
 
   const userIsAdmin = isAdmin(session);
 
-  // Check org feature access for non-admin users
+  // Check org∩user module access for non-admin users
   if (!userIsAdmin) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasModule = await orgHasModule(orgId, "dashboard.view");
-    if (!hasModule) {
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("dashboard.view")) {
       notFound();
     }
   }

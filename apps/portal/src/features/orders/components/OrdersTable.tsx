@@ -680,7 +680,9 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
           updates.sellerOrganisationCode = org?.code ?? undefined;
         }
         if (field.producerOrganisationId !== undefined) {
-          const org = organisations.find((o) => o.id === field.producerOrganisationId);
+          const org =
+            organisations.find((o) => o.id === field.producerOrganisationId) ??
+            partyOptions?.producerOptions.find((o) => o.id === field.producerOrganisationId);
           updates.producerOrganisationName = org?.name ?? undefined;
           updates.producerOrganisationCode = org?.code ?? undefined;
         }

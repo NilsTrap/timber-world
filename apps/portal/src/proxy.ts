@@ -90,7 +90,8 @@ export async function proxy(request: NextRequest) {
   }
 
   // Admin route protection - only block /products (deprecated)
-  // /admin/* routes handle their own access control via orgHasModule checks
+  // /admin/* routes handle their own access control via two-layer
+  // getUserEnabledModules (org ∩ user) checks in each page.
   if (user && pathname.startsWith("/products")) {
     const role = user.user_metadata?.role;
     if (role !== "admin") {

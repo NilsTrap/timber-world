@@ -21,7 +21,7 @@ interface ActionResult<T> {
  *
  * Returns organisations available as order customers.
  * - Admins: all active organisations
- * - Non-admin with orders.customer-select: only their trading partners
+ * - Non-admin with orders.view: only their trading partners
  */
 export async function getCustomerOptions(): Promise<ActionResult<CustomerOption[]>> {
   const session = await getSession();
@@ -47,9 +47,10 @@ export async function getCustomerOptions(): Promise<ActionResult<CustomerOption[
     return { success: true, data: data as CustomerOption[] };
   }
 
-  // Non-admin: check module permission
+  // Non-admin: must be able to see orders (orders.customer-select was removed
+  // 2026-06-09; party selection is now role-driven, so gate on orders.view).
   const userOrgId = session.currentOrganizationId || session.organisationId;
-  const canSelect = (await getUserEnabledModules(session.portalUserId ?? "", userOrgId)).has("orders.customer-select");
+  const canSelect = (await getUserEnabledModules(session.portalUserId ?? "", userOrgId)).has("orders.view");
   if (!canSelect) {
     return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }

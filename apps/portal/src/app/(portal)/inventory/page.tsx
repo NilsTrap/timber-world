@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect, notFound } from "next/navigation";
 import { Package } from "lucide-react";
-import { getSession, isAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { getOrgUserPackages } from "@/features/inventory/actions";
 import { getPackagesInDrafts } from "@/features/production/actions";
 import { getPackagesInShipmentDrafts } from "@/features/shipments/actions";
@@ -118,9 +118,10 @@ export default async function InventoryPage({
   if (isAdmin(session)) redirect("/admin/inventory");
 
   // Module gate must run before render so notFound() can trigger.
+  // Non-admin only (admins redirected to /admin/inventory above); org∩user check.
   const orgId = session.currentOrganizationId || session.organisationId;
-  const hasModule = await orgHasModule(orgId, "inventory.view");
-  if (!hasModule) notFound();
+  const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+  if (!mods.has("inventory.view")) notFound();
 
   // Header paints immediately; package data streams in via Suspense.
   return (

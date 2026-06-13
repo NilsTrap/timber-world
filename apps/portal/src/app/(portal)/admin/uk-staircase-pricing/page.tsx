@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { UkStaircasePricingManager } from "@/features/uk-staircase-pricing";
 
 export const metadata: Metadata = {
@@ -20,7 +20,11 @@ export default async function UkStaircasePricingPage() {
   }
 
   if (!isAdmin(session)) {
-    redirect("/dashboard?access_denied=true");
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("uk-staircase-pricing.view")) {
+      redirect("/dashboard?access_denied=true");
+    }
   }
 
   return (

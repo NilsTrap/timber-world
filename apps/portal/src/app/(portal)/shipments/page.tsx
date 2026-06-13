@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { redirect, notFound } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { getSession, isAdmin, isSuperAdmin, orgHasModule } from "@/lib/auth";
+import { getSession, isAdmin, isSuperAdmin, getUserEnabledModules } from "@/lib/auth";
 import { getUserOrganisation, getAllOrgShipments, getActiveOrganisations } from "@/features/shipments/actions";
 import { getAllPendingShipmentCount } from "@/features/shipments/actions/getAllShipments";
 import { OrgUserShipmentsPageContent, AllShipmentsTab } from "@/features/shipments/components";
@@ -19,11 +19,11 @@ export default async function ShipmentsPage({
     redirect("/login");
   }
 
-  // Check org feature access for non-admin users
+  // Check org∩user module access for non-admin users
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasModule = await orgHasModule(orgId, "shipments.view");
-    if (!hasModule) {
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("shipments.view")) {
       notFound();
     }
   }

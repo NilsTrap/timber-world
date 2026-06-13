@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { CompetitorPricingManager } from "@/features/competitor-pricing";
 
 export const metadata: Metadata = {
@@ -20,7 +20,11 @@ export default async function CompetitorPricingPage() {
   }
 
   if (!isAdmin(session)) {
-    redirect("/dashboard?access_denied=true");
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("competitor-pricing.view")) {
+      redirect("/dashboard?access_denied=true");
+    }
   }
 
   return (
