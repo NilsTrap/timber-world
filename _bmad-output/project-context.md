@@ -1,9 +1,9 @@
 ---
 project_name: 'Timber-World-Platform'
 user_name: 'Nils'
-date: '2026-05-21'
+date: '2026-06-16'
 status: 'complete'
-sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime', 'session_verification', 'print_functionality', 'shipment_workflow', 'pallet_grouping', 'draft_blocking', 'competitor_pricing', 'marketing_stock', 'orders', 'modules_permissions', 'uk_staircase_pricing']
+sections_completed: ['technology_stack', 'permissions', 'server_actions', 'multi_tenant', 'data_transform', 'supabase', 'react_nextjs', 'file_organization', 'naming', 'i18n', 'testing', 'critical_rules', 'realtime', 'session_verification', 'print_functionality', 'shipment_workflow', 'pallet_grouping', 'draft_blocking', 'competitor_pricing', 'marketing_stock', 'orders', 'modules_permissions', 'uk_staircase_pricing', 'rls_security', 'orders_company_roles', 'agents_app', 'product_catalog', 'dense_tables', 'scraper_tooling']
 architecture_ref: '_bmad-output/planning-artifacts/platform/architecture.md'
 ---
 
@@ -721,6 +721,46 @@ When re-validating, the validator updates existing output `inventory_packages` r
 3. **Rollback uses the same temp pattern:** On failure, the rollback first sequentially sets each row to `__tmp_rollback_<entryId>_<i>` + negative sequence, then writes originals in parallel. Otherwise the rollback itself can collide on the same unique indexes and leave rows stuck with `__tmp_*` package numbers.
 
 If you touch `validateProduction.ts`, preserve all three.
+
+## Recent Changes & Conventions (updated 2026-06-16)
+
+### Row-Level Security (RLS) is ON for core tables
+
+RLS is enabled on the core tables (orders, inventory, shipments, production). Two rules for agents:
+
+- **Cross-org reads** must go through `SECURITY DEFINER` counterparty helper functions — a plain client query will be filtered to the caller's own org and silently return nothing.
+- **Privileged writes that legitimately cross org boundaries** (e.g. transferring inventory to a counterparty on shipment accept/send) must use the **service-role admin client inside the server action**, never the user client. See `project_rls_cross_org_fixes` notes. Collaborator IJL owns the RLS rollout.
+
+### Orders Company Roles (Customer / Manufacturer / Producer)
+
+`organisations` has `is_customer` / `is_manufacturer` / `is_producer` boolean flags (multi-role, set in the org-details "Roles" toggle). They drive **Add-Order** behaviour:
+
+- A **Manufacturer**-flagged org's user is auto-assigned as the order's Manufacturer and picks the Customer.
+- A customer-side (non-manufacturer) org's user is auto-assigned as the Customer and picks the Manufacturer.
+- The **Producer** is picked on the **Sales tab** (read-only elsewhere).
+- Counterparty pick-lists are the user's **trading partners** filtered by the matching role (`getOrderPartyOptions`), enforced server-side by `_validateOrderParty.ts`. Admins pick freely.
+
+These flags are **Orders-only** for now (not wired into RLS or other features).
+
+**Order permission model (current):** create / edit / cancel are gated on `orders.view`; **delete is admin-only**. The old `orders.create` and `orders.customer-select` sub-modules were removed. Production-tab editing is gated on `orders.tab.production` and restricted server-side to the `PRODUCTION_EDIT_FIELDS` whitelist (the separate `orders.tab.production.edit` module was removed 2026-06-09).
+
+**UI naming:** the finishing subcontractor is labelled **"Producer"** (renamed from "Workshop" on 2026-06-09); its file section is **"Producer Files"**. DB columns are unchanged (`seller_organisation_*` = Manufacturer, `producer_organisation_*` = Producer).
+
+### Agents App (`apps/agents`) — separate app
+
+There is now a third app: a standalone **agent-facing** app (self-registration + approval, server cart, checkout, commissions, GBP pricing, public signed-out catalog browsing). The **portal** hosts the admin side: Agent Orders (list/detail/confirm/cancel), Agent Manual, and agent management. Agent/Agent-Orders/Agent-Manual/Catalogue are grantable modules.
+
+### Dynamic Product Catalog
+
+The catalog schema is **dynamic**: a global `catalog_fields` registry is decoupled from categories via `catalog_category_field_assignments`. Variants are inline-editable with per-variant stock and SKU as the read-only first column. Pricing is admin-managed pricing units + multi-currency with an EUR→GBP cascade.
+
+### Dense Tables (UI convention)
+
+All portal tables use the **"Google-Sheets-style dense"** look (12px font, 4px padding, 32px header, tight rows). Apply it via the `@timber/ui` Table's **`dense`** prop, or spread the exported **`DENSE_TABLE_CLASS`** into a raw `<table>`'s className. It works via descendant-combinator variants (`[&_td]`/`[&_th]`) that out-specify per-cell classes, so you don't edit every cell — but text on an inner `<span>`/`<input>` keeps its own class (that's why `DataEntryTable` also sets `text-xs`/`h-6` directly). **Excluded:** all `Print*` components (paper layouts) and the public marketing site (must not pass `dense`).
+
+### Competitor Scraper tooling
+
+The scrapers in `tools/*` are **standalone npm packages** (not in the pnpm workspace) launched by `apps/portal/src/app/api/scraper/route.ts` via `npx tsx`. `tsx` is a **workspace-root devDependency** so `npx tsx` resolves from any scraper dir by walking up the tree. Do not rely on a per-scraper `npm install` to provide `tsx` — inside the pnpm monorepo that leaves a dangling `.bin/tsx` and fails with "tsx: command not found".
 
 ## Architecture Reference
 

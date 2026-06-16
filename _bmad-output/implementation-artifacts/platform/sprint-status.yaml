@@ -1,5 +1,5 @@
 # generated: 2026-01-22
-# updated: 2026-04-13
+# updated: 2026-06-16
 # project: Timber-World
 # project_key: platform
 # tracking_system: file-system
@@ -20,7 +20,7 @@
 #   - done: Story completed
 
 generated: 2026-01-22
-updated: 2026-05-21
+updated: 2026-06-16
 project: Timber-World
 project_key: platform
 tracking_system: file-system
@@ -425,6 +425,91 @@ development_status:
   #   to acquire pallet data anyway).
   # - Org users see pallet price as read-only reference info. Pallet count
   #   itself is editable by anyone who can edit the production entry.
+
+  # ============================================================
+  # PHASE 2 (continued): Work since 2026-05-21
+  # ============================================================
+
+  # Production Plans (2026-05-22)
+  epic-production-plans: done
+  # - Informational package groupings ("plans") on the Production page that group
+  #   inventory packages for reference without changing production/inventory state.
+
+  # Security & Performance Hardening — RLS Rollout (2026-05-22)
+  epic-security-performance-rls: done
+  # - Row-Level Security enabled on the core tables (orders/inventory/shipments/
+  #   production, Phase D) and completed across the schema (IJL/security-and-performance
+  #   branch). Collaborator IJL owns the rollout.
+  # - Cross-org reads go through SECURITY DEFINER counterparty helpers; privileged
+  #   writes use the service-role admin client inside server actions.
+  # - Perf: parallelized independent DB queries in hot server actions, Suspense
+  #   boundaries, sidebar cache + hover-only prefetch, memoized Orders columns,
+  #   composite order indexes, dynamic-import of heavy click-to-open dialogs.
+  # - Added an RLS & perf test harness + CI workflow.
+
+  # Post-RLS Cross-Org Fixes (June 2026)
+  epic-post-rls-fixes: done
+  # - RLS rollout broke several cross-org flows; fixes let users read counterparty/
+  #   partner organisation rows and shipment-counterparty packages on pending shipments.
+  # - Shipments: allow transferring inventory to EXTERNAL orgs on send; transfer
+  #   inventory on accept via the admin client; harden the available-packages query.
+  # - Auth: backfill organization_memberships for legacy users (was causing orders 404s).
+
+  # Dynamic Product Catalog (2026-05/06)
+  epic-product-catalog: done
+  # - Dynamic product catalog schema + admin UI. Global catalog_fields registry decoupled
+  #   from categories via catalog_category_field_assignments; inline-editable variants table
+  #   with per-variant stock and SKU as the read-only first column; global packaging types;
+  #   admin-managed pricing units; multi-currency with EUR→GBP cascade; category images;
+  #   cascade category deletion with warning. Marketing RLS fix shipped alongside.
+
+  # Agents App — NEW APP (apps/agents) (2026-05/06)
+  epic-agents-app: done
+  # - New standalone agent-facing app: scaffold + agent_users table, self-registration +
+  #   approval, commissions config, agent ordering flow (variant detail, server cart,
+  #   checkout, my orders), GBP price display + commission toggle, image galleries/
+  #   thumbnails, dashboard, public signed-out catalog browsing, product filters.
+  # - Portal side: admin Agent Orders area (list/detail/confirm/cancel), Agent Manual
+  #   reference page, agent management in portal admin.
+
+  # Orders: Company Roles + Two-Layer Permissions + Producer rename (2026-06-09)
+  epic-orders-company-roles: done
+  # - organisations gain is_customer / is_manufacturer / is_producer flags (multi-role,
+  #   set in the org-details "Roles" toggle). Drive Add-Order auto-fill: a Manufacturer-
+  #   flagged org's user is auto-assigned Manufacturer and picks the Customer; a customer-
+  #   side org's user is auto-assigned Customer and picks the Manufacturer; the Producer is
+  #   picked on the Sales tab. Counterparty pick-lists = the user's trading partners filtered
+  #   by role (getOrderPartyOptions), enforced server-side by _validateOrderParty.ts. Admins
+  #   pick freely. Flags are Orders-only for now (not wired into RLS).
+  # - Retired orders.create + orders.customer-select sub-modules. Create/edit/cancel now
+  #   gated on orders.view; DELETE is admin-only. Production-tab editing gated on
+  #   orders.tab.production (PRODUCTION_EDIT_FIELDS whitelist); the separate
+  #   orders.tab.production.edit module was removed.
+  # - Two-layer (org AND user) module permissions enforced consistently across orders.
+  # - UI rename: "Workshop" → "Producer" and "Workshop Files" → "Producer Files". DB
+  #   columns unchanged (still seller_/producer_organisation_*).
+
+  # Module Enforcement + Grantable Modules (2026-06-14)
+  epic-module-enforcement: done
+  # - Made Agents / Agent Orders / Agent Manual / Catalogue modules grantable to org users;
+  #   "Catalog" → "Catalogue" spelling fix.
+  # - Enforced two-layer module permissions consistently and closed CRM + quotes permission
+  #   leaks (module-enforcement audit).
+
+  # Portal-Wide Dense Tables (2026-06-16)
+  epic-dense-tables: done
+  # - Rolled the Orders "Google-Sheets-style dense" look (12px font, 4px padding, 32px
+  #   header, tight rows) out to EVERY table in the portal. @timber/ui Table gains an opt-in
+  #   `dense` prop + exported DENSE_TABLE_CLASS; DataEntryTable made dense; 30 <Table> listing
+  #   tables + 18 raw <table> tables updated. Excludes Print* components and the public
+  #   marketing site (which shares the Table primitive but is not opted in).
+
+  # Competitor Scraper tsx Fix (2026-06-16)
+  epic-scraper-tsx-fix: done
+  # - Added tsx as a workspace-root devDependency so the portal scraper route's `npx tsx`
+  #   resolves for all tools/* scrapers. mass.ee scraping had broken because running
+  #   `npm install` inside the pnpm monorepo left a dangling node_modules/.bin/tsx, giving
+  #   "tsx: command not found" (exit 127). No route code change needed.
 
 # ============================================================
 # PHASE 3: Planned Features

@@ -29,7 +29,12 @@ This is a **BMad Method Framework** installation (v6.0.0-alpha.22) for the **Tim
 | Portal - Competitor Pricing | ✅ Complete |
 | Portal - Marketing CMS & Stock | ✅ Complete |
 | Portal - UK Staircase Pricing | ✅ Complete |
-| Portal - Module-Based Permissions | ✅ Complete |
+| Portal - Module-Based Permissions (two-layer) | ✅ Complete |
+| Portal - Orders Company Roles (Customer/Manufacturer/Producer) | ✅ Complete |
+| Portal - Dynamic Product Catalog | ✅ Complete |
+| Agents App (`apps/agents`) + portal Agent Orders/Manual | ✅ Complete |
+| Security - RLS on core tables + perf hardening | ✅ Complete |
+| UI - Portal-wide dense tables | ✅ Complete |
 | Portal - CRM | ✅ In progress |
 | Stair Treads Production | 📋 Planning |
 
@@ -250,6 +255,18 @@ const displayRows = useMemo(() => { /* ... */ }, [data, columnFilters, columnSor
   </span>
 </TableHead>
 ```
+
+### Dense Tables (Portal-Wide Look)
+
+All portal tables use the **"Google-Sheets-style dense"** look (12px font, 4px padding, 32px header height, tight rows), rolled out portal-wide on 2026-06-16.
+
+- **`<Table>` primitive** → pass the **`dense`** prop: `<Table dense>`.
+- **Raw `<table>`** → spread the exported **`DENSE_TABLE_CLASS`** (from `@timber/ui`) into its `className`.
+- **`DataEntryTable`** is dense by default.
+
+The recipe lives in `packages/ui/src/components/table.tsx`. It works via descendant-combinator variants (`[&_td]`/`[&_th]`) that out-specify per-cell `text-sm`/`px-2`, so cells shrink without editing each one — but text on an inner `<span>`/`<input>` keeps its own class (that's why `DataEntryTable` also sets `text-xs`/`h-6` directly on its inputs/spans).
+
+**Excluded deliberately:** all `Print*` components (paper layouts) and the public marketing site (`apps/marketing` shares the `@timber/ui` Table but must NOT pass `dense`).
 
 ### Page Layout Components (Portal Pages)
 
