@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import { Button } from "@timber/ui";
+import { Button, Tabs, TabsContent, TabsList, TabsTrigger } from "@timber/ui";
+import { DealPanel } from "./DealPanel";
 import { getOrder } from "../actions/getOrder";
 import { getOrderPackages } from "../actions/getOrderPackages";
 import { getStaircaseCodes } from "../actions/getStaircaseCodes";
@@ -76,6 +77,9 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") || "list";
+  // Local view axis: the existing order content vs. the universal Deal view
+  // (line items + documents). Separate from the list-inherited `tab` above.
+  const [view, setView] = useState<"order" | "deal">("order");
   const [order, setOrder] = useState<Order | null>(null);
   const [packages, setPackages] = useState<OrderPackage[]>([]);
   const [dropdowns, setDropdowns] = useState<RefDropdowns | null>(null);
@@ -220,6 +224,13 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
         );
       })()}
 
+      <Tabs value={view} onValueChange={(v) => setView(v as "order" | "deal")}>
+        <TabsList>
+          <TabsTrigger value="order">Order</TabsTrigger>
+          <TabsTrigger value="deal">Deal</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="order" className="space-y-6 mt-4">
       {/* Ordered Products - DataEntryTable */}
       <OrderProductsSection
         orderId={orderId}
@@ -258,6 +269,12 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
       {/* Activity Log */}
       <OrderActivityLog orderId={orderId} tab={tab} />
+        </TabsContent>
+
+        <TabsContent value="deal" className="mt-4">
+          <DealPanel orderId={orderId} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
