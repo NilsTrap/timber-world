@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { ScraperConfigForm } from "./ScraperConfigForm";
 import { PriceTable } from "./PriceTable";
@@ -80,11 +80,29 @@ export function ScraperTab({ source, lastScrapedAt, onRefresh, refreshing, showD
 
   const dirName = SCRAPER_DIR_NAMES[source] || `tools/${source}-scraper/`;
 
+  // Per-source last-scraped time.
+  // For showData sources we have this source's own rows loaded, so derive the
+  // real max(scraped_at) from them. For mass.ee (showData=false) the parent
+  // loads the data and passes its timestamp in. The passed `lastScrapedAt` is
+  // the global most-recent scrape, so it must NOT be shown on other sources'
+  // tabs (that's the bug where every tab read mass.ee's time).
+  const sourceLastScrapedAt = useMemo(() => {
+    if (!showData) return lastScrapedAt;
+    if (data.length === 0) return null;
+    return data.reduce<string | null>(
+      (latest, d) =>
+        !latest || new Date(d.scraped_at).getTime() > new Date(latest).getTime()
+          ? d.scraped_at
+          : latest,
+      null
+    );
+  }, [showData, lastScrapedAt, data]);
+
   return (
     <div className="space-y-6">
       <ScraperConfigForm
         source={source}
-        lastScrapedAt={lastScrapedAt}
+        lastScrapedAt={sourceLastScrapedAt}
         onRefresh={handleRefresh}
         refreshing={refreshing}
       />
