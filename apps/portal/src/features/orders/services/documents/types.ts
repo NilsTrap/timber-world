@@ -1,10 +1,11 @@
 /**
  * Document data — the validated, render-ready shape a document is built from.
- * Assembled by documentService from a deal; consumed by the per-type renderers.
- * Keeping this separate from DB rows is what lets the same renderer be unit-tested
- * from a fixture with no database.
+ * Assembled from a deal (order); consumed by the per-type renderers. Keeping this
+ * separate from DB rows is what lets the same renderer be unit-tested from a
+ * fixture with no database. Salvaged from features/deals during E2.4; the full
+ * generation port + data assembly that feed these is built in E3.
  */
-import type { DocType } from "../../types";
+import type { DocType } from "../dealModel";
 
 export interface PartyCard {
   name: string;

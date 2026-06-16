@@ -15,9 +15,8 @@
  */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { ActorContext, DealSide, DocType } from "@/features/deals/types";
-import { createDeal, getDeal, listDeals, replaceLineItems } from "@/features/deals/services/dealsService";
-import { generateDocument } from "@/features/deals/services/documentService";
+import type { ActorContext, DealSide } from "@/features/orders/services/dealModel";
+import { createDeal, getOrderDeal, listDeals, replaceLineItems, allocateDealCode } from "@/features/orders/services/orderDeals";
 import { listDefinitions, getOptions } from "@/features/catalog/services/attributes";
 
 export const dynamic = "force-dynamic";
@@ -128,21 +127,22 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: "timber_generate_document",
+    name: "timber_allocate_deal_code",
     description:
-      "Generate a PDF document for a deal (sales_spec or purchase_spec available now) and return its number and a signed download URL. Records the document on the deal.",
+      "Allocate (or return, if already set) the Timber deal code for a deal — the Nils-convention ENTITY+CLIENT+SEQ code (e.g. TIMSOM001). Idempotent. Timber owns deal/document numbering.",
     readOnly: false,
     inputSchema: {
       type: "object",
-      properties: {
-        deal_id: { type: "string", description: "Deal UUID." },
-        doc_type: { type: "string", enum: ["sales_spec", "purchase_spec"], description: "Document type to generate." },
-        side: { type: "string", enum: ["sell", "buy"], description: "Override side (defaults from doc_type)." },
-      },
-      required: ["deal_id", "doc_type"],
+      properties: { deal_id: { type: "string", description: "Deal (order) UUID." } },
+      required: ["deal_id"],
     },
   },
 ];
+// NOTE: document generation (timber_generate_document) is being rebuilt on the
+// orders/deal model in E3 (data-assembly + generation port) — the salvaged
+// renderers now live under features/orders/services/documents/. It will be
+// re-registered here then; no live consumer depends on it yet (Oscar instance
+// not provisioned).
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 function resolveRole(req: Request): Role | null {
@@ -204,7 +204,7 @@ async function callTool(name: string, args: any, role: Role) {
     }
     case "timber_get_deal": {
       if (!args?.deal_id) return toolErr("deal_id is required");
-      const res = await getDeal(db, SERVICE_ACTOR, args.deal_id);
+      const res = await getOrderDeal(db, SERVICE_ACTOR, args.deal_id);
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     case "timber_create_deal": {
@@ -233,13 +233,9 @@ async function callTool(name: string, args: any, role: Role) {
       const res = await replaceLineItems(db, SERVICE_ACTOR, args.deal_id, side, mapLineItemArgs(args?.items));
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
-    case "timber_generate_document": {
-      if (!args?.deal_id || !args?.doc_type) return toolErr("deal_id and doc_type are required");
-      const res = await generateDocument(db, SERVICE_ACTOR, {
-        dealId: args.deal_id,
-        docType: args.doc_type as DocType,
-        side: args?.side as DealSide | undefined,
-      });
+    case "timber_allocate_deal_code": {
+      if (!args?.deal_id) return toolErr("deal_id is required");
+      const res = await allocateDealCode(db, SERVICE_ACTOR, args.deal_id);
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     default:
