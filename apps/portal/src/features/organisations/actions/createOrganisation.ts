@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin } from "@/lib/auth";
 import { createOrgSchema, type CreateOrgInput } from "../schemas";
 import type { Organisation, ActionResult } from "../types";
+import { crmSyncOrg } from "../services/oscarCrm";
 
 /** Trim a value; empty → null (so blank company-card fields store as NULL). */
 function nn(v: string | null | undefined): string | null {
@@ -126,6 +127,27 @@ export async function createOrganisation(
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
   };
+
+  // Write-through to the Oscar CRM (best-effort; no-op until configured).
+  await crmSyncOrg(supabase, {
+    timberOrgId: organisation.id,
+    code: organisation.code,
+    name: organisation.name,
+    legalAddress: organisation.legalAddress,
+    vatNumber: organisation.vatNumber,
+    registrationNumber: organisation.registrationNumber,
+    country: organisation.country,
+    phone: organisation.phone,
+    email: organisation.email,
+    website: organisation.website,
+    bankName: organisation.bankName,
+    bankAccountNumber: organisation.bankAccountNumber,
+    bankSwiftCode: organisation.bankSwiftCode,
+    isCustomer: organisation.isCustomer,
+    isManufacturer: organisation.isManufacturer,
+    isProducer: organisation.isProducer,
+    crmOrgId: null,
+  });
 
   return {
     success: true,

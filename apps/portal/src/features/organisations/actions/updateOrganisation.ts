@@ -5,6 +5,7 @@ import { getSession, isAdmin } from "@/lib/auth";
 import { updateOrgSchema } from "../schemas";
 import { isValidUUID } from "../types";
 import type { Organisation, ActionResult } from "../types";
+import { crmSyncOrg } from "../services/oscarCrm";
 
 /**
  * Update Organisation
@@ -111,7 +112,7 @@ export async function updateOrganisation(
     .from("organisations")
     .update(updatePayload)
     .eq("id", id)
-    .select("id, code, name, is_active, is_external, is_customer, is_manufacturer, is_producer, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, logo_url, created_at, updated_at")
+    .select("id, code, name, is_active, is_external, is_customer, is_manufacturer, is_producer, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, logo_url, crm_org_id, created_at, updated_at")
     .single();
 
   if (error) {
@@ -155,6 +156,27 @@ export async function updateOrganisation(
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
   };
+
+  // Write-through to the Oscar CRM (best-effort; no-op until configured).
+  await crmSyncOrg(supabase, {
+    timberOrgId: organisation.id,
+    code: organisation.code,
+    name: organisation.name,
+    legalAddress: organisation.legalAddress,
+    vatNumber: organisation.vatNumber,
+    registrationNumber: organisation.registrationNumber,
+    country: organisation.country,
+    phone: organisation.phone,
+    email: organisation.email,
+    website: organisation.website,
+    bankName: organisation.bankName,
+    bankAccountNumber: organisation.bankAccountNumber,
+    bankSwiftCode: organisation.bankSwiftCode,
+    isCustomer: organisation.isCustomer,
+    isManufacturer: organisation.isManufacturer,
+    isProducer: organisation.isProducer,
+    crmOrgId: (data.crm_org_id as string | null) ?? null,
+  });
 
   return {
     success: true,

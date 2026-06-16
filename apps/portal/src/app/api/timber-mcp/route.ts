@@ -19,6 +19,7 @@ import type { ActorContext, DealSide, DocType } from "@/features/orders/services
 import { createDeal, getOrderDeal, listDeals, replaceLineItems, allocateDealCode } from "@/features/orders/services/orderDeals";
 import { assembleDocumentData, generateDocument } from "@/features/orders/services/orderDocuments";
 import { listDefinitions, getOptions } from "@/features/catalog/services/attributes";
+import { listOrgs, getOrg, createOrg } from "@/features/organisations/services/orgService";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,51 @@ const TOOLS: ToolDef[] = [
         attribute_key: { type: "string", description: "Attribute key, e.g. 'wood_species' or 'quality' (from timber_get_attribute_definitions)." },
       },
       required: ["attribute_key"],
+    },
+  },
+  {
+    name: "timber_list_orgs",
+    description: "List Timber organisations (customers/manufacturers/producers) with their company card + CRM link. Optional text query matches name or code.",
+    readOnly: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Filter by name or code (substring)." },
+        limit: { type: "integer", description: "Max rows (default 100, cap 200)." },
+      },
+    },
+  },
+  {
+    name: "timber_get_org",
+    description: "Get one Timber organisation by id — full company card (legal address, VAT/registration, country, contact, bank) + role flags + crm_org_id.",
+    readOnly: true,
+    inputSchema: {
+      type: "object",
+      properties: { org_id: { type: "string", description: "Organisation UUID." } },
+      required: ["org_id"],
+    },
+  },
+  {
+    name: "timber_create_org",
+    description: "Create a Timber organisation (3-char code + name + optional company card). Mirrors to the Oscar CRM when configured and returns the stored org incl. crm_org_id.",
+    readOnly: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        code: { type: "string", description: "3-char org code (letter + 2 letters/digits, e.g. SOM)." },
+        name: { type: "string", description: "Organisation name." },
+        legal_address: { type: "string" },
+        vat_number: { type: "string" },
+        registration_number: { type: "string" },
+        country: { type: "string", description: "ISO-3166 alpha-2 (e.g. LV, GB)." },
+        phone: { type: "string" },
+        email: { type: "string" },
+        website: { type: "string" },
+        bank_name: { type: "string" },
+        bank_account_number: { type: "string" },
+        bank_swift_code: { type: "string" },
+      },
+      required: ["code", "name"],
     },
   },
   {
@@ -219,6 +265,33 @@ async function callTool(name: string, args: any, role: Role) {
     case "timber_list_attribute_options": {
       if (!args?.attribute_key) return toolErr("attribute_key is required");
       const res = await getOptions(db, args.attribute_key);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_list_orgs": {
+      const res = await listOrgs(db, { query: args?.query, limit: args?.limit });
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_get_org": {
+      if (!args?.org_id) return toolErr("org_id is required");
+      const res = await getOrg(db, args.org_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_create_org": {
+      if (!args?.code || !args?.name) return toolErr("code and name are required");
+      const res = await createOrg(db, {
+        code: args.code,
+        name: args.name,
+        legalAddress: args?.legal_address,
+        vatNumber: args?.vat_number,
+        registrationNumber: args?.registration_number,
+        country: args?.country,
+        phone: args?.phone,
+        email: args?.email,
+        website: args?.website,
+        bankName: args?.bank_name,
+        bankAccountNumber: args?.bank_account_number,
+        bankSwiftCode: args?.bank_swift_code,
+      });
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     case "timber_list_deals": {
