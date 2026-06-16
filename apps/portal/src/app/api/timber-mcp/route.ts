@@ -15,8 +15,9 @@
  */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { ActorContext, DealSide } from "@/features/orders/services/dealModel";
+import type { ActorContext, DealSide, DocType } from "@/features/orders/services/dealModel";
 import { createDeal, getOrderDeal, listDeals, replaceLineItems, allocateDealCode } from "@/features/orders/services/orderDeals";
+import { assembleDocumentData, generateDocument } from "@/features/orders/services/orderDocuments";
 import { listDefinitions, getOptions } from "@/features/catalog/services/attributes";
 
 export const dynamic = "force-dynamic";
@@ -138,12 +139,37 @@ const TOOLS: ToolDef[] = [
       required: ["deal_id"],
     },
   },
+  {
+    name: "timber_get_document_data",
+    description:
+      "Assemble the full render-ready data for a deal document (parties' company cards, line items, totals, VAT rule + reference, amount-in-words, and a freshly-allocated Timber document number). This is the structured input the document generator turns into a file. Allocates a document number (Timber owns numbering).",
+    readOnly: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        deal_id: { type: "string", description: "Deal (order) UUID." },
+        doc_type: { type: "string", enum: ["sales_spec", "purchase_spec", "contract", "proforma_invoice", "invoice", "packing_list", "cmr"], description: "Document type." },
+        side: { type: "string", enum: ["sell", "buy"], description: "Override side (defaults: purchase docs → buy, else sell)." },
+      },
+      required: ["deal_id", "doc_type"],
+    },
+  },
+  {
+    name: "timber_generate_document",
+    description:
+      "Generate a document (PDF) for a deal, store it on the deal, and return its number and a signed download URL. Uses Timber's interim local renderer today; swaps to the Oscar generator when configured. Records an order_documents row.",
+    readOnly: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        deal_id: { type: "string", description: "Deal (order) UUID." },
+        doc_type: { type: "string", enum: ["sales_spec", "purchase_spec", "contract", "proforma_invoice", "invoice", "packing_list", "cmr"], description: "Document type to generate." },
+        side: { type: "string", enum: ["sell", "buy"], description: "Override side (defaults: purchase docs → buy, else sell)." },
+      },
+      required: ["deal_id", "doc_type"],
+    },
+  },
 ];
-// NOTE: document generation (timber_generate_document) is being rebuilt on the
-// orders/deal model in E3 (data-assembly + generation port) — the salvaged
-// renderers now live under features/orders/services/documents/. It will be
-// re-registered here then; no live consumer depends on it yet (Oscar instance
-// not provisioned).
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 function resolveRole(req: Request): Role | null {
@@ -238,6 +264,24 @@ async function callTool(name: string, args: any, role: Role) {
     case "timber_allocate_deal_code": {
       if (!args?.deal_id) return toolErr("deal_id is required");
       const res = await allocateDealCode(db, SERVICE_ACTOR, args.deal_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_get_document_data": {
+      if (!args?.deal_id || !args?.doc_type) return toolErr("deal_id and doc_type are required");
+      const res = await assembleDocumentData(db, SERVICE_ACTOR, {
+        orderId: args.deal_id,
+        docType: args.doc_type as DocType,
+        side: args?.side as DealSide | undefined,
+      });
+      return res.success ? toolOk(res.data.data) : toolErr(res.error);
+    }
+    case "timber_generate_document": {
+      if (!args?.deal_id || !args?.doc_type) return toolErr("deal_id and doc_type are required");
+      const res = await generateDocument(db, SERVICE_ACTOR, {
+        orderId: args.deal_id,
+        docType: args.doc_type as DocType,
+        side: args?.side as DealSide | undefined,
+      });
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     default:
