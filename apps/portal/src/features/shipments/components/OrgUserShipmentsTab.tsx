@@ -162,7 +162,7 @@ export function OrgUserShipmentsTab({ shipments }: OrgUserShipmentsTabProps) {
 
       {/* Shipments Table */}
       <div className="rounded-md border">
-        <Table>
+        <Table dense>
           <TableHeader>
             <TableRow>
               <TableHead className="w-[100px]">Direction</TableHead>

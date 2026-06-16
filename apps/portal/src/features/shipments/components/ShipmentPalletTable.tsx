@@ -426,7 +426,7 @@ export function ShipmentPalletTable({
       )}
 
       <div className="rounded-lg border overflow-x-auto w-fit max-w-full">
-        <Table className="w-auto">
+        <Table dense className="w-auto">
           <TableHeader>
             <TableRow>
               {/* Expand/collapse icon column */}

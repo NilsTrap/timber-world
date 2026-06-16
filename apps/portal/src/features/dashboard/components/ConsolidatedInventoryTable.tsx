@@ -56,7 +56,7 @@ export function ConsolidatedInventoryTable({ data, inventoryUrl = "/inventory" }
   return (
     <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs">
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="text-left p-3 font-medium">Product</th>

@@ -270,7 +270,7 @@ export function OutputPasteImportModal({
             <div className="space-y-2">
               <Label>Column Mapping</Label>
               <div className="border rounded-md overflow-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs">
                   <thead className="bg-muted">
                     <tr>
                       <th className="p-2 text-left font-medium">Spreadsheet Column</th>
@@ -311,7 +311,7 @@ export function OutputPasteImportModal({
             <div className="space-y-2">
               <Label>Preview (first 5 rows)</Label>
               <div className="border rounded-md overflow-auto max-h-48">
-                <table className="w-full text-xs">
+                <table className="w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs">
                   <thead className="bg-muted sticky top-0">
                     <tr>
                       {headers.map((h, i) => (

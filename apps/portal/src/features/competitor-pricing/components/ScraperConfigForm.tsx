@@ -477,7 +477,7 @@ export function ScraperConfigForm({
             <div className="space-y-2">
               <div className="text-sm font-medium">{savedUrls.length} saved product URLs</div>
               <div className="max-h-64 overflow-y-auto rounded-md border bg-muted/30">
-                <table className="w-full text-xs">
+                <table className="w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs">
                   <thead className="sticky top-0 bg-muted">
                     <tr>
                       <th className="text-left px-2 py-1 font-medium">Species</th>

@@ -244,7 +244,7 @@ export function OrderPackagesTable({
       ) : (
         <div className="rounded-lg border">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs">
               <thead>
                 <tr className="border-b bg-muted/50">
                   {isAdding && <th className="px-2 py-2 text-left font-medium">Code</th>}

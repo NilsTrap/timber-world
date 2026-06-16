@@ -2,20 +2,39 @@ import * as React from "react";
 
 import { cn } from "../utils";
 
-const Table = React.forwardRef<HTMLTableElement, React.ComponentProps<"table">>(
-  ({ className, ...props }, ref) => {
-    return (
-      <div data-slot="table-container" className="relative w-full">
-        <table
-          ref={ref}
-          data-slot="table"
-          className={cn("w-full caption-bottom text-sm", className)}
-          {...props}
-        />
-      </div>
-    );
-  }
-);
+/**
+ * "Google-Sheets-style dense" table recipe — matches the Orders tables.
+ *
+ * Shrinks font to 12px and tightens padding/row height so far more data fits
+ * per screen. Uses descendant-combinator arbitrary variants ([&_td]/[&_th]),
+ * which have higher CSS specificity than per-cell `text-sm`/`px-2`, so it
+ * overrides existing cell classes without editing every cell.
+ *
+ * - On the <Table> primitive: pass the `dense` prop.
+ * - On a raw <table> element: spread this string into its className.
+ */
+export const DENSE_TABLE_CLASS =
+  "text-xs [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs";
+
+const Table = React.forwardRef<
+  HTMLTableElement,
+  React.ComponentProps<"table"> & { dense?: boolean }
+>(({ className, dense, ...props }, ref) => {
+  return (
+    <div data-slot="table-container" className="relative w-full">
+      <table
+        ref={ref}
+        data-slot="table"
+        className={cn(
+          "w-full caption-bottom text-sm",
+          dense && DENSE_TABLE_CLASS,
+          className
+        )}
+        {...props}
+      />
+    </div>
+  );
+});
 Table.displayName = "Table";
 
 function TableHeader({

@@ -180,7 +180,7 @@ export function ProductionPlanDetailClient({ plan: initial }: Props) {
           </div>
         ) : (
           <div className="rounded-lg border bg-card overflow-x-auto">
-            <Table>
+            <Table dense>
               <TableHeader>
                 <TableRow>
                   <TableHead>Shipment</TableHead>

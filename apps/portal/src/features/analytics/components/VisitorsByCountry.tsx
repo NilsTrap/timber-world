@@ -48,7 +48,7 @@ export function VisitorsByCountry({ data }: VisitorsByCountryProps) {
         <CardTitle>Top Countries</CardTitle>
       </CardHeader>
       <CardContent>
-        <Table>
+        <Table dense>
           <TableHeader>
             <TableRow>
               <TableHead>Country</TableHead>

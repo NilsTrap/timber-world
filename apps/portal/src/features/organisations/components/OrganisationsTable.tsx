@@ -288,7 +288,7 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
         </div>
       ) : (
         <div className="rounded-lg border">
-          <Table>
+          <Table dense>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-24">

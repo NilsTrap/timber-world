@@ -51,7 +51,7 @@ export function PackageList({ packages, label, color, highlightId }: { packages:
           {packages.length} pkg · {totalPieces} pcs · {formatVol(totalVol)} m³
         </span>
       </div>
-      <table className="w-full text-xs">
+      <table className="w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs">
         <thead>
           <tr className="text-[11px] text-muted-foreground border-b">
             <th className="text-left py-0.5 pr-2 font-medium">Package</th>
@@ -153,7 +153,7 @@ export function InputOutputTable({ sections, highlightId }: { sections: InputOut
   if (nonEmpty.length === 0) return null;
 
   return (
-    <table className="w-full text-xs">
+    <table className="w-full text-xs [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs">
       <thead>
         <tr className="text-[11px] text-muted-foreground border-b">
           <th className="text-left py-0.5 pr-2 font-medium">Package</th>

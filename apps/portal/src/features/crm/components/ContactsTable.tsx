@@ -64,7 +64,7 @@ export function ContactsTable({ contacts }: ContactsTableProps) {
 
   return (
     <div className="rounded-lg border bg-card">
-      <Table>
+      <Table dense>
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>

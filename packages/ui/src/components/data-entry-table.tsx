@@ -857,7 +857,7 @@ function DataEntryTableInner<TRow>(
           // Exit selection mode when focus leaves
           activeDropdownRef.current = null;
         }}
-        className="h-7 text-sm rounded-md border border-input bg-transparent px-1 py-0.5 shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="h-6 text-xs rounded-md border border-input bg-transparent px-1 py-0.5 shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         <option value="">-</option>
         {(col.options ?? []).map((opt) => (
@@ -875,7 +875,7 @@ function DataEntryTableInner<TRow>(
     const tooltip = label ? `${getLabelText(col.label)}: ${label}` : `${getLabelText(col.label)}: (empty)`;
     return (
       <span
-        className="inline-flex items-center justify-center h-7 w-full text-sm text-muted-foreground cursor-default"
+        className="inline-flex items-center justify-center h-6 w-full text-xs text-muted-foreground cursor-default"
         title={tooltip}
       >
         {abbrev}
@@ -891,7 +891,7 @@ function DataEntryTableInner<TRow>(
   ) => (
     <Input
       id={`${idPrefix}-${renderIndex}-${col.key}`}
-      className={`h-7 text-sm px-1 ${col.width ?? "w-[4.5rem]"} ${col.isNumeric ? "text-right" : ""}`}
+      className={`h-6 text-xs px-1 ${col.width ?? "w-[4.5rem]"} ${col.isNumeric ? "text-right" : ""}`}
       placeholder={col.placeholder}
       value={col.getValue(row) ?? ""}
       onChange={(e) => updateCell(originalIndex, col.key, e.target.value)}
@@ -914,7 +914,7 @@ function DataEntryTableInner<TRow>(
           </div>
           <div className="flex items-center gap-2">
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={handleClearAll} className="text-sm h-7">
+              <Button variant="ghost" size="sm" onClick={handleClearAll} className="text-xs h-6">
                 <X className="h-3 w-3 mr-1" />
                 Clear Filters
               </Button>
@@ -929,7 +929,7 @@ function DataEntryTableInner<TRow>(
       )}
 
       <div ref={scrollContainerRef} className="rounded-lg border overflow-auto max-h-[80vh] w-fit max-w-full">
-        <Table ref={tableRef} className="mb-3">
+        <Table dense ref={tableRef} className="mb-3">
           <TableHeader className="sticky top-0 z-10 bg-card">
             <TableRow>
               {columns.map((col) => {
@@ -941,7 +941,7 @@ function DataEntryTableInner<TRow>(
                   return (
                     <TableHead
                       key={col.key}
-                      className={`px-0.5 text-sm cursor-pointer select-none hover:bg-accent/50 transition-colors whitespace-nowrap ${isCollapsed ? "w-[30px]" : ""}`}
+                      className={`px-0.5 text-xs cursor-pointer select-none hover:bg-accent/50 transition-colors whitespace-nowrap ${isCollapsed ? "w-[30px]" : ""}`}
                       style={!isCollapsed && lockedWidth ? { minWidth: lockedWidth } : undefined}
                       onClick={() => toggleColumn(col.key)}
                       title={isCollapsed ? `Expand ${getLabelText(col.label)}` : `Collapse ${getLabelText(col.label)}`}
@@ -971,7 +971,7 @@ function DataEntryTableInner<TRow>(
                 return (
                   <TableHead
                     key={col.key}
-                    className="px-0.5 text-sm whitespace-nowrap"
+                    className="px-0.5 text-xs whitespace-nowrap"
                     style={lockedWidth ? { minWidth: lockedWidth } : undefined}
                   >
                     {showFilter ? (
@@ -994,7 +994,7 @@ function DataEntryTableInner<TRow>(
                 );
               })}
               {/* Actions column */}
-              {!readOnly && <TableHead className="px-0.5 text-sm" />}
+              {!readOnly && <TableHead className="px-0.5 text-xs" />}
             </TableRow>
           </TableHeader>
 
@@ -1017,7 +1017,7 @@ function DataEntryTableInner<TRow>(
 
                   if (col.type === "custom" && col.renderCell) {
                     return (
-                      <TableCell key={col.key} className={`px-0.5 text-sm ${col.width ?? ""}`}>
+                      <TableCell key={col.key} className={`px-0.5 text-xs ${col.width ?? ""}`}>
                         {col.renderCell(
                           row,
                           renderIndex,
@@ -1043,10 +1043,10 @@ function DataEntryTableInner<TRow>(
                       return (
                         <TableCell
                           key={col.key}
-                          className="px-0.5 text-sm whitespace-nowrap w-[30px] text-muted-foreground"
+                          className="px-0.5 text-xs whitespace-nowrap w-[30px] text-muted-foreground"
                           title={tooltip}
                         >
-                          <span className="inline-flex items-center h-7">
+                          <span className="inline-flex items-center h-6">
                             {abbrev}
                           </span>
                         </TableCell>
@@ -1057,9 +1057,9 @@ function DataEntryTableInner<TRow>(
                     return (
                       <TableCell
                         key={col.key}
-                        className={`px-0.5 text-sm whitespace-nowrap ${isNum ? "text-right" : ""} ${col.width ?? ""}`}
+                        className={`px-0.5 text-xs whitespace-nowrap ${isNum ? "text-right" : ""} ${col.width ?? ""}`}
                       >
-                        <span className={`inline-flex items-center h-7 ${isNum ? "w-full justify-end" : ""}`}>
+                        <span className={`inline-flex items-center h-6 ${isNum ? "w-full justify-end" : ""}`}>
                           {displayValue || "-"}
                         </span>
                       </TableCell>
@@ -1070,7 +1070,7 @@ function DataEntryTableInner<TRow>(
                     return (
                       <TableCell
                         key={col.key}
-                        className={`px-0.5 text-sm ${isCollapsed ? "w-[30px]" : ""}`}
+                        className={`px-0.5 text-xs ${isCollapsed ? "w-[30px]" : ""}`}
                       >
                         {isCollapsed
                           ? renderCollapsedCell(col, currentValue)
@@ -1081,7 +1081,7 @@ function DataEntryTableInner<TRow>(
 
                   // text or numeric
                   return (
-                    <TableCell key={col.key} className="px-0.5 text-sm">
+                    <TableCell key={col.key} className="px-0.5 text-xs">
                       {renderInput(col, row, renderIndex, originalIndex)}
                     </TableCell>
                   );
@@ -1137,7 +1137,7 @@ function DataEntryTableInner<TRow>(
                   return (
                     <TableCell
                       key={col.key}
-                      className={`px-0.5 font-mono text-sm font-semibold whitespace-nowrap ${col.isNumeric ? "text-right" : ""}`}
+                      className={`px-0.5 font-mono text-xs font-semibold whitespace-nowrap ${col.isNumeric ? "text-right" : ""}`}
                     >
                       {display}
                     </TableCell>

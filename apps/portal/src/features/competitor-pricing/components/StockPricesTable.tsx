@@ -269,7 +269,7 @@ export function StockPricesTable() {
         </div>
       </div>
       <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-        <Table>
+        <Table dense>
           <TableHeader>
             <TableRow>
               <TableHead className="w-8"></TableHead>

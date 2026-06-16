@@ -146,7 +146,7 @@ export function ProcessesTab({ processes: initialProcesses, organizationName, or
       </div>
 
       <div className="rounded-lg border bg-card shadow-sm">
-        <Table>
+        <Table dense>
           <TableHeader>
             <TableRow>
               <TableHead className="w-20">Code</TableHead>

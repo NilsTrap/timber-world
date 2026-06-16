@@ -181,7 +181,7 @@ export function MarketingStockTable() {
         </div>
       ) : (
         <div className="rounded-lg border bg-card shadow-sm overflow-auto max-h-[75vh]">
-          <Table>
+          <Table dense>
             <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card [&_th]:border-b">
               <TableRow>
                 <TableHead className="w-10">#</TableHead>

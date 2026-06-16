@@ -161,7 +161,7 @@ export function AllShipmentsTab({ organizations }: AllShipmentsTabProps) {
               No shipments found
             </div>
           ) : (
-            <Table>
+            <Table dense>
               <TableHeader>
                 <TableRow>
                   <TableHead>Code</TableHead>

@@ -64,7 +64,7 @@ export function PeopleTable() {
 
   return (
     <div className="rounded-lg border">
-      <Table>
+      <Table dense>
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>

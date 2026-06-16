@@ -182,7 +182,7 @@ export function TradingPartnersTab({ organisationId }: TradingPartnersTabProps) 
           )}
         </div>
       ) : (
-        <Table>
+        <Table dense>
           <TableHeader>
             <TableRow>
               <TableHead>Code</TableHead>

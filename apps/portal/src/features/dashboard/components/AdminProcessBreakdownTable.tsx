@@ -61,7 +61,7 @@ export function AdminProcessBreakdownTable({
       <div className="p-4 border-b">
         <h3 className="text-sm font-medium">Per-Process Efficiency</h3>
       </div>
-      <table className="w-full text-sm">
+      <table className="w-full text-sm [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs">
         <thead>
           <tr className="border-b bg-muted/50">
             <th className="px-4 py-3 text-left font-medium">Process</th>

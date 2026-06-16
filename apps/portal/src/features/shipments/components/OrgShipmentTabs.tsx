@@ -101,7 +101,7 @@ export function OrgShipmentTabs({ activeTab }: OrgShipmentTabsProps) {
             No {isOutgoing ? "outgoing" : "incoming"} shipments yet
           </div>
         ) : (
-          <Table>
+          <Table dense>
             <TableHeader>
               <TableRow>
                 <TableHead>Code</TableHead>

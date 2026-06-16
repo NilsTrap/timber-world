@@ -270,7 +270,7 @@ export function ReferenceOptionsTable({
         </div>
       ) : (
         <div className="rounded-lg border">
-          <Table>
+          <Table dense>
             <TableHeader>
               <TableRow>
                 {organisationId && (

@@ -60,6 +60,7 @@ export {
   TableRow,
   TableCell,
   TableCaption,
+  DENSE_TABLE_CLASS,
 } from "./components/table";
 export { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/tabs";
 export {

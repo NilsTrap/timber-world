@@ -548,7 +548,7 @@ export function PackageSelector({
             )}
 
             <div className="flex-1 overflow-auto rounded-lg border">
-              <Table className="w-max min-w-full">
+              <Table dense className="w-max min-w-full">
                 <TableHeader>
                   <TableRow>
                     {/* Checkbox header */}

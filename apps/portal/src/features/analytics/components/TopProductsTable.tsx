@@ -38,7 +38,7 @@ export function TopProductsTable({ data }: TopProductsTableProps) {
         <CardTitle>Most Selected Products</CardTitle>
       </CardHeader>
       <CardContent>
-        <Table>
+        <Table dense>
           <TableHeader>
             <TableRow>
               <TableHead>#</TableHead>

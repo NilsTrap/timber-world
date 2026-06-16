@@ -382,7 +382,7 @@ export const ProductionInputsTable = forwardRef<ProductionInputsTableHandle, Pro
   return (
     <div>
       <div className="rounded-lg border overflow-x-auto w-fit max-w-full">
-        <Table className="w-auto">
+        <Table dense className="w-auto">
           <TableHeader>
             <TableRow>
               {columns.map((col) => {

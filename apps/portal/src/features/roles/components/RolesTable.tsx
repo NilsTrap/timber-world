@@ -68,7 +68,7 @@ export function RolesTable({ roles, featuresByCategory }: RolesTableProps) {
         </Button>
       </div>
 
-      <Table>
+      <Table dense>
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>

@@ -343,7 +343,7 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
         </div>
       ) : (
         <div className="rounded-lg border">
-          <Table>
+          <Table dense>
             <TableHeader>
               <TableRow>
                 <TableHead>

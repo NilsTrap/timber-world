@@ -210,7 +210,7 @@ export function PlanPackageSelector({
         ) : (
           <div className="flex-1 flex flex-col min-h-0">
             <div className="flex-1 overflow-auto rounded-lg border">
-              <Table className="w-max min-w-full">
+              <Table dense className="w-max min-w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="px-1 w-[40px] sticky left-0 bg-background z-10">

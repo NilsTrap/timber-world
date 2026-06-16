@@ -79,7 +79,7 @@ export function QuoteRequestsTable() {
 
   return (
     <div className="rounded-lg border bg-card">
-      <Table>
+      <Table dense>
         <TableHeader>
           <TableRow>
             <TableHead>Date</TableHead>

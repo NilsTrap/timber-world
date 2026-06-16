@@ -101,7 +101,7 @@ export function OrgUserShipmentsCompletedTable({ shipments }: OrgUserShipmentsCo
 
   return (
     <div className="rounded-md border">
-      <Table>
+      <Table dense>
         <TableHeader>
           <TableRow>
             <TableHead

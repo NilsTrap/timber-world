@@ -460,7 +460,7 @@ export function PriceTable({ data, onDelete, source: sourceProp }: PriceTablePro
       </div>
 
       <div ref={scrollRef} className="rounded-lg border bg-card shadow-sm relative overflow-auto max-h-[80vh]">
-        <table className="w-full caption-bottom text-sm">
+        <table className="w-full caption-bottom text-sm [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs">
           <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card [&_th]:border-b">
             <TableRow>
               {renderHeader("source", "Source")}

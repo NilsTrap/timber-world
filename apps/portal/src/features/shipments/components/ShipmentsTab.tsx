@@ -107,7 +107,7 @@ export function ShipmentsTab({ shipments, canDelete = false }: ShipmentsTabProps
 
   return (
     <div className="rounded-md border">
-      <Table>
+      <Table dense>
         <TableHeader>
           <TableRow>
             <TableHead

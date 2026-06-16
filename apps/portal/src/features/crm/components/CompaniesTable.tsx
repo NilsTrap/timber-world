@@ -334,7 +334,7 @@ export function CompaniesTable({ companies, searchQuery = "" }: CompaniesTablePr
 
       {/* Table */}
       <div className="rounded-lg border bg-card overflow-auto max-h-[calc(100vh-220px)] [&_[data-slot=table-container]]:overflow-visible">
-        <Table>
+        <Table dense>
           <TableHeader className="sticky top-0 bg-card z-10">
             <TableRow>
               <TableHead className="bg-card">

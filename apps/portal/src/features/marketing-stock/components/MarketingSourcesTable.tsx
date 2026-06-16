@@ -78,7 +78,7 @@ export function MarketingSourcesTable() {
       </div>
 
       <div className="rounded-lg border bg-card shadow-sm">
-        <Table>
+        <Table dense>
           <TableHeader>
             <TableRow>
               <TableHead className="w-16">Enabled</TableHead>

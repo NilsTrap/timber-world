@@ -88,7 +88,7 @@ export function AllProductsPage({ products: initialProducts, categories }: Props
       )}
 
       <div className="rounded-lg border bg-card overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs">
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="w-10 px-3 py-2">
