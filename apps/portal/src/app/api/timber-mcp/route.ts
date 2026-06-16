@@ -268,6 +268,7 @@ async function callTool(name: string, args: any, role: Role) {
     }
     case "timber_get_document_data": {
       if (!args?.deal_id || !args?.doc_type) return toolErr("deal_id and doc_type are required");
+      if (args.side != null && args.side !== "sell" && args.side !== "buy") return toolErr("side must be 'sell' or 'buy'");
       const res = await assembleDocumentData(db, SERVICE_ACTOR, {
         orderId: args.deal_id,
         docType: args.doc_type as DocType,
@@ -277,6 +278,7 @@ async function callTool(name: string, args: any, role: Role) {
     }
     case "timber_generate_document": {
       if (!args?.deal_id || !args?.doc_type) return toolErr("deal_id and doc_type are required");
+      if (args.side != null && args.side !== "sell" && args.side !== "buy") return toolErr("side must be 'sell' or 'buy'");
       const res = await generateDocument(db, SERVICE_ACTOR, {
         orderId: args.deal_id,
         docType: args.doc_type as DocType,

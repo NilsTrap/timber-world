@@ -34,7 +34,9 @@ function li(over: Partial<OrderLineItem>): OrderLineItem {
 eq("lineTotal explicit", lineTotalCents({ lineTotalCents: 12345, unitPriceCents: 999, unit: "m3", volumeM3: 2, pieces: null }), 12345);
 eq("lineTotal m3", lineTotalCents({ lineTotalCents: null, unitPriceCents: 45000, unit: "m3", volumeM3: 2, pieces: null }), 90000);
 eq("lineTotal piece", lineTotalCents({ lineTotalCents: null, unitPriceCents: 1000, unit: "piece", volumeM3: null, pieces: "50" }), 50000);
-eq("lineTotal fallback (no qty)", lineTotalCents({ lineTotalCents: null, unitPriceCents: 7000, unit: "m3", volumeM3: null, pieces: null }), 7000);
+eq("lineTotal m3 missing volume → 0 (no phantom qty=1)", lineTotalCents({ lineTotalCents: null, unitPriceCents: 7000, unit: "m3", volumeM3: null, pieces: null }), 0);
+eq("lineTotal piece unparseable → 0", lineTotalCents({ lineTotalCents: null, unitPriceCents: 1000, unit: "piece", volumeM3: null, pieces: "various" }), 0);
+eq("lineTotal package (no qty column) → 0 unless explicit", lineTotalCents({ lineTotalCents: null, unitPriceCents: 5000, unit: "package", volumeM3: null, pieces: null }), 0);
 eq("lineTotal nothing", lineTotalCents({ lineTotalCents: null, unitPriceCents: null, unit: "m3", volumeM3: 2, pieces: null }), 0);
 
 // toDocLine

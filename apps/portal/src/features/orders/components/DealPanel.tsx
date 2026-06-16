@@ -10,6 +10,7 @@ import {
 } from "@timber/ui";
 import type { OrderDealView } from "../services/orderDeals";
 import type { OrderLineItem, DocType, DealSide } from "../services/dealModel";
+import { lineTotalCents } from "../services/documents/assemble";
 import { getOrderDealView, generateOrderDocument, getOrderDocumentUrl } from "../actions/dealActions";
 
 const DOC_TYPE_LABELS: Record<DocType, string> = {
@@ -175,7 +176,8 @@ export function DealPanel({ orderId }: { orderId: string }) {
 function LineItemsTable({ title, items, currency }: { title: string; items: OrderLineItem[]; currency: string }) {
   if (items.length === 0) return null;
   const totalVol = items.reduce((s, li) => s + (li.volumeM3 ?? 0), 0);
-  const totalCents = items.reduce((s, li) => s + (li.lineTotalCents ?? (li.unitPriceCents != null && li.volumeM3 != null ? Math.round(li.unitPriceCents * li.volumeM3) : (li.unitPriceCents ?? 0))), 0);
+  // Same computation as the service/generated document, so row · footer · PDF agree.
+  const totalCents = items.reduce((s, li) => s + lineTotalCents(li), 0);
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold flex items-center gap-1.5"><FileText className="h-4 w-4 text-muted-foreground" />{title}</h3>
@@ -200,7 +202,7 @@ function LineItemsTable({ title, items, currency }: { title: string; items: Orde
               <TableCell className="text-right">{li.pieces ?? "—"}</TableCell>
               <TableCell className="text-right">{li.volumeM3 != null ? li.volumeM3.toFixed(3) : "—"}</TableCell>
               <TableCell className="text-right">{fmtCents(li.unitPriceCents, currency)}</TableCell>
-              <TableCell className="text-right">{fmtCents(li.lineTotalCents, currency)}</TableCell>
+              <TableCell className="text-right">{fmtCents(lineTotalCents(li), currency)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
