@@ -174,6 +174,14 @@ async function callTool(name: string, args: any, role: Role) {
     }
     case "timber_set_deal_refs": {
       if (!args?.deal_id || !Array.isArray(args?.refs)) return toolErr("deal_id and refs[] are required");
+      // Only the client ref types are settable here. 'other' is reserved for the
+      // internal idempotency marker (idem:<key>) — exposing it would let a caller
+      // poison create-deal idempotency, and setExternalRefs never clears 'other'.
+      const ALLOWED_REF_TYPES = ["client_project", "client_job", "client_po"];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (args.refs.some((r: any) => !ALLOWED_REF_TYPES.includes(r?.ref_type))) {
+        return toolErr(`Each ref_type must be one of: ${ALLOWED_REF_TYPES.join(", ")}.`);
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const refs: OrderExternalRef[] = args.refs.map((r: any) => ({ refType: r.ref_type, refValue: r.ref_value, label: r.label ?? null }));
       const res = await setExternalRefs(db, SERVICE_ACTOR, args.deal_id, refs);

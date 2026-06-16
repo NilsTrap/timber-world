@@ -164,13 +164,18 @@ export async function setDealStatus(db: DbClient, _actor: ActorContext, orderId:
 export async function listDealsMissingDocs(db: DbClient, _actor: ActorContext, opts: { docType: DocType; limit?: number }): Promise<ActionResult<OrderDealSummary[]>> {
   const c = db as DbClient;
   const limit = Math.min(opts.limit ?? 100, 200);
-  // Order ids that already HAVE this doc type.
-  const { data: have, error: haveErr } = await c.from("order_documents").select("order_id").eq("doc_type", opts.docType);
+  // Scan the newest 500 deals as candidates, then ask which of THOSE already have
+  // the doc type (scoped by id so the lookup can't hit the PostgREST max-rows cap
+  // and falsely report a deal as missing).
+  const { data: candidates, error } = await c.from("orders").select(ORDER_SELECT).order("created_at", { ascending: false }).limit(500);
+  if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };
+  const rows = candidates ?? [];
+  if (rows.length === 0) return { success: true, data: [] };
+  const ids = rows.map((r: { id: string }) => r.id);
+  const { data: have, error: haveErr } = await c.from("order_documents").select("order_id").eq("doc_type", opts.docType).in("order_id", ids);
   if (haveErr) return { success: false, error: haveErr.message, code: "FETCH_FAILED" };
   const haveIds = new Set<string>((have ?? []).map((r: { order_id: string }) => r.order_id));
-  const { data, error } = await c.from("orders").select(ORDER_SELECT).order("created_at", { ascending: false }).limit(500);
-  if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };
-  const missing = (data ?? []).filter((row: { id: string }) => !haveIds.has(row.id)).slice(0, limit);
+  const missing = rows.filter((row: { id: string }) => !haveIds.has(row.id)).slice(0, limit);
   return { success: true, data: missing.map(mapOrderDealHeader) };
 }
 
