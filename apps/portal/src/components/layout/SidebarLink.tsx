@@ -27,6 +27,7 @@ import {
   Layers,
   ClipboardList,
   BookOpen,
+  Handshake,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -58,9 +59,27 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Layers,
   ClipboardList,
   BookOpen,
+  Handshake,
 };
 
 export type IconName = keyof typeof ICON_MAP;
+
+/** Visual grouping for colour-coding nav areas. Mirrors Sidebar's NavGroup. */
+export type NavGroup = "agent" | "deals";
+
+/** Per-group colours: left accent bar + icon tint + (children) left border. */
+const GROUP_BAR: Record<NavGroup, string> = {
+  agent: "bg-amber-500",
+  deals: "bg-emerald-500",
+};
+const GROUP_ICON: Record<NavGroup, string> = {
+  agent: "text-amber-600",
+  deals: "text-emerald-600",
+};
+export const GROUP_CHILD_BORDER: Record<NavGroup, string> = {
+  agent: "border-amber-500/40",
+  deals: "border-emerald-500/40",
+};
 
 interface SidebarLinkProps {
   href: string;
@@ -69,6 +88,8 @@ interface SidebarLinkProps {
   isCollapsed: boolean;
   /** Optional badge count to display */
   badge?: number;
+  /** Visual group for colour-coding. */
+  group?: NavGroup;
 }
 
 /**
@@ -85,7 +106,7 @@ const LAST_ENTRY_KEYS: Record<string, string> = {
   "/orders": "order-last-entry",
 };
 
-export function SidebarLink({ href, label, iconName, isCollapsed, badge }: SidebarLinkProps) {
+export function SidebarLink({ href, label, iconName, isCollapsed, badge, group }: SidebarLinkProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -140,7 +161,13 @@ export function SidebarLink({ href, label, iconName, isCollapsed, badge }: Sideb
           : "text-foreground/60 hover:bg-accent hover:text-foreground"
       )}
     >
-      <Icon className="h-5 w-5 shrink-0" />
+      {group && (
+        <span
+          aria-hidden
+          className={cn("absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r", GROUP_BAR[group])}
+        />
+      )}
+      <Icon className={cn("h-5 w-5 shrink-0", group && !isActive ? GROUP_ICON[group] : undefined)} />
       {!isCollapsed && <span className="flex-1">{label}</span>}
       {badge !== undefined && badge > 0 && (
         <span

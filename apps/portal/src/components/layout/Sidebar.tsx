@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { Button } from "@timber/ui";
 import { cn } from "@/lib/utils";
-import { SidebarLink, type IconName } from "./SidebarLink";
+import { SidebarLink, GROUP_CHILD_BORDER, type IconName, type NavGroup as LinkNavGroup } from "./SidebarLink";
 import { OrganizationSelector, type OrganizationOption } from "./OrganizationSelector";
 import {
   OrganizationSwitcher,
@@ -14,6 +14,13 @@ import {
 } from "./OrganizationSwitcher";
 import { logoutUser } from "@/features/auth/actions";
 import { getPendingShipmentCount } from "@/features/shipments/actions/getOrgShipments";
+
+/**
+ * Visual grouping for nav items. Used to colour-code distinct areas of the
+ * system so it's clear at a glance what belongs to the agent shop vs the new
+ * deals workflow vs the rest. `undefined` = the default (core system) group.
+ */
+export type NavGroup = "agent" | "deals";
 
 /**
  * Navigation Item Type
@@ -26,6 +33,8 @@ export interface NavItem {
   badge?: number;
   /** Sub-navigation items (shown when parent is active) */
   children?: { href: string; label: string }[];
+  /** Visual group for colour-coding (agent shop, deals, …). */
+  group?: NavGroup;
 }
 
 interface SidebarProps {
@@ -165,9 +174,10 @@ export function Sidebar({
                 iconName={item.iconName}
                 isCollapsed={isCollapsed}
                 badge={item.href === "/shipments" ? shipmentBadge : item.badge}
+                group={item.group}
               />
               {item.children && !isCollapsed && (
-                <SidebarChildren parentHref={item.href} children={item.children} />
+                <SidebarChildren parentHref={item.href} children={item.children} group={item.group} />
               )}
             </li>
           ))}
@@ -221,14 +231,14 @@ export function Sidebar({
   );
 }
 
-function SidebarChildren({ parentHref, children }: { parentHref: string; children: { href: string; label: string }[] }) {
+function SidebarChildren({ parentHref, children, group }: { parentHref: string; children: { href: string; label: string }[]; group?: LinkNavGroup }) {
   const pathname = usePathname();
   const isParentActive = pathname.startsWith(parentHref);
 
   if (!isParentActive) return null;
 
   return (
-    <ul className="ml-8 mt-0.5 space-y-0.5">
+    <ul className={cn("mt-0.5 space-y-0.5", group ? `ml-5 border-l-2 pl-3 ${GROUP_CHILD_BORDER[group]}` : "ml-8")}>
       {children.map((child) => {
         const isActive = child.href === parentHref
           ? pathname === parentHref

@@ -23,10 +23,10 @@ interface ModuleNavItem extends NavItem {
  * Admin users see all items - feature filtering is for org-level access
  */
 const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
-  { href: "/admin/agents", label: "Agents", iconName: "Contact" },
-  { href: "/admin/agent-orders", label: "Agent Orders", iconName: "ClipboardList" },
-  { href: "/admin/agent-manual", label: "Agent Manual", iconName: "BookOpen" },
-  { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", children: [
+  { href: "/admin/agents", label: "Agents", iconName: "Contact", group: "agent" },
+  { href: "/admin/agent-orders", label: "Agent Orders", iconName: "ClipboardList", group: "agent" },
+  { href: "/admin/agent-manual", label: "Agent Manual", iconName: "BookOpen", group: "agent" },
+  { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", group: "agent", children: [
     { href: "/admin/catalog", label: "Categories" },
     { href: "/admin/catalog/products", label: "Products" },
     { href: "/admin/catalog/fields", label: "Fields" },
@@ -38,6 +38,7 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
   { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp" },
   { href: "/admin/crm", label: "CRM", iconName: "Users" },
   { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
+  { href: "/deals", label: "Deals", iconName: "Handshake", group: "deals" },
   { href: "/admin/inventory", label: "Inventory", iconName: "Package" },
   { href: "/orders", label: "Orders", iconName: "ShoppingCart" },
   { href: "/production", label: "Production", iconName: "Factory" },
@@ -53,10 +54,10 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
  */
 function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
   return [
-    { href: "/admin/agents", label: "Agents", iconName: "Contact", requiresModule: "agents.view" },
-    { href: "/admin/agent-orders", label: "Agent Orders", iconName: "ClipboardList", requiresModule: "agent-orders.view" },
-    { href: "/admin/agent-manual", label: "Agent Manual", iconName: "BookOpen", requiresModule: "agent-manual.view" },
-    { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", requiresModule: "catalogue.view", children: [
+    { href: "/admin/agents", label: "Agents", iconName: "Contact", requiresModule: "agents.view", group: "agent" },
+    { href: "/admin/agent-orders", label: "Agent Orders", iconName: "ClipboardList", requiresModule: "agent-orders.view", group: "agent" },
+    { href: "/admin/agent-manual", label: "Agent Manual", iconName: "BookOpen", requiresModule: "agent-manual.view", group: "agent" },
+    { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", requiresModule: "catalogue.view", group: "agent", children: [
       { href: "/admin/catalog", label: "Categories" },
       { href: "/admin/catalog/products", label: "Products" },
       { href: "/admin/catalog/fields", label: "Fields" },
@@ -68,6 +69,7 @@ function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
     { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp", requiresModule: "competitor-pricing.view" },
     { href: "/admin/crm", label: "CRM", iconName: "Users", requiresModule: "crm.view" },
     { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard", requiresModule: "dashboard.view" },
+    { href: "/deals", label: "Deals", iconName: "Handshake", requiresModule: "deals.view", group: "deals" },
     { href: "/inventory", label: "Inventory", iconName: "Package", requiresModule: "inventory.view" },
     { href: "/orders", label: "Orders", iconName: "ShoppingCart", requiresModule: "orders.view" },
     { href: "/production", label: "Production", iconName: "Factory", requiresModule: "production.view" },
