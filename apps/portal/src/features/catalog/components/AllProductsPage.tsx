@@ -72,7 +72,6 @@ export function AllProductsPage({ products: initialProducts, categories }: Props
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">All Products</h1>
           <p className="text-muted-foreground">{products.length} products across {categories.length} categories</p>
         </div>
       </div>

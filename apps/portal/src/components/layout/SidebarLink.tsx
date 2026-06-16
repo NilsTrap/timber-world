@@ -62,6 +62,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   ClipboardList,
   BookOpen,
   Handshake,
+  Store,
 };
 
 export type IconName = keyof typeof ICON_MAP;
@@ -187,5 +188,59 @@ export function SidebarLink({ href, label, iconName, isCollapsed, badge, group }
         </span>
       )}
     </Link>
+  );
+}
+
+interface SidebarSectionHeaderProps {
+  label: string;
+  iconName: IconName;
+  /** Whether the section is expanded (controls the chevron + content visibility). */
+  isOpen: boolean;
+  /** Whether any child route is currently active (tints the header). */
+  isActive: boolean;
+  group?: NavGroup;
+  onClick: () => void;
+}
+
+/**
+ * Expandable section header (e.g. "UK Agent app").
+ *
+ * Styled like a {@link SidebarLink} but it's a toggle button — it groups several
+ * real sections under one collapsible parent instead of navigating itself.
+ */
+export function SidebarSectionHeader({
+  label,
+  iconName,
+  isOpen,
+  isActive,
+  group,
+  onClick,
+}: SidebarSectionHeaderProps) {
+  const Icon = ICON_MAP[iconName] || LayoutDashboard;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={isOpen}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors relative",
+        isActive
+          ? "text-foreground font-medium"
+          : "text-foreground/60 hover:bg-accent hover:text-foreground"
+      )}
+    >
+      {group && (
+        <span
+          aria-hidden
+          className={cn("absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r", GROUP_BAR[group])}
+        />
+      )}
+      <Icon className={cn("h-5 w-5 shrink-0", group ? GROUP_ICON[group] : undefined)} />
+      <span className="flex-1 text-left">{label}</span>
+      <ChevronDown
+        aria-hidden
+        className={cn("h-4 w-4 shrink-0 transition-transform", isOpen ? "" : "-rotate-90")}
+      />
+    </button>
   );
 }

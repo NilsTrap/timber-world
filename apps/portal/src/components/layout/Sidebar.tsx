@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { Button } from "@timber/ui";
 import { cn } from "@/lib/utils";
-import { SidebarLink, GROUP_CHILD_BORDER, type IconName, type NavGroup as LinkNavGroup } from "./SidebarLink";
+import { SidebarLink, SidebarSectionHeader, GROUP_CHILD_BORDER, type IconName, type NavGroup as LinkNavGroup } from "./SidebarLink";
 import { OrganizationSelector, type OrganizationOption } from "./OrganizationSelector";
 import {
   OrganizationSwitcher,
@@ -23,6 +23,20 @@ import { getPendingShipmentCount } from "@/features/shipments/actions/getOrgShip
 export type NavGroup = "agent" | "deals" | "settings";
 
 /**
+ * Sub-navigation item.
+ *
+ * - For a normal parent (e.g. Settings) these render as small text links shown
+ *   only when the parent route is active; `iconName` is omitted.
+ * - For a `collapsible` section (e.g. "UK Agent app") each child is a real
+ *   section rendered as a full {@link SidebarLink}; `iconName` is required.
+ */
+export interface NavChild {
+  href: string;
+  label: string;
+  iconName?: IconName;
+}
+
+/**
  * Navigation Item Type
  */
 export interface NavItem {
@@ -32,9 +46,15 @@ export interface NavItem {
   /** Optional badge count to display */
   badge?: number;
   /** Sub-navigation items (shown when parent is active) */
-  children?: { href: string; label: string }[];
+  children?: NavChild[];
   /** Visual group for colour-coding (agent shop, deals, …). */
   group?: NavGroup;
+  /**
+   * Render as an expandable section header instead of a link. The `children`
+   * are full nav links (each with its own `iconName`), collapsed/expanded
+   * under one parent (e.g. "UK Agent app"). `href` is used only as a key.
+   */
+  collapsible?: boolean;
 }
 
 interface SidebarProps {
@@ -166,21 +186,27 @@ export function Sidebar({
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-2" aria-label="Main navigation">
         <ul className="space-y-1">
-          {navItems.map((item) => (
-            <li key={item.href}>
-              <SidebarLink
-                href={item.href}
-                label={item.label}
-                iconName={item.iconName}
-                isCollapsed={isCollapsed}
-                badge={item.href === "/shipments" ? shipmentBadge : item.badge}
-                group={item.group}
-              />
-              {item.children && !isCollapsed && (
-                <SidebarChildren parentHref={item.href} children={item.children} group={item.group} />
-              )}
-            </li>
-          ))}
+          {navItems.map((item) =>
+            item.collapsible ? (
+              <li key={item.href}>
+                <SidebarSection item={item} isCollapsed={isCollapsed} />
+              </li>
+            ) : (
+              <li key={item.href}>
+                <SidebarLink
+                  href={item.href}
+                  label={item.label}
+                  iconName={item.iconName}
+                  isCollapsed={isCollapsed}
+                  badge={item.href === "/shipments" ? shipmentBadge : item.badge}
+                  group={item.group}
+                />
+                {item.children && !isCollapsed && (
+                  <SidebarChildren parentHref={item.href} children={item.children} group={item.group} />
+                )}
+              </li>
+            )
+          )}
         </ul>
       </nav>
 
@@ -228,6 +254,94 @@ export function Sidebar({
         </Button>
       </div>
     </aside>
+  );
+}
+
+const SECTION_OPEN_PREFIX = "sidebar-section-open:";
+
+/**
+ * Collapsible nav section (e.g. "UK Agent app").
+ *
+ * Groups several real sections under one expandable parent. Open/closed state is
+ * persisted to localStorage (default open) and force-opened whenever a child
+ * route is active. When the whole sidebar is collapsed to the icon rail, the
+ * children are shown as flat icons so they stay reachable.
+ */
+function SidebarSection({ item, isCollapsed }: { item: NavItem; isCollapsed: boolean }) {
+  const pathname = usePathname();
+  const children = item.children ?? [];
+  const isChildActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const anyChildActive = children.some((child) => isChildActive(child.href));
+
+  const storageKey = SECTION_OPEN_PREFIX + item.href;
+  const [isOpen, setIsOpen] = useState(true);
+
+  // Load persisted open/closed state (defaults to open).
+  useEffect(() => {
+    const stored = localStorage.getItem(storageKey);
+    if (stored !== null) setIsOpen(stored === "true");
+  }, [storageKey]);
+
+  // Always reveal the active section when navigating into one of its children.
+  useEffect(() => {
+    if (anyChildActive) setIsOpen(true);
+  }, [anyChildActive]);
+
+  const toggle = () => {
+    const next = !isOpen;
+    setIsOpen(next);
+    localStorage.setItem(storageKey, String(next));
+  };
+
+  // Icon rail: render the children as flat icons (no expandable header fits).
+  if (isCollapsed) {
+    return (
+      <div className="space-y-1">
+        {children.map((child) => (
+          <SidebarLink
+            key={child.href}
+            href={child.href}
+            label={child.label}
+            iconName={child.iconName ?? item.iconName}
+            isCollapsed
+            group={item.group}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <SidebarSectionHeader
+        label={item.label}
+        iconName={item.iconName}
+        isOpen={isOpen}
+        isActive={anyChildActive}
+        group={item.group}
+        onClick={toggle}
+      />
+      {isOpen && (
+        <ul
+          className={cn(
+            "mt-0.5 space-y-0.5",
+            item.group ? `ml-5 border-l-2 pl-3 ${GROUP_CHILD_BORDER[item.group]}` : "ml-3"
+          )}
+        >
+          {children.map((child) => (
+            <li key={child.href}>
+              <SidebarLink
+                href={child.href}
+                label={child.label}
+                iconName={child.iconName ?? item.iconName}
+                isCollapsed={false}
+                group={item.group}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

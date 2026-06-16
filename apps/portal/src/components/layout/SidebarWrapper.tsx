@@ -5,10 +5,21 @@ import {
   getUserEnabledModules,
   type UserRole,
 } from "@/lib/auth";
-import { Sidebar, type NavItem } from "./Sidebar";
+import { Sidebar, type NavItem, type NavChild } from "./Sidebar";
 import { getActiveOrganisations } from "@/features/shipments/actions/getActiveOrganisations";
 import type { OrganizationOption } from "./OrganizationSelector";
 import type { OrganizationSwitcherOption } from "./OrganizationSwitcher";
+
+/**
+ * Sub-nav child with an optional module requirement (collapsible-section
+ * children carry their own gating so each can be hidden independently).
+ */
+interface ModuleNavChild extends NavChild {
+  /** Module code required to show this child (null/undefined = always show) */
+  requiresModule?: string | null;
+  /** Show when the user has ANY of these modules (OR). Takes precedence over requiresModule. */
+  requiresAnyModule?: string[];
+}
 
 /**
  * Extended NavItem with optional module requirement
@@ -18,21 +29,28 @@ interface ModuleNavItem extends NavItem {
   requiresModule?: string | null;
   /** Show when the user has ANY of these modules (OR). Takes precedence over requiresModule. */
   requiresAnyModule?: string[];
+  /** Children that may each carry their own module gate (collapsible sections). */
+  children?: ModuleNavChild[];
 }
+
+/** Modules whose access implies the "UK Agent app" section should appear. */
+const AGENT_APP_MODULES = ["agents.view", "agent-orders.view", "agent-manual.view", "catalogue.view"];
+
+/** Children of the "UK Agent app" collapsible section (admin = no gating). */
+const AGENT_APP_CHILDREN: ModuleNavChild[] = [
+  { href: "/admin/agents", label: "Agents", iconName: "Contact", requiresModule: "agents.view" },
+  { href: "/admin/agent-orders", label: "Agent Orders", iconName: "ClipboardList", requiresModule: "agent-orders.view" },
+  { href: "/admin/agent-manual", label: "Agent Manual", iconName: "BookOpen", requiresModule: "agent-manual.view" },
+  { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", requiresModule: "catalogue.view" },
+];
 
 /**
  * Navigation items for Admin users
  * Admin users see all items - feature filtering is for org-level access
  */
 const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
-  { href: "/admin/agents", label: "Agents", iconName: "Contact", group: "agent" },
-  { href: "/admin/agent-orders", label: "Agent Orders", iconName: "ClipboardList", group: "agent" },
-  { href: "/admin/agent-manual", label: "Agent Manual", iconName: "BookOpen", group: "agent" },
-  { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", group: "agent", children: [
-    { href: "/admin/catalog", label: "Categories" },
-    { href: "/admin/catalog/products", label: "Products" },
-    { href: "/admin/catalog/currencies", label: "Currencies" },
-  ]},
+  { href: "agent-app", label: "UK Agent app", iconName: "Store", group: "agent", collapsible: true,
+    children: AGENT_APP_CHILDREN },
   { href: "/admin/marketing", label: "CMS", iconName: "Image" },
   { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp" },
   { href: "/admin/crm", label: "CRM", iconName: "Users" },
@@ -57,14 +75,8 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
  */
 function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
   return [
-    { href: "/admin/agents", label: "Agents", iconName: "Contact", requiresModule: "agents.view", group: "agent" },
-    { href: "/admin/agent-orders", label: "Agent Orders", iconName: "ClipboardList", requiresModule: "agent-orders.view", group: "agent" },
-    { href: "/admin/agent-manual", label: "Agent Manual", iconName: "BookOpen", requiresModule: "agent-manual.view", group: "agent" },
-    { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", requiresModule: "catalogue.view", group: "agent", children: [
-      { href: "/admin/catalog", label: "Categories" },
-      { href: "/admin/catalog/products", label: "Products" },
-      { href: "/admin/catalog/currencies", label: "Currencies" },
-    ]},
+    { href: "agent-app", label: "UK Agent app", iconName: "Store", group: "agent", collapsible: true,
+      requiresAnyModule: AGENT_APP_MODULES, children: AGENT_APP_CHILDREN },
     { href: "/admin/marketing", label: "CMS", iconName: "Image", requiresModule: "marketing.view" },
     { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp", requiresModule: "competitor-pricing.view" },
     { href: "/admin/crm", label: "CRM", iconName: "Users", requiresModule: "crm.view" },
@@ -104,19 +116,37 @@ function moduleMatches(required: string, enabledModules: Set<string>): boolean {
   return false;
 }
 
+/** Whether a single nav item/child is visible given its module requirement(s). */
+function isVisible(
+  req: { requiresModule?: string | null; requiresAnyModule?: string[] },
+  enabledModules: Set<string>
+): boolean {
+  // OR requirement: show when the user has ANY of the listed modules
+  if (req.requiresAnyModule?.length) {
+    return req.requiresAnyModule.some((m) => moduleMatches(m, enabledModules));
+  }
+  // No module requirement = always show
+  if (!req.requiresModule) return true;
+  return moduleMatches(req.requiresModule, enabledModules);
+}
+
 function filterNavItemsByModules(
   items: ModuleNavItem[],
   enabledModules: Set<string>
 ): NavItem[] {
-  return items.filter((item) => {
-    // OR requirement: show when the user has ANY of the listed modules
-    if (item.requiresAnyModule?.length) {
-      return item.requiresAnyModule.some((m) => moduleMatches(m, enabledModules));
+  const result: NavItem[] = [];
+  for (const item of items) {
+    // Collapsible sections: filter children individually; hide the whole
+    // section when the user can reach none of them.
+    if (item.collapsible && item.children) {
+      const children = item.children.filter((child) => isVisible(child, enabledModules));
+      if (children.length === 0) continue;
+      result.push({ ...item, children });
+      continue;
     }
-    // No module requirement = always show
-    if (!item.requiresModule) return true;
-    return moduleMatches(item.requiresModule, enabledModules);
-  });
+    if (isVisible(item, enabledModules)) result.push(item);
+  }
+  return result;
 }
 
 /**

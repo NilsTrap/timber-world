@@ -65,7 +65,6 @@ export function CurrenciesPage({ currencies: initial }: Props) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Currencies</h1>
           <p className="text-muted-foreground">EUR is the base. Other currencies are derived — press &quot;Update prices&quot; to fetch the latest ECB rate and recompute all catalog prices with charm rounding.</p>
         </div>
         {!showAdd && (

@@ -46,7 +46,6 @@ export function CatalogPageContent({ categories, pricingUnits }: Props) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Product Catalog</h1>
           <p className="text-muted-foreground">Manage product categories, fields, and variants</p>
         </div>
         <Button onClick={() => setShowForm(!showForm)}>
