@@ -137,13 +137,13 @@ export async function crmGetOrganization(crmOrgId: string): Promise<CrmResult<un
  * disabled) must not fail the Timber org operation; the org just stays unsynced.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function crmSyncOrg(db: any, org: OrgCardForCrm & { crmOrgId: string | null }): Promise<void> {
+export async function crmSyncOrg(db: any, org: OrgCardForCrm & { crmOrgId: string | null }): Promise<string | null> {
   const res = await crmUpsertOrganization(org, org.crmOrgId);
   if (!res.success) {
     console.warn(`[oscarCrm] sync failed for org ${org.timberOrgId}: ${res.error}`);
-    return;
+    return null;
   }
-  if (res.skipped) return; // CRM disabled — nothing to persist
+  if (res.skipped) return null; // CRM disabled — nothing to persist
   // Supabase returns { error } rather than throwing, so check it explicitly
   // (a swallowed error here would re-create the org in the CRM next time).
   try {
@@ -155,4 +155,5 @@ export async function crmSyncOrg(db: any, org: OrgCardForCrm & { crmOrgId: strin
   } catch (e) {
     console.warn(`[oscarCrm] storing crm_org_id threw for org ${org.timberOrgId}: ${(e as Error).message}`);
   }
+  return res.data.crmOrgId;
 }

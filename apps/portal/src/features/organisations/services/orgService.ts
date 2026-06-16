@@ -134,6 +134,8 @@ export async function createOrg(db: DbClient, input: CreateOrgInput): Promise<Ac
   if (error || !data) return { success: false, error: error?.message ?? "Failed to create organisation", code: "CREATE_FAILED" };
 
   const org = mapOrg(data);
-  await crmSyncOrg(db, { ...cardFromOrg(org), crmOrgId: null });
+  // Write-through to the Oscar CRM (best-effort); reflect the stored id in the return.
+  const crmId = await crmSyncOrg(db, { ...cardFromOrg(org), crmOrgId: null });
+  if (crmId) org.crmOrgId = crmId;
   return { success: true, data: org };
 }
