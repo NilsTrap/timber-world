@@ -118,6 +118,9 @@ export async function getOrderDeal(db: DbClient, _actor: ActorContext, orderId: 
   return { success: true, data: view };
 }
 
+/** Valid `orders.status` enum values (order_status). Used to guard the filter. */
+export const ORDER_STATUSES = ["draft", "pending", "confirmed", "in_progress", "shipped", "completed", "loaded", "cancelled"] as const;
+
 export interface ListOrderDealsFilters {
   status?: string;
   productGroup?: string;
@@ -126,6 +129,11 @@ export interface ListOrderDealsFilters {
 
 /** List deals (orders) newest-first, header only. Filter by status / product group. */
 export async function listDeals(db: DbClient, _actor: ActorContext, filters: ListOrderDealsFilters = {}): Promise<ActionResult<OrderDealSummary[]>> {
+  // Guard the status filter: passing a value outside the enum makes Postgres
+  // raise an enum-cast error, so validate up front with a helpful message.
+  if (filters.status && !(ORDER_STATUSES as readonly string[]).includes(filters.status)) {
+    return { success: false, error: `Invalid status "${filters.status}". Valid: ${ORDER_STATUSES.join(", ")}.`, code: "VALIDATION_ERROR" };
+  }
   const c = db as DbClient;
   let query = c.from("orders").select(ORDER_SELECT).order("created_at", { ascending: false });
   if (filters.status) query = query.eq("status", filters.status);
@@ -260,10 +268,17 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
     if (existing?.order_id) return getOrderDeal(db, actor, existing.order_id);
   }
 
+  // `orders.name` is NOT NULL with no DB default — deals created via MCP often
+  // omit a name, so derive a sensible non-null label (customer → product group → generic).
+  const dealName =
+    input.name ??
+    input.customerNameForCode ??
+    (input.productGroup ? `${input.productGroup} deal` : "Untitled deal");
+
   const { data: row, error } = await c
     .from("orders")
     .insert({
-      name: input.name ?? null,
+      name: dealName,
       deal_kind: input.dealKind ?? "buy_sell",
       product_group: input.productGroup ?? null,
       customer_organisation_id: input.customerOrganisationId ?? null,

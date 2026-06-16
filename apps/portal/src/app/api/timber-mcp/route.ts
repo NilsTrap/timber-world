@@ -66,7 +66,7 @@ const TOOLS: ToolDef[] = [
     inputSchema: {
       type: "object",
       properties: {
-        status: { type: "string", description: "Filter by status: draft, quoted, confirmed, in_progress, shipped, completed, cancelled." },
+        status: { type: "string", description: "Filter by status: draft, pending, confirmed, in_progress, shipped, loaded, completed, cancelled." },
         product_group: { type: "string", description: "Filter by product group, e.g. 'malka' or 'boards'." },
         limit: { type: "integer", description: "Max rows (default 100, cap 200)." },
       },
@@ -90,6 +90,7 @@ const TOOLS: ToolDef[] = [
     inputSchema: {
       type: "object",
       properties: {
+        name: { type: "string", description: "Short deal name/label (defaults to the customer or product group if omitted)." },
         product_group: { type: "string", description: "Product group, e.g. 'malka', 'boards'." },
         currency: { type: "string", enum: ["EUR", "GBP", "USD"], description: "Deal currency (default EUR)." },
         customer_name: { type: "string", description: "Buyer name (used for the deal code when no org row exists)." },
@@ -209,6 +210,7 @@ async function callTool(name: string, args: any, role: Role) {
     }
     case "timber_create_deal": {
       const res = await createDeal(db, SERVICE_ACTOR, {
+        name: args?.name ?? null,
         productGroup: args?.product_group ?? null,
         currency: args?.currency,
         customerNameForCode: args?.customer_name ?? null,
