@@ -21,30 +21,38 @@ const org: OrgCardForCrm = {
   isCustomer: true, isManufacturer: false, isProducer: true,
 };
 
+// Field mapping to the confirmed Oscar CRM contract (reg_number/bank_iban/bank_swift/external_id/role flags)
 const p = orgToCrmPayload(org);
 eq("name", p.name, "Somms Ltd");
-eq("code", p.code, "SOM");
+eq("external_id = Timber code", p.external_id, "SOM");
 eq("legal_address", p.legal_address, "1 High St");
 eq("vat_number", p.vat_number, "GB123");
-eq("bank_swift_code", p.bank_swift_code, "BARC");
-eq("roles filter nulls (customer+producer)", p.roles, ["customer", "producer"]);
-eq("external_ref back-link", p.external_ref, { system: "timber", org_id: "org-1", code: "SOM" });
+eq("reg_number (not registration_number)", p.reg_number, "R1");
+eq("bank_iban (not bank_account_number)", p.bank_iban, "GB00");
+eq("bank_swift (not bank_swift_code)", p.bank_swift, "BARC");
+eq("is_customer flag", p.is_customer, true);
+eq("is_manufacturer flag", p.is_manufacturer, false);
+eq("is_producer flag", p.is_producer, true);
+ok("no legacy 'roles' array", !("roles" in p));
+ok("no legacy 'code' field", !("code" in p));
+ok("business_id NOT in pure payload (added by caller)", !("business_id" in p));
 
-const empty = orgToCrmPayload({ ...org, isCustomer: false, isManufacturer: false, isProducer: false, vatNumber: null });
-eq("roles empty when no flags", empty.roles, []);
+const empty = orgToCrmPayload({ ...org, vatNumber: null });
 eq("null vat passes through", empty.vat_number, null);
 
-// gating — depends on env
-const url = process.env.OSCAR_CRM_URL, tok = process.env.OSCAR_CRM_TOKEN;
-delete process.env.OSCAR_CRM_URL; delete process.env.OSCAR_CRM_TOKEN;
+// gating — requires URL + TOKEN + BUSINESS_ID
+const url = process.env.OSCAR_CRM_URL, tok = process.env.OSCAR_CRM_TOKEN, biz = process.env.OSCAR_BUSINESS_ID;
+delete process.env.OSCAR_CRM_URL; delete process.env.OSCAR_CRM_TOKEN; delete process.env.OSCAR_BUSINESS_ID;
 ok("disabled when env unset", isCrmEnabled() === false);
 process.env.OSCAR_CRM_URL = "https://timber.agentwave.app/api/crm-mcp";
-ok("still disabled with only URL", isCrmEnabled() === false);
-process.env.OSCAR_CRM_TOKEN = "secret";
-ok("enabled when URL + token set", isCrmEnabled() === true);
+process.env.OSCAR_CRM_TOKEN = "mcp_x_secret";
+ok("still disabled without business_id", isCrmEnabled() === false);
+process.env.OSCAR_BUSINESS_ID = "timber";
+ok("enabled when all three set", isCrmEnabled() === true);
 // restore
-if (url === undefined) delete process.env.OSCAR_CRM_URL; else process.env.OSCAR_CRM_URL = url;
-if (tok === undefined) delete process.env.OSCAR_CRM_TOKEN; else process.env.OSCAR_CRM_TOKEN = tok;
+for (const [k, v] of [["OSCAR_CRM_URL", url], ["OSCAR_CRM_TOKEN", tok], ["OSCAR_BUSINESS_ID", biz]] as const) {
+  if (v === undefined) delete process.env[k]; else process.env[k] = v;
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;

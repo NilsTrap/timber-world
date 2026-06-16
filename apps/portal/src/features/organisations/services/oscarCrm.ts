@@ -39,36 +39,38 @@ export type CrmResult<T> =
   | { success: true; skipped: false; data: T }
   | { success: false; error: string };
 
-/** True when the Oscar CRM endpoint + token are configured (env-gated). */
+/**
+ * True when the Oscar CRM endpoint + token + business_id are all configured.
+ * business_id is required on every CRM write (the instance is multi-business),
+ * so we gate on all three to avoid firing a partial-config request.
+ */
 export function isCrmEnabled(): boolean {
-  return !!(process.env.OSCAR_CRM_URL && process.env.OSCAR_CRM_TOKEN);
+  return !!(process.env.OSCAR_CRM_URL && process.env.OSCAR_CRM_TOKEN && process.env.OSCAR_BUSINESS_ID);
 }
 
 /**
- * Pure: map a Timber org/company-card to the CRM create/update payload. Kept
- * pure (no env/IO) so it unit-tests; the field names track the agreed contract.
+ * Pure: map a Timber org/company-card to the Oscar CRM org payload. Field names
+ * track the confirmed contract (oscar-app dev agent, 2026-06-16): reg_number,
+ * bank_iban, bank_swift, and external_id = the Timber org code (Oscar dedups on
+ * it). `business_id` is added by the caller from env (kept out of this pure fn).
  */
 export function orgToCrmPayload(org: OrgCardForCrm): Record<string, unknown> {
   return {
     name: org.name,
-    code: org.code,
+    external_id: org.code, // Timber org code → Oscar back-ref / dedup
     legal_address: org.legalAddress,
     vat_number: org.vatNumber,
-    registration_number: org.registrationNumber,
+    reg_number: org.registrationNumber,
     country: org.country,
     phone: org.phone,
     email: org.email,
     website: org.website,
     bank_name: org.bankName,
-    bank_account_number: org.bankAccountNumber,
-    bank_swift_code: org.bankSwiftCode,
-    roles: [
-      org.isCustomer ? "customer" : null,
-      org.isManufacturer ? "manufacturer" : null,
-      org.isProducer ? "producer" : null,
-    ].filter(Boolean),
-    // Back-reference for dedupe/idempotency on the Oscar side.
-    external_ref: { system: "timber", org_id: org.timberOrgId, code: org.code },
+    bank_iban: org.bankAccountNumber,
+    bank_swift: org.bankSwiftCode,
+    is_customer: org.isCustomer,
+    is_manufacturer: org.isManufacturer,
+    is_producer: org.isProducer,
   };
 }
 
@@ -77,14 +79,9 @@ let rpcId = 0;
 async function callOscarCrm(tool: string, args: Record<string, unknown>): Promise<unknown> {
   const url = process.env.OSCAR_CRM_URL as string;
   const token = process.env.OSCAR_CRM_TOKEN as string;
-  const businessId = process.env.OSCAR_BUSINESS_ID; // optional (dedicated instance may not need it)
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(businessId ? { "X-Business-Id": businessId } : {}),
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method: "tools/call", params: { name: tool, arguments: args } }),
   });
   if (!res.ok) throw new Error(`Oscar CRM ${tool} HTTP ${res.status}`);
@@ -99,7 +96,8 @@ async function callOscarCrm(tool: string, args: Record<string, unknown>): Promis
 export async function crmUpsertOrganization(org: OrgCardForCrm, crmOrgId: string | null): Promise<CrmResult<{ crmOrgId: string }>> {
   if (!isCrmEnabled()) return { success: true, skipped: true };
   try {
-    const payload = orgToCrmPayload(org);
+    const businessId = process.env.OSCAR_BUSINESS_ID as string;
+    const payload = { ...orgToCrmPayload(org), business_id: businessId };
     const result = crmOrgId
       ? ((await callOscarCrm("crm_update_organization", { id: crmOrgId, ...payload })) as { id?: string } | null)
       : ((await callOscarCrm("crm_create_organization", payload)) as { id?: string } | null);
@@ -115,7 +113,7 @@ export async function crmUpsertOrganization(org: OrgCardForCrm, crmOrgId: string
 export async function crmListOrganizations(query?: string, limit = 50): Promise<CrmResult<unknown[]>> {
   if (!isCrmEnabled()) return { success: true, skipped: true };
   try {
-    const data = (await callOscarCrm("crm_list_organizations", { query: query ?? undefined, limit })) as unknown[] | null;
+    const data = (await callOscarCrm("crm_list_organizations", { business_id: process.env.OSCAR_BUSINESS_ID, query: query ?? undefined, limit })) as unknown[] | null;
     return { success: true, skipped: false, data: data ?? [] };
   } catch (e) {
     return { success: false, error: (e as Error).message };
