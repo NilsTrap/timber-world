@@ -65,20 +65,23 @@ const ICON_MAP: Record<string, LucideIcon> = {
 export type IconName = keyof typeof ICON_MAP;
 
 /** Visual grouping for colour-coding nav areas. Mirrors Sidebar's NavGroup. */
-export type NavGroup = "agent" | "deals";
+export type NavGroup = "agent" | "deals" | "settings";
 
 /** Per-group colours: left accent bar + icon tint + (children) left border. */
 const GROUP_BAR: Record<NavGroup, string> = {
   agent: "bg-amber-500",
   deals: "bg-emerald-500",
+  settings: "bg-slate-400",
 };
 const GROUP_ICON: Record<NavGroup, string> = {
   agent: "text-amber-600",
   deals: "text-emerald-600",
+  settings: "text-slate-500",
 };
 export const GROUP_CHILD_BORDER: Record<NavGroup, string> = {
   agent: "border-amber-500/40",
   deals: "border-emerald-500/40",
+  settings: "border-slate-400/40",
 };
 
 interface SidebarLinkProps {

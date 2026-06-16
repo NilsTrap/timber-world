@@ -72,7 +72,7 @@ export async function getAllFields(): Promise<ActionResult<CatalogField[]>> {
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
@@ -102,7 +102,7 @@ export async function saveField(input: SaveFieldInput): Promise<ActionResult<Cat
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
@@ -123,6 +123,7 @@ export async function saveField(input: SaveFieldInput): Promise<ActionResult<Cat
         .single();
       if (error) return { success: false, error: error.message };
       revalidatePath("/admin/catalog");
+      revalidatePath("/admin/settings/fields");
       return { success: true, data: toGlobalField(data) };
     }
   }
@@ -148,6 +149,7 @@ export async function saveField(input: SaveFieldInput): Promise<ActionResult<Cat
   }
 
   revalidatePath("/admin/catalog");
+  revalidatePath("/admin/settings/fields");
   return { success: true, data: toGlobalField(result.data) };
 }
 
@@ -157,7 +159,7 @@ export async function deleteField(id: string): Promise<ActionResult<null>> {
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
@@ -174,6 +176,7 @@ export async function deleteField(id: string): Promise<ActionResult<null>> {
   const { error } = await (supabase as any).from("catalog_fields").delete().eq("id", id);
   if (error) return { success: false, error: error.message };
   revalidatePath("/admin/catalog");
+  revalidatePath("/admin/settings/fields");
   return { success: true, data: null };
 }
 
@@ -185,7 +188,7 @@ export async function getCategoryFields(categoryId: string): Promise<ActionResul
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
@@ -205,7 +208,7 @@ export async function saveFieldAssignment(input: SaveFieldAssignmentInput): Prom
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
@@ -233,6 +236,7 @@ export async function saveFieldAssignment(input: SaveFieldAssignmentInput): Prom
   }
 
   revalidatePath("/admin/catalog");
+  revalidatePath("/admin/settings/fields");
   return { success: true, data: {
     id: result.data.id,
     categoryId: result.data.category_id,
@@ -252,13 +256,14 @@ export async function removeFieldAssignment(id: string): Promise<ActionResult<nu
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
   const { error } = await (supabase as any).from("catalog_category_field_assignments").delete().eq("id", id);
   if (error) return { success: false, error: error.message };
   revalidatePath("/admin/catalog");
+  revalidatePath("/admin/settings/fields");
   return { success: true, data: null };
 }
 
@@ -270,7 +275,7 @@ export async function saveFieldOption(input: SaveFieldOptionInput): Promise<Acti
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
@@ -297,6 +302,7 @@ export async function saveFieldOption(input: SaveFieldOptionInput): Promise<Acti
   }
 
   revalidatePath("/admin/catalog");
+  revalidatePath("/admin/settings/fields");
   return { success: true, data: toOption(result.data) };
 }
 
@@ -306,12 +312,13 @@ export async function deleteFieldOption(id: string): Promise<ActionResult<null>>
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
   const { error } = await (supabase as any).from("catalog_field_options").delete().eq("id", id);
   if (error) return { success: false, error: error.message };
   revalidatePath("/admin/catalog");
+  revalidatePath("/admin/settings/fields");
   return { success: true, data: null };
 }

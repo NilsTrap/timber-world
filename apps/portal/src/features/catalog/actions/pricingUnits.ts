@@ -23,7 +23,7 @@ export async function getPricingUnits(): Promise<ActionResult<PricingUnit[]>> {
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
@@ -52,7 +52,7 @@ export async function savePricingUnit(input: SavePricingUnitInput): Promise<Acti
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
@@ -77,7 +77,7 @@ export async function savePricingUnit(input: SavePricingUnitInput): Promise<Acti
     return { success: false, error: result.error.message };
   }
 
-  revalidatePath("/admin/catalog/pricing-units");
+  revalidatePath("/admin/settings/pricing-units");
   return { success: true, data: toUnit(result.data) };
 }
 
@@ -87,7 +87,7 @@ export async function deletePricingUnit(id: string): Promise<ActionResult<null>>
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
@@ -96,6 +96,6 @@ export async function deletePricingUnit(id: string): Promise<ActionResult<null>>
     if (error.code === "23503") return { success: false, error: "Cannot delete: a category uses this pricing unit.", code: "IN_USE" };
     return { success: false, error: error.message };
   }
-  revalidatePath("/admin/catalog/pricing-units");
+  revalidatePath("/admin/settings/pricing-units");
   return { success: true, data: null };
 }

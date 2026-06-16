@@ -20,7 +20,7 @@ import { getPendingShipmentCount } from "@/features/shipments/actions/getOrgShip
  * system so it's clear at a glance what belongs to the agent shop vs the new
  * deals workflow vs the rest. `undefined` = the default (core system) group.
  */
-export type NavGroup = "agent" | "deals";
+export type NavGroup = "agent" | "deals" | "settings";
 
 /**
  * Navigation Item Type

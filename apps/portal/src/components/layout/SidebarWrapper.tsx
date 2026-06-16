@@ -29,9 +29,6 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
   { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", group: "agent", children: [
     { href: "/admin/catalog", label: "Categories" },
     { href: "/admin/catalog/products", label: "Products" },
-    { href: "/admin/catalog/fields", label: "Fields" },
-    { href: "/admin/catalog/packaging", label: "Packaging" },
-    { href: "/admin/catalog/pricing-units", label: "Pricing Units" },
     { href: "/admin/catalog/currencies", label: "Currencies" },
   ]},
   { href: "/admin/marketing", label: "CMS", iconName: "Image" },
@@ -43,6 +40,11 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
   { href: "/orders", label: "Orders", iconName: "ShoppingCart" },
   { href: "/production", label: "Production", iconName: "Factory" },
   { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText" },
+  { href: "/admin/settings", label: "Settings", iconName: "Settings", group: "settings", children: [
+    { href: "/admin/settings/fields", label: "Fields" },
+    { href: "/admin/settings/packaging", label: "Packaging" },
+    { href: "/admin/settings/pricing-units", label: "Pricing Units" },
+  ]},
   { href: "/admin/shipments", label: "Shipments", iconName: "Truck" },
   { href: "/admin/uk-staircase-pricing", label: "UK Staircase Pricing", iconName: "PoundSterling" },
   { href: "/admin/organisations", label: "Users", iconName: "Users2" },
@@ -60,9 +62,6 @@ function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
     { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", requiresModule: "catalogue.view", group: "agent", children: [
       { href: "/admin/catalog", label: "Categories" },
       { href: "/admin/catalog/products", label: "Products" },
-      { href: "/admin/catalog/fields", label: "Fields" },
-      { href: "/admin/catalog/packaging", label: "Packaging" },
-      { href: "/admin/catalog/pricing-units", label: "Pricing Units" },
       { href: "/admin/catalog/currencies", label: "Currencies" },
     ]},
     { href: "/admin/marketing", label: "CMS", iconName: "Image", requiresModule: "marketing.view" },
@@ -74,6 +73,11 @@ function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
     { href: "/orders", label: "Orders", iconName: "ShoppingCart", requiresModule: "orders.view" },
     { href: "/production", label: "Production", iconName: "Factory", requiresModule: "production.view" },
     { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText", requiresModule: "quotes.view" },
+    { href: "/admin/settings", label: "Settings", iconName: "Settings", requiresModule: "settings.view", group: "settings", children: [
+      { href: "/admin/settings/fields", label: "Fields" },
+      { href: "/admin/settings/packaging", label: "Packaging" },
+      { href: "/admin/settings/pricing-units", label: "Pricing Units" },
+    ]},
     { href: "/shipments", label: "Shipments", iconName: "Truck", badge: pendingShipmentCount, requiresModule: "shipments.view" },
     { href: "/admin/uk-staircase-pricing", label: "UK Staircase Pricing", iconName: "PoundSterling", requiresModule: "uk-staircase-pricing.view" },
     { href: "/admin/organisations", label: "Users", iconName: "Users2", requiresModule: "organizations.view" },

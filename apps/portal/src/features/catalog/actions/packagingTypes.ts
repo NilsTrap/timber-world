@@ -31,7 +31,7 @@ export async function getPackagingTypes(): Promise<ActionResult<PackagingType[]>
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
@@ -59,7 +59,7 @@ export async function savePackagingType(input: SavePackagingTypeInput): Promise<
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
@@ -79,7 +79,7 @@ export async function savePackagingType(input: SavePackagingTypeInput): Promise<
   }
 
   if (result.error) return { success: false, error: result.error.message };
-  revalidatePath("/admin/catalog/packaging");
+  revalidatePath("/admin/settings/packaging");
   return { success: true, data: toType(result.data) };
 }
 
@@ -89,12 +89,12 @@ export async function deletePackagingType(id: string): Promise<ActionResult<null
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const supabase = await createClient();
   const { error } = await (supabase as any).from("catalog_packaging_types").delete().eq("id", id);
   if (error) return { success: false, error: error.message };
-  revalidatePath("/admin/catalog/packaging");
+  revalidatePath("/admin/settings/packaging");
   return { success: true, data: null };
 }

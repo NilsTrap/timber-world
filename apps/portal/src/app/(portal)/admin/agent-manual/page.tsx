@@ -93,9 +93,9 @@ export default async function AgentManualPage() {
             <tbody>
               <tr><td className={td}>Create / edit categories</td><td className={td}><Link className="text-primary hover:underline" href="/admin/catalog">Catalog → Categories</Link></td></tr>
               <tr><td className={td}>See all products in one list</td><td className={td}><Link className="text-primary hover:underline" href="/admin/catalog/products">Catalog → Products</Link></td></tr>
-              <tr><td className={td}>Manage reusable fields (Species, Quality…)</td><td className={td}><Link className="text-primary hover:underline" href="/admin/catalog/fields">Catalog → Fields</Link></td></tr>
-              <tr><td className={td}>Define package types (pieces per pack)</td><td className={td}><Link className="text-primary hover:underline" href="/admin/catalog/packaging">Catalog → Packaging</Link></td></tr>
-              <tr><td className={td}>Set up units (m², m³, m, piece)</td><td className={td}><Link className="text-primary hover:underline" href="/admin/catalog/pricing-units">Catalog → Pricing Units</Link></td></tr>
+              <tr><td className={td}>Manage reusable fields (Species, Quality…)</td><td className={td}><Link className="text-primary hover:underline" href="/admin/settings/fields">Settings → Fields</Link></td></tr>
+              <tr><td className={td}>Define package types (pieces per pack)</td><td className={td}><Link className="text-primary hover:underline" href="/admin/settings/packaging">Settings → Packaging</Link></td></tr>
+              <tr><td className={td}>Set up units (m², m³, m, piece)</td><td className={td}><Link className="text-primary hover:underline" href="/admin/settings/pricing-units">Settings → Pricing Units</Link></td></tr>
               <tr><td className={td}>Manage currencies &amp; GBP conversion</td><td className={td}><Link className="text-primary hover:underline" href="/admin/catalog/currencies">Catalog → Currencies</Link></td></tr>
               <tr><td className={td}>Approve / reject agents</td><td className={td}><Link className="text-primary hover:underline" href="/admin/agents">Agents</Link></td></tr>
               <tr><td className={td}>Review &amp; confirm agent orders</td><td className={td}><Link className="text-primary hover:underline" href="/admin/agent-orders">Agent Orders</Link></td></tr>
@@ -113,7 +113,7 @@ export default async function AgentManualPage() {
           <li><strong>Product</strong> — a specific item inside a category, e.g. “Oak Full Stave Panel”. Holds the description, product images, and field values (Species, Quality, etc.).</li>
           <li><strong>Variant</strong> — a buyable size of a product, e.g. 18 × 600 × 2000 mm. Holds the SKU, dimensions, price, stock, packaging and variant images. This is what an agent actually adds to a cart.</li>
         </ul>
-        <p className={p}>Shared building blocks used across categories:</p>
+        <p className={p}>Shared building blocks used across categories (Fields, Packaging and Pricing Units now live under <strong>Settings</strong>; Currencies stays in the Catalogue):</p>
         <ul className={ul}>
           <li><strong>Fields</strong> — reusable attributes (Species, Quality, Panel Type…). Defined once, then assigned to any category. Become the filters agents see.</li>
           <li><strong>Packaging</strong> — named pack types with a <em>pieces-per-package</em> count.</li>
