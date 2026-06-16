@@ -85,7 +85,10 @@ function cardFromOrg(o: OrgView) {
 
 export async function listOrgs(db: DbClient, opts: { query?: string; limit?: number } = {}): Promise<ActionResult<OrgView[]>> {
   let q = db.from("organisations").select(ORG_SELECT).order("name", { ascending: true });
-  if (opts.query) q = q.or(`name.ilike.%${opts.query}%,code.ilike.%${opts.query}%`);
+  // Strip PostgREST reserved chars before interpolating into the .or() filter
+  // (the read-only MCP token can reach this — don't let a query inject filters).
+  const safe = (opts.query ?? "").replace(/[,()*\\]/g, " ").trim();
+  if (safe) q = q.or(`name.ilike.%${safe}%,code.ilike.%${safe}%`);
   q = q.limit(Math.min(opts.limit ?? 100, 200));
   const { data, error } = await q;
   if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };

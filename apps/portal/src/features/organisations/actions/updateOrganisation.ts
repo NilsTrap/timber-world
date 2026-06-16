@@ -7,6 +7,12 @@ import { isValidUUID } from "../types";
 import type { Organisation, ActionResult } from "../types";
 import { crmSyncOrg } from "../services/oscarCrm";
 
+/** Trim a value; empty → null (blank company-card fields store as NULL). */
+function nn(v: string | null | undefined): string | null {
+  const t = (v ?? "").trim();
+  return t === "" ? null : t;
+}
+
 /**
  * Update Organisation
  *
@@ -76,35 +82,38 @@ export async function updateOrganisation(
   if (newCode) {
     updatePayload.code = newCode;
   }
+  // Normalise blank/whitespace company-card fields to NULL (mirrors
+  // createOrganisation's nn()); country upper-cased to ISO-2 so VAT rules + the
+  // CRM `country` field stay consistent across create + edit.
   if ("legalAddress" in input) {
-    updatePayload.legal_address = input.legalAddress ?? null;
+    updatePayload.legal_address = nn(input.legalAddress);
   }
   if ("vatNumber" in input) {
-    updatePayload.vat_number = input.vatNumber ?? null;
+    updatePayload.vat_number = nn(input.vatNumber);
   }
   if ("registrationNumber" in input) {
-    updatePayload.registration_number = input.registrationNumber ?? null;
+    updatePayload.registration_number = nn(input.registrationNumber);
   }
   if ("country" in input) {
-    updatePayload.country = input.country ?? null;
+    updatePayload.country = nn(input.country)?.toUpperCase() ?? null;
   }
   if ("phone" in input) {
-    updatePayload.phone = input.phone ?? null;
+    updatePayload.phone = nn(input.phone);
   }
   if ("email" in input) {
-    updatePayload.email = input.email ?? null;
+    updatePayload.email = nn(input.email);
   }
   if ("website" in input) {
-    updatePayload.website = input.website ?? null;
+    updatePayload.website = nn(input.website);
   }
   if ("bankName" in input) {
-    updatePayload.bank_name = input.bankName ?? null;
+    updatePayload.bank_name = nn(input.bankName);
   }
   if ("bankAccountNumber" in input) {
-    updatePayload.bank_account_number = input.bankAccountNumber ?? null;
+    updatePayload.bank_account_number = nn(input.bankAccountNumber);
   }
   if ("bankSwiftCode" in input) {
-    updatePayload.bank_swift_code = input.bankSwiftCode ?? null;
+    updatePayload.bank_swift_code = nn(input.bankSwiftCode);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

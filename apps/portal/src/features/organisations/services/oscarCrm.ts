@@ -124,7 +124,7 @@ export async function crmListOrganizations(query?: string, limit = 50): Promise<
 export async function crmGetOrganization(crmOrgId: string): Promise<CrmResult<unknown>> {
   if (!isCrmEnabled()) return { success: true, skipped: true };
   try {
-    const data = await callOscarCrm("crm_get_organization", { id: crmOrgId });
+    const data = await callOscarCrm("crm_get_organization", { id: crmOrgId, business_id: process.env.OSCAR_BUSINESS_ID });
     return { success: true, skipped: false, data };
   } catch (e) {
     return { success: false, error: (e as Error).message };
@@ -144,12 +144,15 @@ export async function crmSyncOrg(db: any, org: OrgCardForCrm & { crmOrgId: strin
     return;
   }
   if (res.skipped) return; // CRM disabled — nothing to persist
+  // Supabase returns { error } rather than throwing, so check it explicitly
+  // (a swallowed error here would re-create the org in the CRM next time).
   try {
-    await db
+    const { error } = await db
       .from("organisations")
       .update({ crm_org_id: res.data.crmOrgId, crm_synced_at: new Date().toISOString() })
       .eq("id", org.timberOrgId);
+    if (error) console.warn(`[oscarCrm] storing crm_org_id failed for org ${org.timberOrgId}: ${error.message}`);
   } catch (e) {
-    console.warn(`[oscarCrm] stored CRM id update failed for org ${org.timberOrgId}: ${(e as Error).message}`);
+    console.warn(`[oscarCrm] storing crm_org_id threw for org ${org.timberOrgId}: ${(e as Error).message}`);
   }
 }
