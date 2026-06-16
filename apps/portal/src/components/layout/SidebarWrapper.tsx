@@ -66,7 +66,7 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
   ]},
   { href: "/admin/shipments", label: "Shipments", iconName: "Truck" },
   { href: "/admin/uk-staircase-pricing", label: "UK Staircase Pricing", iconName: "PoundSterling" },
-  { href: "/admin/organisations", label: "Users", iconName: "Users2" },
+  { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2" },
 ];
 
 /**
@@ -92,7 +92,7 @@ function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
     ]},
     { href: "/shipments", label: "Shipments", iconName: "Truck", badge: pendingShipmentCount, requiresModule: "shipments.view" },
     { href: "/admin/uk-staircase-pricing", label: "UK Staircase Pricing", iconName: "PoundSterling", requiresModule: "uk-staircase-pricing.view" },
-    { href: "/admin/organisations", label: "Users", iconName: "Users2", requiresModule: "organizations.view" },
+    { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2", requiresModule: "organizations.view" },
   ];
 }
 

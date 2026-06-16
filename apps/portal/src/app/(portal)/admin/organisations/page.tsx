@@ -4,13 +4,13 @@ import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { UsersPageTabs } from "@/features/organisations/components/UsersPageTabs";
 
 export const metadata: Metadata = {
-  title: "Users",
+  title: "Orgs & People",
 };
 
 /**
- * Users Management Page (Admin Only)
+ * Orgs & People Management Page (Admin Only)
  *
- * Allows admins to manage organisations and people.
+ * Allows admins to manage organisations and people (portal logins).
  */
 export default async function UsersPage() {
   const session = await getSession();
@@ -30,7 +30,7 @@ export default async function UsersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Users</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Orgs &amp; People</h1>
         <p className="text-muted-foreground">
           Manage organisations and people
         </p>
