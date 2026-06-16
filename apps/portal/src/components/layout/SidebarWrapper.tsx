@@ -16,6 +16,8 @@ import type { OrganizationSwitcherOption } from "./OrganizationSwitcher";
 interface ModuleNavItem extends NavItem {
   /** Module code required to show this nav item (null = always show) */
   requiresModule?: string | null;
+  /** Show when the user has ANY of these modules (OR). Takes precedence over requiresModule. */
+  requiresAnyModule?: string[];
 }
 
 /**
@@ -73,7 +75,7 @@ function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
     { href: "/orders", label: "Orders", iconName: "ShoppingCart", requiresModule: "orders.view" },
     { href: "/production", label: "Production", iconName: "Factory", requiresModule: "production.view" },
     { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText", requiresModule: "quotes.view" },
-    { href: "/admin/settings", label: "Settings", iconName: "Settings", requiresModule: "settings.view", group: "settings", children: [
+    { href: "/admin/settings", label: "Settings", iconName: "Settings", requiresAnyModule: ["settings.view", "catalogue.view"], group: "settings", children: [
       { href: "/admin/settings/fields", label: "Fields" },
       { href: "/admin/settings/packaging", label: "Packaging" },
       { href: "/admin/settings/pricing-units", label: "Pricing Units" },
@@ -93,21 +95,29 @@ function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
  * - Any module with the same prefix (e.g. "orders.create") is in the set
  *   (so that sub-module access implies sidebar visibility)
  */
+function moduleMatches(required: string, enabledModules: Set<string>): boolean {
+  // Exact match
+  if (enabledModules.has(required)) return true;
+  // Prefix match: "orders.view" → any "orders.*" module implies visibility
+  const prefix = required.split(".")[0] + ".";
+  for (const mod of enabledModules) {
+    if (mod.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
 function filterNavItemsByModules(
   items: ModuleNavItem[],
   enabledModules: Set<string>
 ): NavItem[] {
   return items.filter((item) => {
+    // OR requirement: show when the user has ANY of the listed modules
+    if (item.requiresAnyModule?.length) {
+      return item.requiresAnyModule.some((m) => moduleMatches(m, enabledModules));
+    }
     // No module requirement = always show
     if (!item.requiresModule) return true;
-    // Exact match
-    if (enabledModules.has(item.requiresModule)) return true;
-    // Prefix match: "orders.view" → check for any "orders.*" module
-    const prefix = item.requiresModule.split(".")[0] + ".";
-    for (const mod of enabledModules) {
-      if (mod.startsWith(prefix)) return true;
-    }
-    return false;
+    return moduleMatches(item.requiresModule, enabledModules);
   });
 }
 

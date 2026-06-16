@@ -13,7 +13,7 @@ export default async function SettingsFieldsPage() {
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("settings.view")) redirect("/dashboard");
+    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) redirect("/dashboard");
   }
 
   const result = await getAllFields();
