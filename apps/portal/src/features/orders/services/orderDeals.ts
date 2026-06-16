@@ -13,6 +13,7 @@ import {
   type DealFieldsPatch,
   type DealKind,
   type DealSide,
+  type DocType,
   type TransportBilling,
   type OrderExternalRef,
   type OrderLineItem,
@@ -142,6 +143,35 @@ export async function listDeals(db: DbClient, _actor: ActorContext, filters: Lis
   const { data, error } = await query;
   if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };
   return { success: true, data: (data ?? []).map(mapOrderDealHeader) };
+}
+
+/** Set a deal's operational fulfilment status (validated against the enum). */
+export async function setDealStatus(db: DbClient, _actor: ActorContext, orderId: string, status: string): Promise<ActionResult<{ id: string; status: string }>> {
+  if (!isValidUUID(orderId)) return { success: false, error: "Invalid order id", code: "VALIDATION_ERROR" };
+  if (!(ORDER_STATUSES as readonly string[]).includes(status)) {
+    return { success: false, error: `Invalid status "${status}". Valid: ${ORDER_STATUSES.join(", ")}.`, code: "VALIDATION_ERROR" };
+  }
+  const c = db as DbClient;
+  const { error } = await c.from("orders").update({ status }).eq("id", orderId);
+  if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
+  return { success: true, data: { id: orderId, status } };
+}
+
+/**
+ * List deals (orders) that are MISSING a document of `docType` — drives the
+ * doc-chasing workflow. Header-only, newest-first, capped.
+ */
+export async function listDealsMissingDocs(db: DbClient, _actor: ActorContext, opts: { docType: DocType; limit?: number }): Promise<ActionResult<OrderDealSummary[]>> {
+  const c = db as DbClient;
+  const limit = Math.min(opts.limit ?? 100, 200);
+  // Order ids that already HAVE this doc type.
+  const { data: have, error: haveErr } = await c.from("order_documents").select("order_id").eq("doc_type", opts.docType);
+  if (haveErr) return { success: false, error: haveErr.message, code: "FETCH_FAILED" };
+  const haveIds = new Set<string>((have ?? []).map((r: { order_id: string }) => r.order_id));
+  const { data, error } = await c.from("orders").select(ORDER_SELECT).order("created_at", { ascending: false }).limit(500);
+  if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };
+  const missing = (data ?? []).filter((row: { id: string }) => !haveIds.has(row.id)).slice(0, limit);
+  return { success: true, data: missing.map(mapOrderDealHeader) };
 }
 
 export async function updateDealFields(db: DbClient, _actor: ActorContext, orderId: string, patch: DealFieldsPatch): Promise<ActionResult<true>> {

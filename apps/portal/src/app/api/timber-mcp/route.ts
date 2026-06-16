@@ -15,11 +15,12 @@
  */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { ActorContext, DealSide, DocType } from "@/features/orders/services/dealModel";
-import { createDeal, getOrderDeal, listDeals, replaceLineItems, allocateDealCode } from "@/features/orders/services/orderDeals";
+import type { ActorContext, DealSide, DealKind, DocType, TransportBilling, OrderExternalRef } from "@/features/orders/services/dealModel";
+import { createDeal, getOrderDeal, listDeals, replaceLineItems, allocateDealCode, updateDealFields, setExternalRefs, setDealStatus, listDealsMissingDocs } from "@/features/orders/services/orderDeals";
 import { assembleDocumentData, generateDocument } from "@/features/orders/services/orderDocuments";
 import { listDefinitions, getOptions } from "@/features/catalog/services/attributes";
 import { listOrgs, getOrg, createOrg } from "@/features/organisations/services/orgService";
+import { TOOLS } from "./tools";
 
 export const dynamic = "force-dynamic";
 
@@ -32,190 +33,7 @@ const SERVICE_ACTOR: ActorContext = {
   label: "oscar-agent",
 };
 
-// ── Tool catalog ─────────────────────────────────────────────────────────────
-interface ToolDef {
-  name: string;
-  description: string;
-  readOnly: boolean;
-  inputSchema: Record<string, unknown>;
-}
-
-const TOOLS: ToolDef[] = [
-  {
-    name: "timber_get_attribute_definitions",
-    description:
-      "List the controlled-vocabulary attribute definitions (deal/line-item fields like species, quality, humidity, processing, plus the dimension fields). Returns each attribute's key, label, type, unit and active-option count. Call this first to learn the valid keys, then timber_list_attribute_options for a key's allowed values.",
-    readOnly: true,
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "timber_list_attribute_options",
-    description:
-      "List the allowed options (value + label) for one attribute, identified by its key (from timber_get_attribute_definitions). Use these exact values when creating deals/line items so they match the controlled vocabulary. Returns only active options.",
-    readOnly: true,
-    inputSchema: {
-      type: "object",
-      properties: {
-        attribute_key: { type: "string", description: "Attribute key, e.g. 'wood_species' or 'quality' (from timber_get_attribute_definitions)." },
-      },
-      required: ["attribute_key"],
-    },
-  },
-  {
-    name: "timber_list_orgs",
-    description: "List Timber organisations (customers/manufacturers/producers) with their company card + CRM link. Optional text query matches name or code.",
-    readOnly: true,
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "Filter by name or code (substring)." },
-        limit: { type: "integer", description: "Max rows (default 100, cap 200)." },
-      },
-    },
-  },
-  {
-    name: "timber_get_org",
-    description: "Get one Timber organisation by id — full company card (legal address, VAT/registration, country, contact, bank) + role flags + crm_org_id.",
-    readOnly: true,
-    inputSchema: {
-      type: "object",
-      properties: { org_id: { type: "string", description: "Organisation UUID." } },
-      required: ["org_id"],
-    },
-  },
-  {
-    name: "timber_create_org",
-    description: "Create a Timber organisation (3-char code + name + optional company card). Mirrors to the Oscar CRM when configured and returns the stored org incl. crm_org_id.",
-    readOnly: false,
-    inputSchema: {
-      type: "object",
-      properties: {
-        code: { type: "string", description: "3-char org code (letter + 2 letters/digits, e.g. SOM)." },
-        name: { type: "string", description: "Organisation name." },
-        legal_address: { type: "string" },
-        vat_number: { type: "string" },
-        registration_number: { type: "string" },
-        country: { type: "string", description: "ISO-3166 alpha-2 (e.g. LV, GB)." },
-        phone: { type: "string" },
-        email: { type: "string" },
-        website: { type: "string" },
-        bank_name: { type: "string" },
-        bank_account_number: { type: "string" },
-        bank_swift_code: { type: "string" },
-      },
-      required: ["code", "name"],
-    },
-  },
-  {
-    name: "timber_list_deals",
-    description: "List deals (trade records), newest first. Filter by status or product group.",
-    readOnly: true,
-    inputSchema: {
-      type: "object",
-      properties: {
-        status: { type: "string", description: "Filter by status: draft, pending, confirmed, in_progress, shipped, loaded, completed, cancelled." },
-        product_group: { type: "string", description: "Filter by product group, e.g. 'malka' or 'boards'." },
-        limit: { type: "integer", description: "Max rows (default 100, cap 200)." },
-      },
-    },
-  },
-  {
-    name: "timber_get_deal",
-    description: "Get one deal by id, including its line items, external reference codes and generated documents.",
-    readOnly: true,
-    inputSchema: {
-      type: "object",
-      properties: { deal_id: { type: "string", description: "Deal UUID." } },
-      required: ["deal_id"],
-    },
-  },
-  {
-    name: "timber_create_deal",
-    description:
-      "Create a new deal (trade record). Use after extracting an order from an email, voice note, or meeting transcript. Returns the created deal with its generated code. Pass idempotency_key to make repeated calls safe.",
-    readOnly: false,
-    inputSchema: {
-      type: "object",
-      properties: {
-        name: { type: "string", description: "Short deal name/label (defaults to the customer or product group if omitted)." },
-        product_group: { type: "string", description: "Product group, e.g. 'malka', 'boards'." },
-        currency: { type: "string", enum: ["EUR", "GBP", "USD"], description: "Deal currency (default EUR)." },
-        customer_name: { type: "string", description: "Buyer name (used for the deal code when no org row exists)." },
-        customer_organisation_id: { type: "string", description: "Buyer organisation UUID, if known." },
-        seller_organisation_id: { type: "string", description: "Selling/trading entity organisation UUID (defaults to Timber International)." },
-        producer_organisation_id: { type: "string", description: "Producer organisation UUID (buy side), if known." },
-        incoterms: { type: "string", description: "Incoterms code, e.g. FCA, EXW, DAP." },
-        incoterms_place: { type: "string", description: "Incoterms place." },
-        advance_pct: { type: "number", description: "Advance percentage 0–100 for this deal." },
-        payment_terms: { type: "string", description: "Free-text payment terms." },
-        delivery_terms: { type: "string", description: "Free-text delivery terms." },
-        delivery_deadline: { type: "string", description: "Delivery deadline (free text, e.g. 'July 2026')." },
-        notes: { type: "string", description: "Free-text notes." },
-        idempotency_key: { type: "string", description: "Stable key to dedupe repeated creates from a retried workflow." },
-        line_items: {
-          type: "array",
-          description: "Sell-side line items. Each: {product_name, wood_species, humidity, processing, quality, thickness, width, length, pieces, volume_m3, unit, unit_price_cents, vat_rate}.",
-          items: { type: "object" },
-        },
-      },
-    },
-  },
-  {
-    name: "timber_upsert_deal_line_items",
-    description: "Replace all line items for a deal side ('sell' or 'buy') with the provided list. Idempotent (full replace).",
-    readOnly: false,
-    inputSchema: {
-      type: "object",
-      properties: {
-        deal_id: { type: "string", description: "Deal UUID." },
-        side: { type: "string", enum: ["sell", "buy"], description: "Which side's items to replace (default 'sell')." },
-        items: { type: "array", description: "Line items (see timber_create_deal.line_items shape).", items: { type: "object" } },
-      },
-      required: ["deal_id", "items"],
-    },
-  },
-  {
-    name: "timber_allocate_deal_code",
-    description:
-      "Allocate (or return, if already set) the Timber deal code for a deal — the Nils-convention ENTITY+CLIENT+SEQ code (e.g. TIMSOM001). Idempotent. Timber owns deal/document numbering.",
-    readOnly: false,
-    inputSchema: {
-      type: "object",
-      properties: { deal_id: { type: "string", description: "Deal (order) UUID." } },
-      required: ["deal_id"],
-    },
-  },
-  {
-    name: "timber_get_document_data",
-    description:
-      "Assemble the full render-ready data for a deal document (parties' company cards, line items, totals, VAT rule + reference, amount-in-words, and a freshly-allocated Timber document number). This is the structured input the document generator turns into a file. Allocates a document number (Timber owns numbering).",
-    readOnly: false,
-    inputSchema: {
-      type: "object",
-      properties: {
-        deal_id: { type: "string", description: "Deal (order) UUID." },
-        doc_type: { type: "string", enum: ["sales_spec", "purchase_spec", "contract", "proforma_invoice", "invoice", "packing_list", "cmr"], description: "Document type." },
-        side: { type: "string", enum: ["sell", "buy"], description: "Override side (defaults: purchase docs → buy, else sell)." },
-      },
-      required: ["deal_id", "doc_type"],
-    },
-  },
-  {
-    name: "timber_generate_document",
-    description:
-      "Generate a document (PDF) for a deal, store it on the deal, and return its number and a signed download URL. Uses Timber's interim local renderer today; swaps to the Oscar generator when configured. Records an order_documents row.",
-    readOnly: false,
-    inputSchema: {
-      type: "object",
-      properties: {
-        deal_id: { type: "string", description: "Deal (order) UUID." },
-        doc_type: { type: "string", enum: ["sales_spec", "purchase_spec", "contract", "proforma_invoice", "invoice", "packing_list", "cmr"], description: "Document type to generate." },
-        side: { type: "string", enum: ["sell", "buy"], description: "Override side (defaults: purchase docs → buy, else sell)." },
-      },
-      required: ["deal_id", "doc_type"],
-    },
-  },
-];
+// Tool catalog (definitions) lives in ./tools; dispatch is below.
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 function resolveRole(req: Request): Role | null {
@@ -339,6 +157,28 @@ async function callTool(name: string, args: any, role: Role) {
       const res = await allocateDealCode(db, SERVICE_ACTOR, args.deal_id);
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
+    case "timber_update_deal": {
+      if (!args?.deal_id) return toolErr("deal_id is required");
+      const res = await updateDealFields(db, SERVICE_ACTOR, args.deal_id, {
+        dealKind: args?.deal_kind as DealKind | undefined,
+        productGroup: args?.product_group,
+        incoterms: args?.incoterms,
+        incotermsPlace: args?.incoterms_place,
+        advancePct: args?.advance_pct,
+        paymentTerms: args?.payment_terms,
+        deliveryTerms: args?.delivery_terms,
+        deliveryDeadline: args?.delivery_deadline,
+        transportBilling: args?.transport_billing as TransportBilling | undefined,
+      });
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_set_deal_refs": {
+      if (!args?.deal_id || !Array.isArray(args?.refs)) return toolErr("deal_id and refs[] are required");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const refs: OrderExternalRef[] = args.refs.map((r: any) => ({ refType: r.ref_type, refValue: r.ref_value, label: r.label ?? null }));
+      const res = await setExternalRefs(db, SERVICE_ACTOR, args.deal_id, refs);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
     case "timber_get_document_data": {
       if (!args?.deal_id || !args?.doc_type) return toolErr("deal_id and doc_type are required");
       if (args.side != null && args.side !== "sell" && args.side !== "buy") return toolErr("side must be 'sell' or 'buy'");
@@ -357,6 +197,16 @@ async function callTool(name: string, args: any, role: Role) {
         docType: args.doc_type as DocType,
         side: args?.side as DealSide | undefined,
       });
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_set_deal_status": {
+      if (!args?.deal_id || !args?.status) return toolErr("deal_id and status are required");
+      const res = await setDealStatus(db, SERVICE_ACTOR, args.deal_id, args.status);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_list_deals_missing_docs": {
+      if (!args?.doc_type) return toolErr("doc_type is required");
+      const res = await listDealsMissingDocs(db, SERVICE_ACTOR, { docType: args.doc_type as DocType, limit: args?.limit });
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     default:
