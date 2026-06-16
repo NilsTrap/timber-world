@@ -18,6 +18,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActorContext, DealSide, DocType } from "@/features/deals/types";
 import { createDeal, getDeal, listDeals, replaceLineItems } from "@/features/deals/services/dealsService";
 import { generateDocument } from "@/features/deals/services/documentService";
+import { listDefinitions, getOptions } from "@/features/catalog/services/attributes";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,26 @@ interface ToolDef {
 }
 
 const TOOLS: ToolDef[] = [
+  {
+    name: "timber_get_attribute_definitions",
+    description:
+      "List the controlled-vocabulary attribute definitions (deal/line-item fields like species, quality, humidity, processing, plus the dimension fields). Returns each attribute's key, label, type, unit and active-option count. Call this first to learn the valid keys, then timber_list_attribute_options for a key's allowed values.",
+    readOnly: true,
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "timber_list_attribute_options",
+    description:
+      "List the allowed options (value + label) for one attribute, identified by its key (from timber_get_attribute_definitions). Use these exact values when creating deals/line items so they match the controlled vocabulary. Returns only active options.",
+    readOnly: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        attribute_key: { type: "string", description: "Attribute key, e.g. 'wood_species' or 'quality' (from timber_get_attribute_definitions)." },
+      },
+      required: ["attribute_key"],
+    },
+  },
   {
     name: "timber_list_deals",
     description: "List deals (trade records), newest first. Filter by status or product group.",
@@ -164,6 +185,15 @@ async function callTool(name: string, args: any, role: Role) {
   const db = createAdminClient();
 
   switch (name) {
+    case "timber_get_attribute_definitions": {
+      const res = await listDefinitions(db);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_list_attribute_options": {
+      if (!args?.attribute_key) return toolErr("attribute_key is required");
+      const res = await getOptions(db, args.attribute_key);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
     case "timber_list_deals": {
       const res = await listDeals(db, SERVICE_ACTOR, {
         status: args?.status,
