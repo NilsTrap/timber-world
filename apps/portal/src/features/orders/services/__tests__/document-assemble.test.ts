@@ -33,6 +33,8 @@ function li(over: Partial<OrderLineItem>): OrderLineItem {
 // lineTotalCents
 eq("lineTotal explicit", lineTotalCents({ lineTotalCents: 12345, unitPriceCents: 999, unit: "m3", volumeM3: 2, pieces: null }), 12345);
 eq("lineTotal m3", lineTotalCents({ lineTotalCents: null, unitPriceCents: 45000, unit: "m3", volumeM3: 2, pieces: null }), 90000);
+eq("lineTotal loose_m3 (firewood, volume-priced)", lineTotalCents({ lineTotalCents: null, unitPriceCents: 6000, unit: "loose_m3", volumeM3: 25, pieces: null }), 150000);
+eq("lineTotal crate (no qty column) → 0", lineTotalCents({ lineTotalCents: null, unitPriceCents: 5000, unit: "crate", volumeM3: null, pieces: null }), 0);
 eq("lineTotal piece", lineTotalCents({ lineTotalCents: null, unitPriceCents: 1000, unit: "piece", volumeM3: null, pieces: "50" }), 50000);
 eq("lineTotal m3 missing volume → 0 (no phantom qty=1)", lineTotalCents({ lineTotalCents: null, unitPriceCents: 7000, unit: "m3", volumeM3: null, pieces: null }), 0);
 eq("lineTotal piece unparseable → 0", lineTotalCents({ lineTotalCents: null, unitPriceCents: 1000, unit: "piece", volumeM3: null, pieces: "various" }), 0);

@@ -10,7 +10,7 @@ export type DbClient = any;
 export type DealSide = "sell" | "buy";
 export type DealKind = "buy_sell" | "sale_only" | "purchase_only";
 export type TransportBilling = "in_price" | "separate_line" | "separate_invoice";
-export type LineUnit = "m3" | "m2" | "piece" | "linear_m" | "package";
+export type LineUnit = "m3" | "m2" | "piece" | "linear_m" | "package" | "crate" | "loose_m3";
 export type DocType =
   | "sales_spec"
   | "purchase_spec"

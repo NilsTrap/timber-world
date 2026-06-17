@@ -108,8 +108,11 @@ export async function createOrg(db: DbClient, input: CreateOrgInput): Promise<Ac
   if (!parsed.success) return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid input", code: "VALIDATION_ERROR" };
   const card = parsed.data;
 
+  // Idempotent for the agent/MCP path: a retried intake with the same code returns
+  // the existing org (not an error), so re-running an Oscar workflow is safe. We
+  // return it as-is rather than overwriting, to avoid clobbering curated data.
   const { data: existing } = await db.from("organisations").select("id").eq("code", card.code).maybeSingle();
-  if (existing) return { success: false, error: "Organisation code already exists", code: "DUPLICATE_CODE" };
+  if (existing?.id) return getOrg(db, existing.id as string);
 
   const { data, error } = await db
     .from("organisations")

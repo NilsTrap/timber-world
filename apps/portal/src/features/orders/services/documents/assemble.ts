@@ -19,12 +19,13 @@ import { DOC_TITLES, type DocumentData, type DocLineItem, type PartyCard } from 
 export function lineTotalCents(li: Pick<OrderLineItem, "lineTotalCents" | "unitPriceCents" | "unit" | "volumeM3" | "pieces">): number {
   if (li.lineTotalCents != null) return li.lineTotalCents;
   if (li.unitPriceCents == null) return 0;
-  if (li.unit === "m3") return li.volumeM3 != null ? Math.round(li.unitPriceCents * li.volumeM3) : 0;
+  // Volume-priced units multiply by volume_m3 (loose_m3 = bulk firewood).
+  if (li.unit === "m3" || li.unit === "loose_m3") return li.volumeM3 != null ? Math.round(li.unitPriceCents * li.volumeM3) : 0;
   if (li.unit === "piece") {
     const pcs = li.pieces != null ? parseFloat(li.pieces) : NaN;
     return Number.isFinite(pcs) ? Math.round(li.unitPriceCents * pcs) : 0;
   }
-  // m2 / linear_m / package have no quantity column yet → can't derive a total.
+  // m2 / linear_m / package / crate have no quantity column yet → can't derive a total.
   return 0;
 }
 
