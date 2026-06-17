@@ -310,6 +310,16 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
     input.customerNameForCode ??
     (input.productGroup ? `${input.productGroup} deal` : "Untitled deal");
 
+  // Default the selling/trading entity to the house org (Timber International,
+  // code TIM) when not specified, so the deal — and the documents generated from
+  // it — carry the seller's requisites (VAT, legal address, bank). Overridable
+  // per deal (e.g. The Wood and Good / TWG).
+  let sellerOrgId = input.sellerOrganisationId ?? null;
+  if (!sellerOrgId) {
+    const { data: house } = await c.from("organisations").select("id").eq("code", DEFAULT_ENTITY_CODE).maybeSingle();
+    sellerOrgId = (house?.id as string | undefined) ?? null;
+  }
+
   const { data: row, error } = await c
     .from("orders")
     .insert({
@@ -317,7 +327,7 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
       deal_kind: input.dealKind ?? "buy_sell",
       product_group: input.productGroup ?? null,
       customer_organisation_id: input.customerOrganisationId ?? null,
-      seller_organisation_id: input.sellerOrganisationId ?? null,
+      seller_organisation_id: sellerOrgId,
       producer_organisation_id: input.producerOrganisationId ?? null,
       currency: input.currency ?? "EUR",
       incoterms: input.incoterms ?? null,
