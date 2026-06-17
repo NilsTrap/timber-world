@@ -4,6 +4,7 @@
  */
 import { createBrowserClient } from '@supabase/ssr'
 import type { Database } from './types'
+import { browserCookieOptions } from './cookieOptions'
 
 function getSupabaseConfig() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -25,5 +26,9 @@ function getSupabaseConfig() {
  */
 export function createClient() {
   const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig()
-  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey)
+  // Embed-safe cookie attrs (SameSite=None; Secure; Partitioned) in production so
+  // the client-written auth cookie survives inside Oscar's cross-site iframe.
+  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey,
+    browserCookieOptions ? { cookieOptions: browserCookieOptions } : undefined
+  )
 }
