@@ -77,9 +77,10 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") || "list";
-  // Local view axis: the existing order content vs. the universal Deal view
-  // (line items + documents). Separate from the list-inherited `tab` above.
-  const [view, setView] = useState<"order" | "deal">("order");
+  // Local view axis: the universal Deal view (line items + documents) vs. the
+  // existing order content. Defaults to "deal" — the deal is the primary lens in
+  // the Oscar-integration model; the Order tab is the operational/staircase fallback.
+  const [view, setView] = useState<"order" | "deal">("deal");
   const [order, setOrder] = useState<Order | null>(null);
   const [packages, setPackages] = useState<OrderPackage[]>([]);
   const [dropdowns, setDropdowns] = useState<RefDropdowns | null>(null);
