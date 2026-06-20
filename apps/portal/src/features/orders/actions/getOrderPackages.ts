@@ -1,7 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
 
@@ -53,7 +54,40 @@ export async function getOrderPackages(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = supabase as any;
 
-  const { data, error } = await client
+  // Authz + pricing visibility. Order packages are owned by the seller/manufacturer
+  // org, so the owner-only inventory_packages RLS hides them from a producer
+  // (Wood ART) counterparty — which made the detail-page products table empty for
+  // them. We therefore read packages via the service-role admin client below, but
+  // ONLY after verifying the caller may see this order: admins pass; everyone else
+  // must be a party on the order (the orders RLS row read proves it) AND have
+  // orders.view. Pricing is stripped for parties without a pricing-bearing tab.
+  let stripPricing = false;
+  if (!isAdmin(session)) {
+    const { data: ord } = await client
+      .from("orders")
+      .select("customer_organisation_id, seller_organisation_id, producer_organisation_id")
+      .eq("id", orderId)
+      .single();
+    if (!ord) {
+      return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    }
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const isParty =
+      ord.customer_organisation_id === orgId ||
+      ord.seller_organisation_id === orgId ||
+      ord.producer_organisation_id === orgId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!isParty || !mods.has("orders.view")) {
+      return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    }
+    stripPricing = !["orders.tab.prices", "orders.tab.sales", "orders.tab.analytics"].some(
+      (m) => mods.has(m)
+    );
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data, error } = await admin
     .from("inventory_packages")
     .select(`
       id, package_number, status, thickness, width, riser, length, pieces,
@@ -95,12 +129,15 @@ export async function getOrderPackages(
     volumeM3: row.volume_m3,
     staircaseCodeId: row.staircase_code_id ?? null,
     status: row.status,
-    unitPricePiece: row.unit_price_piece,
-    unitPriceM3: row.unit_price_m3,
-    unitPriceM2: row.unit_price_m2,
-    workPerPiece: row.work_per_piece != null ? parseFloat(row.work_per_piece) : null,
-    transportPerPiece: row.transport_per_piece != null ? parseFloat(row.transport_per_piece) : null,
-    eurPerM3: row.eur_per_m3 != null ? parseFloat(row.eur_per_m3) : null,
+    // Pricing nulled for parties without a pricing-bearing tab (producers). These
+    // columns are hidden on the production tab anyway; this keeps them out of the
+    // payload entirely.
+    unitPricePiece: stripPricing ? null : row.unit_price_piece,
+    unitPriceM3: stripPricing ? null : row.unit_price_m3,
+    unitPriceM2: stripPricing ? null : row.unit_price_m2,
+    workPerPiece: stripPricing ? null : (row.work_per_piece != null ? parseFloat(row.work_per_piece) : null),
+    transportPerPiece: stripPricing ? null : (row.transport_per_piece != null ? parseFloat(row.transport_per_piece) : null),
+    eurPerM3: stripPricing ? null : (row.eur_per_m3 != null ? parseFloat(row.eur_per_m3) : null),
     notes: row.notes,
     productionEntryId: row.production_entry_id,
   }));

@@ -29,12 +29,21 @@ export async function getStaircaseCodes(): Promise<ActionResult<StaircaseCode[]>
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
+  // The staircase code is a product identifier (e.g. "Tread40") needed to render
+  // the read-only "Code" column on every orders tab — including Production, which
+  // producer (Wood ART) users see. So gate on plain orders.view, not the pricing
+  // tab. The codes carry embedded pricing (work/transport/final/eur-per-m3), which
+  // we strip below for anyone without a pricing-bearing tab module.
+  let stripCodePricing = false;
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("orders.tab.prices")) {
+    if (!mods.has("orders.view")) {
       return { success: false, error: "Permission denied", code: "FORBIDDEN" };
     }
+    stripCodePricing = !["orders.tab.prices", "orders.tab.sales", "orders.tab.analytics"].some(
+      (m) => mods.has(m)
+    );
   }
 
   const supabase = await createClient();
@@ -60,10 +69,11 @@ export async function getStaircaseCodes(): Promise<ActionResult<StaircaseCode[]>
     widthMm: row.width_mm,
     lengthMm: row.length_mm,
     riserMm: row.riser_mm ?? null,
-    workCostCents: row.work_cost_cents ?? 0,
-    transportCostCents: row.transport_cost_cents ?? null,
-    finalPriceCents: row.final_price_cents ?? null,
-    eurPerM3Cents: row.eur_per_m3_cents ?? null,
+    // Pricing stripped for non-pricing users (Code label + dimensions still work)
+    workCostCents: stripCodePricing ? 0 : (row.work_cost_cents ?? 0),
+    transportCostCents: stripCodePricing ? null : (row.transport_cost_cents ?? null),
+    finalPriceCents: stripCodePricing ? null : (row.final_price_cents ?? null),
+    eurPerM3Cents: stripCodePricing ? null : (row.eur_per_m3_cents ?? null),
   }));
 
   return { success: true, data: codes };
