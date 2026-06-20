@@ -1,8 +1,52 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import type { Order, ActionResult } from "../types";
+
+/**
+ * Sales/P&L pricing fields that must NOT reach a counterparty (producer/customer)
+ * who has no pricing-bearing tab (sales / analytics / prices). The production-cost
+ * fields the producer legitimately edits (productionMaterial, productionFinishing,
+ * woodArt, woodArtCnc, their totals + invoice/payment fields) are deliberately NOT
+ * here — those stay visible. Numeric fields are zeroed (the table renders 0 as ""),
+ * string/nullable fields are nulled.
+ */
+const PRICING_NUMERIC_FIELDS = [
+  "totalPricePence",
+  "maxM3",
+  "eurPerM3",
+  "workPerPiece",
+  "invoicedWork",
+  "usedWork",
+  "invoicedTransport",
+  "usedTransport",
+  "plMaterialValue",
+  "plWorkValue",
+  "plTransportValue",
+  "plMaterialsValue",
+  "plTotalValue",
+  "plPercentFromInvoice",
+] as const;
+const PRICING_NULLABLE_FIELDS = [
+  "advanceInvoiceNumber",
+  "invoiceNumber",
+  "transportInvoiceNumber",
+  "transportPrice",
+  "valueCents",
+] as const;
+
+/** Strip sales/P&L pricing from an order in place, keeping producer-owned cost fields. */
+function stripOrderPricing(order: Order): Order {
+  for (const f of PRICING_NUMERIC_FIELDS) {
+    (order as unknown as Record<string, number>)[f] = 0;
+  }
+  for (const f of PRICING_NULLABLE_FIELDS) {
+    (order as unknown as Record<string, unknown>)[f] = null;
+  }
+  return order;
+}
 
 /**
  * Get Orders
@@ -28,11 +72,14 @@ export async function getOrders(options?: {
     };
   }
 
-  // 2. For non-admin users, check if their org has orders feature enabled
-  if (!isAdmin(session)) {
+  // 2. For non-admin users, check if their org has orders feature enabled.
+  //    Capture the full enabled-module set so we can also decide pricing visibility.
+  const userIsAdmin = isAdmin(session);
+  let enabledModules = new Set<string>();
+  if (!userIsAdmin) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    const hasOrdersModule = (await getUserEnabledModules(session.portalUserId ?? "", orgId)).has("orders.view");
-    if (!hasOrdersModule) {
+    enabledModules = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!enabledModules.has("orders.view")) {
       return {
         success: false,
         error: "Orders feature not enabled for your organisation",
@@ -40,6 +87,16 @@ export async function getOrders(options?: {
       };
     }
   }
+
+  // Sales/P&L pricing is only meaningful on the sales / analytics / prices tabs.
+  // A non-admin with none of those modules (e.g. a producer/Wood ART with only
+  // production access) must never receive pricing in the payload — not even
+  // hidden in the network response. Admins always see everything.
+  const stripPricing =
+    !userIsAdmin &&
+    !["orders.tab.sales", "orders.tab.analytics", "orders.tab.prices"].some((m) =>
+      enabledModules.has(m)
+    );
 
   const supabase = await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,20 +161,6 @@ export async function getOrders(options?: {
       ),
       portal_users (
         name
-      ),
-      inventory_packages (
-        thickness,
-        pieces,
-        volume_m3,
-        status,
-        unit_price_piece,
-        transport_per_piece,
-        work_per_piece,
-        eur_per_m3,
-        production_entry_id,
-        ref_types (value),
-        ref_product_names (value),
-        uk_staircase_pricing (eur_per_m3_cents, work_cost_cents, transport_cost_cents)
       )
     `
     )
@@ -155,6 +198,52 @@ export async function getOrders(options?: {
     };
   }
 
+  // 5b. Fetch each order's packages via the service-role admin client, scoped to
+  //     the orders the user already passed order-level RLS for above. Order
+  //     packages are owned by the seller/manufacturer org, so inventory_packages
+  //     RLS hides them from a producer (Wood ART) counterparty — which made the
+  //     package-derived "Type" column (and piece counts) come back empty for them.
+  //     Reading them here keeps the raw rows (incl. pricing) server-side only; we
+  //     return just the computed summaries, and strip sales pricing below.
+  const visibleOrderIds = (data || []).map((row: { id: string }) => row.id);
+  if (visibleOrderIds.length > 0) {
+    const admin = createAdminClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: pkgRows } = await (admin as any)
+      .from("inventory_packages")
+      .select(
+        `
+        order_id,
+        thickness,
+        pieces,
+        volume_m3,
+        status,
+        unit_price_piece,
+        transport_per_piece,
+        work_per_piece,
+        eur_per_m3,
+        production_entry_id,
+        ref_types (value),
+        ref_product_names (value),
+        uk_staircase_pricing (eur_per_m3_cents, work_cost_cents, transport_cost_cents)
+      `
+      )
+      .in("order_id", visibleOrderIds);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pkgsByOrderId = new Map<string, any[]>();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const pkg of (pkgRows || []) as any[]) {
+      const list = pkgsByOrderId.get(pkg.order_id) ?? [];
+      list.push(pkg);
+      pkgsByOrderId.set(pkg.order_id, list);
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const row of data as any[]) {
+      row.inventory_packages = pkgsByOrderId.get(row.id) ?? [];
+    }
+  }
+
   // 6. Collect ids needed for the two follow-up batch-fetches
   const allProductionEntryIds = new Set<string>();
   for (const row of data || []) {
@@ -164,7 +253,7 @@ export async function getOrders(options?: {
       }
     }
   }
-  const orderIds = (data || []).map((row: { id: string }) => row.id);
+  const orderIds = visibleOrderIds;
 
   // Fire the production-inputs and file-count queries in parallel — they're
   // independent of each other and both only need the ids we just collected.
@@ -328,7 +417,7 @@ export async function getOrders(options?: {
     const totalInvoiceEur = totalPricePence > 0 ? (totalPricePence / 100) * 0.9 : 0;
     const plPercentVal = totalInvoiceEur > 0 && plTotalVal !== 0 ? (plTotalVal / totalInvoiceEur) * 100 : 0;
 
-    return {
+    const order: Order = {
     id: row.id as string,
     name: row.name as string,
     projectNumber: row.project_number as string | null,
@@ -404,6 +493,7 @@ export async function getOrders(options?: {
     updatedAt: row.updated_at as string,
     fileCount: fileCountMap.get(row.id as string) ?? 0,
   };
+    return stripPricing ? stripOrderPricing(order) : order;
   });
 
   return {
