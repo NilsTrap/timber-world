@@ -14,6 +14,7 @@ import {
   type DealKind,
   type DealSide,
   type DocType,
+  type LineUnit,
   type TransportBilling,
   type OrderExternalRef,
   type OrderLineItem,
@@ -208,6 +209,66 @@ export async function replaceLineItems(db: DbClient, _actor: ActorContext, order
   const rows = items.map((it, i) => lineItemToRow(orderId, { ...it, side }, i));
   const { data, error } = await c.from("order_line_items").insert(rows).select("*");
   if (error) return { success: false, error: error.message, code: "INSERT_FAILED" };
+  return { success: true, data: (data ?? []).map(mapLineItem) };
+}
+
+/** Per-line amount edit: the price/quantity fields an admin corrects when the
+ * agent captured a line but left the price (or a quantity) blank. */
+export interface LineItemAmountPatch {
+  id: string;
+  /** The line's unit — lets us decide whether the total derives from price×qty. */
+  unit?: LineUnit;
+  unitPriceCents?: number | null;
+  pieces?: string | null;
+  volumeM3?: number | null;
+  /** Explicit line total (cents). Only honoured for units with no quantity column
+   *  (m2 / linear_m / package / crate); derivable units always recompute. */
+  lineTotalCents?: number | null;
+}
+
+/** Units whose line total derives from unit price × a quantity column. */
+const DERIVABLE_TOTAL_UNITS: ReadonlySet<LineUnit> = new Set(["m3", "loose_m3", "piece"]);
+
+/**
+ * Update price / quantity on existing line items, by id (scoped to `orderId`).
+ * Surgical (no delete+reinsert → ids and other fields are preserved). For units
+ * whose total is unit price × quantity, the stored `line_total_cents` is nulled
+ * so it recomputes from the edited values — keeping the table row, the footer and
+ * the generated PDF in agreement. For units with no quantity column (m2 /
+ * linear_m / package / crate) any existing explicit total is left untouched.
+ * Caller enforces permission (admin-only at the action layer).
+ */
+export async function updateLineItemAmounts(
+  db: DbClient,
+  _actor: ActorContext,
+  orderId: string,
+  patches: LineItemAmountPatch[]
+): Promise<ActionResult<OrderLineItem[]>> {
+  if (!isValidUUID(orderId)) return { success: false, error: "Invalid order id", code: "VALIDATION_ERROR" };
+  const c = db as DbClient;
+  for (const p of patches) {
+    if (!isValidUUID(p.id)) return { success: false, error: "Invalid line item id", code: "VALIDATION_ERROR" };
+    // Financial integrity: never persist a negative price / quantity / total.
+    if ((p.unitPriceCents != null && p.unitPriceCents < 0) ||
+        (p.volumeM3 != null && p.volumeM3 < 0) ||
+        (p.lineTotalCents != null && p.lineTotalCents < 0)) {
+      return { success: false, error: "Amounts cannot be negative.", code: "VALIDATION_ERROR" };
+    }
+    const u: Record<string, unknown> = {};
+    if (p.unitPriceCents !== undefined) u.unit_price_cents = p.unitPriceCents;
+    if (p.pieces !== undefined) u.pieces = p.pieces;
+    if (p.volumeM3 !== undefined) u.volume_m3 = p.volumeM3;
+    // Total: for units whose total is price×quantity, null the stored value so it
+    // recomputes from the edited fields. For units with no quantity column take an
+    // explicit total when supplied (the only way to value those lines).
+    if (p.unit && DERIVABLE_TOTAL_UNITS.has(p.unit)) u.line_total_cents = null;
+    else if (p.lineTotalCents !== undefined) u.line_total_cents = p.lineTotalCents;
+    if (Object.keys(u).length === 0) continue;
+    const { error } = await c.from("order_line_items").update(u).eq("id", p.id).eq("order_id", orderId);
+    if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
+  }
+  const { data, error } = await c.from("order_line_items").select("*").eq("order_id", orderId).order("side").order("line_no");
+  if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };
   return { success: true, data: (data ?? []).map(mapLineItem) };
 }
 

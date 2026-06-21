@@ -7,16 +7,44 @@
  */
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "../types";
-import type { DealSide, DocType } from "../services/dealModel";
-import { getOrderDeal, type OrderDealView } from "../services/orderDeals";
-import { generateDocument, getDocumentUrl, type GeneratedDocument } from "../services/orderDocuments";
+import type { DealSide, DocType, OrderLineItem } from "../services/dealModel";
+import { getOrderDeal, updateLineItemAmounts, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
+import { generateDocument, getDocumentUrl, deleteDocument, type GeneratedDocument } from "../services/orderDocuments";
 import { resolveDealActor } from "./_dealActor";
 
+/** Deal view + whether the current viewer is a platform admin (drives the Deal
+ * tab's admin-only edit/delete affordances; the actions re-check server-side). */
+export type OrderDealViewResult = OrderDealView & { viewerIsAdmin: boolean };
+
 /** Full deal view (header + line items + external refs + documents) for one order. */
-export async function getOrderDealView(orderId: string): Promise<ActionResult<OrderDealView>> {
+export async function getOrderDealView(orderId: string): Promise<ActionResult<OrderDealViewResult>> {
   const a = await resolveDealActor();
   if (!a.ok) return { success: false, error: a.error, code: a.code };
-  return getOrderDeal(a.db, a.actor, orderId);
+  const res = await getOrderDeal(a.db, a.actor, orderId);
+  if (!res.success) return res as ActionResult<OrderDealViewResult>;
+  return { success: true, data: { ...res.data, viewerIsAdmin: a.actor.isPlatformAdmin } };
+}
+
+/** Admin-only: edit price/quantity on a deal's line items (e.g. fill a price the
+ * agent left blank). Re-checks admin server-side — never trusts the client. */
+export async function updateDealLineItemAmounts(input: { orderId: string; items: LineItemAmountPatch[] }): Promise<ActionResult<OrderLineItem[]>> {
+  const a = await resolveDealActor();
+  if (!a.ok) return { success: false, error: a.error, code: a.code };
+  if (!a.actor.isPlatformAdmin) return { success: false, error: "Only admins can edit deal amounts", code: "FORBIDDEN" };
+  const res = await updateLineItemAmounts(a.db, a.actor, input.orderId, input.items);
+  if (res.success) revalidatePath(`/orders/${input.orderId}`);
+  return res;
+}
+
+/** Admin-only: delete a generated document (file + row). Re-checks admin both
+ * here and in the service. `orderId` is only used to revalidate the page. */
+export async function deleteOrderDocument(input: { documentId: string; orderId: string }): Promise<ActionResult<{ id: string }>> {
+  const a = await resolveDealActor();
+  if (!a.ok) return { success: false, error: a.error, code: a.code };
+  if (!a.actor.isPlatformAdmin) return { success: false, error: "Only admins can delete documents", code: "FORBIDDEN" };
+  const res = await deleteDocument(a.db, a.actor, input.documentId);
+  if (res.success) revalidatePath(`/orders/${input.orderId}`);
+  return res;
 }
 
 /** Generate a document for the deal (interim local renderer), store + return URL. */

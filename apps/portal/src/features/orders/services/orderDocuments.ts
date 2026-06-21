@@ -213,6 +213,28 @@ export async function generateDocument(db: DbClient, actor: ActorContext, input:
   };
 }
 
+/**
+ * Delete a generated document: remove the stored file from the private bucket
+ * and the `order_documents` row. Admin-only (enforced here on the actor, and
+ * again at the action layer). Idempotent — a missing row is treated as success.
+ * Uses the admin client (private bucket; row delete bypasses per-row RLS).
+ */
+export async function deleteDocument(db: DbClient, actor: ActorContext, documentId: string): Promise<ActionResult<{ id: string }>> {
+  if (!isValidUUID(documentId)) return { success: false, error: "Invalid document id", code: "VALIDATION_ERROR" };
+  if (!actor.isPlatformAdmin) return { success: false, error: "Only admins can delete documents", code: "FORBIDDEN" };
+  const admin = createAdminClient() as AnyDb;
+  const { data: row, error } = await admin.from("order_documents").select("id, storage_path").eq("id", documentId).maybeSingle();
+  if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };
+  if (!row) return { success: true, data: { id: documentId } }; // already gone
+  if (row.storage_path) {
+    // Best-effort: a missing object must not block removing the row.
+    await admin.storage.from(STORAGE_BUCKET).remove([row.storage_path as string]);
+  }
+  const { error: delErr } = await admin.from("order_documents").delete().eq("id", documentId);
+  if (delErr) return { success: false, error: delErr.message, code: "DELETE_FAILED" };
+  return { success: true, data: { id: documentId } };
+}
+
 /** Mint a fresh signed download URL for an already-generated document. */
 export async function getDocumentUrl(db: DbClient, _actor: ActorContext, documentId: string): Promise<ActionResult<{ url: string; fileName: string | null }>> {
   if (!isValidUUID(documentId)) return { success: false, error: "Invalid document id", code: "VALIDATION_ERROR" };
