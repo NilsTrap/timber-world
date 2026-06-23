@@ -77,10 +77,12 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") || "list";
-  // Local view axis: the universal Deal view (line items + documents) vs. the
-  // existing order content. Defaults to "deal" — the deal is the primary lens in
-  // the Oscar-integration model; the Order tab is the operational/staircase fallback.
-  const [view, setView] = useState<"order" | "deal">("deal");
+  // Local view axis: the existing order content (products/packages/files) vs. the
+  // universal Deal view (line items + documents). Defaults to "order" — the
+  // operational order is the primary lens for portal users (esp. producers, who
+  // only hold orders.tab.production and can't act on the Deal); the Deal tab
+  // remains one click away. (Per Nils 2026-06-23; was "deal" in the Oscar build.)
+  const [view, setView] = useState<"order" | "deal">("order");
   const [order, setOrder] = useState<Order | null>(null);
   const [packages, setPackages] = useState<OrderPackage[]>([]);
   const [dropdowns, setDropdowns] = useState<RefDropdowns | null>(null);
