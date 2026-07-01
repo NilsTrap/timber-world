@@ -418,18 +418,6 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
     sellerOrgId = (house?.id as string | undefined) ?? null;
   }
 
-  // Every deal lives on a spine — a sale seeds one when none is supplied.
-  let spineId = input.spineId ?? null;
-  if (!spineId) {
-    const sp = await createSpine(db, actor, {
-      title: dealName,
-      productGroup: input.productGroup ?? null,
-      product: input.spineProduct,
-    });
-    if (!sp.success) return sp as unknown as ActionResult<OrderDealView>;
-    spineId = sp.data.id;
-  }
-
   const { data: row, error } = await c
     .from("orders")
     .insert({
@@ -440,7 +428,6 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
       buyer_organisation_id: input.buyerOrganisationId ?? input.customerOrganisationId ?? null,
       seller_organisation_id: sellerOrgId,
       producer_organisation_id: input.producerOrganisationId ?? null,
-      spine_id: spineId,
       currency: input.currency ?? "EUR",
       incoterms: input.incoterms ?? null,
       incoterms_place: input.incotermsPlace ?? null,
@@ -457,6 +444,20 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
     .single();
   if (error || !row) return { success: false, error: error?.message ?? "Failed to create deal", code: "CREATE_FAILED" };
   const orderId = row.id as string;
+
+  // Seed the spine AFTER the order exists, so a failed order insert can't leak an
+  // orphan spine or burn an SP-### number. Best-effort: a deal without a spine is
+  // valid and recoverable (attach later); a spine without a deal is junk.
+  let spineId = input.spineId ?? null;
+  if (!spineId) {
+    const sp = await createSpine(db, actor, {
+      title: dealName,
+      productGroup: input.productGroup ?? null,
+      product: input.spineProduct,
+    });
+    if (sp.success) spineId = sp.data.id;
+  }
+  if (spineId) await c.from("orders").update({ spine_id: spineId }).eq("id", orderId);
 
   // Allocate the deal code at creation (best-effort: a counter failure must not
   // orphan the row — the code can be re-allocated later via allocateDealCode).
@@ -485,6 +486,10 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
       productGroup: input.productGroup ?? null,
       sellerOrganisationId: input.sourceOrganisationId, // supplier sells to us
       buyerOrganisationId: sellerOrgId, // the house buys
+      // Legacy customer slot mirrors the buyer so the buy leg stays visible under
+      // the current 3-party orders RLS (customer/seller/producer) until E3 rewrites
+      // it to seller+buyer. Backfill already keeps customer==buyer for old rows.
+      customerOrganisationId: sellerOrgId,
       spineId, // SAME spine — no new spine spawned
       currency: input.currency ?? "EUR",
     });
