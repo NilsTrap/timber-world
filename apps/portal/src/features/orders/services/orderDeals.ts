@@ -23,7 +23,8 @@ import {
   mapLineItem,
   lineItemToRow,
 } from "./dealModel";
-import { allocateCounter, buildDealCode, clientCodeFromName, dealCodeScope } from "./numbering";
+import { allocateCounter, buildBilateralDealCode, bilateralDealCodeScope, clientCodeFromName } from "./numbering";
+import { createSpine, type SpineProduct } from "./spines";
 
 const DEFAULT_ENTITY_CODE = "TIM";
 
@@ -47,6 +48,9 @@ export interface OrderDealView {
   customer: { id: string | null; code: string | null; name: string | null };
   seller: { id: string | null; code: string | null; name: string | null };
   producer: { id: string | null; code: string | null; name: string | null };
+  buyer: { id: string | null; code: string | null; name: string | null };
+  spineId: string | null;
+  upstreamDealId: string | null;
   lineItems: OrderLineItem[];
   externalRefs: OrderExternalRef[];
   documents: OrderDocumentMeta[];
@@ -60,9 +64,11 @@ const ORDER_SELECT = `
   incoterms, incoterms_place, advance_pct, payment_terms, delivery_terms,
   delivery_deadline, transport_billing, notes,
   customer_organisation_id, seller_organisation_id, producer_organisation_id,
+  buyer_organisation_id, spine_id, upstream_deal_id,
   customer:organisations!orders_customer_organisation_id_fkey(id, code, name),
   seller:organisations!orders_seller_organisation_id_fkey(id, code, name),
-  producer:organisations!orders_producer_organisation_id_fkey(id, code, name)
+  producer:organisations!orders_producer_organisation_id_fkey(id, code, name),
+  buyer:organisations!orders_buyer_organisation_id_fkey(id, code, name)
 `;
 
 /** Map an `orders` row (selected with ORDER_SELECT) to the deal header. */
@@ -88,7 +94,27 @@ function mapOrderDealHeader(row: any): OrderDealSummary {
     customer: { id: row.customer_organisation_id ?? null, code: row.customer?.code ?? null, name: row.customer?.name ?? null },
     seller: { id: row.seller_organisation_id ?? null, code: row.seller?.code ?? null, name: row.seller?.name ?? null },
     producer: { id: row.producer_organisation_id ?? null, code: row.producer?.code ?? null, name: row.producer?.name ?? null },
+    buyer: { id: row.buyer_organisation_id ?? null, code: row.buyer?.code ?? null, name: row.buyer?.name ?? null },
+    spineId: row.spine_id ?? null,
+    upstreamDealId: row.upstream_deal_id ?? null,
   };
+}
+
+export type DealDirection = "sell" | "buy" | "observer";
+
+/**
+ * Direction of a deal RELATIVE to a viewer's org — never an absolute label.
+ * The middle leg is ONE deal: a "sell" to the org that is its seller, a "buy" to
+ * the org that is its buyer, and "observer" to anyone else (e.g. a platform admin).
+ */
+export function dealDirectionFor(
+  sellerOrgId: string | null | undefined,
+  buyerOrgId: string | null | undefined,
+  viewerOrgId: string | null | undefined,
+): DealDirection {
+  if (viewerOrgId && viewerOrgId === sellerOrgId) return "sell";
+  if (viewerOrgId && viewerOrgId === buyerOrgId) return "buy";
+  return "observer";
 }
 
 export async function getOrderDeal(db: DbClient, _actor: ActorContext, orderId: string): Promise<ActionResult<OrderDealView>> {
@@ -300,21 +326,25 @@ export async function allocateDealCode(
   const c = db as DbClient;
   const { data: row, error } = await c
     .from("orders")
-    .select("deal_code, customer_organisation_id, seller_organisation_id, customer:organisations!orders_customer_organisation_id_fkey(name), seller:organisations!orders_seller_organisation_id_fkey(code)")
+    .select("deal_code, seller:organisations!orders_seller_organisation_id_fkey(code), buyer:organisations!orders_buyer_organisation_id_fkey(code), customer:organisations!orders_customer_organisation_id_fkey(name)")
     .eq("id", orderId)
     .single();
   if (error || !row) return { success: false, error: error?.message ?? "Order not found", code: "NOT_FOUND" };
   if (row.deal_code) return { success: true, data: { dealCode: row.deal_code } };
 
-  const entityCode = (row.seller?.code as string | undefined)?.toUpperCase() || DEFAULT_ENTITY_CODE;
-  const clientCode = clientCodeFromName((row.customer?.name as string | undefined) ?? opts?.customerNameFallback ?? undefined);
+  // Bilateral code SELLER-BUYER-NNN. Buyer code from the buyer org, else derived
+  // from the customer name (MCP creates that only know the buyer's name).
+  const sellerCode = (row.seller?.code as string | undefined)?.toUpperCase() || DEFAULT_ENTITY_CODE;
+  const buyerCode =
+    (row.buyer?.code as string | undefined)?.toUpperCase() ||
+    clientCodeFromName((row.customer?.name as string | undefined) ?? opts?.customerNameFallback ?? undefined);
   let seq: number;
   try {
-    seq = await allocateCounter(db, dealCodeScope(entityCode, clientCode));
+    seq = await allocateCounter(db, bilateralDealCodeScope(sellerCode, buyerCode));
   } catch (e) {
     return { success: false, error: (e as Error).message, code: "COUNTER_FAILED" };
   }
-  const dealCode = buildDealCode(entityCode, clientCode, seq);
+  const dealCode = buildBilateralDealCode(sellerCode, buyerCode, seq);
   const { error: upErr } = await c.from("orders").update({ deal_code: dealCode }).eq("id", orderId);
   if (upErr) return { success: false, error: upErr.message, code: "UPDATE_FAILED" };
   return { success: true, data: { dealCode } };
@@ -327,6 +357,13 @@ export interface CreateOrderDealInput {
   sellerOrganisationId?: string | null;
   customerOrganisationId?: string | null;
   producerOrganisationId?: string | null;
+  buyerOrganisationId?: string | null;
+  spineId?: string | null;
+  spineProduct?: Partial<SpineProduct>;
+  /** Auto-spawn the matching BUY deal on the same spine (a sale that needs sourcing). */
+  needsSourcing?: boolean;
+  /** Supplier/producer org that SELLS to us on the auto-spawned buy leg. */
+  sourceOrganisationId?: string | null;
   currency?: string;
   incoterms?: string | null;
   incotermsPlace?: string | null;
@@ -381,6 +418,18 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
     sellerOrgId = (house?.id as string | undefined) ?? null;
   }
 
+  // Every deal lives on a spine — a sale seeds one when none is supplied.
+  let spineId = input.spineId ?? null;
+  if (!spineId) {
+    const sp = await createSpine(db, actor, {
+      title: dealName,
+      productGroup: input.productGroup ?? null,
+      product: input.spineProduct,
+    });
+    if (!sp.success) return sp as unknown as ActionResult<OrderDealView>;
+    spineId = sp.data.id;
+  }
+
   const { data: row, error } = await c
     .from("orders")
     .insert({
@@ -388,8 +437,10 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
       deal_kind: input.dealKind ?? "buy_sell",
       product_group: input.productGroup ?? null,
       customer_organisation_id: input.customerOrganisationId ?? null,
+      buyer_organisation_id: input.buyerOrganisationId ?? input.customerOrganisationId ?? null,
       seller_organisation_id: sellerOrgId,
       producer_organisation_id: input.producerOrganisationId ?? null,
+      spine_id: spineId,
       currency: input.currency ?? "EUR",
       incoterms: input.incoterms ?? null,
       incoterms_place: input.incotermsPlace ?? null,
@@ -422,6 +473,24 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
     await c.from("order_external_refs").insert(
       refs.map((r) => ({ order_id: orderId, ref_type: r.refType, ref_value: r.refValue, label: r.label ?? null }))
     );
+  }
+
+  // Auto-spawn the matching BUY deal on the SAME spine when this sale needs
+  // sourcing (a sale fulfilled from own stock spawns nothing). The buy leg is
+  // strictly bilateral too (supplier → the house) and never spawns further.
+  if (input.needsSourcing && input.sourceOrganisationId) {
+    const buyRes = await createDeal(db, actor, {
+      name: `${dealName} — sourcing`,
+      dealKind: "purchase_only",
+      productGroup: input.productGroup ?? null,
+      sellerOrganisationId: input.sourceOrganisationId, // supplier sells to us
+      buyerOrganisationId: sellerOrgId, // the house buys
+      spineId, // SAME spine — no new spine spawned
+      currency: input.currency ?? "EUR",
+    });
+    if (buyRes.success) {
+      await c.from("orders").update({ upstream_deal_id: buyRes.data.id }).eq("id", orderId);
+    }
   }
 
   return getOrderDeal(db, actor, orderId);
