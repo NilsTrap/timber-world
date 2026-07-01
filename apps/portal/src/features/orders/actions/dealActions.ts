@@ -6,8 +6,11 @@
  * detail page's Deal tab.
  */
 import { revalidatePath } from "next/cache";
+import { getSession } from "@/lib/auth";
+import { getAccessProfile } from "@/lib/access";
 import type { ActionResult } from "../types";
 import type { DealSide, DocType, OrderLineItem } from "../services/dealModel";
+import { projectDealView, resolveFieldAccess } from "../services/dealFields";
 import { getOrderDeal, updateLineItemAmounts, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
 import { generateDocument, getDocumentUrl, deleteDocument, type GeneratedDocument } from "../services/orderDocuments";
 import { resolveDealActor } from "./_dealActor";
@@ -22,7 +25,15 @@ export async function getOrderDealView(orderId: string): Promise<ActionResult<Or
   if (!a.ok) return { success: false, error: a.error, code: a.code };
   const res = await getOrderDeal(a.db, a.actor, orderId);
   if (!res.success) return res as ActionResult<OrderDealViewResult>;
-  return { success: true, data: { ...res.data, viewerIsAdmin: a.actor.isPlatformAdmin } };
+  let view = res.data;
+  // E4 field wall: non-admin deal views are projected through the caller's
+  // field grants (terms, chain linkage, party identities, buy-side items).
+  if (!a.actor.isPlatformAdmin) {
+    const session = await getSession();
+    const profile = await getAccessProfile(session?.portalUserId ?? null, a.orgId);
+    view = projectDealView(view, resolveFieldAccess(profile), a.orgId);
+  }
+  return { success: true, data: { ...view, viewerIsAdmin: a.actor.isPlatformAdmin } };
 }
 
 /** Admin-only: edit price/quantity on a deal's line items (e.g. fill a price the

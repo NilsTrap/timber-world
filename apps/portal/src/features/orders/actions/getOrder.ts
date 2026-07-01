@@ -2,6 +2,12 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
+import { getAccessProfile } from "@/lib/access";
+import {
+  ORDER_FIELD_DOMAINS,
+  projectFields,
+  resolveFieldAccess,
+} from "../services/dealFields";
 import type { Order, ActionResult } from "../types";
 import { isValidUUID } from "../types";
 
@@ -25,7 +31,7 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
   const { data, error } = await client
     .from("orders")
     .select(`
-      id, code, name, project_number, customer_organisation_id, seller_organisation_id, producer_organisation_id, planned_date, date_received, date_loaded,
+      id, code, name, project_number, customer_organisation_id, seller_organisation_id, producer_organisation_id, buyer_organisation_id, planned_date, date_received, date_loaded,
       volume_m3, value_cents, currency, status, notes,
       created_by, created_at, updated_at,
       customer:organisations!orders_customer_organisation_id_fkey (code, name),
@@ -40,10 +46,16 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
     return { success: false, error: "Order not found", code: "NOT_FOUND" };
   }
 
-  // Non-admin: check org match (buyer or seller) and feature
+  // Non-admin: bilateral party check (seller/buyer canonical; producer is
+  // the transitional legacy slot until E8) and feature gate. RLS already
+  // walls the row read above; this keeps the explicit app-layer guard.
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
-    if (data.customer_organisation_id !== orgId && data.seller_organisation_id !== orgId && data.producer_organisation_id !== orgId) {
+    if (
+      data.seller_organisation_id !== orgId &&
+      data.buyer_organisation_id !== orgId &&
+      data.producer_organisation_id !== orgId
+    ) {
       return { success: false, error: "Permission denied", code: "FORBIDDEN" };
     }
     const hasModule = (await getUserEnabledModules(session.portalUserId ?? "", orgId)).has("orders.view");
@@ -108,6 +120,16 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
     updatedAt: data.updated_at,
     fileCount: 0,
   };
+
+  // E4 field wall: project the payload through the caller's field grants.
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const profile = await getAccessProfile(session.portalUserId, orgId);
+    return {
+      success: true,
+      data: projectFields(order, resolveFieldAccess(profile), ORDER_FIELD_DOMAINS),
+    };
+  }
 
   return { success: true, data: order };
 }

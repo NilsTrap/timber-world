@@ -64,8 +64,18 @@ export interface TestUserDef {
   isPlatformAdmin: boolean;
   /** Organisations the user belongs to. Empty for platform admin. */
   orgKeys: string[];
-  /** Modules enabled for this user (intersected with org-enabled at runtime). */
+  /**
+   * Modules enabled for this user (intersected with org-enabled at runtime).
+   * E4: groups subsume user_modules — the seed converts this list into a
+   * deterministic legacy-parity access group (same md5-key formula as
+   * migration 20260701000011) unless `groups` is set.
+   */
   enabledModules: string[];
+  /**
+   * E4: system access-group keys to assign instead of a legacy-parity group
+   * (e.g. ["salesperson"]). When set, enabledModules is ignored.
+   */
+  groups?: string[];
 }
 
 export interface TestOrgDef {
@@ -80,6 +90,10 @@ const PASS_ADMIN = "IjlTestAdmin!9417zk";
 const PASS_ORG_A_FULL = "IjlTestOrgAFull!4kqp82";
 const PASS_ORG_A_LIMITED = "IjlTestOrgALim!7zw3vd";
 const PASS_ORG_B_FULL = "IjlTestOrgBFull!8jm5px";
+const PASS_HOUSE_SALES = "IjlTestHouseSales!2rv9mq";
+const PASS_HOUSE_PURCHASING = "IjlTestHousePurch!6tn4xb";
+const PASS_CLIENT_USER = "IjlTestClient!3wk8fz";
+const PASS_SUPPLIER_USER = "IjlTestSupplier!5hd7cy";
 
 // Note: organisations.code is CHAR(3) — codes must be exactly 3 chars.
 // Module codes match the `modules.code` values in the DB (see migrations
@@ -93,24 +107,41 @@ const FULL_MODULES = [
 ];
 
 // Note: organisations.code is CHAR(3) — codes must be exactly 3 chars.
+// org-a doubles as the E4 "house" (trader in the middle of the chain); its
+// ceiling includes the tab + counterparty modules the seeded groups grant.
 export const TEST_ORGS: TestOrgDef[] = [
   {
     orgKey: "org-a",
     code: "JLA",
     name: "IJL Test Org A",
-    enabledModules: FULL_MODULES,
+    enabledModules: [
+      ...FULL_MODULES,
+      "orders.tab.list",
+      "orders.tab.sales",
+      "orders.tab.prices",
+      "orders.tab.production",
+      "orders.tab.analytics",
+      "counterparties.clients",
+      "counterparties.suppliers",
+    ],
   },
   {
     orgKey: "org-b",
     code: "JLB",
     name: "IJL Test Org B",
-    enabledModules: FULL_MODULES,
+    enabledModules: [...FULL_MODULES, "orders.tab.list"],
   },
   {
     orgKey: "org-c-empty",
     code: "JLC",
     name: "IJL Test Org C (Empty)",
     enabledModules: ["dashboard.view", "orders.view", "inventory.view"],
+  },
+  {
+    orgKey: "org-d-supplier",
+    code: "JLD",
+    name: "IJL Test Supplier D",
+    enabledModules: ["orders.view", "orders.tab.list", "orders.tab.production"],
   },
 ];
 
@@ -150,6 +181,47 @@ export const TEST_USERS: TestUserDef[] = [
     isPlatformAdmin: false,
     orgKeys: ["org-b"],
     enabledModules: FULL_MODULES,
+  },
+  // E4 group personas — the direction-aware wall inside and around the house.
+  {
+    userKey: "house-sales",
+    email: "test-house-sales@ijl.test",
+    password: PASS_HOUSE_SALES,
+    name: "IJL Test — House Salesperson",
+    isPlatformAdmin: false,
+    orgKeys: ["org-a"],
+    enabledModules: [],
+    groups: ["salesperson"],
+  },
+  {
+    userKey: "house-purchasing",
+    email: "test-house-purchasing@ijl.test",
+    password: PASS_HOUSE_PURCHASING,
+    name: "IJL Test — House Purchasing",
+    isPlatformAdmin: false,
+    orgKeys: ["org-a"],
+    enabledModules: [],
+    groups: ["purchasing"],
+  },
+  {
+    userKey: "client-user",
+    email: "test-client-user@ijl.test",
+    password: PASS_CLIENT_USER,
+    name: "IJL Test — Client Login (Org B)",
+    isPlatformAdmin: false,
+    orgKeys: ["org-b"],
+    enabledModules: [],
+    groups: ["client"],
+  },
+  {
+    userKey: "supplier-user",
+    email: "test-supplier-user@ijl.test",
+    password: PASS_SUPPLIER_USER,
+    name: "IJL Test — Supplier Login (Org D)",
+    isPlatformAdmin: false,
+    orgKeys: ["org-d-supplier"],
+    enabledModules: [],
+    groups: ["producer"],
   },
 ];
 

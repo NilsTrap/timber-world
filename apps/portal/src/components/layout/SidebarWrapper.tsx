@@ -19,6 +19,13 @@ interface ModuleNavChild extends NavChild {
   requiresModule?: string | null;
   /** Show when the user has ANY of these modules (OR). Takes precedence over requiresModule. */
   requiresAnyModule?: string[];
+  /**
+   * Module code matched EXACTLY (no sibling prefix matching). Needed where
+   * sibling module codes share a prefix but must gate independently — the
+   * walled address books (counterparties.clients vs .suppliers). Takes
+   * precedence over the other two.
+   */
+  requiresExactModule?: string;
 }
 
 /**
@@ -53,6 +60,10 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
     children: AGENT_APP_CHILDREN },
   { href: "/admin/marketing", label: "CMS", iconName: "Image" },
   { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp" },
+  { href: "/counterparties", label: "Counterparties", iconName: "Handshake", group: "deals", children: [
+    { href: "/counterparties/clients", label: "Clients" },
+    { href: "/counterparties/suppliers", label: "Suppliers" },
+  ]},
   { href: "/admin/crm", label: "CRM", iconName: "Users" },
   { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
   { href: "/admin/inventory", label: "Inventory", iconName: "Package" },
@@ -62,6 +73,7 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
   { href: "/admin/settings", label: "Settings", iconName: "Settings", group: "settings", children: [
     { href: "/admin/settings/fields", label: "Fields" },
     { href: "/admin/settings/gates", label: "Deal Gates" },
+    { href: "/admin/settings/groups", label: "Access Groups" },
     { href: "/admin/settings/packaging", label: "Packaging" },
     { href: "/admin/settings/pricing-units", label: "Pricing Units" },
   ]},
@@ -80,6 +92,11 @@ function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
       requiresAnyModule: AGENT_APP_MODULES, children: AGENT_APP_CHILDREN },
     { href: "/admin/marketing", label: "CMS", iconName: "Image", requiresModule: "marketing.view" },
     { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp", requiresModule: "competitor-pricing.view" },
+    { href: "/counterparties", label: "Counterparties", iconName: "Handshake", group: "deals",
+      requiresAnyModule: ["counterparties.clients", "counterparties.suppliers"], children: [
+      { href: "/counterparties/clients", label: "Clients", requiresExactModule: "counterparties.clients" },
+      { href: "/counterparties/suppliers", label: "Suppliers", requiresExactModule: "counterparties.suppliers" },
+    ]},
     { href: "/admin/crm", label: "CRM", iconName: "Users", requiresModule: "crm.view" },
     { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard", requiresModule: "dashboard.view" },
     { href: "/inventory", label: "Inventory", iconName: "Package", requiresModule: "inventory.view" },
@@ -119,9 +136,13 @@ function moduleMatches(required: string, enabledModules: Set<string>): boolean {
 
 /** Whether a single nav item/child is visible given its module requirement(s). */
 function isVisible(
-  req: { requiresModule?: string | null; requiresAnyModule?: string[] },
+  req: { requiresModule?: string | null; requiresAnyModule?: string[]; requiresExactModule?: string },
   enabledModules: Set<string>
 ): boolean {
+  // Exact requirement: no sibling prefix matching (walled address books)
+  if (req.requiresExactModule) {
+    return enabledModules.has(req.requiresExactModule);
+  }
   // OR requirement: show when the user has ANY of the listed modules
   if (req.requiresAnyModule?.length) {
     return req.requiresAnyModule.some((m) => moduleMatches(m, enabledModules));
@@ -137,9 +158,10 @@ function filterNavItemsByModules(
 ): NavItem[] {
   const result: NavItem[] = [];
   for (const item of items) {
-    // Collapsible sections: filter children individually; hide the whole
+    // Sections with children: filter children individually; hide the whole
     // section when the user can reach none of them.
-    if (item.collapsible && item.children) {
+    if (item.children) {
+      if (!item.collapsible && !isVisible(item, enabledModules)) continue;
       const children = item.children.filter((child) => isVisible(child, enabledModules));
       if (children.length === 0) continue;
       result.push({ ...item, children });

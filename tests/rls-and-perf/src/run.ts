@@ -74,13 +74,23 @@ async function runNegative(): Promise<ProbeResult[]> {
   return runNegativeSuite();
 }
 
+// Probes that document expected app-layer-only gating (RLS is NOT supposed
+// to block them). Reported, but never counted as leaks.
+const INFORMATIONAL_PROBES = new Set(["inventory.no-module-read"]);
+
 function summarizeNegative(results: ProbeResult[]): { leaks: number; report: string } {
-  const leaks = results.filter((r) => r.outcome === "leaked").length;
+  const leaks = results.filter(
+    (r) => r.outcome === "leaked" && !INFORMATIONAL_PROBES.has(r.probeName),
+  ).length;
   const lines: string[] = [
-    `Negative probe results: ${results.length} probes, ${leaks} leaked, ${results.length - leaks} blocked`,
+    `Negative probe results: ${results.length} probes, ${leaks} leaked, ${results.length - leaks} blocked/informational`,
   ];
   for (const r of results) {
-    const icon = r.outcome === "leaked" ? "✗ LEAK   " : "✓ blocked";
+    const icon = INFORMATIONAL_PROBES.has(r.probeName)
+      ? "ℹ info   "
+      : r.outcome === "leaked"
+        ? "✗ LEAK   "
+        : "✓ blocked";
     lines.push(`  ${icon}  ${r.userKey} / ${r.probeName} (rows=${r.rowsSeen})`);
     if (r.errorMessage) lines.push(`            error: ${r.errorMessage}`);
   }

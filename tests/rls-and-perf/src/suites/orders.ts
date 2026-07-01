@@ -14,7 +14,7 @@ import { userClient } from "../lib/supabase.js";
 import { writeSnapshot, type SnapshotPath } from "../lib/snapshot.js";
 
 const ORDERS_SELECT =
-  "id, code, status, customer_organisation_id, seller_organisation_id, producer_organisation_id, created_at, volume_m3";
+  "id, code, status, customer_organisation_id, seller_organisation_id, buyer_organisation_id, producer_organisation_id, created_at, volume_m3";
 
 async function snapshotOrdersForUser(
   client: SupabaseClient,
@@ -25,6 +25,7 @@ async function snapshotOrdersForUser(
     .from("orders")
     .select(ORDERS_SELECT)
     .order("created_at", { ascending: false })
+    .order("id", { ascending: true })
     .limit(200);
 
   const path: SnapshotPath = { userKey, suite: "orders", case: "list" };

@@ -19,6 +19,7 @@ async function snapshotForUser(
     .from("portal_production_entries")
     .select(PROD_SELECT)
     .order("created_at", { ascending: false })
+    .order("id", { ascending: true })
     .limit(200);
 
   const path: SnapshotPath = { userKey, suite: "production", case: "entries" };

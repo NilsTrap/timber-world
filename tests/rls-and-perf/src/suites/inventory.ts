@@ -20,6 +20,7 @@ async function snapshotPackagesForUser(
     .from("inventory_packages")
     .select(PKG_SELECT)
     .order("package_number", { ascending: true })
+    .order("id", { ascending: true })
     .limit(500);
 
   const path: SnapshotPath = { userKey, suite: "inventory", case: "packages" };

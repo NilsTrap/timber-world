@@ -489,9 +489,10 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
       productGroup: input.productGroup ?? null,
       sellerOrganisationId: input.sourceOrganisationId, // supplier sells to us
       buyerOrganisationId: sellerOrgId, // the house buys
-      // Legacy customer slot mirrors the buyer so the buy leg stays visible under
-      // the current 3-party orders RLS (customer/seller/producer) until E3 rewrites
-      // it to seller+buyer. Backfill already keeps customer==buyer for old rows.
+      // Legacy customer slot mirrors the buyer (customer == buyer invariant on
+      // every row until the E8 data migration retires the 3-party columns).
+      // RLS is bilateral seller+buyer since E4 (20260701000010); this write
+      // only keeps legacy list UI columns populated.
       customerOrganisationId: sellerOrgId,
       spineId, // SAME spine — no new spine spawned
       currency: input.currency ?? "EUR",

@@ -46,15 +46,15 @@ import {
 import dynamic from "next/dynamic";
 import type { OrganisationUser } from "../types";
 
-// AddUserDialog (369 LOC) and UserModulesDialog (336 LOC) only mount when
+// AddUserDialog (369 LOC) and UserGroupsDialog only mount when
 // the admin clicks the corresponding action — keep them out of the
 // initial OrganisationUsersTable bundle.
 const AddUserDialog = dynamic(
   () => import("./AddUserDialog").then((mod) => mod.AddUserDialog),
   { ssr: false },
 );
-const UserModulesDialog = dynamic(
-  () => import("./UserModulesDialog").then((mod) => mod.UserModulesDialog),
+const UserGroupsDialog = dynamic(
+  () => import("./UserGroupsDialog").then((mod) => mod.UserGroupsDialog),
   { ssr: false },
 );
 import { EditUserDialog } from "./EditUserDialog";
@@ -150,8 +150,8 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
   const [resendingCredentialsFor, setResendingCredentialsFor] = useState<string | null>(null);
   const [resettingPasswordFor, setResettingPasswordFor] = useState<string | null>(null);
 
-  // User modules dialog state
-  const [modulesUser, setModulesUser] = useState<OrganisationUser | null>(null);
+  // User groups dialog state (E4 — group assignments replaced per-user modules)
+  const [groupsUser, setGroupsUser] = useState<OrganisationUser | null>(null);
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -409,13 +409,13 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {/* Modules button - manage user module access */}
+                        {/* Groups button - manage user access groups */}
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => setModulesUser(user)}
-                          aria-label={`Manage modules for ${user.name}`}
-                          title="Manage modules"
+                          onClick={() => setGroupsUser(user)}
+                          aria-label={`Manage groups for ${user.name}`}
+                          title="Manage groups"
                         >
                           <Settings2 className="h-4 w-4" />
                         </Button>
@@ -619,12 +619,12 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* User Modules Dialog */}
-      <UserModulesDialog
-        user={modulesUser}
+      {/* User Groups Dialog */}
+      <UserGroupsDialog
+        user={groupsUser}
         organisationId={organisationId}
-        open={!!modulesUser}
-        onOpenChange={(open) => !open && setModulesUser(null)}
+        open={!!groupsUser}
+        onOpenChange={(open) => !open && setGroupsUser(null)}
         onSuccess={handleSuccess}
       />
     </div>

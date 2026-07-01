@@ -1,14 +1,257 @@
 {
-  "count": 31,
+  "count": 57,
   "error": null,
   "rows": [
+    {
+      "created_at": "2026-06-16T06:37:32.340359+00:00",
+      "from_organisation_id": null,
+      "id": "f70227e1-bb17-479f-895a-81e9b720d91a",
+      "shipment_code": "SCRAPE-20260616",
+      "shipment_number": 126,
+      "status": "completed",
+      "to_organisation_id": "6d11e93b-02eb-41de-a6b1-f026a35c1cfb"
+    },
+    {
+      "created_at": "2026-06-12T14:52:56.140972+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "da05e909-aa81-4e4a-a7fd-ac7c18a6f344",
+      "shipment_code": "TWG-ART-005",
+      "shipment_number": 125,
+      "status": "completed",
+      "to_organisation_id": "86612f64-3904-4b47-85b8-8cc81edb9f98"
+    },
+    {
+      "created_at": "2026-06-12T14:51:27.543526+00:00",
+      "from_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9",
+      "id": "2875d00d-a7b9-48af-b028-6fda1b497d26",
+      "shipment_code": "EXT-TWG-010",
+      "shipment_number": 124,
+      "status": "completed",
+      "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
+    },
+    {
+      "created_at": "2026-06-11T05:56:48.353802+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "f104e626-95e2-473c-b9ef-1db9601e74b5",
+      "shipment_code": "TWG-ART-004",
+      "shipment_number": 123,
+      "status": "completed",
+      "to_organisation_id": "86612f64-3904-4b47-85b8-8cc81edb9f98"
+    },
+    {
+      "created_at": "2026-06-11T05:47:30.438031+00:00",
+      "from_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9",
+      "id": "cfa6d0d7-624c-461d-b1d5-6837e3ff7af6",
+      "shipment_code": "EXT-TWG-009",
+      "shipment_number": 122,
+      "status": "completed",
+      "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
+    },
+    {
+      "created_at": "2026-06-11T05:46:50.44981+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "cd2694a0-71aa-4d48-a854-c1ac8f68e948",
+      "shipment_code": "TWG-EXT-010",
+      "shipment_number": 121,
+      "status": "completed",
+      "to_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9"
+    },
+    {
+      "created_at": "2026-06-11T05:42:46.877789+00:00",
+      "from_organisation_id": "86612f64-3904-4b47-85b8-8cc81edb9f98",
+      "id": "5ad933b1-09f9-4d25-a036-724cbf1d6a27",
+      "shipment_code": "ART-TWG-002",
+      "shipment_number": 120,
+      "status": "completed",
+      "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
+    },
+    {
+      "created_at": "2026-06-10T09:17:50.234261+00:00",
+      "from_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9",
+      "id": "ea4d8f06-5ecd-4f4e-83d7-3a9a40c7c1e1",
+      "shipment_code": "EXT-TWG-008",
+      "shipment_number": 119,
+      "status": "completed",
+      "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
+    },
+    {
+      "created_at": "2026-06-10T09:17:26.422531+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "f5142e1d-edea-401d-917e-4e2e663a31fd",
+      "shipment_code": "TWG-ART-003",
+      "shipment_number": 118,
+      "status": "completed",
+      "to_organisation_id": "86612f64-3904-4b47-85b8-8cc81edb9f98"
+    },
+    {
+      "created_at": "2026-06-10T08:55:23.35393+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "c297bcb4-95cd-440a-9504-9dba17ab1125",
+      "shipment_code": "TWG-ART-002",
+      "shipment_number": 116,
+      "status": "completed",
+      "to_organisation_id": "86612f64-3904-4b47-85b8-8cc81edb9f98"
+    },
+    {
+      "created_at": "2026-06-10T07:49:40.039668+00:00",
+      "from_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9",
+      "id": "d90a7af1-9a8c-4612-81eb-9b9e7f171cc7",
+      "shipment_code": "EXT-TWG-007",
+      "shipment_number": 115,
+      "status": "completed",
+      "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
+    },
+    {
+      "created_at": "2026-06-10T07:48:41.538817+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "ed8e2905-3132-4110-bc4d-a60ea2fd0633",
+      "shipment_code": "TWG-EXT-009",
+      "shipment_number": 114,
+      "status": "completed",
+      "to_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9"
+    },
+    {
+      "created_at": "2026-06-10T07:47:24.889732+00:00",
+      "from_organisation_id": "86612f64-3904-4b47-85b8-8cc81edb9f98",
+      "id": "371e658f-9e95-4a8a-8f26-6e41e4790441",
+      "shipment_code": "ART-TWG-001",
+      "shipment_number": 113,
+      "status": "completed",
+      "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
+    },
+    {
+      "created_at": "2026-06-09T06:26:57.589209+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "a1ed4f41-284b-48ed-8001-50bb2b1ddf0d",
+      "shipment_code": "TWG-EXT-008",
+      "shipment_number": 111,
+      "status": "completed",
+      "to_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9"
+    },
+    {
+      "created_at": "2026-06-08T10:07:29.323623+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "6f79d9f8-c004-42b4-bc78-df004cb0bd66",
+      "shipment_code": "TWG-EXT-007",
+      "shipment_number": 110,
+      "status": "completed",
+      "to_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9"
+    },
+    {
+      "created_at": "2026-06-08T08:40:00.568259+00:00",
+      "from_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9",
+      "id": "f0bff868-3a7b-43f5-941d-28c1e742de1a",
+      "shipment_code": "EXT-TWG-006",
+      "shipment_number": 106,
+      "status": "completed",
+      "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
+    },
+    {
+      "created_at": "2026-06-08T07:57:02.594181+00:00",
+      "from_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9",
+      "id": "7feb58b1-f3b7-4cd7-a2c6-a0d1e6928ae7",
+      "shipment_code": "EXT-TWG-005",
+      "shipment_number": 105,
+      "status": "completed",
+      "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
+    },
+    {
+      "created_at": "2026-06-08T07:54:55.396955+00:00",
+      "from_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9",
+      "id": "2d0219f3-907b-4857-af78-c15c743edb06",
+      "shipment_code": "EXT-TWG-004",
+      "shipment_number": 104,
+      "status": "completed",
+      "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
+    },
+    {
+      "created_at": "2026-06-08T07:50:50.460805+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "7087d01b-5ad4-49df-872d-4dd7248705be",
+      "shipment_code": "TWG-EXT-006",
+      "shipment_number": 103,
+      "status": "completed",
+      "to_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9"
+    },
+    {
+      "created_at": "2026-06-08T07:36:28.642327+00:00",
+      "from_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9",
+      "id": "5c56003f-75b0-48b1-a7de-27a71bb75ace",
+      "shipment_code": "EXT-TWG-003",
+      "shipment_number": 102,
+      "status": "completed",
+      "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
+    },
+    {
+      "created_at": "2026-06-08T07:19:59.641869+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "3ff5d368-370e-4160-882a-884ea76216c6",
+      "shipment_code": "TWG-EXT-005",
+      "shipment_number": 99,
+      "status": "completed",
+      "to_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9"
+    },
+    {
+      "created_at": "2026-06-08T07:17:40.669735+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "5a667b0c-e080-43a2-a39f-f3097ae043c4",
+      "shipment_code": "TWG-EXT-004",
+      "shipment_number": 98,
+      "status": "completed",
+      "to_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9"
+    },
+    {
+      "created_at": "2026-06-08T07:12:24.318141+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "95ef2096-5e64-4d8c-b196-a63c8aa1c9f0",
+      "shipment_code": "TWG-EXT-003",
+      "shipment_number": 96,
+      "status": "completed",
+      "to_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9"
+    },
+    {
+      "created_at": "2026-06-05T07:35:16.31007+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "ac140e28-79f7-456c-8ad1-06773badb2df",
+      "shipment_code": "TWG-EXT-002",
+      "shipment_number": 92,
+      "status": "completed",
+      "to_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9"
+    },
+    {
+      "created_at": "2026-06-05T07:33:10.123883+00:00",
+      "from_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9",
+      "id": "59a24543-d203-4e90-902e-83acba3c6ba3",
+      "shipment_code": "EXT-TWG-002",
+      "shipment_number": 91,
+      "status": "completed",
+      "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
+    },
+    {
+      "created_at": "2026-06-04T06:22:33.314306+00:00",
+      "from_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2",
+      "id": "f482a68d-fc3e-4b4c-aa9a-5a22015a4379",
+      "shipment_code": "TWG-EXT-001",
+      "shipment_number": 90,
+      "status": "completed",
+      "to_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9"
+    },
+    {
+      "created_at": "2026-06-04T06:16:52.750853+00:00",
+      "from_organisation_id": "161626c4-a9fe-413b-87fa-9eb277c3d5d9",
+      "id": "3afded16-3873-4475-834e-32ed6e1314f6",
+      "shipment_code": "EXT-TWG-001",
+      "shipment_number": 89,
+      "status": "completed",
+      "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
+    },
     {
       "created_at": "2026-05-22T11:02:41.639054+00:00",
       "from_organisation_id": "ff9feae5-423c-4c36-865d-f58c70b8c44e",
       "id": "e9248d4a-4d59-4870-80cd-f16d451d58e1",
       "shipment_code": "INE-TWG-016",
       "shipment_number": 88,
-      "status": "pending",
+      "status": "completed",
       "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
     },
     {
@@ -17,7 +260,7 @@
       "id": "b07e741b-88ec-40f5-b835-92fc6817e416",
       "shipment_code": "INE-TWG-015",
       "shipment_number": 87,
-      "status": "draft",
+      "status": "completed",
       "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
     },
     {
@@ -26,7 +269,7 @@
       "id": "b2fff92e-b5e9-425d-8e25-b382b5322e89",
       "shipment_code": "INE-TWG-014",
       "shipment_number": 86,
-      "status": "pending",
+      "status": "completed",
       "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
     },
     {
@@ -46,15 +289,6 @@
       "shipment_number": 83,
       "status": "completed",
       "to_organisation_id": "c1bed4cb-4cfb-4827-84e0-432929fb59b2"
-    },
-    {
-      "created_at": "2026-05-06T08:28:11.610046+00:00",
-      "from_organisation_id": null,
-      "id": "4b2687dc-8de7-4c3a-940e-975ef29c5a4b",
-      "shipment_code": "SCRAPE-20260506",
-      "shipment_number": 82,
-      "status": "completed",
-      "to_organisation_id": "6d11e93b-02eb-41de-a6b1-f026a35c1cfb"
     },
     {
       "created_at": "2026-04-30T05:17:00.783572+00:00",

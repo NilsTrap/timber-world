@@ -1,0 +1,17 @@
+{
+  "count": 1,
+  "error": null,
+  "rows": [
+    {
+      "buyer_organisation_id": "eaba66f3-20a4-492f-b42c-5f45e83f8a4b",
+      "code": "IJL-E4-BUY-001",
+      "created_at": "2026-07-01T20:55:38.65847+00:00",
+      "customer_organisation_id": "eaba66f3-20a4-492f-b42c-5f45e83f8a4b",
+      "id": "b3513020-2275-4244-89b6-d9f51bf84220",
+      "producer_organisation_id": null,
+      "seller_organisation_id": "017ab1ba-8201-465d-a9e2-8b7858a292c2",
+      "status": "draft",
+      "volume_m3": null
+    }
+  ]
+}

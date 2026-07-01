@@ -19,6 +19,7 @@ async function snapshotForUser(
     .from("shipments")
     .select(SHIP_SELECT)
     .order("created_at", { ascending: false })
+    .order("id", { ascending: true })
     .limit(200);
 
   const path: SnapshotPath = { userKey, suite: "shipments", case: "list" };

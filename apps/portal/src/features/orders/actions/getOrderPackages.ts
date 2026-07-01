@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
+import { getAccessProfile } from "@/lib/access";
+import { resolveFieldAccess, type FieldAccess } from "../services/dealFields";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
 
@@ -59,13 +61,14 @@ export async function getOrderPackages(
   // (Wood ART) counterparty — which made the detail-page products table empty for
   // them. We therefore read packages via the service-role admin client below, but
   // ONLY after verifying the caller may see this order: admins pass; everyone else
-  // must be a party on the order (the orders RLS row read proves it) AND have
-  // orders.view. Pricing is stripped for parties without a pricing-bearing tab.
-  let stripPricing = false;
+  // must be a party on the order (the orders RLS row read proves it — E4's
+  // direction-aware bilateral policy) AND have orders.view. Package pricing is
+  // projected through the E4 field wall (deal_terms / margin domains).
+  let fieldAccess: FieldAccess | null = null;
   if (!isAdmin(session)) {
     const { data: ord } = await client
       .from("orders")
-      .select("customer_organisation_id, seller_organisation_id, producer_organisation_id")
+      .select("seller_organisation_id, buyer_organisation_id, producer_organisation_id")
       .eq("id", orderId)
       .single();
     if (!ord) {
@@ -73,17 +76,18 @@ export async function getOrderPackages(
     }
     const orgId = session.currentOrganizationId || session.organisationId;
     const isParty =
-      ord.customer_organisation_id === orgId ||
       ord.seller_organisation_id === orgId ||
+      ord.buyer_organisation_id === orgId ||
       ord.producer_organisation_id === orgId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
     if (!isParty || !mods.has("orders.view")) {
       return { success: false, error: "Permission denied", code: "FORBIDDEN" };
     }
-    stripPricing = !["orders.tab.prices", "orders.tab.sales", "orders.tab.analytics"].some(
-      (m) => mods.has(m)
-    );
+    const profile = await getAccessProfile(session.portalUserId, orgId);
+    fieldAccess = resolveFieldAccess(profile);
   }
+  const seeTerms = fieldAccess ? fieldAccess.domainVisible("deal_terms") : true;
+  const seeMargin = fieldAccess ? fieldAccess.domainVisible("margin") : true;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
@@ -129,15 +133,15 @@ export async function getOrderPackages(
     volumeM3: row.volume_m3,
     staircaseCodeId: row.staircase_code_id ?? null,
     status: row.status,
-    // Pricing nulled for parties without a pricing-bearing tab (producers). These
-    // columns are hidden on the production tab anyway; this keeps them out of the
-    // payload entirely.
-    unitPricePiece: stripPricing ? null : row.unit_price_piece,
-    unitPriceM3: stripPricing ? null : row.unit_price_m3,
-    unitPriceM2: stripPricing ? null : row.unit_price_m2,
-    workPerPiece: stripPricing ? null : (row.work_per_piece != null ? parseFloat(row.work_per_piece) : null),
-    transportPerPiece: stripPricing ? null : (row.transport_per_piece != null ? parseFloat(row.transport_per_piece) : null),
-    eurPerM3: stripPricing ? null : (row.eur_per_m3 != null ? parseFloat(row.eur_per_m3) : null),
+    // Pricing projected through the field wall: unit prices are the leg's
+    // deal_terms; work/transport/eur-per-m³ components are margin analytics.
+    // Hidden fields never reach the payload.
+    unitPricePiece: seeTerms ? row.unit_price_piece : null,
+    unitPriceM3: seeTerms ? row.unit_price_m3 : null,
+    unitPriceM2: seeTerms ? row.unit_price_m2 : null,
+    workPerPiece: seeMargin ? (row.work_per_piece != null ? parseFloat(row.work_per_piece) : null) : null,
+    transportPerPiece: seeMargin ? (row.transport_per_piece != null ? parseFloat(row.transport_per_piece) : null) : null,
+    eurPerM3: seeMargin ? (row.eur_per_m3 != null ? parseFloat(row.eur_per_m3) : null) : null,
     notes: row.notes,
     productionEntryId: row.production_entry_id,
   }));

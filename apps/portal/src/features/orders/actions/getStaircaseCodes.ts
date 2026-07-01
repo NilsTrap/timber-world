@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
+import { getAccessProfile } from "@/lib/access";
+import { resolveFieldAccess } from "../services/dealFields";
 import type { ActionResult } from "../types";
 
 export interface StaircaseCode {
@@ -32,18 +34,20 @@ export async function getStaircaseCodes(): Promise<ActionResult<StaircaseCode[]>
   // The staircase code is a product identifier (e.g. "Tread40") needed to render
   // the read-only "Code" column on every orders tab — including Production, which
   // producer (Wood ART) users see. So gate on plain orders.view, not the pricing
-  // tab. The codes carry embedded pricing (work/transport/final/eur-per-m3), which
-  // we strip below for anyone without a pricing-bearing tab module.
-  let stripCodePricing = false;
+  // tab. The embedded values project through the E4 field wall: the final price
+  // is deal_terms (customer-facing), the cost components (work/transport/eur-per-m³)
+  // are margin — a sell-side group must not receive the margin inputs.
+  let seeFinalPrice = true;
+  let seeCostComponents = true;
   if (!isAdmin(session)) {
     const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
     if (!mods.has("orders.view")) {
       return { success: false, error: "Permission denied", code: "FORBIDDEN" };
     }
-    stripCodePricing = !["orders.tab.prices", "orders.tab.sales", "orders.tab.analytics"].some(
-      (m) => mods.has(m)
-    );
+    const access = resolveFieldAccess(await getAccessProfile(session.portalUserId, orgId));
+    seeFinalPrice = access.domainVisible("deal_terms");
+    seeCostComponents = access.domainVisible("margin");
   }
 
   const supabase = await createClient();
@@ -69,11 +73,12 @@ export async function getStaircaseCodes(): Promise<ActionResult<StaircaseCode[]>
     widthMm: row.width_mm,
     lengthMm: row.length_mm,
     riserMm: row.riser_mm ?? null,
-    // Pricing stripped for non-pricing users (Code label + dimensions still work)
-    workCostCents: stripCodePricing ? 0 : (row.work_cost_cents ?? 0),
-    transportCostCents: stripCodePricing ? null : (row.transport_cost_cents ?? null),
-    finalPriceCents: stripCodePricing ? null : (row.final_price_cents ?? null),
-    eurPerM3Cents: stripCodePricing ? null : (row.eur_per_m3_cents ?? null),
+    // Cost components gated on margin, final price on deal_terms (Code label +
+    // dimensions still work for everyone).
+    workCostCents: seeCostComponents ? (row.work_cost_cents ?? 0) : 0,
+    transportCostCents: seeCostComponents ? (row.transport_cost_cents ?? null) : null,
+    finalPriceCents: seeFinalPrice ? (row.final_price_cents ?? null) : null,
+    eurPerM3Cents: seeCostComponents ? (row.eur_per_m3_cents ?? null) : null,
   }));
 
   return { success: true, data: codes };

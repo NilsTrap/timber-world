@@ -45,32 +45,48 @@ export async function orgHasModule(
  * Cross-request cached fetch of a (user, org) module set. Same caching
  * strategy as getOrgEnabledModules — 5-min TTL, revalidate via the
  * `user-modules:<userId>:<orgId>` tag from any admin action that
- * toggles user_modules.
+ * changes group rights or assignments.
+ *
+ * E4: groups subsume user_modules — module grants now come from the user's
+ * access groups in this org (union), still capped by the org ceiling:
+ *   effective = organization_modules ∩ (∪ module rights of assigned groups)
+ * The signature and the 109 call sites are unchanged.
  */
 const fetchUserModules = (userId: string, organizationId: string) =>
   unstable_cache(
     async (uid: string, oid: string): Promise<string[]> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const client = adminClient as any;
-      const [orgResult, userResult] = await Promise.all([
+      const [orgResult, assignmentResult] = await Promise.all([
         client
           .from("organization_modules")
           .select("module_code")
           .eq("organization_id", oid)
           .eq("enabled", true),
         client
-          .from("user_modules")
-          .select("module_code")
+          .from("user_access_groups")
+          .select("group_id")
           .eq("user_id", uid)
-          .eq("organization_id", oid)
-          .eq("enabled", true),
+          .eq("organization_id", oid),
       ]);
+      const groupIds = ((assignmentResult.data || []) as Array<{ group_id: string }>).map(
+        (r) => r.group_id,
+      );
+      if (groupIds.length === 0) return [];
+      const { data: rightRows } = await client
+        .from("access_group_rights")
+        .select("key")
+        .in("group_id", groupIds)
+        .eq("right_type", "module")
+        .eq("resource", "portal");
       const orgSet = new Set(
         (orgResult.data || []).map((m: { module_code: string }) => m.module_code),
       );
-      return ((userResult.data || []) as Array<{ module_code: string }>)
-        .map((m) => m.module_code)
-        .filter((code) => orgSet.has(code));
+      const codes = new Set<string>();
+      for (const row of (rightRows || []) as Array<{ key: string }>) {
+        if (orgSet.has(row.key)) codes.add(row.key);
+      }
+      return Array.from(codes);
     },
     ["user-modules", userId, organizationId],
     { revalidate: 300, tags: [`user-modules:${userId}:${organizationId}`] },

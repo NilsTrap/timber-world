@@ -129,6 +129,10 @@ export async function createOrder(input: {
       name,
       project_number: projectNumber,
       customer_organisation_id: customerOrgId,
+      // Bilateral invariant (E4): buyer is the canonical counterparty of the
+      // seller; on legacy 3-party orders buyer == customer. Required for the
+      // seller+buyer RLS INSERT policy to accept customer-side creators.
+      buyer_organisation_id: customerOrgId,
       seller_organisation_id: sellerOrgId,
       date_received: dateReceived,
       date_loaded: dateLoaded,

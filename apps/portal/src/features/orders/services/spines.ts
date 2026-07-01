@@ -56,7 +56,7 @@ export interface SpineDealRef {
   name: string | null;
   status: string;
   sellerOrgId: string | null;
-  buyerOrgId: string | null; // today = customer_organisation_id; E2 introduces buyer_organisation_id
+  buyerOrgId: string | null; // buyer_organisation_id (E2), customer fallback for pre-backfill rows
 }
 
 export interface SpineLineageRow {
@@ -234,7 +234,7 @@ export async function listSpineDeals(
   if (!isValidUUID(spineId)) return { success: false, error: "Invalid spine id", code: "VALIDATION_ERROR" };
   const { data, error } = await db
     .from("orders")
-    .select("id, code, deal_code, name, status, seller_organisation_id, customer_organisation_id")
+    .select("id, code, deal_code, name, status, seller_organisation_id, buyer_organisation_id, customer_organisation_id")
     .eq("spine_id", spineId)
     .order("created_at", { ascending: true });
   if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };
@@ -247,7 +247,8 @@ export async function listSpineDeals(
       name: r.name ?? null,
       status: r.status,
       sellerOrgId: r.seller_organisation_id ?? null,
-      buyerOrgId: r.customer_organisation_id ?? null,
+      // buyer is canonical since E2; customer fallback covers pre-backfill rows
+      buyerOrgId: r.buyer_organisation_id ?? r.customer_organisation_id ?? null,
     }),
   );
   return { success: true, data: refs };

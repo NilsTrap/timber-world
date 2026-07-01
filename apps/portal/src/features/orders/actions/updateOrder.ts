@@ -2,7 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
+import { getAccessProfile } from "@/lib/access";
 import { updateOrderSchema } from "../schemas";
+import { resolveFieldAccess, disallowedEdits } from "../services/dealFields";
 import type { Order, ActionResult } from "../types";
 import { isValidUUID } from "../types";
 import { logOrderActivity } from "./logOrderActivity";
@@ -62,57 +64,6 @@ export async function updateOrder(
     };
   }
 
-  // 2. Check permission. Two gates:
-  //    - admin OR orders.view  → can edit every field in `input`
-  //    - orders.tab.production → can edit ONLY production-tab fields below
-  //      (date loaded, planned date, production m³ / material / finishing / wood art
-  //      and their invoice + payment metadata). Reject any other field with FORBIDDEN.
-  // Anyone who can see the Production tab may record its numbers on shared orders;
-  // the field whitelist still stops them touching pricing / customer data.
-  const PRODUCTION_EDIT_FIELDS = new Set<string>([
-    "dateLoaded",
-    "plannedDate",
-    "treadM3",
-    "winderM3",
-    "quarterM3",
-    "usedMaterialM3",
-    "productionMaterial",
-    "productionFinishing",
-    "productionInvoiceNumber",
-    "productionPaymentDate",
-    "woodArt",
-    "woodArtCnc",
-    "woodArtInvoiceNumber",
-    "woodArtPaymentDate",
-  ]);
-  if (!isAdmin(session)) {
-    const userOrgId = session.currentOrganizationId || session.organisationId;
-    const userModules = await getUserEnabledModules(session.portalUserId ?? "", userOrgId);
-    const canCreate = userModules.has("orders.view");
-    if (!canCreate) {
-      const canProductionEdit = userModules.has("orders.tab.production");
-      if (!canProductionEdit) {
-        return {
-          success: false,
-          error: "Permission denied",
-          code: "FORBIDDEN",
-        };
-      }
-      // Reject any input field outside the production-edit allowlist.
-      const submittedFields = Object.keys(input).filter(
-        (k) => (input as Record<string, unknown>)[k] !== undefined,
-      );
-      const forbidden = submittedFields.filter((f) => !PRODUCTION_EDIT_FIELDS.has(f));
-      if (forbidden.length > 0) {
-        return {
-          success: false,
-          error: `Permission denied for field${forbidden.length > 1 ? "s" : ""}: ${forbidden.join(", ")}`,
-          code: "FORBIDDEN",
-        };
-      }
-    }
-  }
-
   // 3. Validate order ID
   if (!isValidUUID(orderId)) {
     return {
@@ -120,6 +71,56 @@ export async function updateOrder(
       error: "Invalid order ID",
       code: "INVALID_ID",
     };
+  }
+
+  const supabasePre = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const preClient = supabasePre as any;
+
+  // 2. Check permission. E4: the config-driven field wall replaces the old
+  //    hardcoded PRODUCTION_EDIT_FIELDS whitelist. A non-admin needs orders
+  //    access (orders.view or the production tab) to edit at all; which
+  //    fields they may edit comes from their groups' field-domain/override
+  //    grants (editable in Settings → Groups, no deploy).
+  if (!isAdmin(session)) {
+    const userOrgId = session.currentOrganizationId || session.organisationId;
+    const userModules = await getUserEnabledModules(session.portalUserId ?? "", userOrgId);
+    if (!userModules.has("orders.view") && !userModules.has("orders.tab.production")) {
+      return {
+        success: false,
+        error: "Permission denied",
+        code: "FORBIDDEN",
+      };
+    }
+    // The field wall is derived from the caller's CURRENT org, so that org
+    // must actually be a party to the order being written — otherwise a
+    // multi-org user could edit an order reachable only through org B while
+    // holding org A's (more permissive) field grants. RLS enforces row
+    // reachability across ALL memberships but has no column-level wall, so we
+    // pin the org here (mirrors getOrder's party check).
+    const { data: ord } = await preClient
+      .from("orders")
+      .select("seller_organisation_id, buyer_organisation_id, producer_organisation_id")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (
+      !ord ||
+      (ord.seller_organisation_id !== userOrgId &&
+        ord.buyer_organisation_id !== userOrgId &&
+        ord.producer_organisation_id !== userOrgId)
+    ) {
+      return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    }
+    const profile = await getAccessProfile(session.portalUserId, userOrgId);
+    const access = resolveFieldAccess(profile);
+    const forbidden = disallowedEdits(input as Record<string, unknown>, access);
+    if (forbidden.length > 0) {
+      return {
+        success: false,
+        error: `Permission denied for field${forbidden.length > 1 ? "s" : ""}: ${forbidden.join(", ")}`,
+        code: "FORBIDDEN",
+      };
+    }
   }
 
   // 4. Validate input with Zod
@@ -132,9 +133,8 @@ export async function updateOrder(
     };
   }
 
-  const supabase = await createClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const client = supabase as any;
+  // Reuse the RLS-enforcing client created for the party check above.
+  const client = preClient;
 
   // 5. Build update object (snake_case for DB)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,8 +142,13 @@ export async function updateOrder(
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
   if (parsed.data.projectNumber !== undefined)
     updateData.project_number = parsed.data.projectNumber;
-  if (parsed.data.customerOrganisationId !== undefined)
+  if (parsed.data.customerOrganisationId !== undefined) {
     updateData.customer_organisation_id = parsed.data.customerOrganisationId;
+    // Bilateral invariant (E4, until the E8 data migration): the legacy
+    // customer slot and the canonical buyer stay equal on 3-party orders so
+    // the seller+buyer RLS keeps matching rows edited through this path.
+    updateData.buyer_organisation_id = parsed.data.customerOrganisationId;
+  }
   if (parsed.data.sellerOrganisationId !== undefined)
     updateData.seller_organisation_id = parsed.data.sellerOrganisationId;
   if (parsed.data.producerOrganisationId !== undefined)

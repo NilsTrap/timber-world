@@ -51,22 +51,69 @@ New `spine_lineage` (many-to-many for splits/merges): `spine_id`, `related_spine
 
 ---
 
-## E3 — Group-and-rights + field-level wall + deal-level isolation
+## E4 — Group-and-rights + field-level wall + deal-level isolation (FINAL DESIGN 2026-07-01)
 
-**Goal:** reintroduce an editable rights layer (generalizing the deleted roles model) with action + visibility + scope rights, a field-level visibility wall, and deal isolation that hides the middle leg.
+> Numbering note: earlier revisions of this file called the access epic "E3" and lifecycle "E4" — the plan's numbering (access = **E4**, lifecycle = E3, shipped) is authoritative. Code comments in `orderDeals.ts` / migration `20260701000004` saying "E3" mean THIS epic.
 
-- `access_groups` (`id`, `organization_id` nullable=global, `name`, `description`, `is_system`) — a group = a named role.
-- `access_group_rights` (`group_id`, `right_type ∈ (action, visibility, scope)`, `resource`, `key`, `value` JSONB) — action (create/edit/delete X), visibility (see field/section Y), scope (which deals/spines, e.g. only where my org is a party).
-- `user_access_groups` (`user_id`, `organization_id`, `group_id`).
-- **Field-level wall** = `field_visibility_rules` (`group_id`, `resource='deal'`, `field_key`, `visible`, `editable`) — generalizes `PRODUCTION_EDIT_FIELDS`. Enforced by a projection layer in the service tier (read) + a field-guard in the write actions (replaces the hardcoded set).
-- **Deal isolation (hide the middle leg)** = the new RLS predicate on `orders`: platform admin OR `current_user_in_org(seller_organisation_id)` OR `current_user_in_org(buyer_organisation_id)`. Because deals are bilateral, the end customer sees only the sell-leg; the producer sees only the buy-leg. The middle price is structurally invisible. This **replaces** the 3-party predicate.
-- In-app editable: the groups/rights + field-rules admin UI (extends the existing org-modules admin surface).
+**Edgars's steer (2026-07-01):** (1) **global groups** (one platform-wide set, house-admin editable) with **per-org assignment** (a user gets a group per org membership); (2) v1 walls = buy-side pricing + supplier identity (vs Salesperson/Client), sell-side pricing + customer identity (vs Purchasing/Producer/Warehouse), margins/commissions admin-only; (3) **groups SUBSUME the module system in E4** — `user_modules` stops being read; module grants come from groups. `organization_modules` stays as the org-level ceiling; `getUserEnabledModules(portalUserId, orgId)` keeps its signature/caching (109 call sites untouched) but resolves **org ceiling ∩ (∪ modules of the user's groups in that org)**.
 
-**Proof:** a scoped role sees only its deals (RLS negative-probe: customer cannot select the buy-leg row); a field marked hidden is absent from the read projection and rejected on write; group/rights editable in-app and take effect without redeploy.
+### Schema (all global-scope, additive)
+- `access_groups` (`id`, `key` TEXT UNIQUE slug, `name`, `description`, `is_system` BOOL, `sort_order`) — **no organization_id**: groups are global per the steer.
+- `access_group_rights` (`id`, `group_id` FK CASCADE, `right_type ∈ (module, action, visibility, field, scope)`, `resource` TEXT, `key` TEXT, `value` JSONB DEFAULT '{}', UNIQUE(group_id, right_type, resource, key)). One table for all right kinds:
+  - `module` / `portal` / `<module_code>` — the subsumed module grants (incl. `orders.tab.*`).
+  - `visibility` / `deal` / `side.sell` | `side.buy` | `legacy.producer` | `spine.status` — **row-level** deal access, org-relative (Salesperson=side.sell; Purchasing/Client=side.buy; Producer=side.sell + legacy.producer).
+  - `visibility` / `deal_fields` / `<domain>` `{visible, editable}` — **field-domain** grants (see registry below).
+  - `field` / `deal` / `<fieldKey>` `{visible, editable}` — per-field overrides; take precedence over the domain grant (this is what the DoD "hide one field in settings" edits).
+  - `scope` / `deal` / `deals` = `"mine" | "company" | "all"` — mine = `created_by = current_portal_user_id()` (v1 definition), company = org is a leg party, all = everything (Super admin group only).
+  - `action` / `counterparty` / `clients` | `suppliers` — address-book access (view+manage v1).
+- `user_access_groups` (`user_id` FK portal_users, `organization_id` FK organisations, `group_id` FK, PK(user_id, organization_id, group_id)) — per-org assignment, multiple groups allowed (rights union).
+- `organisations.is_supplier` BOOL (new flag; the supplier book = `is_supplier OR is_producer`; client book = `is_customer`).
+- `platform_settings` (key TEXT PK, value JSONB) — `purchasing_may_reuse_clients` (default false), the spec §9.3 admin toggle.
+- `user_modules` is NOT dropped (E8 cleanup) — migration `…011` maps each existing (user, org) effective set onto seeded groups where equal, else deterministic `legacy-set-N` groups, preserving exact access.
+
+### RLS (the isolation wall)
+- New helpers (SECURITY DEFINER STABLE, like existing): `current_user_has_right(org, type, key)` (rights union over the caller's groups in that org) and **`can_access_deal_row(seller, buyer, producer, created_by)`** — the single master predicate:
+  `platform_admin OR (in_org(seller) AND right('visibility','side.sell') AND scope-ok) OR (in_org(buyer) AND right('visibility','side.buy') AND scope-ok) OR (in_org(producer) AND right('visibility','legacy.producer'))` — the producer arm is **transitional** for the 69 un-migrated legacy orders; removed in E8.
+- Rewritten in lockstep (the complete 3-party inventory): `orders` ×4 policies, `can_access_order()` (children: line_items/external_refs/documents), `spines_select` + `spine_lineage_select` (+ require `spine.status` right for non-admins), `deal_gate_conf_select` (drop customer/producer arms), `current_user_shares_context_with_org` arm (b) → deal-access-aware and arm (c) → book-aware (a Salesperson stops seeing supplier org rows via raw PostgREST).
+- **Close the open holes**: `order_files` + `order_activity_log` get `can_access_order(order_id)` policies (they are `USING(true)` today); `orders` storage bucket policies tightened same way.
+- Spine seeding for portal users (deferred from E2): tightly-scoped INSERT policy — creator must be platform admin OR hold `action/deal/create` — resolves migration `…004`'s TODO.
+- New indexes: `user_access_groups(user_id, organization_id)`, `access_group_rights(group_id)`, `orders(buyer_organisation_id, status)`.
+
+### Field wall (app-layer projection; RLS has no column security)
+- **Field→domain registry** (code, `dealFields.ts`): `general` (code/name/dates/volumes/specs/status/lifecycle — visible to anyone who can see the row), `deal_terms` (value/currency/advance/payment/delivery/incoterms + line-item prices — the leg's own commercial terms, shared by its two parties), `production` (the old PRODUCTION_EDIT_FIELDS + tread/winder/quarter m³), `margin` (`pl_*`, eur_per_m3 analytics — **admin-only per steer**), `financial_docs` (invoice numbers/payment dates), `logistics` (transport fields, package numbers), `customer_identity` / `supplier_identity` (party embeds beyond own leg), `chain` (spine_id/upstream_deal_id — admin-only v1).
+- Resolution (pure fn): per-field override ▸ else its domain grant ▸ else `general`=visible, sensitive domains=hidden (**deny by default**, spec §1.4).
+- Enforced at the choke points found in the census: `getOrders`/`getOrderPackages`/`getStaircaseCodes` (replaces the 3 duplicated `stripPricing` sites), `updateOrder` (replaces `PRODUCTION_EDIT_FIELDS`; editable-set from profile), `getOrderDealView` (line-item side + price projection), document generation (party cards obey identity domains). MCP service-agent path bypasses by design (Oscar is house-side).
+- `getAccessProfile(portalUserId, orgId)` in `lib/access/` — one cached read (unstable_cache, tags `access-profile:<uid>:<oid>` + `access-group:<gid>` per member group so a group edit busts every member's profile). `getUserEnabledModules` reimplemented on top.
+
+### Address books (spec §9.3)
+- Client book = active orgs with `is_customer`; supplier book = `is_supplier OR is_producer`. Gated by `action/counterparty/clients|suppliers` rights → also exposed as module codes `counterparties.clients` / `counterparties.suppliers` (registered in `modules`, granted via groups) so nav/page gating rides the existing machinery.
+- New `features/counterparties/` + `/counterparties/{clients,suppliers}` pages: list/create/edit org records (name, reg, VAT, address, 3-letter code…) for non-admin house staff — org CRUD is admin-only today, so this is a new, rights-scoped surface. `purchasing_may_reuse_clients` setting controls whether the supplier flow may select/see client records.
+- Walls proven at both layers: actions filter by book + right; RLS shared-context rewrite (above) keeps supplier org rows out of a Salesperson's raw reads.
+
+### Seeded groups (all editable in-app; house-relative, direction rights are org-relative so the same keys work for counterparty logins)
+| Group | modules | side | domains (v=visible, e=editable) | scope | books |
+|---|---|---|---|---|---|
+| Super admin | all | both+producer | all v+e | all | both |
+| Salesperson | dashboard, orders(+list/sales/prices tabs), counterparties.clients | sell | general, deal_terms, financial_docs, logistics v; customer_identity v | company | clients |
+| Purchasing | dashboard, orders(+list tab), counterparties.suppliers | buy | general, deal_terms, financial_docs, logistics v; supplier_identity v | company | suppliers |
+| Client | orders(+list tab) | buy | general, deal_terms, logistics v | company | — |
+| Producer | orders(+list/production tabs) | sell + legacy.producer | general, deal_terms, logistics v; production v+e | company | — |
+| Accounting | dashboard, orders(+list/sales tabs) | both | general, deal_terms v; financial_docs v+e | company | — |
+| Warehouse | orders(+list tab), shipments, inventory | both | general, logistics v+e | company | — |
+
+Margin/`pl_*` fields: **no group** — platform admins only (steer #3). Buy-leg pricing is hidden from Salesperson/Client **row-level** (side rights), not field-level — the middle leg is structurally invisible to both ends.
+
+### Settings UI (in-app, no deploy)
+- `/admin/settings/groups` (admin-only, GateConfigManager pattern): group list → rights editor (module toggles reusing the category UI, side/domain/scope pickers, per-field override table) + seed-reset for system groups.
+- `OrganisationUsersTable`: "Modules" dialog replaced by **UserGroupsDialog** (assign groups per user per org). `OrganisationModulesTab` (org ceiling) stays.
+- Every mutation busts the matching cache tags → takes effect within a request (DoD: change in app, no deploy).
+
+### Proof (extends DoD)
+Unit: pure rights/field resolution + projection parity with the old strip lists. Staging integration: seeded-group personas exercise create/read paths. rls-and-perf: new personas (`house-sales`, `house-purchasing`, `client-user`) + negative probes — salesperson selects buy leg → 0 rows; client selects another client's deal → 0 rows; middle leg invisible to both ends; org off both legs → 0; salesperson reads supplier org row → blocked; regenerate committed baselines; flip `NEGATIVE_TESTS_FAIL_ON_LEAK=true`. Browser feel-test for Edgars/Nils listed on the bus flag.
 
 ---
 
-## E4 — Lifecycle + configurable gates
+## E3 — Lifecycle + configurable gates (SHIPPED 2026-07-01 as E3)
 
 **Goal:** a real 5-stage machine with gates that block transitions until satisfied.
 

@@ -3,50 +3,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
+import { getAccessProfile } from "@/lib/access";
+import {
+  ORDER_FIELD_DOMAINS,
+  projectFields,
+  resolveFieldAccess,
+  type FieldAccess,
+} from "../services/dealFields";
 import type { Order, ActionResult } from "../types";
-
-/**
- * Sales/P&L pricing fields that must NOT reach a counterparty (producer/customer)
- * who has no pricing-bearing tab (sales / analytics / prices). The production-cost
- * fields the producer legitimately edits (productionMaterial, productionFinishing,
- * woodArt, woodArtCnc, their totals + invoice/payment fields) are deliberately NOT
- * here — those stay visible. Numeric fields are zeroed (the table renders 0 as ""),
- * string/nullable fields are nulled.
- */
-const PRICING_NUMERIC_FIELDS = [
-  "totalPricePence",
-  "maxM3",
-  "eurPerM3",
-  "workPerPiece",
-  "invoicedWork",
-  "usedWork",
-  "invoicedTransport",
-  "usedTransport",
-  "plMaterialValue",
-  "plWorkValue",
-  "plTransportValue",
-  "plMaterialsValue",
-  "plTotalValue",
-  "plPercentFromInvoice",
-] as const;
-const PRICING_NULLABLE_FIELDS = [
-  "advanceInvoiceNumber",
-  "invoiceNumber",
-  "transportInvoiceNumber",
-  "transportPrice",
-  "valueCents",
-] as const;
-
-/** Strip sales/P&L pricing from an order in place, keeping producer-owned cost fields. */
-function stripOrderPricing(order: Order): Order {
-  for (const f of PRICING_NUMERIC_FIELDS) {
-    (order as unknown as Record<string, number>)[f] = 0;
-  }
-  for (const f of PRICING_NULLABLE_FIELDS) {
-    (order as unknown as Record<string, unknown>)[f] = null;
-  }
-  return order;
-}
 
 /**
  * Get Orders
@@ -88,15 +52,15 @@ export async function getOrders(options?: {
     }
   }
 
-  // Sales/P&L pricing is only meaningful on the sales / analytics / prices tabs.
-  // A non-admin with none of those modules (e.g. a producer/Wood ART with only
-  // production access) must never receive pricing in the payload — not even
-  // hidden in the network response. Admins always see everything.
-  const stripPricing =
-    !userIsAdmin &&
-    !["orders.tab.sales", "orders.tab.analytics", "orders.tab.prices"].some((m) =>
-      enabledModules.has(m)
-    );
+  // E4 field wall: what a non-admin receives is projected through their
+  // groups' field-domain grants (config-driven; replaces the old hardcoded
+  // pricing strip). Hidden fields never reach the network response.
+  let fieldAccess: FieldAccess | null = null;
+  if (!userIsAdmin) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const profile = await getAccessProfile(session.portalUserId, orgId);
+    fieldAccess = resolveFieldAccess(profile);
+  }
 
   const supabase = await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -182,8 +146,11 @@ export async function getOrders(options?: {
         code: "NO_ORGANISATION",
       };
     }
+    // E4 bilateral: seller + buyer are the canonical parties (RLS enforces
+    // the direction-aware wall; this app filter mirrors it for the query
+    // planner). The producer arm is transitional until the E8 migration.
     query = query.or(
-      `customer_organisation_id.eq.${orgId},seller_organisation_id.eq.${orgId},producer_organisation_id.eq.${orgId}`
+      `seller_organisation_id.eq.${orgId},buyer_organisation_id.eq.${orgId},producer_organisation_id.eq.${orgId}`
     );
   }
 
@@ -493,7 +460,7 @@ export async function getOrders(options?: {
     updatedAt: row.updated_at as string,
     fileCount: fileCountMap.get(row.id as string) ?? 0,
   };
-    return stripPricing ? stripOrderPricing(order) : order;
+    return fieldAccess ? projectFields(order, fieldAccess, ORDER_FIELD_DOMAINS) : order;
   });
 
   return {
