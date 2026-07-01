@@ -40,6 +40,12 @@ export function buildSpineCode(seq: number): string {
   return `SP-${pad(seq, 3)}`;
 }
 
+/** Child spine code on split: SP-042 + "a" → "SP-042-A". Keeps parent lineage in the code. */
+export function childSpineCode(parentCode: string, suffix: string): string {
+  const s = (suffix || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return `${parentCode}-${s}`;
+}
+
 /**
  * Bilateral deal code: SELLER-BUYER-NNN (E2 convention), e.g. TIM-SOM-001.
  * `seq` is scoped per seller+buyer pair via {@link bilateralDealCodeScope}.
