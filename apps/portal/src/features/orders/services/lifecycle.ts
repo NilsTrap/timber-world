@@ -296,11 +296,10 @@ export async function advanceDeal(db: DbClient, actor: ActorContext, orderId: st
     return { success: false, error: `Gate not satisfied — missing: ${list}`, code: "GATE_BLOCKED" };
   }
 
+  // Only touch the deal; the spine rollup cache is maintained by the DB trigger
+  // (trg_orders_spine_cache) so it stays correct even for non-admin operators.
   const { error } = await db.from("orders").update({ lifecycle_stage: ev.nextStage }).eq("id", orderId);
   if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
-
-  const deal = await getDealLifecycle(db, orderId);
-  if (deal?.spineId) await recomputeSpineRollup(db, deal.spineId);
   return { success: true, data: { stage: ev.nextStage } };
 }
 
@@ -334,32 +333,14 @@ export async function cancelDeal(db: DbClient, actor: ActorContext, orderId: str
   if (deal.stage === CANCELLED_STAGE) return { success: true, data: { stage: CANCELLED_STAGE, chainFlagged: false } };
 
   const wasActive = isCancellableStage(deal.stage);
-  // keep the legacy enum in sync so the operational tabs also read as cancelled
-  const { error } = await db.from("orders").update({ lifecycle_stage: CANCELLED_STAGE, status: "cancelled" }).eq("id", orderId);
+  // Only touch the deal (keep the legacy enum in sync for the operational tabs). The
+  // spine rollup + chain_broken flagging (own spine + downstream) is done by the DB
+  // trigger trg_orders_spine_cache, so it works regardless of the caller's privilege.
+  const { error } = await db
+    .from("orders")
+    .update({ lifecycle_stage: CANCELLED_STAGE, status: "cancelled" })
+    .eq("id", orderId);
   if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
 
-  let chainFlagged = false;
-  if (wasActive) {
-    // downstream = deals this one was sourcing (they point here via upstream_deal_id)
-    const { data: downstream } = await db.from("orders").select("spine_id").eq("upstream_deal_id", orderId);
-    const spineIds = new Set<string>();
-    if (deal.spineId) spineIds.add(deal.spineId);
-    for (const d of downstream ?? []) if (d.spine_id) spineIds.add(d.spine_id as string);
-    for (const sid of spineIds) {
-      await db.from("spines").update({ chain_broken: true }).eq("id", sid);
-    }
-    chainFlagged = spineIds.size > 0;
-  }
-
-  if (deal.spineId) await recomputeSpineRollup(db, deal.spineId);
-  return { success: true, data: { stage: CANCELLED_STAGE, chainFlagged } };
-}
-
-/** Recompute + cache the spine's rolled-up status from its deals' lifecycle stages. */
-export async function recomputeSpineRollup(db: DbClient, spineId: string): Promise<void> {
-  if (!spineId || !isValidUUID(spineId)) return;
-  const { data } = await db.from("orders").select("lifecycle_stage").eq("spine_id", spineId);
-  const stages = (data ?? []).map((r: any) => (r.lifecycle_stage as string) ?? "draft");
-  const stage = rollupSpineStage(stages);
-  await db.from("spines").update({ status: stage }).eq("id", spineId);
+  return { success: true, data: { stage: CANCELLED_STAGE, chainFlagged: wasActive && deal.spineId !== null } };
 }

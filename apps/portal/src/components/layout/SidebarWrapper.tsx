@@ -61,6 +61,7 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
   { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText" },
   { href: "/admin/settings", label: "Settings", iconName: "Settings", group: "settings", children: [
     { href: "/admin/settings/fields", label: "Fields" },
+    { href: "/admin/settings/gates", label: "Deal Gates" },
     { href: "/admin/settings/packaging", label: "Packaging" },
     { href: "/admin/settings/pricing-units", label: "Pricing Units" },
   ]},

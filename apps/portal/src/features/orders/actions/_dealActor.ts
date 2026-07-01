@@ -9,15 +9,16 @@ import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import type { ActorContext, DbClient } from "../services/dealModel";
 
 export type DealActorResult =
-  | { ok: true; db: DbClient; actor: ActorContext }
+  | { ok: true; db: DbClient; actor: ActorContext; orgId: string | null }
   | { ok: false; error: string; code: string };
 
 export async function resolveDealActor(): Promise<DealActorResult> {
   const session = await getSession();
   if (!session) return { ok: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
 
+  const orgId = session.currentOrganizationId || session.organisationId || null;
+
   if (!isAdmin(session)) {
-    const orgId = session.currentOrganizationId || session.organisationId;
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
     if (!mods.has("orders.view")) return { ok: false, error: "Permission denied", code: "FORBIDDEN" };
   }
@@ -29,5 +30,5 @@ export async function resolveDealActor(): Promise<DealActorResult> {
     isServiceAgent: false,
     label: "portal-user",
   };
-  return { ok: true, db, actor };
+  return { ok: true, db, actor, orgId };
 }

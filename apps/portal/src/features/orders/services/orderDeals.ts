@@ -37,6 +37,8 @@ export interface OrderDealView {
   productGroup: string | null;
   currency: string;
   status: string;
+  /** Deal lifecycle milestone (draft→confirmed→produced→loaded→delivered, +cancelled). */
+  lifecycleStage: string;
   incoterms: string | null;
   incotermsPlace: string | null;
   advancePct: number | null;
@@ -60,7 +62,7 @@ export interface OrderDealView {
 export type OrderDealSummary = Omit<OrderDealView, "lineItems" | "externalRefs" | "documents">;
 
 const ORDER_SELECT = `
-  id, code, deal_code, name, deal_kind, product_group, currency, status,
+  id, code, deal_code, name, deal_kind, product_group, currency, status, lifecycle_stage,
   incoterms, incoterms_place, advance_pct, payment_terms, delivery_terms,
   delivery_deadline, transport_billing, notes,
   customer_organisation_id, seller_organisation_id, producer_organisation_id,
@@ -83,6 +85,7 @@ function mapOrderDealHeader(row: any): OrderDealSummary {
     productGroup: row.product_group ?? null,
     currency: row.currency,
     status: row.status,
+    lifecycleStage: row.lifecycle_stage ?? "draft",
     incoterms: row.incoterms ?? null,
     incotermsPlace: row.incoterms_place ?? null,
     advancePct: row.advance_pct != null ? Number(row.advance_pct) : null,

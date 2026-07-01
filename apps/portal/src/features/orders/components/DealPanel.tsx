@@ -13,6 +13,7 @@ import {
 import type { OrderLineItem, DocType, DealSide, LineUnit } from "../services/dealModel";
 import type { LineItemAmountPatch } from "../services/orderDeals";
 import type { OrderDealViewResult } from "../actions/dealActions";
+import { DealPipeline } from "./DealPipeline";
 import { lineTotalCents } from "../services/documents/assemble";
 import {
   getOrderDealView, generateOrderDocument, getOrderDocumentUrl,
@@ -116,6 +117,9 @@ export function DealPanel({ orderId }: { orderId: string }) {
       {!hasDealData && (
         <EmptyState message="No deal data yet. Deals captured from intake (email / PO / meeting) populate line items here; you can also generate documents below once the deal has line items." />
       )}
+
+      {/* Lifecycle pipeline (stages + gates) */}
+      <DealPipeline orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
 
       {/* Deal summary */}
       <div className="rounded-lg border bg-card p-4">
