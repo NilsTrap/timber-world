@@ -32,6 +32,28 @@ export function dealCodeScope(entityCode: string, clientCode: string): string {
   return `deal:${entityCode.toUpperCase()}:${clientCode}`;
 }
 
+/** Counter scope for spine codes (one global series). */
+export const SPINE_SCOPE = "spine";
+
+/** Spine code: SP-NNN, e.g. SP-001. */
+export function buildSpineCode(seq: number): string {
+  return `SP-${pad(seq, 3)}`;
+}
+
+/**
+ * Bilateral deal code: SELLER-BUYER-NNN (E2 convention), e.g. TIM-SOM-001.
+ * `seq` is scoped per seller+buyer pair via {@link bilateralDealCodeScope}.
+ */
+export function buildBilateralDealCode(sellerCode: string, buyerCode: string, seq: number): string {
+  const s = (sellerCode || "TIM").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3) || "TIM";
+  const b = (buyerCode || "XXX").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3) || "XXX";
+  return `${s}-${b}-${pad(seq, 3)}`;
+}
+
+export function bilateralDealCodeScope(sellerCode: string, buyerCode: string): string {
+  return `deal:${sellerCode.toUpperCase()}:${buyerCode.toUpperCase()}`;
+}
+
 export interface DocNumberParams {
   docType: DocType;
   entityCode: string;
