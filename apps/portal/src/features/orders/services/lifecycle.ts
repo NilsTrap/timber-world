@@ -171,6 +171,14 @@ export async function upsertGateConfig(
   if (!LIFECYCLE_STAGES.includes(input.fromStage as LifecycleStage) || input.fromStage === "delivered") {
     return { success: false, error: "Invalid from_stage for a gate", code: "VALIDATION_ERROR" };
   }
+  // Reject requirement blocks that have no satisfiable data source yet, so an admin can
+  // never configure a gate that permanently blocks a deal. `payment_recorded` needs a
+  // payment signal Timber doesn't model yet — engine supports it, but it's not offered.
+  for (const b of input.requirements ?? []) {
+    if (b.type === "condition" && b.condition === "payment_recorded") {
+      return { success: false, error: "The 'payment recorded' condition isn't available yet (no payment source is wired)", code: "VALIDATION_ERROR" };
+    }
+  }
   const { data, error } = await db
     .from("deal_gates")
     .upsert(
@@ -209,7 +217,7 @@ async function getDealLifecycle(db: DbClient, orderId: string): Promise<DealLife
   };
 }
 
-/** Reads the confirmations + document/payment facts needed to evaluate a gate. */
+/** Reads the confirmations + document facts needed to evaluate a gate. */
 export async function buildGateContext(
   db: DbClient,
   orderId: string,
@@ -217,25 +225,44 @@ export async function buildGateContext(
 ): Promise<GateContext> {
   const confirmations = new Set<string>();
   const documents = new Set<string>();
-  let hasPayment = false;
+
+  // The deal's parties, so a sign-off only counts if the RIGHT party recorded it.
+  const { data: order } = await db
+    .from("orders")
+    .select("seller_organisation_id, buyer_organisation_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  const sellerOrg = (order?.seller_organisation_id as string | null) ?? null;
+  const buyerOrg = (order?.buyer_organisation_id as string | null) ?? null;
 
   const { data: confs } = await db
     .from("deal_gate_confirmations")
-    .select("block_type, block_key")
+    .select("block_type, block_key, confirmed_by_org")
     .eq("order_id", orderId)
     .eq("from_stage", fromStage);
-  for (const c of confs ?? []) confirmations.add(confirmationKey(c.block_type as string, c.block_key as string));
-
-  // "Documents" and "payment recorded" are both sourced from the deal's external refs.
-  const { data: refs } = await db.from("order_external_refs").select("ref_type").eq("order_id", orderId);
-  for (const r of refs ?? []) {
-    const t = r.ref_type as string;
-    if (!t || t === "other") continue; // 'other' holds the idempotency marker, not a document
-    if (t === "payment") hasPayment = true;
-    documents.add(t);
+  for (const c of confs ?? []) {
+    const blockType = c.block_type as string;
+    const blockKey = c.block_key as string;
+    const by = (c.confirmed_by_org as string | null) ?? null;
+    // which org must have made this confirmation for it to count
+    const requiredOrg = blockType === "acceptance" ? buyerOrg : blockKey === "seller" ? sellerOrg : blockKey === "buyer" ? buyerOrg : null;
+    // admin confirmations (null org) always count; a party confirmation must match its party
+    if (by === null || requiredOrg === null || by === requiredOrg) {
+      confirmations.add(confirmationKey(blockType, blockKey));
+    }
   }
 
-  return { confirmations, documents, hasPayment };
+  // "document present" reads the deal's REAL documents (order_documents.doc_type),
+  // e.g. 'invoice' / 'cmr' — not order_external_refs (which only holds client-ref codes).
+  const { data: docs } = await db.from("order_documents").select("doc_type").eq("order_id", orderId);
+  for (const d of docs ?? []) {
+    const t = d.doc_type as string;
+    if (t) documents.add(t);
+  }
+
+  // payment_recorded has no wired source yet and is rejected at gate-config time, so no
+  // gate can depend on it; hasPayment stays false.
+  return { confirmations, documents, hasPayment: false };
 }
 
 // ── advance / cancel (DB) ────────────────────────────────────────────────────
@@ -298,8 +325,18 @@ export async function advanceDeal(db: DbClient, actor: ActorContext, orderId: st
 
   // Only touch the deal; the spine rollup cache is maintained by the DB trigger
   // (trg_orders_spine_cache) so it stays correct even for non-admin operators.
-  const { error } = await db.from("orders").update({ lifecycle_stage: ev.nextStage }).eq("id", orderId);
+  // Guard on the expected current stage so a concurrent cancel/advance can't be clobbered
+  // (and a stale advance can't move the deal backward): 0 rows updated = someone else moved it.
+  const { data: updated, error } = await db
+    .from("orders")
+    .update({ lifecycle_stage: ev.nextStage })
+    .eq("id", orderId)
+    .eq("lifecycle_stage", ev.currentStage)
+    .select("id");
   if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
+  if (!updated || updated.length === 0) {
+    return { success: false, error: "The deal changed since it was read — reload and try again", code: "STAGE_CONFLICT" };
+  }
   return { success: true, data: { stage: ev.nextStage } };
 }
 
@@ -310,6 +347,21 @@ export async function recordGateConfirmation(
   input: { orderId: string; fromStage: string; blockType: "party_signoff" | "acceptance"; blockKey: string; confirmedByOrg?: string | null },
 ): Promise<ActionResult<{ recorded: boolean }>> {
   if (!isValidUUID(input.orderId)) return { success: false, error: "Invalid order id", code: "VALIDATION_ERROR" };
+  // A non-admin may only sign off for the party they ACTUALLY are on this deal — otherwise
+  // a counterparty could forge another party's sign-off. Admins may record on behalf.
+  if (!actor.isPlatformAdmin) {
+    const { data: order } = await db
+      .from("orders")
+      .select("seller_organisation_id, buyer_organisation_id")
+      .eq("id", input.orderId)
+      .maybeSingle();
+    const sellerOrg = (order?.seller_organisation_id as string | null) ?? null;
+    const buyerOrg = (order?.buyer_organisation_id as string | null) ?? null;
+    const requiredOrg = input.blockType === "acceptance" ? buyerOrg : input.blockKey === "seller" ? sellerOrg : input.blockKey === "buyer" ? buyerOrg : null;
+    if (!requiredOrg || !input.confirmedByOrg || input.confirmedByOrg !== requiredOrg) {
+      return { success: false, error: "You can only sign off for your own party on this deal", code: "FORBIDDEN" };
+    }
+  }
   const { error } = await db.from("deal_gate_confirmations").upsert(
     {
       order_id: input.orderId,
@@ -331,6 +383,11 @@ export async function cancelDeal(db: DbClient, actor: ActorContext, orderId: str
   const deal = await getDealLifecycle(db, orderId);
   if (!deal) return { success: false, error: "Deal not found", code: "NOT_FOUND" };
   if (deal.stage === CANCELLED_STAGE) return { success: true, data: { stage: CANCELLED_STAGE, chainFlagged: false } };
+  // A delivered (terminal) deal is done — cancelling it would clobber the legacy
+  // operational status (completed→cancelled) and the spine rollup. Reject it.
+  if (!isCancellableStage(deal.stage)) {
+    return { success: false, error: `A ${deal.stage} deal can no longer be cancelled`, code: "NOT_CANCELLABLE" };
+  }
 
   const wasActive = isCancellableStage(deal.stage);
   // Only touch the deal (keep the legacy enum in sync for the operational tabs). The

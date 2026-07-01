@@ -38,8 +38,9 @@ const BLOCK_TEMPLATES: { value: BlockTemplate; label: string }[] = [
   { value: "party_signoff:seller", label: "Seller sign-off" },
   { value: "party_signoff:buyer", label: "Buyer sign-off" },
   { value: "acceptance", label: "Buyer acceptance" },
-  { value: "condition:payment_recorded", label: "Condition: payment recorded" },
-  { value: "condition:document_present", label: "Condition: document present" },
+  // 'Condition: payment recorded' is intentionally NOT offered — no payment source is
+  // wired yet, and upsertGateConfig rejects it so a gate can't become unsatisfiable.
+  { value: "condition:document_present", label: "Condition: document present (e.g. invoice, cmr)" },
 ];
 function templateToBlock(t: BlockTemplate): GateBlock {
   switch (t) {
