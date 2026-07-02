@@ -13,8 +13,13 @@ import { TEST_USERS } from "../config.js";
 import { userClient } from "../lib/supabase.js";
 import { writeSnapshot, type SnapshotPath } from "../lib/snapshot.js";
 
+// Includes the creator embed the app uses (getOrders/getOrder). `orders` has
+// TWO FKs to portal_users since E5 (created_by + margin_approved_by), so the
+// embed MUST name its FK — an un-named `portal_users(name)` errors PGRST201
+// and empties the whole orders list. Exercising it here fails the suite if the
+// embed ever re-ambiguates.
 const ORDERS_SELECT =
-  "id, code, status, customer_organisation_id, seller_organisation_id, buyer_organisation_id, producer_organisation_id, created_at, volume_m3";
+  "id, code, status, customer_organisation_id, seller_organisation_id, buyer_organisation_id, producer_organisation_id, created_at, volume_m3, portal_users!orders_created_by_fkey(name)";
 
 async function snapshotOrdersForUser(
   client: SupabaseClient,
