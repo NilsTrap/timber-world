@@ -74,6 +74,7 @@ const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
     { href: "/admin/settings/fields", label: "Fields" },
     { href: "/admin/settings/gates", label: "Deal Gates" },
     { href: "/admin/settings/groups", label: "Access Groups" },
+    { href: "/admin/settings/document-templates", label: "Document Templates" },
     { href: "/admin/settings/packaging", label: "Packaging" },
     { href: "/admin/settings/pricing-units", label: "Pricing Units" },
   ]},
