@@ -92,6 +92,10 @@ function mapRow(r: Row): DocumentTemplate {
     createdBy: r.created_by ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    contentFormat: (r.content_format ?? "html") as DocumentTemplate["contentFormat"],
+    docJson: (r.doc_json ?? null) as DocumentTemplate["docJson"],
+    pageSettings: (r.page_settings ?? null) as DocumentTemplate["pageSettings"],
+    logoPath: r.logo_path ?? null,
   };
 }
 
@@ -104,6 +108,7 @@ function mapSummary(r: Row): DocumentTemplateSummary {
     isActive: r.is_active,
     version: r.version,
     updatedAt: r.updated_at,
+    contentFormat: (r.content_format ?? "html") as DocumentTemplateSummary["contentFormat"],
   };
 }
 
@@ -116,7 +121,7 @@ export async function listTemplates(): Promise<ActionResult<DocumentTemplateSumm
   const admin = createAdminClient() as any;
   const { data, error } = await admin
     .from("document_templates")
-    .select("id, doc_type, name, is_default, is_active, version, updated_at")
+    .select("id, doc_type, name, is_default, is_active, version, updated_at, content_format")
     .order("doc_type", { ascending: true })
     .order("is_default", { ascending: false })
     .order("name", { ascending: true });
