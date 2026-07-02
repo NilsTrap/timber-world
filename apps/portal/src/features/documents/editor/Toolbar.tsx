@@ -238,7 +238,7 @@ export function Toolbar({ editor }: { editor: Editor }) {
                   <button
                     key={it.token}
                     type="button"
-                    title={it.token}
+                    title={it.label}
                     onClick={() => {
                       editor.chain().focus().insertMergeField({ token: it.token, label: it.label }).run();
                       setFieldsOpen(false);

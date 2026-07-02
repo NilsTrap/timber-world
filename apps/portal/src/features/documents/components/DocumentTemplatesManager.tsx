@@ -226,6 +226,23 @@ export function DocumentTemplatesManager() {
   const [mainTab, setMainTab] = useState<MainTab>("visual");
   const [editorNonce, setEditorNonce] = useState(0); // bump → remount the visual editor with fresh content
   const [switchWarnOpen, setSwitchWarnOpen] = useState(false); // one-way visual→html switch confirm
+  const [dirty, setDirty] = useState(false); // unsaved edits to the open template
+  const [pendingNav, setPendingNav] = useState<null | (() => void)>(null); // action awaiting discard confirmation
+
+  // Mutate the working copy and mark it dirty (guards against losing unsaved edits).
+  const edit = useCallback((patch: Partial<EditingTemplate>) => {
+    setDirty(true);
+    setEditing((e) => (e ? { ...e, ...patch } : e));
+  }, []);
+
+  // Run `action` now, or (if there are unsaved edits) after a discard confirmation.
+  const guardNav = useCallback(
+    (action: () => void) => {
+      if (dirty && editing) setPendingNav(() => action);
+      else action();
+    },
+    [dirty, editing]
+  );
 
   const htmlRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -305,6 +322,7 @@ export function DocumentTemplatesManager() {
     // Open in the surface that matches the template's format.
     setMainTab(t.contentFormat === "wysiwyg" ? "visual" : "advanced");
     setEditorNonce((n) => n + 1);
+    setDirty(false);
     setPreviewHtml("");
     setPreviewError(null);
   }, []);
@@ -325,6 +343,7 @@ export function DocumentTemplatesManager() {
     });
     setMainTab("visual");
     setEditorNonce((n) => n + 1);
+    setDirty(false);
     setPreviewHtml("");
     setPreviewError(null);
     setAddOpen(false);
@@ -337,6 +356,7 @@ export function DocumentTemplatesManager() {
     const start = ta?.selectionStart ?? editing.html.length;
     const end = ta?.selectionEnd ?? editing.html.length;
     const next = editing.html.slice(0, start) + token + editing.html.slice(end);
+    setDirty(true);
     setEditing({ ...editing, html: next });
     requestAnimationFrame(() => {
       if (!ta) return;
@@ -361,6 +381,7 @@ export function DocumentTemplatesManager() {
       toast.error(res.error);
       return;
     }
+    setDirty(true);
     setEditing({ ...editing, html: res.data.html });
     if (res.data.messages.length > 0) {
       toast.warning(`Imported with ${res.data.messages.length} conversion warning(s). Review before saving.`);
@@ -412,6 +433,7 @@ export function DocumentTemplatesManager() {
       docJson: res.data.docJson,
       pageSettings: res.data.pageSettings,
     });
+    setDirty(false);
     await load();
   };
 
@@ -427,6 +449,7 @@ export function DocumentTemplatesManager() {
           }
         : e
     );
+    setDirty(true);
     setSwitchWarnOpen(false);
     setMainTab("advanced");
     setView("split");
@@ -453,7 +476,7 @@ export function DocumentTemplatesManager() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">Templates</h2>
-          <Button size="sm" onClick={() => setAddOpen(true)}>
+          <Button size="sm" onClick={() => guardNav(() => setAddOpen(true))}>
             <Plus className="h-4 w-4" /> Add template
           </Button>
         </div>
@@ -477,7 +500,7 @@ export function DocumentTemplatesManager() {
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => selectTemplate(t.id)}
+                        onClick={() => guardNav(() => selectTemplate(t.id))}
                         className={cn(
                           "flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-muted",
                           editing?.id === t.id ? "border-primary bg-muted" : "border-transparent"
@@ -524,7 +547,7 @@ export function DocumentTemplatesManager() {
                 <Input
                   id="tpl-name"
                   value={editing.name}
-                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  onChange={(e) => edit({ name: e.target.value })}
                   placeholder="Template name"
                   disabled={saving}
                 />
@@ -536,7 +559,7 @@ export function DocumentTemplatesManager() {
                 ) : (
                   <Select
                     value={editing.docType}
-                    onValueChange={(v) => setEditing({ ...editing, docType: v as DocType })}
+                    onValueChange={(v) => edit({ docType: v as DocType })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -555,7 +578,7 @@ export function DocumentTemplatesManager() {
                 <Switch
                   id="tpl-default"
                   checked={editing.isDefault}
-                  onCheckedChange={(c) => setEditing({ ...editing, isDefault: c })}
+                  onCheckedChange={(c) => edit({ isDefault: c })}
                   disabled={saving}
                 />
                 <label htmlFor="tpl-default" className="text-sm">
@@ -566,7 +589,7 @@ export function DocumentTemplatesManager() {
                 <Switch
                   id="tpl-active"
                   checked={editing.isActive}
-                  onCheckedChange={(c) => setEditing({ ...editing, isActive: c })}
+                  onCheckedChange={(c) => edit({ isActive: c })}
                   disabled={saving}
                 />
                 <label htmlFor="tpl-active" className="text-sm">
@@ -632,8 +655,8 @@ export function DocumentTemplatesManager() {
                 docType={editing.docType}
                 doc={editing.docJson}
                 pageSettings={editing.pageSettings}
-                onDocChange={(d) => setEditing((e) => (e ? { ...e, docJson: d } : e))}
-                onPageSettingsChange={(ps) => setEditing((e) => (e ? { ...e, pageSettings: ps } : e))}
+                onDocChange={(d) => edit({ docJson: d })}
+                onPageSettingsChange={(ps) => edit({ pageSettings: ps })}
               />
             )}
 
@@ -679,7 +702,7 @@ export function DocumentTemplatesManager() {
                       <Textarea
                         ref={htmlRef}
                         value={editing.html}
-                        onChange={(e) => setEditing({ ...editing, html: e.target.value })}
+                        onChange={(e) => edit({ html: e.target.value })}
                         spellCheck={false}
                         className="h-[65vh] resize-none font-mono text-xs leading-relaxed"
                         placeholder="Template HTML (Handlebars) — e.g. <h1>{{docTitle}}</h1>"
@@ -829,6 +852,32 @@ export function DocumentTemplatesManager() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmSwitchToHtml}>Switch to HTML</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Discard-unsaved-changes confirmation (navigating away with a dirty template) */}
+      <AlertDialog open={pendingNav != null} onOpenChange={(o) => { if (!o) setPendingNav(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved edits to this template. Leaving now will discard them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const go = pendingNav;
+                setPendingNav(null);
+                setDirty(false);
+                go?.();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Discard
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

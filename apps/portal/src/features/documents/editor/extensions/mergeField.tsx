@@ -38,7 +38,7 @@ function MergeFieldPill(props: NodeViewProps) {
       }
       contentEditable={false}
       data-token={token}
-      title={hideWhen ? `${token} (hidden when empty)` : token}
+      title={(label || token || "") + (hideWhen ? " (hidden when empty)" : "")}
     >
       {label || token}
       {hideWhen ? <span className="merge-pill__opt" aria-hidden>?</span> : null}
@@ -62,7 +62,22 @@ export const MergeField = Node.create({
   },
 
   parseHTML() {
-    return [{ tag: "span[data-merge-field]" }];
+    // Restore attrs from the data-* representation so a copy/paste of a pill
+    // (which round-trips through DOM serialize→parse) keeps its binding.
+    return [
+      {
+        tag: "span[data-merge-field]",
+        getAttrs: (el) => {
+          const node = el as HTMLElement;
+          const token = node.getAttribute("data-merge-field") || "";
+          return {
+            token,
+            label: MERGE_FIELD_LABELS[token] ?? node.textContent ?? token,
+            hideWhen: node.getAttribute("data-hide-when") === "1",
+          };
+        },
+      },
+    ];
   },
 
   renderHTML({ node }) {

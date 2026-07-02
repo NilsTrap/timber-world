@@ -17,7 +17,6 @@ import type { PageSettings, TipTapDoc } from "../types";
 export function VisualEditorPane({
   editorKey,
   templateId,
-  logoPath,
   docType,
   doc,
   pageSettings,
@@ -27,7 +26,6 @@ export function VisualEditorPane({
   /** Stable per loaded template — bumped only on select/create so the editor remounts with fresh content (not on every keystroke). */
   editorKey: string | number;
   templateId?: string;
-  logoPath?: string | null;
   docType: DocType;
   doc: TipTapDoc;
   pageSettings: PageSettings | null;
@@ -66,7 +64,6 @@ export function VisualEditorPane({
     <div className="space-y-3">
       <PageSettingsPanel
         templateId={templateId}
-        logoPath={logoPath}
         pageSettings={pageSettings}
         onChange={onPageSettingsChange}
       />

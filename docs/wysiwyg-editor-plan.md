@@ -2,7 +2,24 @@
 
 **Branch:** `feature/wysiwyg-doc-editor` (isolated git worktree off `feature/timber-spec-phase` @ `ebbf6eb` = E6+E7).
 **Task:** AgentWave project `0d2f3a0a-0755-4274-9218-227812cc6083` — reactivates the postponed E6 subtask `st3x5d` ("In-app Plate rich-text template editor").
-**Status:** planning → building. Design de-risked by a 5-agent workflow (library validation + 3 architect lenses + synthesis). Verdict: **GO on TipTap v3.**
+**Status:** **BUILT — W0–W7 done + committed** on `feature/wysiwyg-doc-editor` (verify UI via `next build && next start`, not `next dev` — canary Turbopack hydration bug). Design de-risked by a 5-agent workflow. Verdict: **GO on TipTap v3.**
+
+## Completion summary (2026-07-02)
+
+| Epic | What shipped | Proof |
+|------|--------------|-------|
+| W0 | TipTap v3 deps + pnpm overrides + compiler skeleton | single react/pm/prosemirror; editor mounts (zero console errors); 12/12 compile→merge smoke |
+| W1 | Additive schema (`doc_json`/`content_format`/`page_settings`/`logo_path`) + public `template-assets` bucket | applied to staging; 7 seeds unchanged; templateMerge 31/31 + document-render 35/35 |
+| W2 | Pure JSON→Handlebars compiler (registry/nodes/shell) | 55/55 golden tsx + adversarial review 10/10 fixed |
+| W3 | TipTap editor + MergeField & LineItemsTable nodes + toolbar | mounts + renders in a production build (pills, line-items designer) |
+| W4 | Visual + Advanced(HTML) tabs; server-side compile-on-save (trust boundary) | staging integration: stored html === server-compiled; renders correctly |
+| W5 | Logo upload (public bucket), page settings, hide-when-empty | staging bucket round-trip: public logo fetchable with no auth |
+| W6 | 7 visual starter documents + New-from-starter | 78/78 starter tsx assertions |
+| W7 | **E2E real-Gotenberg render** + adversarial review + docs | a starter+logo → real Gotenberg PDF (33 KB, logo embedded as image XObject); all 7 starters → %PDF |
+
+**Render path stayed FROZEN throughout** — `templateMerge.ts` + `gotenberg.ts` never modified (git-verified per epic).
+
+**Remaining (needs Edgars):** merge `feature/wysiwyg-doc-editor` → `feature/timber-spec-phase` + deploy to staging so Nils can feel-test the auth-gated Settings → Document Templates UI (visual editing, insert-field, line-items designer, logo, generate a PDF).
 
 ---
 

@@ -12,14 +12,20 @@ import { Button, Input } from "@timber/ui";
 import { removeTemplateLogo, uploadTemplateLogo } from "../actions";
 import type { PageSettings } from "../types";
 
+/** Derive the storage object path from a public template-assets URL. */
+function pathFromPublicUrl(url?: string | null): string | null {
+  if (!url) return null;
+  const marker = "/template-assets/";
+  const i = url.indexOf(marker);
+  return i >= 0 ? url.slice(i + marker.length) : null;
+}
+
 export function PageSettingsPanel({
   templateId,
-  logoPath,
   pageSettings,
   onChange,
 }: {
   templateId?: string;
-  logoPath?: string | null;
   pageSettings: PageSettings | null;
   onChange: (ps: PageSettings) => void;
 }) {
@@ -33,6 +39,7 @@ export function PageSettingsPanel({
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    const oldPath = pathFromPublicUrl(ps.logoUrl);
     setUploading(true);
     const fd = new FormData();
     fd.append("file", file);
@@ -44,13 +51,15 @@ export function PageSettingsPanel({
       return;
     }
     patch({ logoUrl: res.data.url });
+    // Best-effort: delete the object we just replaced.
+    if (oldPath) void removeTemplateLogo(oldPath);
     toast.success("Logo uploaded");
   };
 
   const removeLogo = async () => {
+    const oldPath = pathFromPublicUrl(ps.logoUrl);
     patch({ logoUrl: null });
-    // Best-effort delete of the stored object (only if we know its path).
-    if (logoPath) await removeTemplateLogo(logoPath);
+    if (oldPath) await removeTemplateLogo(oldPath);
   };
 
   return (

@@ -61,6 +61,9 @@ export const MERGE_FIELD_GROUPS: MergeFieldGroup[] = [
       { label: "Buyer country", token: "buyer.country" },
       { label: "Buyer email", token: "buyer.email" },
       { label: "Buyer phone", token: "buyer.phone" },
+      { label: "Buyer bank", token: "buyer.bankName" },
+      { label: "Buyer account", token: "buyer.bankAccount" },
+      { label: "Buyer SWIFT", token: "buyer.bankSwift" },
     ],
   },
   {
