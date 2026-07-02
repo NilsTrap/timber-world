@@ -16,12 +16,16 @@ import { mergeTemplate } from "@/features/orders/services/documents/templateMerg
 import { DOC_TITLES } from "@/features/orders/services/documents/types";
 import type { DocumentData } from "@/features/orders/services/documents/types";
 import type { DocType } from "@/features/orders/services/dealModel";
+import { compileTemplate } from "@/features/documents/compiler";
+import type { TipTapDoc } from "@/features/documents/compiler";
 import type {
   ActionResult,
+  ContentFormat,
   DocumentTemplate,
   DocumentTemplateSummary,
   ImportDocxResult,
   PreviewTemplateInput,
+  PreviewTemplateJsonInput,
   SaveTemplateInput,
 } from "../types";
 
@@ -92,6 +96,10 @@ function mapRow(r: Row): DocumentTemplate {
     createdBy: r.created_by ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    contentFormat: (r.content_format ?? "html") as DocumentTemplate["contentFormat"],
+    docJson: (r.doc_json ?? null) as DocumentTemplate["docJson"],
+    pageSettings: (r.page_settings ?? null) as DocumentTemplate["pageSettings"],
+    logoPath: r.logo_path ?? null,
   };
 }
 
@@ -104,6 +112,7 @@ function mapSummary(r: Row): DocumentTemplateSummary {
     isActive: r.is_active,
     version: r.version,
     updatedAt: r.updated_at,
+    contentFormat: (r.content_format ?? "html") as DocumentTemplateSummary["contentFormat"],
   };
 }
 
@@ -116,7 +125,7 @@ export async function listTemplates(): Promise<ActionResult<DocumentTemplateSumm
   const admin = createAdminClient() as any;
   const { data, error } = await admin
     .from("document_templates")
-    .select("id, doc_type, name, is_default, is_active, version, updated_at")
+    .select("id, doc_type, name, is_default, is_active, version, updated_at, content_format")
     .order("doc_type", { ascending: true })
     .order("is_default", { ascending: false })
     .order("name", { ascending: true });
@@ -154,8 +163,37 @@ export async function saveTemplate(input: SaveTemplateInput): Promise<ActionResu
   if (!input.name?.trim()) {
     return { success: false, error: "Name is required", code: "VALIDATION" };
   }
-  if (typeof input.html !== "string" || !input.html.trim()) {
-    return { success: false, error: "Template HTML is required", code: "VALIDATION" };
+
+  const contentFormat: ContentFormat = input.contentFormat === "wysiwyg" ? "wysiwyg" : "html";
+
+  // Resolve the html to store. For wysiwyg rows the SERVER recompiles html from
+  // doc_json and IGNORES any client-sent html — this action uses the RLS-bypassing
+  // service-role client, so the server is the sole trust boundary. doc_json is the
+  // source of truth; html is the derived artifact (and the only render input).
+  let html: string;
+  let docJson: TipTapDoc | null = null;
+  let pageSettings: SaveTemplateInput["pageSettings"] = null;
+
+  if (contentFormat === "wysiwyg") {
+    const doc = input.docJson;
+    if (!doc || typeof doc !== "object" || (doc as { type?: string }).type !== "doc") {
+      return { success: false, error: "Visual document is required", code: "VALIDATION" };
+    }
+    try {
+      html = compileTemplate(doc, { pageSettings: input.pageSettings ?? undefined, docType: input.docType });
+    } catch {
+      return { success: false, error: "Failed to compile the visual template", code: "COMPILE_FAILED" };
+    }
+    if (!html.trim()) {
+      return { success: false, error: "Compiled template is empty", code: "VALIDATION" };
+    }
+    docJson = doc;
+    pageSettings = input.pageSettings ?? null;
+  } else {
+    if (typeof input.html !== "string" || !input.html.trim()) {
+      return { success: false, error: "Template HTML is required", code: "VALIDATION" };
+    }
+    html = input.html;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -169,16 +207,23 @@ export async function saveTemplate(input: SaveTemplateInput): Promise<ActionResu
     if (clearErr) return { success: false, error: "Failed to update defaults", code: "QUERY_FAILED" };
   }
 
+  // content_format/doc_json/page_settings are written on EVERY save, so saving a
+  // wysiwyg row as html (the one-way "Advanced" switch) correctly drops doc_json.
+  const payload = {
+    doc_type: input.docType,
+    name: input.name.trim(),
+    html,
+    is_default: input.isDefault,
+    is_active: input.isActive,
+    content_format: contentFormat,
+    doc_json: docJson,
+    page_settings: pageSettings,
+  };
+
   if (input.id) {
     const { data, error } = await admin
       .from("document_templates")
-      .update({
-        doc_type: input.docType,
-        name: input.name.trim(),
-        html: input.html,
-        is_default: input.isDefault,
-        is_active: input.isActive,
-      })
+      .update(payload)
       .eq("id", input.id)
       .select("*")
       .maybeSingle();
@@ -190,14 +235,7 @@ export async function saveTemplate(input: SaveTemplateInput): Promise<ActionResu
 
   const { data, error } = await admin
     .from("document_templates")
-    .insert({
-      doc_type: input.docType,
-      name: input.name.trim(),
-      html: input.html,
-      is_default: input.isDefault,
-      is_active: input.isActive,
-      created_by: gate.portalUserId || null,
-    })
+    .insert({ ...payload, created_by: gate.portalUserId || null })
     .select("*")
     .maybeSingle();
 
@@ -294,6 +332,30 @@ export async function previewTemplate(input: PreviewTemplateInput): Promise<Acti
     return { success: true, data: { html } };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Template render failed";
+    return { success: false, error: msg, code: "RENDER_FAILED" };
+  }
+}
+
+/**
+ * Compile a WYSIWYG doc_json → Handlebars → merge a representative sample and
+ * return the rendered HTML for the visual editor's live preview. The trader only
+ * ever sees merged sample values, never a raw {{token}}.
+ */
+export async function previewTemplateJson(
+  input: PreviewTemplateJsonInput
+): Promise<ActionResult<{ html: string }>> {
+  const gate = await requireDocumentsAccess();
+  if (!gate.ok) return gate.result;
+
+  try {
+    const compiled = compileTemplate(input.docJson, {
+      pageSettings: input.pageSettings ?? undefined,
+      docType: input.docType,
+    });
+    const html = mergeTemplate(compiled, buildSampleDocumentData(input.docType));
+    return { success: true, data: { html } };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Preview render failed";
     return { success: false, error: msg, code: "RENDER_FAILED" };
   }
 }

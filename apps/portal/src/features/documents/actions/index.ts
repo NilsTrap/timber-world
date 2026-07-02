@@ -7,4 +7,6 @@ export {
   setDefaultTemplate,
   importDocxTemplate,
   previewTemplate,
+  previewTemplateJson,
 } from "./templates";
+export { uploadTemplateLogo, removeTemplateLogo } from "./logo";

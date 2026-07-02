@@ -12,8 +12,8 @@ import {
   Code2,
   Eye,
   Columns2,
-  Star,
   FileText,
+  PenLine,
 } from "lucide-react";
 import {
   Button,
@@ -44,7 +44,9 @@ import {
   cn,
 } from "@timber/ui";
 import type { DocType } from "@/features/orders/services/dealModel";
-import type { DocumentTemplateSummary } from "../types";
+import type { ContentFormat, DocumentTemplateSummary, PageSettings, TipTapDoc } from "../types";
+import { compileTemplate } from "../compiler";
+import { starterFor } from "../compiler/starters";
 import {
   listTemplates,
   getTemplate,
@@ -53,6 +55,7 @@ import {
   importDocxTemplate,
   previewTemplate,
 } from "../actions";
+import { VisualEditorPane } from "./VisualEditorPane";
 
 /** Ordered doc types + human labels for grouping the list and the type picker. */
 const DOC_TYPES: DocType[] = [
@@ -74,11 +77,6 @@ const DOC_TYPE_LABELS: Record<DocType, string> = {
   packing_list: "Packing List",
   cmr: "CMR",
 };
-
-/** Starter markup so a brand-new template renders something in the preview. */
-const STARTER_HTML = `<h1>{{docTitle}}</h1>
-<p>{{docNumber}} &middot; {{fmtDate docDate}}</p>
-`;
 
 /**
  * Curated merge-variable palette — the common DocumentData bindings + the four
@@ -192,9 +190,13 @@ interface EditingTemplate {
   html: string;
   isDefault: boolean;
   isActive: boolean;
+  contentFormat: ContentFormat;
+  docJson: TipTapDoc | null;
+  pageSettings: PageSettings | null;
 }
 
 type PreviewView = "code" | "split" | "preview";
+type MainTab = "visual" | "advanced";
 
 /**
  * DocumentTemplatesManager (E6) — the lightweight HTML-code + live-preview
@@ -220,6 +222,27 @@ export function DocumentTemplatesManager() {
   const [previewHtml, setPreviewHtml] = useState("");
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  const [mainTab, setMainTab] = useState<MainTab>("visual");
+  const [editorNonce, setEditorNonce] = useState(0); // bump → remount the visual editor with fresh content
+  const [switchWarnOpen, setSwitchWarnOpen] = useState(false); // one-way visual→html switch confirm
+  const [dirty, setDirty] = useState(false); // unsaved edits to the open template
+  const [pendingNav, setPendingNav] = useState<null | (() => void)>(null); // action awaiting discard confirmation
+
+  // Mutate the working copy and mark it dirty (guards against losing unsaved edits).
+  const edit = useCallback((patch: Partial<EditingTemplate>) => {
+    setDirty(true);
+    setEditing((e) => (e ? { ...e, ...patch } : e));
+  }, []);
+
+  // Run `action` now, or (if there are unsaved edits) after a discard confirmation.
+  const guardNav = useCallback(
+    (action: () => void) => {
+      if (dirty && editing) setPendingNav(() => action);
+      else action();
+    },
+    [dirty, editing]
+  );
 
   const htmlRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -260,17 +283,17 @@ export function DocumentTemplatesManager() {
     setPreviewLoading(false);
   }, []);
 
-  // Debounced live preview whenever the html/type changes and the preview pane
-  // is visible. The "Refresh preview" button calls runPreview directly.
+  // Debounced live preview for the ADVANCED (raw HTML) tab whenever the html/type
+  // changes and the preview pane is visible. The Visual tab has its own preview.
   useEffect(() => {
-    if (!editing || view === "code") return;
+    if (!editing || mainTab !== "advanced" || view === "code") return;
     const html = editing.html;
     const docType = editing.docType;
     const t = setTimeout(() => {
       runPreview(html, docType);
     }, 400);
     return () => clearTimeout(t);
-  }, [editing?.html, editing?.docType, view, editing, runPreview]);
+  }, [editing?.html, editing?.docType, view, mainTab, editing, runPreview]);
 
   const selectTemplate = useCallback(async (id: string) => {
     setLoadingTemplate(true);
@@ -292,20 +315,35 @@ export function DocumentTemplatesManager() {
       html: t.html,
       isDefault: t.isDefault,
       isActive: t.isActive,
+      contentFormat: t.contentFormat,
+      docJson: t.docJson,
+      pageSettings: t.pageSettings,
     });
+    // Open in the surface that matches the template's format.
+    setMainTab(t.contentFormat === "wysiwyg" ? "visual" : "advanced");
+    setEditorNonce((n) => n + 1);
+    setDirty(false);
     setPreviewHtml("");
     setPreviewError(null);
   }, []);
 
   const startCreate = () => {
     const name = addName.trim() || `New ${DOC_TYPE_LABELS[addDocType]} template`;
+    // New templates start from the doc type's VISUAL starter (a complete, editable page).
+    const starter = starterFor(addDocType);
     setEditing({
       docType: addDocType,
       name,
-      html: STARTER_HTML,
+      html: "",
       isDefault: false,
       isActive: true,
+      contentFormat: "wysiwyg",
+      docJson: starter.doc,
+      pageSettings: starter.pageSettings ?? null,
     });
+    setMainTab("visual");
+    setEditorNonce((n) => n + 1);
+    setDirty(false);
     setPreviewHtml("");
     setPreviewError(null);
     setAddOpen(false);
@@ -318,6 +356,7 @@ export function DocumentTemplatesManager() {
     const start = ta?.selectionStart ?? editing.html.length;
     const end = ta?.selectionEnd ?? editing.html.length;
     const next = editing.html.slice(0, start) + token + editing.html.slice(end);
+    setDirty(true);
     setEditing({ ...editing, html: next });
     requestAnimationFrame(() => {
       if (!ta) return;
@@ -342,6 +381,7 @@ export function DocumentTemplatesManager() {
       toast.error(res.error);
       return;
     }
+    setDirty(true);
     setEditing({ ...editing, html: res.data.html });
     if (res.data.messages.length > 0) {
       toast.warning(`Imported with ${res.data.messages.length} conversion warning(s). Review before saving.`);
@@ -356,8 +396,12 @@ export function DocumentTemplatesManager() {
       toast.error("Name is required");
       return;
     }
-    if (!editing.html.trim()) {
+    if (editing.contentFormat === "html" && !editing.html.trim()) {
       toast.error("Template HTML is required");
+      return;
+    }
+    if (editing.contentFormat === "wysiwyg" && !editing.docJson) {
+      toast.error("Visual document is required");
       return;
     }
     setSaving(true);
@@ -368,6 +412,9 @@ export function DocumentTemplatesManager() {
       html: editing.html,
       isDefault: editing.isDefault,
       isActive: editing.isActive,
+      contentFormat: editing.contentFormat,
+      docJson: editing.docJson,
+      pageSettings: editing.pageSettings,
     });
     setSaving(false);
     if (!res.success) {
@@ -382,8 +429,30 @@ export function DocumentTemplatesManager() {
       html: res.data.html,
       isDefault: res.data.isDefault,
       isActive: res.data.isActive,
+      contentFormat: res.data.contentFormat,
+      docJson: res.data.docJson,
+      pageSettings: res.data.pageSettings,
     });
+    setDirty(false);
     await load();
+  };
+
+  /** Confirmed one-way switch: visual → raw HTML (compile the current doc, drop doc_json). */
+  const confirmSwitchToHtml = () => {
+    setEditing((e) =>
+      e
+        ? {
+            ...e,
+            contentFormat: "html",
+            html: e.docJson ? compileTemplate(e.docJson, { pageSettings: e.pageSettings ?? undefined, docType: e.docType }) : e.html,
+            docJson: null,
+          }
+        : e
+    );
+    setDirty(true);
+    setSwitchWarnOpen(false);
+    setMainTab("advanced");
+    setView("split");
   };
 
   const confirmDelete = async () => {
@@ -407,7 +476,7 @@ export function DocumentTemplatesManager() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">Templates</h2>
-          <Button size="sm" onClick={() => setAddOpen(true)}>
+          <Button size="sm" onClick={() => guardNav(() => setAddOpen(true))}>
             <Plus className="h-4 w-4" /> Add template
           </Button>
         </div>
@@ -431,7 +500,7 @@ export function DocumentTemplatesManager() {
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => selectTemplate(t.id)}
+                        onClick={() => guardNav(() => selectTemplate(t.id))}
                         className={cn(
                           "flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-muted",
                           editing?.id === t.id ? "border-primary bg-muted" : "border-transparent"
@@ -478,7 +547,7 @@ export function DocumentTemplatesManager() {
                 <Input
                   id="tpl-name"
                   value={editing.name}
-                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  onChange={(e) => edit({ name: e.target.value })}
                   placeholder="Template name"
                   disabled={saving}
                 />
@@ -490,7 +559,7 @@ export function DocumentTemplatesManager() {
                 ) : (
                   <Select
                     value={editing.docType}
-                    onValueChange={(v) => setEditing({ ...editing, docType: v as DocType })}
+                    onValueChange={(v) => edit({ docType: v as DocType })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -509,7 +578,7 @@ export function DocumentTemplatesManager() {
                 <Switch
                   id="tpl-default"
                   checked={editing.isDefault}
-                  onCheckedChange={(c) => setEditing({ ...editing, isDefault: c })}
+                  onCheckedChange={(c) => edit({ isDefault: c })}
                   disabled={saving}
                 />
                 <label htmlFor="tpl-default" className="text-sm">
@@ -520,7 +589,7 @@ export function DocumentTemplatesManager() {
                 <Switch
                   id="tpl-active"
                   checked={editing.isActive}
-                  onCheckedChange={(c) => setEditing({ ...editing, isActive: c })}
+                  onCheckedChange={(c) => edit({ isActive: c })}
                   disabled={saving}
                 />
                 <label htmlFor="tpl-active" className="text-sm">
@@ -529,58 +598,38 @@ export function DocumentTemplatesManager() {
               </div>
             </div>
 
-            {/* Toolbar */}
+            {/* Action bar: Visual | Advanced(HTML) tabs + shared Save/Delete */}
             <div className="flex flex-wrap items-center justify-between gap-2">
-              {/* View toggle */}
               <div className="inline-flex rounded-md border p-0.5">
                 <Button
-                  variant={view === "code" ? "secondary" : "ghost"}
+                  variant={mainTab === "visual" ? "secondary" : "ghost"}
                   size="sm"
-                  onClick={() => setView("code")}
+                  disabled={editing.contentFormat === "html"}
+                  title={
+                    editing.contentFormat === "html"
+                      ? "This template is raw HTML — visual editing isn't available"
+                      : undefined
+                  }
+                  onClick={() => {
+                    if (editing.contentFormat !== "html") setMainTab("visual");
+                  }}
                 >
-                  <Code2 className="h-4 w-4" /> Code
+                  <PenLine className="h-4 w-4" /> Visual
                 </Button>
                 <Button
-                  variant={view === "split" ? "secondary" : "ghost"}
+                  variant={mainTab === "advanced" ? "secondary" : "ghost"}
                   size="sm"
-                  onClick={() => setView("split")}
+                  onClick={() => {
+                    // Opening Advanced on a visual template is a one-way switch to raw HTML.
+                    if (editing.contentFormat === "wysiwyg") setSwitchWarnOpen(true);
+                    else setMainTab("advanced");
+                  }}
                 >
-                  <Columns2 className="h-4 w-4" /> Split
-                </Button>
-                <Button
-                  variant={view === "preview" ? "secondary" : "ghost"}
-                  size="sm"
-                  onClick={() => setView("preview")}
-                >
-                  <Eye className="h-4 w-4" /> Preview
+                  <Code2 className="h-4 w-4" /> Advanced (HTML)
                 </Button>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => runPreview(editing.html, editing.docType)}
-                  disabled={previewLoading || view === "code"}
-                >
-                  {previewLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  Refresh preview
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleImportClick} disabled={importing}>
-                  {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                  Import .docx
-                </Button>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".docx"
-                  className="hidden"
-                  onChange={handleImportFile}
-                />
                 {editing.id && (
                   <Button
                     variant="outline"
@@ -598,74 +647,118 @@ export function DocumentTemplatesManager() {
               </div>
             </div>
 
-            {/* Editor + preview */}
-            <div
-              className={cn(
-                "grid gap-4",
-                view === "split" ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1"
-              )}
-            >
-              {/* Code view + palette */}
-              {view !== "preview" && (
-                <div className="space-y-3">
-                  <Textarea
-                    ref={htmlRef}
-                    value={editing.html}
-                    onChange={(e) => setEditing({ ...editing, html: e.target.value })}
-                    spellCheck={false}
-                    className="h-[65vh] resize-none font-mono text-xs leading-relaxed"
-                    placeholder="Template HTML (Handlebars) — e.g. <h1>{{docTitle}}</h1>"
-                  />
-                  <div className="space-y-2 rounded-md border p-3">
-                    <p className="text-xs font-semibold">Insert variable</p>
-                    <div className="space-y-2">
-                      {PALETTE.map((g) => (
-                        <div key={g.heading}>
-                          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                            {g.heading}
-                          </p>
-                          <div className="flex flex-wrap gap-1">
-                            {g.items.map((it) => (
-                              <button
-                                key={g.heading + it.label}
-                                type="button"
-                                onClick={() => insertToken(it.token)}
-                                title={it.token}
-                                className="rounded border bg-muted/40 px-2 py-0.5 font-mono text-[11px] hover:bg-muted"
-                              >
-                                {it.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+            {/* ── Visual tab ─────────────────────────────────────────────── */}
+            {mainTab === "visual" && editing.docJson && (
+              <VisualEditorPane
+                editorKey={editorNonce}
+                templateId={editing.id}
+                docType={editing.docType}
+                doc={editing.docJson}
+                pageSettings={editing.pageSettings}
+                onDocChange={(d) => edit({ docJson: d })}
+                onPageSettingsChange={(ps) => edit({ pageSettings: ps })}
+              />
+            )}
+
+            {/* ── Advanced (HTML) tab ────────────────────────────────────── */}
+            {mainTab === "advanced" && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {/* View toggle */}
+                  <div className="inline-flex rounded-md border p-0.5">
+                    <Button variant={view === "code" ? "secondary" : "ghost"} size="sm" onClick={() => setView("code")}>
+                      <Code2 className="h-4 w-4" /> Code
+                    </Button>
+                    <Button variant={view === "split" ? "secondary" : "ghost"} size="sm" onClick={() => setView("split")}>
+                      <Columns2 className="h-4 w-4" /> Split
+                    </Button>
+                    <Button variant={view === "preview" ? "secondary" : "ghost"} size="sm" onClick={() => setView("preview")}>
+                      <Eye className="h-4 w-4" /> Preview
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => runPreview(editing.html, editing.docType)}
+                      disabled={previewLoading || view === "code"}
+                    >
+                      {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                      Refresh preview
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleImportClick} disabled={importing}>
+                      {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                      Import .docx
+                    </Button>
+                    <input ref={fileRef} type="file" accept=".docx" className="hidden" onChange={handleImportFile} />
                   </div>
                 </div>
-              )}
 
-              {/* Live preview (sandboxed iframe — no allow-scripts) */}
-              {view !== "code" && (
-                <div className="space-y-2">
-                  {previewError ? (
-                    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
-                      <p className="font-semibold">Template error</p>
-                      <p className="mt-1 whitespace-pre-wrap font-mono">{previewError}</p>
+                <div className={cn("grid gap-4", view === "split" ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1")}>
+                  {/* Code view + palette */}
+                  {view !== "preview" && (
+                    <div className="space-y-3">
+                      <Textarea
+                        ref={htmlRef}
+                        value={editing.html}
+                        onChange={(e) => edit({ html: e.target.value })}
+                        spellCheck={false}
+                        className="h-[65vh] resize-none font-mono text-xs leading-relaxed"
+                        placeholder="Template HTML (Handlebars) — e.g. <h1>{{docTitle}}</h1>"
+                      />
+                      <div className="space-y-2 rounded-md border p-3">
+                        <p className="text-xs font-semibold">Insert variable</p>
+                        <div className="space-y-2">
+                          {PALETTE.map((g) => (
+                            <div key={g.heading}>
+                              <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                                {g.heading}
+                              </p>
+                              <div className="flex flex-wrap gap-1">
+                                {g.items.map((it) => (
+                                  <button
+                                    key={g.heading + it.label}
+                                    type="button"
+                                    onClick={() => insertToken(it.token)}
+                                    title={it.token}
+                                    className="rounded border bg-muted/40 px-2 py-0.5 font-mono text-[11px] hover:bg-muted"
+                                  >
+                                    {it.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    <iframe
-                      title="Template preview"
-                      sandbox=""
-                      srcDoc={previewHtml}
-                      className="h-[65vh] w-full rounded-md border bg-white"
-                    />
                   )}
-                  <p className="text-[11px] text-muted-foreground">
-                    Preview merges the template against a sample deal. Scripts are disabled.
-                  </p>
+
+                  {/* Live preview (sandboxed iframe — no allow-scripts) */}
+                  {view !== "code" && (
+                    <div className="space-y-2">
+                      {previewError ? (
+                        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
+                          <p className="font-semibold">Template error</p>
+                          <p className="mt-1 whitespace-pre-wrap font-mono">{previewError}</p>
+                        </div>
+                      ) : (
+                        <iframe
+                          title="Template preview"
+                          sandbox=""
+                          srcDoc={previewHtml}
+                          className="h-[65vh] w-full rounded-md border bg-white"
+                        />
+                      )}
+                      <p className="text-[11px] text-muted-foreground">
+                        Preview merges the template against a sample deal. Scripts are disabled.
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -676,7 +769,7 @@ export function DocumentTemplatesManager() {
           <DialogHeader>
             <DialogTitle>Add template</DialogTitle>
             <DialogDescription>
-              Pick a document type. You can edit the HTML and save afterwards.
+              Pick a document type. It opens a ready-made visual template you can edit and save.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -740,6 +833,50 @@ export function DocumentTemplatesManager() {
             >
               {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {deleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* One-way visual → raw HTML switch confirmation */}
+      <AlertDialog open={switchWarnOpen} onOpenChange={(o) => setSwitchWarnOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Switch to Advanced (HTML)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This converts the template to raw HTML and disconnects the visual editor. The current
+              layout is kept as HTML, but you won&apos;t be able to edit it visually again unless you
+              rebuild it. This takes effect when you save.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmSwitchToHtml}>Switch to HTML</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Discard-unsaved-changes confirmation (navigating away with a dirty template) */}
+      <AlertDialog open={pendingNav != null} onOpenChange={(o) => { if (!o) setPendingNav(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved edits to this template. Leaving now will discard them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const go = pendingNav;
+                setPendingNav(null);
+                setDirty(false);
+                go?.();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Discard
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
