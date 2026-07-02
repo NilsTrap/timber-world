@@ -41,5 +41,36 @@ for (const t of TOOLS) {
   if (t.readOnly) ok(`${t.name} (readOnly) is named like a read`, looksRead);
 }
 
+// 6. E7: the new spine/gates/access tools are all registered.
+const byName = new Map(TOOLS.map((t) => [t.name, t]));
+for (const req of [
+  "timber_get_spine", "timber_list_spine_deals", "timber_get_spine_lineage",
+  "timber_get_advance_status", "timber_list_gate_configs", "timber_advance_deal",
+  "timber_record_gate_confirmation", "timber_cancel_deal",
+  "timber_list_access_groups", "timber_get_access_group",
+  "timber_list_user_access_groups", "timber_list_users",
+]) {
+  ok(`E7 tool ${req} is registered`, byName.has(req));
+}
+
+// 7. The "gates" step must expose BOTH a read (evaluate/list) AND a state-changing
+//    write (advance/cancel) — the completeness rule forbids UI-only lifecycle mutations.
+const gateTools = TOOLS.filter((t) => t.lifecycle === "gates");
+ok("gates step has a read tool", gateTools.some((t) => t.readOnly));
+ok("gates step has a write tool", gateTools.some((t) => !t.readOnly));
+const advance = byName.get("timber_advance_deal");
+ok("a deal can be advanced through its gate via MCP (write)", advance != null && advance.readOnly === false);
+const cancel = byName.get("timber_cancel_deal");
+ok("a deal can be cancelled via MCP (write)", cancel != null && cancel.readOnly === false);
+
+// 8. The access step is read-only in this phase (group WRITES deferred to a later epic).
+ok("access step is read-only for now", TOOLS.filter((t) => t.lifecycle === "access").every((t) => t.readOnly));
+
+// 9. create_deal exposes the bilateral buy-leg auto-spawn (needs_sourcing + source_organisation_id).
+const createDealProps =
+  ((byName.get("timber_create_deal")?.inputSchema as { properties?: Record<string, unknown> })?.properties) ?? {};
+ok("create_deal exposes needs_sourcing", "needs_sourcing" in createDealProps);
+ok("create_deal exposes source_organisation_id", "source_organisation_id" in createDealProps);
+
 console.log(`\n${passed} passed, ${failed} failed — ${TOOLS.length} tools across ${LIFECYCLE_STEPS.length} lifecycle steps`);
 if (failed > 0) process.exitCode = 1;

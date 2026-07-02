@@ -11,7 +11,7 @@
 export const LIFECYCLE_STEPS = [
   "vocabulary",   // controlled vocab for intake (attributes)
   "org",          // organisations: create/link/read (CRM-synced)
-  "deal_create",  // create a deal from intake
+  "deal_create",  // create a deal from intake (+ auto-spawn the buy leg — E7)
   "deal_read",    // list/get deals
   "line_items",   // set the deal's line items
   "deal_update",  // amend deal fields / external refs
@@ -19,6 +19,9 @@ export const LIFECYCLE_STEPS = [
   "documents",    // assemble + generate/store documents
   "status",       // operational fulfilment status transitions
   "doc_chasing",  // find deals missing required documents
+  "spine",        // query the spine: chain of deals + rolled-up status + lineage (E7)
+  "gates",        // read + advance a deal's lifecycle stage through its gates (E7)
+  "access",       // read the access-group / user management surface (E7)
 ] as const;
 
 export type LifecycleStep = (typeof LIFECYCLE_STEPS)[number];
@@ -147,7 +150,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "timber_create_deal",
     description:
-      "Create a new deal (trade record). Use after extracting an order from an email, voice note, or meeting transcript. Returns the created deal with its generated code. Pass idempotency_key to make repeated calls safe.",
+      "Create a new (sell-side) deal — a bilateral trade record seeded on its own spine. Use after extracting an order from an email, voice note, or meeting transcript. Set needs_sourcing=true + source_organisation_id to AUTO-SPAWN the matching BUY (sourcing) leg on the SAME spine (supplier → the house); the created deal's upstream_deal_id then points to that spawned buy leg. Returns the created deal with its generated code. Pass idempotency_key to make repeated calls safe (a repeat returns the same deal and never re-spawns).",
     readOnly: false,
     lifecycle: "deal_create",
     inputSchema: {
@@ -157,9 +160,28 @@ export const TOOLS: ToolDef[] = [
         product_group: { type: "string", description: "Product group, e.g. 'malka', 'boards'." },
         currency: { type: "string", enum: ["EUR", "GBP", "USD"], description: "Deal currency (default EUR)." },
         customer_name: { type: "string", description: "Buyer name (used for the deal code when no org row exists)." },
-        customer_organisation_id: { type: "string", description: "Buyer organisation UUID, if known." },
+        customer_organisation_id: { type: "string", description: "Buyer organisation UUID, if known (legacy customer slot; mirrors buyer)." },
+        buyer_organisation_id: { type: "string", description: "Buyer organisation UUID (canonical bilateral buyer; defaults to customer_organisation_id)." },
         seller_organisation_id: { type: "string", description: "Selling/trading entity organisation UUID (defaults to Timber International)." },
-        producer_organisation_id: { type: "string", description: "Producer organisation UUID (buy side), if known." },
+        producer_organisation_id: { type: "string", description: "Producer organisation UUID (finishing subcontractor), if known." },
+        needs_sourcing: { type: "boolean", description: "Auto-spawn the matching BUY (sourcing) deal on the same spine (a sale that must be sourced from a supplier). Requires source_organisation_id." },
+        source_organisation_id: { type: "string", description: "Supplier organisation UUID that SELLS to the house on the auto-spawned buy leg. Used only when needs_sourcing is true." },
+        spine_product: {
+          type: "object",
+          description: "Optional shared product definition for the deal's spine, applied when a new spine is seeded. Use snake_case keys.",
+          properties: {
+            wood_species: { type: "string" },
+            product_type: { type: "string" },
+            processing: { type: "string", description: "Finish/processing." },
+            quality: { type: "string" },
+            certificate: { type: "string" },
+            thickness: { type: "string" },
+            width: { type: "string" },
+            length: { type: "string" },
+            pieces: { type: "string" },
+            volume_m3: { type: "number" },
+          },
+        },
         incoterms: { type: "string", description: "Incoterms code, e.g. FCA, EXW, DAP." },
         incoterms_place: { type: "string", description: "Incoterms place." },
         advance_pct: { type: "number", description: "Advance percentage 0–100 for this deal." },
@@ -301,6 +323,157 @@ export const TOOLS: ToolDef[] = [
         limit: { type: "integer", description: "Max rows (default 100, cap 200)." },
       },
       required: ["doc_type"],
+    },
+  },
+  // ── E7: spine (chain + rollup + lineage) ───────────────────────────────────
+  {
+    name: "timber_get_spine",
+    description:
+      "Get one spine (the shared product identity that a chain of bilateral deals hangs off): its code (SP-###), title, life stage (spec/lot), product group, shared product definition and rolled-up status. Get a spine_id from a deal (timber_get_deal → spine_id).",
+    readOnly: true,
+    lifecycle: "spine",
+    inputSchema: {
+      type: "object",
+      properties: { spine_id: { type: "string", description: "Spine UUID (from a deal's spine_id)." } },
+      required: ["spine_id"],
+    },
+  },
+  {
+    name: "timber_list_spine_deals",
+    description:
+      "List every deal attached to a spine, oldest-first — the deal chain (e.g. the sell leg + its auto-spawned buy leg) with each deal's code, name, status, seller and buyer. Use to see the whole chain and its per-deal fulfilment status.",
+    readOnly: true,
+    lifecycle: "spine",
+    inputSchema: {
+      type: "object",
+      properties: { spine_id: { type: "string", description: "Spine UUID." } },
+      required: ["spine_id"],
+    },
+  },
+  {
+    name: "timber_get_spine_lineage",
+    description:
+      "Get a spine's lineage both directions: the spines it was derived FROM (split/merge sources) and the spines derived from it. Use to trace how a lot was split or where merged material came from.",
+    readOnly: true,
+    lifecycle: "spine",
+    inputSchema: {
+      type: "object",
+      properties: { spine_id: { type: "string", description: "Spine UUID." } },
+      required: ["spine_id"],
+    },
+  },
+  // ── E7: lifecycle gates (read + advance a deal's stage) ─────────────────────
+  {
+    name: "timber_get_advance_status",
+    description:
+      "Read-only: can this deal advance to its next lifecycle stage (draft→confirmed→produced→loaded→delivered), and if a gate blocks it, which requirements are still unmet? Returns current stage, next stage, the gate requirements, whether satisfied, and the unmet blocks. Call before timber_advance_deal.",
+    readOnly: true,
+    lifecycle: "gates",
+    inputSchema: {
+      type: "object",
+      properties: { deal_id: { type: "string", description: "Deal (order) UUID." } },
+      required: ["deal_id"],
+    },
+  },
+  {
+    name: "timber_list_gate_configs",
+    description:
+      "List the configured lifecycle gates (per deal_kind + from_stage): the requirement blocks (party sign-offs, buyer acceptance, required documents) that must be satisfied before a deal advances past that stage. Read-only — gates are authored in the portal admin UI.",
+    readOnly: true,
+    lifecycle: "gates",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "timber_advance_deal",
+    description:
+      "Advance a deal one lifecycle milestone if its gate is satisfied (or has no requirements). Fails with the unmet requirements if the gate blocks it, or if the deal is already at a terminal stage. The spine's rolled-up stage is maintained automatically. Safe under retry: a stale/duplicate call that finds the deal already moved returns a STAGE_CONFLICT rather than double-advancing.",
+    readOnly: false,
+    lifecycle: "gates",
+    inputSchema: {
+      type: "object",
+      properties: { deal_id: { type: "string", description: "Deal (order) UUID." } },
+      required: ["deal_id"],
+    },
+  },
+  {
+    name: "timber_record_gate_confirmation",
+    description:
+      "Record a party sign-off or buyer-acceptance confirmation against a deal's current-stage gate, so a gate that requires it can be satisfied. Idempotent (upsert on deal+stage+block). Use block_type 'party_signoff' with block_key 'seller'|'buyer', or block_type 'acceptance'. confirmed_by_org is the confirming party's org.",
+    readOnly: false,
+    lifecycle: "gates",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deal_id: { type: "string", description: "Deal (order) UUID." },
+        from_stage: { type: "string", enum: ["draft", "confirmed", "produced", "loaded"], description: "The stage whose gate this confirmation is for (the deal's current stage)." },
+        block_type: { type: "string", enum: ["party_signoff", "acceptance"], description: "'party_signoff' (a party approves) or 'acceptance' (buyer accepts)." },
+        block_key: { type: "string", description: "For party_signoff: 'seller' or 'buyer'. For acceptance: a label such as 'buyer'." },
+        confirmed_by_org: { type: "string", description: "Organisation UUID recording the confirmation (the party it is for)." },
+      },
+      required: ["deal_id", "from_stage", "block_type", "block_key"],
+    },
+  },
+  {
+    name: "timber_cancel_deal",
+    description:
+      "Cancel a deal (sets its lifecycle stage + operational status to cancelled). If the deal was still active (≤ loaded) its spine and downstream deals are flagged chain-broken. Idempotent: cancelling an already-cancelled deal succeeds; a delivered deal cannot be cancelled.",
+    readOnly: false,
+    lifecycle: "gates",
+    inputSchema: {
+      type: "object",
+      properties: { deal_id: { type: "string", description: "Deal (order) UUID." } },
+      required: ["deal_id"],
+    },
+  },
+  // ── E7: user / access-group management (read surface) ───────────────────────
+  {
+    name: "timber_list_access_groups",
+    description:
+      "List the access groups (the thing that grants portal access + deal-field visibility since E4), each with its key, name, system flag and member count. Read-only — group rights are edited in the portal admin UI.",
+    readOnly: true,
+    lifecycle: "access",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "timber_get_access_group",
+    description:
+      "Get one access group's full rights: enabled modules, deal-row visibility, deal-field domains (visible/editable), field overrides, deal scope (mine/company/all) and action grants.",
+    readOnly: true,
+    lifecycle: "access",
+    inputSchema: {
+      type: "object",
+      properties: { group_id: { type: "string", description: "Access group UUID (from timber_list_access_groups)." } },
+      required: ["group_id"],
+    },
+  },
+  {
+    name: "timber_list_user_access_groups",
+    description:
+      "List every access group and whether it is assigned to a given user in a given organisation. Use to inspect a user's effective group membership for one org.",
+    readOnly: true,
+    lifecycle: "access",
+    inputSchema: {
+      type: "object",
+      properties: {
+        user_id: { type: "string", description: "Portal user UUID (from timber_list_users)." },
+        organisation_id: { type: "string", description: "Organisation UUID the assignment is scoped to." },
+      },
+      required: ["user_id", "organisation_id"],
+    },
+  },
+  {
+    name: "timber_list_users",
+    description:
+      "List portal users (id, email, name, role) — the directory for resolving a user before reading their group assignments. Optional substring query on name/email and an optional org filter (active members of that organisation).",
+    readOnly: true,
+    lifecycle: "access",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Filter by name or email (substring)." },
+        org_id: { type: "string", description: "Restrict to active members of this organisation UUID." },
+        limit: { type: "integer", description: "Max rows (default 100, cap 200)." },
+      },
     },
   },
 ];

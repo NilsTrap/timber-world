@@ -18,8 +18,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActorContext, DealSide, DealKind, DocType, TransportBilling, OrderExternalRef } from "@/features/orders/services/dealModel";
 import { createDeal, getOrderDeal, listDeals, replaceLineItems, allocateDealCode, updateDealFields, setExternalRefs, setDealStatus, listDealsMissingDocs } from "@/features/orders/services/orderDeals";
 import { assembleDocumentData, generateDocument } from "@/features/orders/services/orderDocuments";
+import { getSpine, listSpineDeals, getSpineLineage } from "@/features/orders/services/spines";
+import type { SpineProduct } from "@/features/orders/services/spines";
+import { evaluateAdvance, advanceDeal, recordGateConfirmation, cancelDeal, listGateConfigs } from "@/features/orders/services/lifecycle";
 import { listDefinitions, getOptions, listCategoryDefinitions } from "@/features/catalog/services/attributes";
 import { listOrgs, getOrg, createOrg } from "@/features/organisations/services/orgService";
+import { listAccessGroups, getAccessGroupDetail, getUserAccessGroups, listPortalUsers } from "@/features/access/services/groupsRead";
 import { TOOLS } from "./tools";
 
 export const dynamic = "force-dynamic";
@@ -146,14 +150,21 @@ async function callTool(name: string, args: any, role: Role) {
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     case "timber_create_deal": {
+      if (args?.needs_sourcing && !args?.source_organisation_id) {
+        return toolErr("source_organisation_id is required when needs_sourcing is true.");
+      }
       const res = await createDeal(db, SERVICE_ACTOR, {
         name: args?.name ?? null,
         productGroup: args?.product_group ?? null,
         currency: args?.currency,
         customerNameForCode: args?.customer_name ?? null,
         customerOrganisationId: args?.customer_organisation_id ?? null,
+        buyerOrganisationId: args?.buyer_organisation_id ?? null,
         sellerOrganisationId: args?.seller_organisation_id ?? null,
         producerOrganisationId: args?.producer_organisation_id ?? null,
+        needsSourcing: args?.needs_sourcing ?? false,
+        sourceOrganisationId: args?.source_organisation_id ?? null,
+        spineProduct: mapSpineProductArgs(args?.spine_product),
         incoterms: args?.incoterms ?? null,
         incotermsPlace: args?.incoterms_place ?? null,
         advancePct: args?.advance_pct ?? null,
@@ -237,9 +248,109 @@ async function callTool(name: string, args: any, role: Role) {
       const res = await listDealsMissingDocs(db, SERVICE_ACTOR, { docType: args.doc_type as DocType, limit: args?.limit });
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
+    // ── E7: spine reads (chain + rollup + lineage) ────────────────────────────
+    case "timber_get_spine": {
+      if (!args?.spine_id) return toolErr("spine_id is required");
+      const res = await getSpine(db, SERVICE_ACTOR, args.spine_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_list_spine_deals": {
+      if (!args?.spine_id) return toolErr("spine_id is required");
+      const res = await listSpineDeals(db, SERVICE_ACTOR, args.spine_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_get_spine_lineage": {
+      if (!args?.spine_id) return toolErr("spine_id is required");
+      const res = await getSpineLineage(db, SERVICE_ACTOR, args.spine_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    // ── E7: lifecycle gates (read + advance a deal's stage) ───────────────────
+    case "timber_get_advance_status": {
+      if (!args?.deal_id) return toolErr("deal_id is required");
+      const res = await evaluateAdvance(db, args.deal_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_list_gate_configs": {
+      const res = await listGateConfigs(db);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_advance_deal": {
+      if (!args?.deal_id) return toolErr("deal_id is required");
+      const res = await advanceDeal(db, SERVICE_ACTOR, args.deal_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_record_gate_confirmation": {
+      if (!args?.deal_id || !args?.from_stage || !args?.block_type || !args?.block_key) {
+        return toolErr("deal_id, from_stage, block_type and block_key are required");
+      }
+      if (args.block_type !== "party_signoff" && args.block_type !== "acceptance") {
+        return toolErr("block_type must be 'party_signoff' or 'acceptance'");
+      }
+      const res = await recordGateConfirmation(db, SERVICE_ACTOR, {
+        orderId: args.deal_id,
+        fromStage: args.from_stage,
+        blockType: args.block_type,
+        blockKey: args.block_key,
+        confirmedByOrg: args?.confirmed_by_org ?? null,
+      });
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_cancel_deal": {
+      if (!args?.deal_id) return toolErr("deal_id is required");
+      const res = await cancelDeal(db, SERVICE_ACTOR, args.deal_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    // ── E7: user / access-group management (read surface) ─────────────────────
+    case "timber_list_access_groups": {
+      const res = await listAccessGroups(db);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_get_access_group": {
+      if (!args?.group_id) return toolErr("group_id is required");
+      const res = await getAccessGroupDetail(db, args.group_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_list_user_access_groups": {
+      if (!args?.user_id || !args?.organisation_id) return toolErr("user_id and organisation_id are required");
+      const res = await getUserAccessGroups(db, args.user_id, args.organisation_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_list_users": {
+      const res = await listPortalUsers(db, { query: args?.query, orgId: args?.org_id, limit: args?.limit });
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
     default:
       return toolErr(`Unhandled tool: ${name}`);
   }
+}
+
+/**
+ * Normalize the create_deal `spine_product` arg (snake_case, like every other
+ * MCP arg) into the SpineProduct shape the spine writer reads (camelCase). Every
+ * sibling arg is snake_case, so an agent supplies snake_case here too — without
+ * this mapper the spine's product columns would be silently dropped. Also
+ * tolerates camelCase for robustness. Absent keys stay absent (column untouched).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapSpineProductArgs(p: any): Partial<SpineProduct> | undefined {
+  if (!p || typeof p !== "object") return undefined;
+  const pick = (snake: string, camel: string) => (snake in p ? p[snake] : camel in p ? p[camel] : undefined);
+  const out: Partial<SpineProduct> = {};
+  const set = (k: keyof SpineProduct, v: unknown) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (v !== undefined) (out as any)[k] = v ?? null;
+  };
+  set("woodSpecies", pick("wood_species", "woodSpecies"));
+  set("productType", pick("product_type", "productType"));
+  set("processing", pick("processing", "processing"));
+  set("quality", pick("quality", "quality"));
+  set("certificate", pick("certificate", "certificate"));
+  set("thickness", pick("thickness", "thickness"));
+  set("width", pick("width", "width"));
+  set("length", pick("length", "length"));
+  set("pieces", pick("pieces", "pieces"));
+  set("volumeM3", pick("volume_m3", "volumeM3"));
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -15,7 +15,6 @@
 import { updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isSuperAdmin } from "@/lib/auth";
-import type { DealScope, FieldGrant } from "@/lib/access/types";
 import type {
   AccessGroupDetail,
   AccessGroupSummary,
@@ -24,6 +23,11 @@ import type {
   GroupRightsInput,
   UserGroupAssignment,
 } from "../types";
+import {
+  getAccessGroupDetail as getAccessGroupDetailSvc,
+  getUserAccessGroups as getUserAccessGroupsSvc,
+  listAccessGroups as listAccessGroupsSvc,
+} from "../services/groupsRead";
 
 async function requireSuperAdmin(): Promise<
   { ok: true; client: any } | { ok: false; error: string; code: string }
@@ -74,58 +78,8 @@ export async function listPortalModules(): Promise<
 export async function listAccessGroups(): Promise<ActionResult<AccessGroupSummary[]>> {
   const g = await requireSuperAdmin();
   if (!g.ok) return { success: false, error: g.error, code: g.code };
-  const [{ data: groups, error }, { data: members }] = await Promise.all([
-    g.client
-      .from("access_groups")
-      .select("id, key, name, description, is_system, sort_order")
-      .order("sort_order", { ascending: true }),
-    g.client.from("user_access_groups").select("group_id"),
-  ]);
-  if (error) return { success: false, error: "Failed to load groups", code: "FETCH_FAILED" };
-  const counts = new Map<string, number>();
-  for (const m of (members || []) as Array<{ group_id: string }>) {
-    counts.set(m.group_id, (counts.get(m.group_id) ?? 0) + 1);
-  }
-  return {
-    success: true,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    data: (groups || []).map((row: any) => ({
-      id: row.id,
-      key: row.key,
-      name: row.name,
-      description: row.description ?? null,
-      isSystem: row.is_system === true,
-      sortOrder: row.sort_order,
-      memberCount: counts.get(row.id) ?? 0,
-    })),
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function decomposeRights(rows: any[]): Omit<AccessGroupDetail, "id" | "key" | "name" | "description" | "isSystem"> {
-  const modules: string[] = [];
-  const dealVisibility: string[] = [];
-  const fieldDomains: AccessGroupDetail["fieldDomains"] = {};
-  const fieldOverrides: Record<string, FieldGrant> = {};
-  const actions: string[] = [];
-  let scope: DealScope = "company";
-  for (const r of rows) {
-    const grant = (): FieldGrant => {
-      const v = (r.value ?? {}) as Record<string, unknown>;
-      return { visible: v.visible !== false, editable: v.editable === true };
-    };
-    if (r.right_type === "module") modules.push(r.key);
-    else if (r.right_type === "visibility" && r.resource === "deal") dealVisibility.push(r.key);
-    else if (r.right_type === "visibility" && r.resource === "deal_fields")
-      fieldDomains[r.key as keyof typeof fieldDomains] = grant();
-    else if (r.right_type === "field") fieldOverrides[r.key] = grant();
-    else if (r.right_type === "action") actions.push(`${r.resource}:${r.key}`);
-    else if (r.right_type === "scope") {
-      const v = typeof r.value === "string" ? r.value : null;
-      if (v === "mine" || v === "company" || v === "all") scope = v;
-    }
-  }
-  return { modules, dealVisibility, fieldDomains, fieldOverrides, scope, actions };
+  // Delegate to the shared read service (same source the MCP surface calls).
+  return listAccessGroupsSvc(g.client);
 }
 
 export async function getAccessGroupDetail(
@@ -133,29 +87,7 @@ export async function getAccessGroupDetail(
 ): Promise<ActionResult<AccessGroupDetail>> {
   const g = await requireSuperAdmin();
   if (!g.ok) return { success: false, error: g.error, code: g.code };
-  const [{ data: group, error }, { data: rights }] = await Promise.all([
-    g.client
-      .from("access_groups")
-      .select("id, key, name, description, is_system")
-      .eq("id", groupId)
-      .single(),
-    g.client
-      .from("access_group_rights")
-      .select("right_type, resource, key, value")
-      .eq("group_id", groupId),
-  ]);
-  if (error || !group) return { success: false, error: "Group not found", code: "NOT_FOUND" };
-  return {
-    success: true,
-    data: {
-      id: group.id,
-      key: group.key,
-      name: group.name,
-      description: group.description ?? null,
-      isSystem: group.is_system === true,
-      ...decomposeRights(rights || []),
-    },
-  };
+  return getAccessGroupDetailSvc(g.client, groupId);
 }
 
 function slugify(name: string): string {
@@ -303,32 +235,7 @@ export async function getUserAccessGroups(
 ): Promise<ActionResult<UserGroupAssignment[]>> {
   const g = await requireSuperAdmin();
   if (!g.ok) return { success: false, error: g.error, code: g.code };
-  const [{ data: groups, error }, { data: assigned }] = await Promise.all([
-    g.client
-      .from("access_groups")
-      .select("id, key, name, is_system, sort_order")
-      .order("sort_order", { ascending: true }),
-    g.client
-      .from("user_access_groups")
-      .select("group_id")
-      .eq("user_id", userId)
-      .eq("organization_id", organisationId),
-  ]);
-  if (error) return { success: false, error: "Failed to load groups", code: "FETCH_FAILED" };
-  const assignedSet = new Set(
-    ((assigned || []) as Array<{ group_id: string }>).map((r) => r.group_id),
-  );
-  return {
-    success: true,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    data: (groups || []).map((row: any) => ({
-      groupId: row.id,
-      groupKey: row.key,
-      groupName: row.name,
-      isSystem: row.is_system === true,
-      assigned: assignedSet.has(row.id),
-    })),
-  };
+  return getUserAccessGroupsSvc(g.client, userId, organisationId);
 }
 
 /** Replace a user's group assignments in one org (delete-then-insert). */
