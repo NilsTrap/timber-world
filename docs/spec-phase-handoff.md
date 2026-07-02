@@ -1,16 +1,26 @@
 # Timber Spec phase — handoff (2026-07-02)
 
 Resume point for a **fresh-context session** continuing Nils's System Spec build (epics E0–E9).
-Read this + the bus (agent-bus MCP, run `3a5a2c92`) + the tasks board, then continue from **E7**.
+Read this + the bus (agent-bus MCP) + the tasks board, then continue from **E8 — but PAUSE for Edgars first** (E8 is the prod cutover: 69-order bilateral split, drop the E4 transitional producer/customer==buyer RLS bridge, prod DB region move Ireland→Frankfurt).
 
 ## Where things are
-- **Branch:** `feature/timber-spec-phase` (off `origin/main`), **pushed**. E0 plan → E1×2 → E2×2 → E3×3 → E4 (`328f1d4`) → E5 (`a0537e0`) → orders-hotfix (`e2ddda2`) → E6 (`ed7b4a3`). `main`/prod untouched.
-- **Staging DB** (`fyzrtqsnmnizoxgcqsjc`, Frankfurt): **all migrations applied** (`20260701000001`–`20260701000018`). Verified.
-- **Staging portal APP:** the branch is **deployed** to `https://timber-portal-staging.vercel.app` (E6 deployment `plt579c5e`). CLI deploy; NOT git-linked → redeploy = the swap→`vercel --prod`→restore dance (below). Nils logs in with real prod email/password.
+- **Branch:** `feature/timber-spec-phase` (off `origin/main`), **pushed**. E0 plan → E1×2 → E2×2 → E3×3 → E4 (`328f1d4`) → E5 (`a0537e0`) → orders-hotfix (`e2ddda2`) → E6 (`ed7b4a3`) → **E7 (`db63461`)**. `main`/prod untouched.
+- **Staging DB** (`fyzrtqsnmnizoxgcqsjc`, Frankfurt): **all migrations applied** (`20260701000001`–`20260701000018`). Verified. **E7 added NO migration** (MCP surface over existing services).
+- **Staging portal APP:** the branch is **deployed** to `https://timber-portal-staging.vercel.app` (**E7 deployment `timber-portal-staging-1rufuseb2`**, verified live). CLI deploy; NOT git-linked → redeploy = the swap→`vercel --prod`→restore dance (below). Nils logs in with real prod email/password.
 - **Gotenberg (E6 infra):** Docker on VPS2 (`hetzner-openclaw2`, loopback:3019), Caddy-proxied at `https://gotenberg.ideajetlab.com` behind a **bearer token** (401 without). `GOTENBERG_URL`+`GOTENBERG_BEARER` set on the Vercel staging project (prod+preview envs). Token lives in Caddy `/etc/caddy/Caddyfile` + `/root/.gotenberg_token` on VPS2 + the Vercel env only (Vault deferred per steer). To rotate: regen on VPS + update the Caddy block + Vercel env.
-- **Tasks board:** project `0d2f3a0a-0755-4274-9218-227812cc6083`. **E1–E6 = in-review** (Edgars to close). E7–E9 = todo. Deferred/postponed: E5 (retire flat stairs, decommission inventory — import-gated, → E8); E6 (full Plate editor — Next-16 risk; §9.5 carrier transport-pack; per-role/stage doc-creation gating; brand palette §12).
+- **Tasks board:** project `0d2f3a0a-0755-4274-9218-227812cc6083`. **E1–E7 = in-review** (Edgars to close). E8–E9 = todo. Deferred/postponed: E5 (retire flat stairs, decommission inventory — import-gated, → E8); E6 (full Plate editor — Next-16 risk; §9.5 carrier transport-pack; per-role/stage doc-creation gating; brand palette §12); **E7 (group WRITE CRUD via MCP — session/cache-bound, needs service extraction; carrier-reply transport ingest — no transport fields yet, ties to §9.5 → E8).**
 - **CI:** `NEGATIVE_TESTS_FAIL_ON_LEAK=true` set. The rls-and-perf orders suite now includes the creator embed (guards the PGRST201 two-FK regression).
 - **⚠️ Account monthly spend limit was hit** mid-E6-review (Opus 4.8 sub-agents fail once reached). Raise at claude.ai/settings/usage before heavy sub-agent fan-outs; the Fable-5 orchestrator still runs.
+
+## Done — E7 · MCP surface (2026-07-02) → in-review
+Extended `apps/portal/src/app/api/timber-mcp` from **17 → 29 tools / 10 → 13 lifecycle steps** (+`spine`, +`gates`, +`access`), keeping two-token auth + idempotency. NO migration. New tools:
+- **spine reads:** `timber_get_spine` / `list_spine_deals` (the chain) / `get_spine_lineage`.
+- **gates:** `get_advance_status` + `list_gate_configs` (read); `advance_deal` / `record_gate_confirmation` / `cancel_deal` (write, full-token) — every deterministic lifecycle mutation is now MCP-exposed (coverage test asserts `gates` has both a read AND a write).
+- **access (read-only):** `list_access_groups` / `get_access_group` / `list_user_access_groups` / `list_users`, backed by a NEW DRY `features/access/services/groupsRead.ts` that the E4 portal group **actions now delegate to** (single source, no drift).
+- **create_deal** extended: `needs_sourcing` + `source_organisation_id` (+ `buyer_organisation_id`, `spine_product`) → auto-spawns the matching BUY leg on the SAME spine (`upstream_deal_id` points to it).
+- **Steer (Edgars away 2026-07-02 → took the 3 recommended options):** full lifecycle set · groups **read-only** now (WRITE CRUD deferred — session/cache-bound) · in/out contracts as **compositions** (inbound = create_deal+line_items+refs; outbound = generate CMR/packing_list; carrier-reply ingest deferred, no transport fields / §9.5 → E8).
+- **Proof:** type-check clean (8/8 incl. agents); coverage 137/137 (29 tools/13 steps); **hermetic route integration** (drove the real POST handler vs staging DB, full+RO tokens) **30/30**; **live-HTTP E2E as Vilma** on the deployed staging endpoint with the REAL tokens **10/10** (tools/list 29 full / 17 RO, RO-blocked-from-write, create+auto-spawn, idempotency, spine reads, advance draft→confirmed, doc gen, group reads). All test data cleaned up. Adversarial review (4 lenses × refuters, Opus, 9 agents 0 errors): **2 distinct findings fixed + re-proven** — (1) PostgREST `.or()` filter-injection in `listPortalUsers` (readonly-reachable) → sanitized like the hardened `listOrgs`; (2) `create_deal` `spine_product` snake_case silently dropped by the camelCase spine writer → added `mapSpineProductArgs` + documented the sub-schema.
+- **Needs Edgars:** confirm the 3 steer choices above (groups read-only / compositions / defer carrier ingest). The MCP tokens for staging live in `~/.supabase-ijl/timber-mcp-staging-tokens` (full + readonly).
 
 ## Done — E6 · documents (2026-07-02) → in-review
 Migrations `...17` (document_templates, admin-write RLS, `documents.view` module) + `...18` (7 seeded default Handlebars templates). `documents/templateMerge.ts` (Handlebars + money/fmtM3/fmtDate/pct helpers, bounded cache), `documents/gotenberg.ts` + `port.ts` (gotenbergGenerator behind the DocumentGenerator port; loads default template → merge → POST to Gotenberg → PDF; jsPDF fallback; env-gated first branch of `getDocumentGenerator()`), `features/documents/*` (template CRUD + Mammoth import + live-preview actions; lightweight code+sandboxed-preview editor at `/admin/settings/document-templates`).
@@ -46,10 +56,9 @@ Design detail: `docs/spec-design-notes.md` + `docs/spec-implementation-plan.md` 
 - Deal → **Deal tab** → pipeline (advance / sign-off / cancel round-trips).
 - **Settings → Deal Gates** (`/admin/settings/gates`) → configure a gate, watch it block/allow.
 
-## NEXT: E7–E9 (todo)
-- **E7 · MCP** — extend the timber-mcp surface for spine/bilateral/lifecycle (+ a user/group management surface; keep the two-token auth + idempotency). The MCP route is `apps/portal/src/app/api/timber-mcp/{route,tools}.ts` with a coverage test; E5 already added `timber_get_category_fields`.
-- **E7 · MCP** extend the timber-mcp surface for spine/bilateral/lifecycle.
-- **E8 · data migration + prod rollout** (incl. prod DB region move Ireland→Frankfurt; the E2 69-order migration; prod cutover). **PAUSE for Edgars before E8.**
+## NEXT: E8–E9 (todo)
+- **E7 · MCP** — DONE (see the E7 section above), in-review.
+- **E8 · data migration + prod rollout** (incl. prod DB region move Ireland→Frankfurt; the E2 69-order bilateral split; drop the E4 transitional `producer`/`customer==buyer` RLS bridge; prod cutover). Also folds in the deferred E7 items when relevant (group WRITE CRUD via MCP; carrier-reply transport ingest + §9.5 transport fields). **PAUSE for Edgars before E8.**
 - **E9 · consolidate legacy sections under one nav group.**
 
 ## Operational how-to (for the fresh session)
