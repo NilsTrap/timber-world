@@ -3,175 +3,12 @@ import {
   isSuperAdmin,
   hasMultipleOrganizations,
   getUserEnabledModules,
-  type UserRole,
 } from "@/lib/auth";
-import { Sidebar, type NavItem, type NavChild } from "./Sidebar";
+import { Sidebar, type NavItem } from "./Sidebar";
+import { ADMIN_NAV_ITEMS, getOrgUserNavItems, filterNavItemsByModules } from "./navItems";
 import { getActiveOrganisations } from "@/features/shipments/actions/getActiveOrganisations";
 import type { OrganizationOption } from "./OrganizationSelector";
 import type { OrganizationSwitcherOption } from "./OrganizationSwitcher";
-
-/**
- * Sub-nav child with an optional module requirement (collapsible-section
- * children carry their own gating so each can be hidden independently).
- */
-interface ModuleNavChild extends NavChild {
-  /** Module code required to show this child (null/undefined = always show) */
-  requiresModule?: string | null;
-  /** Show when the user has ANY of these modules (OR). Takes precedence over requiresModule. */
-  requiresAnyModule?: string[];
-  /**
-   * Module code matched EXACTLY (no sibling prefix matching). Needed where
-   * sibling module codes share a prefix but must gate independently — the
-   * walled address books (counterparties.clients vs .suppliers). Takes
-   * precedence over the other two.
-   */
-  requiresExactModule?: string;
-}
-
-/**
- * Extended NavItem with optional module requirement
- */
-interface ModuleNavItem extends NavItem {
-  /** Module code required to show this nav item (null = always show) */
-  requiresModule?: string | null;
-  /** Show when the user has ANY of these modules (OR). Takes precedence over requiresModule. */
-  requiresAnyModule?: string[];
-  /** Children that may each carry their own module gate (collapsible sections). */
-  children?: ModuleNavChild[];
-}
-
-/** Modules whose access implies the "UK Agent app" section should appear. */
-const AGENT_APP_MODULES = ["agents.view", "agent-orders.view", "agent-manual.view", "catalogue.view"];
-
-/** Children of the "UK Agent app" collapsible section (admin = no gating). */
-const AGENT_APP_CHILDREN: ModuleNavChild[] = [
-  { href: "/admin/agents", label: "Agents", iconName: "Contact", requiresModule: "agents.view" },
-  { href: "/admin/agent-orders", label: "Agent Orders", iconName: "ClipboardList", requiresModule: "agent-orders.view" },
-  { href: "/admin/agent-manual", label: "Agent Manual", iconName: "BookOpen", requiresModule: "agent-manual.view" },
-  { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", requiresModule: "catalogue.view" },
-];
-
-/**
- * Navigation items for Admin users
- * Admin users see all items - feature filtering is for org-level access
- */
-const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
-  { href: "agent-app", label: "UK Agent app", iconName: "Store", group: "agent", collapsible: true,
-    children: AGENT_APP_CHILDREN },
-  { href: "/admin/marketing", label: "CMS", iconName: "Image" },
-  { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp" },
-  { href: "/counterparties", label: "Counterparties", iconName: "Handshake", group: "deals", children: [
-    { href: "/counterparties/clients", label: "Clients" },
-    { href: "/counterparties/suppliers", label: "Suppliers" },
-  ]},
-  { href: "/admin/crm", label: "CRM", iconName: "Users" },
-  { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
-  { href: "/admin/inventory", label: "Inventory", iconName: "Package" },
-  { href: "/orders", label: "Orders", iconName: "ShoppingCart" },
-  { href: "/production", label: "Production", iconName: "Factory" },
-  { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText" },
-  { href: "/admin/settings", label: "Settings", iconName: "Settings", group: "settings", children: [
-    { href: "/admin/settings/fields", label: "Fields" },
-    { href: "/admin/settings/gates", label: "Deal Gates" },
-    { href: "/admin/settings/groups", label: "Access Groups" },
-    { href: "/admin/settings/document-templates", label: "Document Templates" },
-    { href: "/admin/settings/packaging", label: "Packaging" },
-    { href: "/admin/settings/pricing-units", label: "Pricing Units" },
-  ]},
-  { href: "/admin/shipments", label: "Shipments", iconName: "Truck" },
-  { href: "/admin/uk-staircase-pricing", label: "UK Staircase Pricing", iconName: "PoundSterling" },
-  { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2" },
-];
-
-/**
- * Navigation items for Organization Users
- * Module requirements determine which items are visible per organization
- */
-function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
-  return [
-    { href: "agent-app", label: "UK Agent app", iconName: "Store", group: "agent", collapsible: true,
-      requiresAnyModule: AGENT_APP_MODULES, children: AGENT_APP_CHILDREN },
-    { href: "/admin/marketing", label: "CMS", iconName: "Image", requiresModule: "marketing.view" },
-    { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp", requiresModule: "competitor-pricing.view" },
-    { href: "/counterparties", label: "Counterparties", iconName: "Handshake", group: "deals",
-      requiresAnyModule: ["counterparties.clients", "counterparties.suppliers"], children: [
-      { href: "/counterparties/clients", label: "Clients", requiresExactModule: "counterparties.clients" },
-      { href: "/counterparties/suppliers", label: "Suppliers", requiresExactModule: "counterparties.suppliers" },
-    ]},
-    { href: "/admin/crm", label: "CRM", iconName: "Users", requiresModule: "crm.view" },
-    { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard", requiresModule: "dashboard.view" },
-    { href: "/inventory", label: "Inventory", iconName: "Package", requiresModule: "inventory.view" },
-    { href: "/orders", label: "Orders", iconName: "ShoppingCart", requiresModule: "orders.view" },
-    { href: "/production", label: "Production", iconName: "Factory", requiresModule: "production.view" },
-    { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText", requiresModule: "quotes.view" },
-    { href: "/admin/settings", label: "Settings", iconName: "Settings", requiresAnyModule: ["settings.view", "catalogue.view"], group: "settings", children: [
-      { href: "/admin/settings/fields", label: "Fields" },
-      { href: "/admin/settings/packaging", label: "Packaging" },
-      { href: "/admin/settings/pricing-units", label: "Pricing Units" },
-    ]},
-    { href: "/shipments", label: "Shipments", iconName: "Truck", badge: pendingShipmentCount, requiresModule: "shipments.view" },
-    { href: "/admin/uk-staircase-pricing", label: "UK Staircase Pricing", iconName: "PoundSterling", requiresModule: "uk-staircase-pricing.view" },
-    { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2", requiresModule: "organizations.view" },
-  ];
-}
-
-/**
- * Filter nav items based on enabled modules.
- *
- * A nav item is shown if:
- * - It has no module requirement, OR
- * - The exact module (e.g. "orders.view") is in the set, OR
- * - Any module with the same prefix (e.g. "orders.create") is in the set
- *   (so that sub-module access implies sidebar visibility)
- */
-function moduleMatches(required: string, enabledModules: Set<string>): boolean {
-  // Exact match
-  if (enabledModules.has(required)) return true;
-  // Prefix match: "orders.view" → any "orders.*" module implies visibility
-  const prefix = required.split(".")[0] + ".";
-  for (const mod of enabledModules) {
-    if (mod.startsWith(prefix)) return true;
-  }
-  return false;
-}
-
-/** Whether a single nav item/child is visible given its module requirement(s). */
-function isVisible(
-  req: { requiresModule?: string | null; requiresAnyModule?: string[]; requiresExactModule?: string },
-  enabledModules: Set<string>
-): boolean {
-  // Exact requirement: no sibling prefix matching (walled address books)
-  if (req.requiresExactModule) {
-    return enabledModules.has(req.requiresExactModule);
-  }
-  // OR requirement: show when the user has ANY of the listed modules
-  if (req.requiresAnyModule?.length) {
-    return req.requiresAnyModule.some((m) => moduleMatches(m, enabledModules));
-  }
-  // No module requirement = always show
-  if (!req.requiresModule) return true;
-  return moduleMatches(req.requiresModule, enabledModules);
-}
-
-function filterNavItemsByModules(
-  items: ModuleNavItem[],
-  enabledModules: Set<string>
-): NavItem[] {
-  const result: NavItem[] = [];
-  for (const item of items) {
-    // Sections with children: filter children individually; hide the whole
-    // section when the user can reach none of them.
-    if (item.children) {
-      if (!item.collapsible && !isVisible(item, enabledModules)) continue;
-      const children = item.children.filter((child) => isVisible(child, enabledModules));
-      if (children.length === 0) continue;
-      result.push({ ...item, children });
-      continue;
-    }
-    if (isVisible(item, enabledModules)) result.push(item);
-  }
-  return result;
-}
 
 /**
  * Sidebar Wrapper (Server Component)
@@ -180,6 +17,7 @@ function filterNavItemsByModules(
  * For Super Admin, also fetches organizations for the org selector.
  * For multi-org users, provides organization switcher data.
  * Filters org user nav items based on organization module configuration.
+ * The nav config + module-gating filter live in ./navItems (pure, unit-tested).
  */
 export async function SidebarWrapper() {
   const session = await getSession();
