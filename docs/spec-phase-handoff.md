@@ -1,14 +1,22 @@
 # Timber Spec phase — handoff (2026-07-02)
 
 Resume point for a **fresh-context session** continuing Nils's System Spec build (epics E0–E9).
-Read this + the bus flag + the tasks board, then continue from **E6**.
+Read this + the bus (agent-bus MCP, run `3a5a2c92`) + the tasks board, then continue from **E7**.
 
 ## Where things are
-- **Branch:** `feature/timber-spec-phase` (off `origin/main`), **pushed**. E0 plan → E1×2 → E2×2 → E3×3 → E4 (`328f1d4`) → E5 (`a0537e0`). `main`/prod untouched.
-- **Staging DB** (`fyzrtqsnmnizoxgcqsjc`, Frankfurt): **all migrations applied** (`20260701000001`–`20260701000016`). Verified.
-- **Staging portal APP:** the branch is **deployed** to `https://timber-portal-staging.vercel.app` (E5 deployment `9zorpf2ma`, staging Supabase). CLI deploy of the branch; NOT git-linked → redeploy = the swap→`vercel --prod`→restore dance (see below). Nils logs in with real prod email/password (staging mirrors prod).
-- **Tasks board:** project `0d2f3a0a-0755-4274-9218-227812cc6083`. **E1–E5 = in-review** (Edgars to close). E6–E9 = todo. E0 (perf) folded into E8's region move. Two E5 subtasks (retire flat stairs table, decommission inventory) = **postponed** (import-gated, bundle with E8).
-- **CI:** `NEGATIVE_TESTS_FAIL_ON_LEAK=true` repo var set — the rls-and-perf leak gate is enforced.
+- **Branch:** `feature/timber-spec-phase` (off `origin/main`), **pushed**. E0 plan → E1×2 → E2×2 → E3×3 → E4 (`328f1d4`) → E5 (`a0537e0`) → orders-hotfix (`e2ddda2`) → E6 (`ed7b4a3`). `main`/prod untouched.
+- **Staging DB** (`fyzrtqsnmnizoxgcqsjc`, Frankfurt): **all migrations applied** (`20260701000001`–`20260701000018`). Verified.
+- **Staging portal APP:** the branch is **deployed** to `https://timber-portal-staging.vercel.app` (E6 deployment `plt579c5e`). CLI deploy; NOT git-linked → redeploy = the swap→`vercel --prod`→restore dance (below). Nils logs in with real prod email/password.
+- **Gotenberg (E6 infra):** Docker on VPS2 (`hetzner-openclaw2`, loopback:3019), Caddy-proxied at `https://gotenberg.ideajetlab.com` behind a **bearer token** (401 without). `GOTENBERG_URL`+`GOTENBERG_BEARER` set on the Vercel staging project (prod+preview envs). Token lives in Caddy `/etc/caddy/Caddyfile` + `/root/.gotenberg_token` on VPS2 + the Vercel env only (Vault deferred per steer). To rotate: regen on VPS + update the Caddy block + Vercel env.
+- **Tasks board:** project `0d2f3a0a-0755-4274-9218-227812cc6083`. **E1–E6 = in-review** (Edgars to close). E7–E9 = todo. Deferred/postponed: E5 (retire flat stairs, decommission inventory — import-gated, → E8); E6 (full Plate editor — Next-16 risk; §9.5 carrier transport-pack; per-role/stage doc-creation gating; brand palette §12).
+- **CI:** `NEGATIVE_TESTS_FAIL_ON_LEAK=true` set. The rls-and-perf orders suite now includes the creator embed (guards the PGRST201 two-FK regression).
+- **⚠️ Account monthly spend limit was hit** mid-E6-review (Opus 4.8 sub-agents fail once reached). Raise at claude.ai/settings/usage before heavy sub-agent fan-outs; the Fable-5 orchestrator still runs.
+
+## Done — E6 · documents (2026-07-02) → in-review
+Migrations `...17` (document_templates, admin-write RLS, `documents.view` module) + `...18` (7 seeded default Handlebars templates). `documents/templateMerge.ts` (Handlebars + money/fmtM3/fmtDate/pct helpers, bounded cache), `documents/gotenberg.ts` + `port.ts` (gotenbergGenerator behind the DocumentGenerator port; loads default template → merge → POST to Gotenberg → PDF; jsPDF fallback; env-gated first branch of `getDocumentGenerator()`), `features/documents/*` (template CRUD + Mammoth import + live-preview actions; lightweight code+sandboxed-preview editor at `/admin/settings/document-templates`).
+- **Proof:** type-check clean (3 apps); 31 templateMerge assertions; **end-to-end integration rendered a real 34792-byte PDF** through the adapter via the public bearer route. Adversarial review (Opus 4.8): 3 findings fixed (template-write privilege-escalation → admin-only gate; unbounded preview cache → bounded; editor stale-state on failed load).
+- **Steer:** full Plate WYSIWYG deferred (lightweight editor shipped); Gotenberg provisioned now (done); bearer in Caddy+Vercel only (Vault deferred).
+- **Needs Edgars feel-test:** Settings → Document Templates (edit a template + live preview + .docx import); generate a doc on a deal (Deal tab → Generate) and confirm the Gotenberg-rendered PDF.
 
 ## Done — E5 · catalog consolidation (2026-07-02) → in-review
 Migrations `...13`–`...16` (staging): `file` catalog field type + EAV file value columns + private `catalog-files` bucket; per-surface visibility (`visible_agents/internal/marketing`) on categories+products; `order_line_items.catalog_product_id/catalog_variant_id/is_standard` + `orders.margin_approved_at/by`; seeded firewood/boards/stairs categories + spec fields (slug-idempotent) + fields riser/stair_family/joint_type.
@@ -38,8 +46,8 @@ Design detail: `docs/spec-design-notes.md` + `docs/spec-implementation-plan.md` 
 - Deal → **Deal tab** → pipeline (advance / sign-off / cancel round-trips).
 - **Settings → Deal Gates** (`/admin/settings/gates`) → configure a gate, watch it block/allow.
 
-## NEXT: E6–E9 (todo)
-- **E6 · documents** — in-app HTML editor (Plate) + Handlebars merge + Gotenberg render (Docker on VPS2/hetzner-openclaw2 behind Caddy+bearer) + Mammoth import; templates as open HTML in Supabase. NOTE: an interim jsPDF renderer + `DocumentGenerator` port already exist (`orders/services/documents/`); E6 swaps in the HTML-template + Gotenberg path.
+## NEXT: E7–E9 (todo)
+- **E7 · MCP** — extend the timber-mcp surface for spine/bilateral/lifecycle (+ a user/group management surface; keep the two-token auth + idempotency). The MCP route is `apps/portal/src/app/api/timber-mcp/{route,tools}.ts` with a coverage test; E5 already added `timber_get_category_fields`.
 - **E7 · MCP** extend the timber-mcp surface for spine/bilateral/lifecycle.
 - **E8 · data migration + prod rollout** (incl. prod DB region move Ireland→Frankfurt; the E2 69-order migration; prod cutover). **PAUSE for Edgars before E8.**
 - **E9 · consolidate legacy sections under one nav group.**
