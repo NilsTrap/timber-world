@@ -226,6 +226,7 @@ export function DocumentTemplatesManager() {
   const [mainTab, setMainTab] = useState<MainTab>("visual");
   const [editorNonce, setEditorNonce] = useState(0); // bump → remount the visual editor with fresh content
   const [switchWarnOpen, setSwitchWarnOpen] = useState(false); // one-way visual→html switch confirm
+  const [startVisualWarnOpen, setStartVisualWarnOpen] = useState(false); // start a visual version of an html template
   const [dirty, setDirty] = useState(false); // unsaved edits to the open template
   const [pendingNav, setPendingNav] = useState<null | (() => void)>(null); // action awaiting discard confirmation
 
@@ -455,6 +456,19 @@ export function DocumentTemplatesManager() {
     setView("split");
   };
 
+  /** Start a visual version of a raw-HTML template from its doc type's visual starter. */
+  const confirmStartVisual = () => {
+    if (!editing) return;
+    const starter = starterFor(editing.docType);
+    setDirty(true);
+    setEditing((e) =>
+      e ? { ...e, contentFormat: "wysiwyg", docJson: starter.doc, pageSettings: starter.pageSettings ?? null } : e
+    );
+    setEditorNonce((n) => n + 1);
+    setStartVisualWarnOpen(false);
+    setMainTab("visual");
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget?.id) return;
     setDeleting(true);
@@ -604,14 +618,16 @@ export function DocumentTemplatesManager() {
                 <Button
                   variant={mainTab === "visual" ? "secondary" : "ghost"}
                   size="sm"
-                  disabled={editing.contentFormat === "html"}
                   title={
-                    editing.contentFormat === "html"
-                      ? "This template is raw HTML — visual editing isn't available"
-                      : undefined
+                    editing.docJson
+                      ? undefined
+                      : "This template is raw HTML — start a visual version from a matching template"
                   }
                   onClick={() => {
-                    if (editing.contentFormat !== "html") setMainTab("visual");
+                    // Visual editing needs a visual document. A raw-HTML template
+                    // (no doc_json) offers to start from the matching visual starter.
+                    if (editing.docJson) setMainTab("visual");
+                    else setStartVisualWarnOpen(true);
                   }}
                 >
                   <PenLine className="h-4 w-4" /> Visual
@@ -852,6 +868,25 @@ export function DocumentTemplatesManager() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmSwitchToHtml}>Switch to HTML</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Start a visual version of a raw-HTML template */}
+      <AlertDialog open={startVisualWarnOpen} onOpenChange={(o) => setStartVisualWarnOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edit this template visually?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This template is raw HTML, which can&apos;t be edited visually directly. We&apos;ll start
+              you from a ready-made visual version for this document type that you can edit. Your
+              current raw HTML is replaced only when you Save — until then you can switch back to the
+              Advanced (HTML) tab or cancel.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmStartVisual}>Start visual editing</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
