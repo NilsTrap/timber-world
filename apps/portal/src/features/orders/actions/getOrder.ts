@@ -37,7 +37,7 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
       customer:organisations!orders_customer_organisation_id_fkey (code, name),
       seller:organisations!orders_seller_organisation_id_fkey (code, name),
       producer:organisations!orders_producer_organisation_id_fkey (code, name),
-      portal_users (name)
+      portal_users!orders_created_by_fkey (name)
     `)
     .eq("id", orderId)
     .single();

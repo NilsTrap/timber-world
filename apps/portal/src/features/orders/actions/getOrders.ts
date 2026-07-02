@@ -123,7 +123,7 @@ export async function getOrders(options?: {
         code,
         name
       ),
-      portal_users (
+      portal_users!orders_created_by_fkey (
         name
       )
     `
