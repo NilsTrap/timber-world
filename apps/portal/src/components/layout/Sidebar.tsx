@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { Button } from "@timber/ui";
 import { cn } from "@/lib/utils";
 import { SidebarLink, SidebarSectionHeader, GROUP_CHILD_BORDER, type IconName, type NavGroup as LinkNavGroup } from "./SidebarLink";
+import { activeSectionKey } from "./navItems";
 import { OrganizationSelector, type OrganizationOption } from "./OrganizationSelector";
 import {
   OrganizationSwitcher,
@@ -93,6 +94,22 @@ export function Sidebar({
   const [isMounted, setIsMounted] = useState(false);
   const [shipmentBadge, setShipmentBadge] = useState(0);
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  // ── Single-open accordion (one second-level nav open at a time) ─────────────
+  // The section matching the current route is open by default; the user can open
+  // another (collapsible header click) which collapses the rest. `manualKey`:
+  // undefined = follow the route; string|null = an explicit override for now.
+  const activeKey = activeSectionKey(navItems, pathname);
+  const [manualKey, setManualKey] = useState<string | null | undefined>(undefined);
+  // Navigating (path change) re-syncs the open section to the route.
+  useEffect(() => { setManualKey(undefined); }, [pathname]);
+  const openKey = manualKey !== undefined ? manualKey : activeKey;
+  const toggleSection = (key: string) =>
+    setManualKey((prev) => {
+      const current = prev !== undefined ? prev : activeKey;
+      return current === key ? null : key; // toggle: open it (closing others), or collapse it
+    });
 
   // Get current orgs from URL for OrganizationSelector (comma-separated)
   const orgParam = searchParams.get("org");
@@ -186,10 +203,17 @@ export function Sidebar({
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-2" aria-label="Main navigation">
         <ul className="space-y-1">
-          {navItems.map((item) =>
-            item.collapsible ? (
+          {navItems.map((item) => {
+            const hasChildren = !!item.children && item.children.length > 0;
+            const isSectionOpen = hasChildren && openKey === item.href;
+            return item.collapsible ? (
               <li key={item.href}>
-                <SidebarSection item={item} isCollapsed={isCollapsed} />
+                <SidebarSection
+                  item={item}
+                  isCollapsed={isCollapsed}
+                  isOpen={isSectionOpen}
+                  onToggle={() => toggleSection(item.href)}
+                />
               </li>
             ) : (
               <li key={item.href}>
@@ -202,11 +226,11 @@ export function Sidebar({
                   group={item.group}
                 />
                 {item.children && !isCollapsed && (
-                  <SidebarChildren parentHref={item.href} children={item.children} group={item.group} />
+                  <SidebarChildren parentHref={item.href} children={item.children} group={item.group} isOpen={isSectionOpen} />
                 )}
               </li>
-            )
-          )}
+            );
+          })}
         </ul>
       </nav>
 
@@ -257,41 +281,22 @@ export function Sidebar({
   );
 }
 
-const SECTION_OPEN_PREFIX = "sidebar-section-open:";
-
 /**
  * Collapsible nav section (e.g. "UK Agent app").
  *
  * Groups several real sections under one expandable parent. Open/closed state is
- * persisted to localStorage (default open) and force-opened whenever a child
- * route is active. When the whole sidebar is collapsed to the icon rail, the
- * children are shown as flat icons so they stay reachable.
+ * CONTROLLED by the parent Sidebar (`isOpen`/`onToggle`) so only one section is
+ * ever open at a time (single-open accordion). When the whole sidebar is
+ * collapsed to the icon rail, the children are shown as flat icons so they stay
+ * reachable.
  */
-function SidebarSection({ item, isCollapsed }: { item: NavItem; isCollapsed: boolean }) {
+function SidebarSection({ item, isCollapsed, isOpen, onToggle }: { item: NavItem; isCollapsed: boolean; isOpen: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const children = item.children ?? [];
   const isChildActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
   const anyChildActive = children.some((child) => isChildActive(child.href));
 
-  const storageKey = SECTION_OPEN_PREFIX + item.href;
-  const [isOpen, setIsOpen] = useState(true);
-
-  // Load persisted open/closed state (defaults to open).
-  useEffect(() => {
-    const stored = localStorage.getItem(storageKey);
-    if (stored !== null) setIsOpen(stored === "true");
-  }, [storageKey]);
-
-  // Always reveal the active section when navigating into one of its children.
-  useEffect(() => {
-    if (anyChildActive) setIsOpen(true);
-  }, [anyChildActive]);
-
-  const toggle = () => {
-    const next = !isOpen;
-    setIsOpen(next);
-    localStorage.setItem(storageKey, String(next));
-  };
+  const toggle = onToggle;
 
   // Icon rail: render the children as flat icons (no expandable header fits).
   if (isCollapsed) {
@@ -345,11 +350,13 @@ function SidebarSection({ item, isCollapsed }: { item: NavItem; isCollapsed: boo
   );
 }
 
-function SidebarChildren({ parentHref, children, group }: { parentHref: string; children: { href: string; label: string }[]; group?: LinkNavGroup }) {
+function SidebarChildren({ parentHref, children, group, isOpen }: { parentHref: string; children: { href: string; label: string }[]; group?: LinkNavGroup; isOpen: boolean }) {
   const pathname = usePathname();
-  const isParentActive = pathname.startsWith(parentHref);
 
-  if (!isParentActive) return null;
+  // Open state is owned by the parent Sidebar (single-open accordion): a regular
+  // parent's sub-links show when its section is the open one (its own route is
+  // active) and hide when another section is opened.
+  if (!isOpen) return null;
 
   return (
     <ul className={cn("mt-0.5 space-y-0.5", group ? `ml-5 border-l-2 pl-3 ${GROUP_CHILD_BORDER[group]}` : "ml-8")}>

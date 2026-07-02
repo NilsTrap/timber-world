@@ -7,8 +7,10 @@
  */
 import {
   ADMIN_NAV_ITEMS,
+  AGENT_APP_CHILDREN,
   getOrgUserNavItems,
   filterNavItemsByModules,
+  activeSectionKey,
   LEGACY_ADMIN_CHILDREN,
   type ModuleNavItem,
 } from "./navItems";
@@ -84,6 +86,33 @@ const salesNav = filterNavItemsByModules(getOrgUserNavItems(), salesModules);
 ok("a role with no legacy modules sees NO Legacy group", !salesNav.some((i) => i.label === "Legacy"));
 ok("salesperson still sees Counterparties (clients only)",
    salesNav.some((i) => i.href === "/counterparties" && (i.children ?? []).length === 1 && i.children?.[0]?.href === "/counterparties/clients"));
+
+// ── 6. Nav ordering + Catalog promotion (2026-07-02) ────────────────────────
+ok("Dashboard is the FIRST nav item", ADMIN_NAV_ITEMS[0]?.href === "/dashboard", ADMIN_NAV_ITEMS[0]?.href);
+const catalogItem = ADMIN_NAV_ITEMS.find((i) => i.href === "/admin/catalog");
+ok("Catalogue is a TOP-LEVEL main item (not collapsible, no children)",
+   !!catalogItem && !catalogItem.collapsible && !catalogItem.children);
+ok("Catalogue is NO LONGER a child of the UK Agent app group",
+   !AGENT_APP_CHILDREN.some((c) => c.href === "/admin/catalog"));
+// still no orphan: catalog remains reachable (asserted by the EXACT-set check above)
+ok("Catalogue is still reachable (present in the destination set)", adminSet.has("/admin/catalog"));
+
+// ── 7. Accordion: activeSectionKey resolves the correct open section ─────────
+ok("route under a regular parent → that parent's key (settings)",
+   activeSectionKey(ADMIN_NAV_ITEMS, "/admin/settings/fields") === "/admin/settings");
+ok("route under a collapsible group child → the group key (agent-app)",
+   activeSectionKey(ADMIN_NAV_ITEMS, "/admin/agents") === "agent-app");
+ok("route under Legacy child → 'legacy'",
+   activeSectionKey(ADMIN_NAV_ITEMS, "/production") === "legacy");
+ok("counterparties child → '/counterparties'",
+   activeSectionKey(ADMIN_NAV_ITEMS, "/counterparties/suppliers") === "/counterparties");
+ok("a leaf route (Dashboard) opens NO section", activeSectionKey(ADMIN_NAV_ITEMS, "/dashboard") === null);
+ok("the promoted Catalogue leaf opens NO section", activeSectionKey(ADMIN_NAV_ITEMS, "/admin/catalog") === null);
+// at most one section can match a given path (single-open is well-defined)
+for (const path of ["/admin/settings/fields", "/admin/agents", "/production", "/counterparties/clients", "/dashboard", "/admin/catalog"]) {
+  const matches = ADMIN_NAV_ITEMS.filter((i) => activeSectionKey([i], path) !== null).length;
+  ok(`exactly ≤1 section matches "${path}" (accordion is single-open)`, matches <= 1, matches);
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;
