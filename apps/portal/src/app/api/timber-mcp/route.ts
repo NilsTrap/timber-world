@@ -18,7 +18,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActorContext, DealSide, DealKind, DocType, TransportBilling, OrderExternalRef } from "@/features/orders/services/dealModel";
 import { createDeal, getOrderDeal, listDeals, replaceLineItems, allocateDealCode, updateDealFields, setExternalRefs, setDealStatus, listDealsMissingDocs } from "@/features/orders/services/orderDeals";
 import { assembleDocumentData, generateDocument } from "@/features/orders/services/orderDocuments";
-import { listDefinitions, getOptions } from "@/features/catalog/services/attributes";
+import { listDefinitions, getOptions, listCategoryDefinitions } from "@/features/catalog/services/attributes";
 import { listOrgs, getOrg, createOrg } from "@/features/organisations/services/orgService";
 import { TOOLS } from "./tools";
 
@@ -78,6 +78,26 @@ async function callTool(name: string, args: any, role: Role) {
   switch (name) {
     case "timber_get_attribute_definitions": {
       const res = await listDefinitions(db);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_get_category_fields": {
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      // Resolve the category by explicit slug, or by category_id when it isn't a UUID.
+      const slug: string | null =
+        args?.category_slug ?? (args?.category_id && !UUID_RE.test(args.category_id) ? args.category_id : null);
+      let categoryId: string | null = args?.category_id && UUID_RE.test(args.category_id) ? args.category_id : null;
+      if (!categoryId && slug) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: cat } = await (db as any)
+          .from("catalog_categories")
+          .select("id")
+          .eq("slug", slug)
+          .maybeSingle();
+        if (!cat) return toolErr(`No category found for slug "${slug}"`);
+        categoryId = cat.id as string;
+      }
+      if (!categoryId) return toolErr("category_id (UUID) or category_slug is required");
+      const res = await listCategoryDefinitions(db, categoryId);
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     case "timber_list_attribute_options": {

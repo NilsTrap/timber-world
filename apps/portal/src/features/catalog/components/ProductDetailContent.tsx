@@ -3,12 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Trash2, X, Copy } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, X, Copy, Paperclip, FileText, ExternalLink } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
 import { saveProduct, duplicateProduct, deleteProduct } from "../actions/products";
 import { getVariants, saveVariant, deleteVariant } from "../actions/variants";
 import { uploadProductImage, deleteProductImage, uploadVariantImage, deleteVariantImage } from "../actions/images";
+import { uploadFieldValueFile, getFieldValueFileUrl } from "../actions/fieldFiles";
 import { VariantPackagingSection } from "./VariantPackagingSection";
 import { VariantsTable } from "./VariantsTable";
 import type {
@@ -21,6 +22,17 @@ import type {
 } from "../types";
 import type { CurrencyPriceMap } from "../actions/currencies";
 import type { PackagingType } from "../actions/packagingTypes";
+
+/** Local edit-state for a dynamic field value (E5: includes file-ref columns). */
+export type FieldValueState = {
+  optionId?: string;
+  valueText?: string;
+  valueNumber?: number;
+  valueStoragePath?: string | null;
+  valueFileName?: string | null;
+  valueMimeType?: string | null;
+  valueFileSizeBytes?: number | null;
+};
 
 interface Props {
   product: CatalogProduct;
@@ -63,13 +75,24 @@ export function ProductDetailContent({
   const [editingVariant, setEditingVariant] = useState<CatalogVariant | null>(null);
   const [images, setImages] = useState(product.images || []);
   const [uploading, setUploading] = useState(false);
+  const [visAgents, setVisAgents] = useState(product.visibleAgents);
+  const [visInternal, setVisInternal] = useState(product.visibleInternal);
+  const [visMarketing, setVisMarketing] = useState(product.visibleMarketing);
 
   // Product-level field values state
-  const [fieldValues, setFieldValues] = useState<Record<string, { optionId?: string; valueText?: string; valueNumber?: number }>>(
+  const [fieldValues, setFieldValues] = useState<Record<string, FieldValueState>>(
     () => {
-      const map: Record<string, any> = {};
+      const map: Record<string, FieldValueState> = {};
       for (const fv of product.fieldValues || []) {
-        map[fv.fieldId] = { optionId: fv.optionId, valueText: fv.valueText, valueNumber: fv.valueNumber };
+        map[fv.fieldId] = {
+          optionId: fv.optionId ?? undefined,
+          valueText: fv.valueText ?? undefined,
+          valueNumber: fv.valueNumber ?? undefined,
+          valueStoragePath: fv.valueStoragePath,
+          valueFileName: fv.valueFileName,
+          valueMimeType: fv.valueMimeType,
+          valueFileSizeBytes: fv.valueFileSizeBytes,
+        };
       }
       return map;
     }
@@ -82,6 +105,10 @@ export function ProductDetailContent({
       optionId: v.optionId || null,
       valueText: v.valueText || null,
       valueNumber: v.valueNumber ?? null,
+      valueStoragePath: v.valueStoragePath || null,
+      valueFileName: v.valueFileName || null,
+      valueMimeType: v.valueMimeType || null,
+      valueFileSizeBytes: v.valueFileSizeBytes ?? null,
     }));
 
     const result = await saveProduct({
@@ -91,6 +118,9 @@ export function ProductDetailContent({
       slug: slug.trim(),
       description: desc.trim() || null,
       basePriceEurCents: basePrice ? Math.round(Number(basePrice) * 100) : null,
+      visibleAgents: visAgents,
+      visibleInternal: visInternal,
+      visibleMarketing: visMarketing,
       fieldValues: fvArray,
     });
     setSaving(false);
@@ -198,11 +228,29 @@ export function ProductDetailContent({
                   field={field}
                   value={fieldValues[field.id]}
                   onChange={(val) => setFieldValues((prev) => ({ ...prev, [field.id]: val }))}
+                  scope="product"
+                  entityId={product.id}
                 />
               ))}
             </div>
           </div>
         )}
+
+        <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+          <div className="text-sm font-medium">Surface visibility</div>
+          <p className="text-xs text-muted-foreground">Control which apps show this product. Uncheck to hide it from that surface.</p>
+          <div className="flex gap-4 flex-wrap">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={visAgents} onChange={(e) => setVisAgents(e.target.checked)} /> Agents app
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={visInternal} onChange={(e) => setVisInternal(e.target.checked)} /> Internal
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={visMarketing} onChange={(e) => setVisMarketing(e.target.checked)} /> Marketing
+            </label>
+          </div>
+        </div>
 
         <Button onClick={handleSaveProduct} disabled={saving}>
           {saving ? "Saving..." : "Save Product"}
@@ -321,11 +369,19 @@ function DynamicField({
   field,
   value,
   onChange,
+  scope,
+  entityId,
 }: {
   field: CategoryField;
-  value?: { optionId?: string; valueText?: string; valueNumber?: number };
-  onChange: (val: { optionId?: string; valueText?: string; valueNumber?: number }) => void;
+  value?: FieldValueState;
+  onChange: (val: FieldValueState) => void;
+  scope: "product" | "variant";
+  entityId: string;
 }) {
+  if (field.fieldType === "file") {
+    return <FileFieldInput field={field} value={value} onChange={onChange} scope={scope} entityId={entityId} />;
+  }
+
   if (field.fieldType === "select" && field.options) {
     return (
       <div className="space-y-1">
@@ -384,6 +440,97 @@ function DynamicField({
 }
 
 // ============================================================================
+// File Field Input (E5 — file-upload field type)
+// ============================================================================
+
+function FileFieldInput({
+  field,
+  value,
+  onChange,
+  scope,
+  entityId,
+}: {
+  field: CategoryField;
+  value?: FieldValueState;
+  onChange: (val: FieldValueState) => void;
+  scope: "product" | "variant";
+  entityId: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const storagePath = value?.valueStoragePath;
+
+  const handleUpload = async (file: File) => {
+    setBusy(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const result = await uploadFieldValueFile(scope, entityId, field.id, fd);
+    setBusy(false);
+    if (result.success) {
+      onChange({
+        ...value,
+        valueStoragePath: result.data.storagePath,
+        valueFileName: result.data.fileName,
+        valueMimeType: result.data.mimeType,
+        valueFileSizeBytes: result.data.fileSizeBytes,
+      });
+      toast.success("File uploaded — save to keep it");
+    } else {
+      toast.error(result.error);
+    }
+  };
+
+  const handleView = async () => {
+    if (!storagePath) return;
+    const result = await getFieldValueFileUrl(storagePath);
+    if (result.success) window.open(result.data, "_blank", "noopener,noreferrer");
+    else toast.error(result.error);
+  };
+
+  const handleRemove = () => {
+    onChange({
+      ...value,
+      valueStoragePath: null,
+      valueFileName: null,
+      valueMimeType: null,
+      valueFileSizeBytes: null,
+    });
+  };
+
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium flex items-center gap-1">
+        <Paperclip className="h-3 w-3" /> {field.fieldLabel}
+      </label>
+      {storagePath ? (
+        <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2 py-1.5">
+          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+          <button type="button" onClick={handleView} className="text-sm text-primary underline truncate flex-1 text-left inline-flex items-center gap-1" title={value?.valueFileName || "View file"}>
+            <span className="truncate">{value?.valueFileName || "View file"}</span>
+            <ExternalLink className="h-3 w-3 shrink-0" />
+          </button>
+          <label className="inline-flex cursor-pointer">
+            <input type="file" className="hidden" disabled={busy}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }} />
+            <span className="text-xs text-muted-foreground hover:text-foreground">{busy ? "…" : "Replace"}</span>
+          </label>
+          <button type="button" onClick={handleRemove} className="shrink-0" title="Remove file">
+            <X className="h-3.5 w-3.5 text-destructive" />
+          </button>
+        </div>
+      ) : (
+        <label className="inline-flex cursor-pointer">
+          <input type="file" className="hidden" disabled={busy}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }} />
+          <Button size="sm" variant="outline" className="h-9 text-sm w-full" asChild disabled={busy}>
+            <span><Plus className="h-3 w-3 mr-1" /> {busy ? "Uploading..." : "Upload file"}</span>
+          </Button>
+        </label>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
 // Variant Form
 // ============================================================================
 
@@ -413,11 +560,19 @@ function VariantForm({
   // Dimensions are dedicated columns; hide their (system) fields from the generic list.
   const nonDimensionFields = variantFields.filter((f) => !f.dimensionRole);
 
-  const [fieldValues, setFieldValues] = useState<Record<string, { optionId?: string; valueText?: string; valueNumber?: number }>>(
+  const [fieldValues, setFieldValues] = useState<Record<string, FieldValueState>>(
     () => {
-      const map: Record<string, any> = {};
+      const map: Record<string, FieldValueState> = {};
       for (const fv of variant?.fieldValues || []) {
-        map[fv.fieldId] = { optionId: fv.optionId, valueText: fv.valueText, valueNumber: fv.valueNumber };
+        map[fv.fieldId] = {
+          optionId: fv.optionId ?? undefined,
+          valueText: fv.valueText ?? undefined,
+          valueNumber: fv.valueNumber ?? undefined,
+          valueStoragePath: fv.valueStoragePath,
+          valueFileName: fv.valueFileName,
+          valueMimeType: fv.valueMimeType,
+          valueFileSizeBytes: fv.valueFileSizeBytes,
+        };
       }
       return map;
     }
@@ -430,6 +585,10 @@ function VariantForm({
       optionId: v.optionId || null,
       valueText: v.valueText || null,
       valueNumber: v.valueNumber ?? null,
+      valueStoragePath: v.valueStoragePath || null,
+      valueFileName: v.valueFileName || null,
+      valueMimeType: v.valueMimeType || null,
+      valueFileSizeBytes: v.valueFileSizeBytes ?? null,
     }));
 
     await onSave({
@@ -494,6 +653,8 @@ function VariantForm({
                 field={field}
                 value={fieldValues[field.id]}
                 onChange={(val) => setFieldValues((prev) => ({ ...prev, [field.id]: val }))}
+                scope="variant"
+                entityId={variant?.id ?? "new"}
               />
             ))}
           </div>

@@ -3,11 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Paperclip, FileText, ExternalLink, X } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
 import { saveVariant, deleteVariant } from "../actions/variants";
 import { uploadVariantImage, deleteVariantImage } from "../actions/images";
+import { uploadFieldValueFile, getFieldValueFileUrl } from "../actions/fieldFiles";
+import type { FieldValueState } from "./ProductDetailContent";
 import { VariantPackagingSection } from "./VariantPackagingSection";
 import { setVariantCurrencyOverride, type CurrencyPriceMap } from "../actions/currencies";
 import { effectiveRateEurCents, computeQuantity, lineTotalCents, formatMoney } from "../pricing";
@@ -63,11 +65,19 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
   const [images, setImages] = useState(variant.images || []);
   const [uploading, setUploading] = useState(false);
 
-  const [fieldValues, setFieldValues] = useState<Record<string, { optionId?: string; valueText?: string; valueNumber?: number }>>(
+  const [fieldValues, setFieldValues] = useState<Record<string, FieldValueState>>(
     () => {
-      const map: Record<string, any> = {};
+      const map: Record<string, FieldValueState> = {};
       for (const fv of variant.fieldValues || []) {
-        map[fv.fieldId] = { optionId: fv.optionId, valueText: fv.valueText, valueNumber: fv.valueNumber };
+        map[fv.fieldId] = {
+          optionId: fv.optionId ?? undefined,
+          valueText: fv.valueText ?? undefined,
+          valueNumber: fv.valueNumber ?? undefined,
+          valueStoragePath: fv.valueStoragePath,
+          valueFileName: fv.valueFileName,
+          valueMimeType: fv.valueMimeType,
+          valueFileSizeBytes: fv.valueFileSizeBytes,
+        };
       }
       return map;
     }
@@ -80,6 +90,10 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
       optionId: v.optionId || null,
       valueText: v.valueText || null,
       valueNumber: v.valueNumber ?? null,
+      valueStoragePath: v.valueStoragePath || null,
+      valueFileName: v.valueFileName || null,
+      valueMimeType: v.valueMimeType || null,
+      valueFileSizeBytes: v.valueFileSizeBytes ?? null,
     }));
 
     const result = await saveVariant({
@@ -219,6 +233,8 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
                   field={field}
                   value={fieldValues[field.id]}
                   onChange={(val) => setFieldValues((prev) => ({ ...prev, [field.id]: val }))}
+                  scope="variant"
+                  entityId={variant.id}
                 />
               ))}
             </div>
@@ -300,7 +316,10 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
   );
 }
 
-function DynamicField({ field, value, onChange }: { field: CategoryField; value?: any; onChange: (val: any) => void }) {
+function DynamicField({ field, value, onChange, scope, entityId }: { field: CategoryField; value?: FieldValueState; onChange: (val: FieldValueState) => void; scope: "product" | "variant"; entityId: string }) {
+  if (field.fieldType === "file") {
+    return <FileFieldInput field={field} value={value} onChange={onChange} scope={scope} entityId={entityId} />;
+  }
   if (field.fieldType === "select" && field.options) {
     return (
       <div className="space-y-1">
@@ -324,6 +343,75 @@ function DynamicField({ field, value, onChange }: { field: CategoryField; value?
     <div className="space-y-1">
       <label className="text-xs font-medium">{field.fieldLabel}</label>
       <Input className="h-9 text-sm" value={value?.valueText || ""} onChange={(e) => onChange({ valueText: e.target.value })} />
+    </div>
+  );
+}
+
+function FileFieldInput({ field, value, onChange, scope, entityId }: { field: CategoryField; value?: FieldValueState; onChange: (val: FieldValueState) => void; scope: "product" | "variant"; entityId: string }) {
+  const [busy, setBusy] = useState(false);
+  const storagePath = value?.valueStoragePath;
+
+  const handleUpload = async (file: File) => {
+    setBusy(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const result = await uploadFieldValueFile(scope, entityId, field.id, fd);
+    setBusy(false);
+    if (result.success) {
+      onChange({
+        ...value,
+        valueStoragePath: result.data.storagePath,
+        valueFileName: result.data.fileName,
+        valueMimeType: result.data.mimeType,
+        valueFileSizeBytes: result.data.fileSizeBytes,
+      });
+      toast.success("File uploaded — save to keep it");
+    } else {
+      toast.error(result.error);
+    }
+  };
+
+  const handleView = async () => {
+    if (!storagePath) return;
+    const result = await getFieldValueFileUrl(storagePath);
+    if (result.success) window.open(result.data, "_blank", "noopener,noreferrer");
+    else toast.error(result.error);
+  };
+
+  const handleRemove = () => {
+    onChange({ ...value, valueStoragePath: null, valueFileName: null, valueMimeType: null, valueFileSizeBytes: null });
+  };
+
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium flex items-center gap-1">
+        <Paperclip className="h-3 w-3" /> {field.fieldLabel}
+      </label>
+      {storagePath ? (
+        <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2 py-1.5">
+          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+          <button type="button" onClick={handleView} className="text-sm text-primary underline truncate flex-1 text-left inline-flex items-center gap-1" title={value?.valueFileName || "View file"}>
+            <span className="truncate">{value?.valueFileName || "View file"}</span>
+            <ExternalLink className="h-3 w-3 shrink-0" />
+          </button>
+          <label className="inline-flex cursor-pointer">
+            <input type="file" className="hidden" disabled={busy}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }} />
+            <span className="text-xs text-muted-foreground hover:text-foreground">{busy ? "…" : "Replace"}</span>
+          </label>
+          <button type="button" onClick={handleRemove} className="shrink-0" title="Remove file">
+            <X className="h-3.5 w-3.5 text-destructive" />
+          </button>
+        </div>
+      ) : (
+        <label className="inline-flex cursor-pointer">
+          <input type="file" className="hidden" disabled={busy}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }} />
+          <Button size="sm" variant="outline" className="h-9 text-sm w-full" asChild disabled={busy}>
+            <span><Plus className="h-3 w-3 mr-1" /> {busy ? "Uploading..." : "Upload file"}</span>
+          </Button>
+        </label>
+      )}
     </div>
   );
 }

@@ -23,6 +23,9 @@ function toCategory(row: any): CatalogCategory {
     commissionMaxDiscountPct: row.commission_max_discount_pct != null ? Number(row.commission_max_discount_pct) : null,
     commissionDiscountedPct: row.commission_discounted_pct != null ? Number(row.commission_discounted_pct) : null,
     isActive: row.is_active,
+    visibleAgents: row.visible_agents ?? true,
+    visibleInternal: row.visible_internal ?? true,
+    visibleMarketing: row.visible_marketing ?? true,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -114,6 +117,9 @@ export async function saveCategory(input: SaveCategoryInput): Promise<ActionResu
     commission_max_discount_pct: input.commissionMaxDiscountPct ?? null,
     commission_discounted_pct: input.commissionDiscountedPct ?? null,
     is_active: input.isActive ?? true,
+    ...(input.visibleAgents !== undefined ? { visible_agents: input.visibleAgents } : {}),
+    ...(input.visibleInternal !== undefined ? { visible_internal: input.visibleInternal } : {}),
+    ...(input.visibleMarketing !== undefined ? { visible_marketing: input.visibleMarketing } : {}),
     sort_order: input.sortOrder ?? 0,
   };
 
@@ -178,6 +184,9 @@ export async function duplicateCategory(id: string): Promise<ActionResult<Catalo
       commission_max_discount_pct: source.commission_max_discount_pct,
       commission_discounted_pct: source.commission_discounted_pct,
       is_active: false,
+      visible_agents: source.visible_agents,
+      visible_internal: source.visible_internal,
+      visible_marketing: source.visible_marketing,
       sort_order: source.sort_order + 1,
     })
     .select()

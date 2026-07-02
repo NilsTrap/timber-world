@@ -73,3 +73,26 @@ export async function getOrderDocumentUrl(documentId: string): Promise<ActionRes
   if (!a.ok) return { success: false, error: a.error, code: a.code };
   return getDocumentUrl(a.db, a.actor, documentId);
 }
+
+/**
+ * E5 · Owner margin approval (spec §5.3). Toggles orders.margin_approved_at/by.
+ * Owner/admin only — automatic minimum-margin rules are deferred (§1.3).
+ */
+export async function setDealMarginApproval(input: {
+  orderId: string;
+  approved: boolean;
+}): Promise<ActionResult<{ marginApprovedAt: string | null }>> {
+  const a = await resolveDealActor();
+  if (!a.ok) return { success: false, error: a.error, code: a.code };
+  if (!a.actor.isPlatformAdmin) {
+    return { success: false, error: "Only the owner can approve the margin", code: "FORBIDDEN" };
+  }
+  const patch = input.approved
+    ? { margin_approved_at: new Date().toISOString(), margin_approved_by: a.actor.portalUserId }
+    : { margin_approved_at: null, margin_approved_by: null };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (a.db as any).from("orders").update(patch).eq("id", input.orderId);
+  if (error) return { success: false, error: "Failed to update margin approval", code: "UPDATE_FAILED" };
+  revalidatePath(`/orders/${input.orderId}`);
+  return { success: true, data: { marginApprovedAt: patch.margin_approved_at } };
+}

@@ -5,7 +5,7 @@ export type ActionResult<T> =
 /** Pricing-unit code (admin-managed in catalog_pricing_units). */
 export type PrimaryUnit = string;
 export type CalcMethod = "per_piece" | "area" | "volume" | "length";
-export type FieldType = "select" | "number" | "text" | "boolean";
+export type FieldType = "select" | "number" | "text" | "boolean" | "file";
 export type AppliesTo = "product" | "variant";
 export type DimensionRole = "width" | "length" | "thickness";
 export type StockUnit = "piece" | "package";
@@ -32,6 +32,9 @@ export interface CatalogCategory {
   commissionMaxDiscountPct: number | null;
   commissionDiscountedPct: number | null;
   isActive: boolean;
+  visibleAgents: boolean;
+  visibleInternal: boolean;
+  visibleMarketing: boolean;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -104,6 +107,9 @@ export interface CatalogProduct {
   description: string | null;
   basePriceEurCents: number | null;
   isActive: boolean;
+  visibleAgents: boolean;
+  visibleInternal: boolean;
+  visibleMarketing: boolean;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -121,7 +127,15 @@ export interface ProductImage {
   sortOrder: number;
 }
 
-export interface ProductFieldValue {
+/** File-value fields for a 'file' field type (E5). Shared by product/variant. */
+export interface FileValue {
+  valueStoragePath: string | null;
+  valueFileName: string | null;
+  valueMimeType: string | null;
+  valueFileSizeBytes: number | null;
+}
+
+export interface ProductFieldValue extends FileValue {
   id: string;
   productId: string;
   fieldId: string;
@@ -169,7 +183,7 @@ export interface VariantImage {
   sortOrder: number;
 }
 
-export interface VariantFieldValue {
+export interface VariantFieldValue extends FileValue {
   id: string;
   variantId: string;
   fieldId: string;
@@ -193,6 +207,9 @@ export interface SaveCategoryInput {
   commissionMaxDiscountPct?: number | null;
   commissionDiscountedPct?: number | null;
   isActive?: boolean;
+  visibleAgents?: boolean;
+  visibleInternal?: boolean;
+  visibleMarketing?: boolean;
   sortOrder?: number;
 }
 
@@ -228,6 +245,18 @@ export interface SaveFieldOptionInput {
   isActive?: boolean;
 }
 
+/** Field-value payload item for saveProduct/saveVariant (E5: includes file-ref columns). */
+export interface FieldValueInput {
+  fieldId: string;
+  optionId?: string | null;
+  valueText?: string | null;
+  valueNumber?: number | null;
+  valueStoragePath?: string | null;
+  valueFileName?: string | null;
+  valueMimeType?: string | null;
+  valueFileSizeBytes?: number | null;
+}
+
 export interface SaveProductInput {
   id?: string;
   categoryId: string;
@@ -236,8 +265,11 @@ export interface SaveProductInput {
   description?: string | null;
   basePriceEurCents?: number | null;
   isActive?: boolean;
+  visibleAgents?: boolean;
+  visibleInternal?: boolean;
+  visibleMarketing?: boolean;
   sortOrder?: number;
-  fieldValues?: { fieldId: string; optionId?: string | null; valueText?: string | null; valueNumber?: number | null }[];
+  fieldValues?: FieldValueInput[];
 }
 
 export interface SaveVariantInput {
@@ -254,7 +286,7 @@ export interface SaveVariantInput {
   stockUnit?: StockUnit;
   isActive?: boolean;
   sortOrder?: number;
-  fieldValues?: { fieldId: string; optionId?: string | null; valueText?: string | null; valueNumber?: number | null }[];
+  fieldValues?: FieldValueInput[];
 }
 
 // ---- Currencies ----

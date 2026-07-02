@@ -55,6 +55,11 @@ export interface OrderLineItem {
   vatRate: number | null;
   lineTotalCents: number | null;
   notes: string | null;
+  /** E5: catalog linkage. Set when the line was picked from the catalog
+   * (standard product, auto-priced); null for a non-standard per-deal line. */
+  catalogProductId: string | null;
+  catalogVariantId: string | null;
+  isStandard: boolean;
 }
 
 export interface OrderExternalRef {
@@ -122,6 +127,9 @@ export function mapLineItem(row: any): OrderLineItem {
     vatRate: row.vat_rate != null ? Number(row.vat_rate) : null,
     lineTotalCents: row.line_total_cents ?? null,
     notes: row.notes ?? null,
+    catalogProductId: row.catalog_product_id ?? null,
+    catalogVariantId: row.catalog_variant_id ?? null,
+    isStandard: row.is_standard ?? false,
   };
 }
 
@@ -153,5 +161,8 @@ export function lineItemToRow(orderId: string, it: Partial<OrderLineItem>, index
     vat_rate: it.vatRate ?? null,
     line_total_cents: it.lineTotalCents ?? null,
     notes: it.notes ?? null,
+    catalog_product_id: it.catalogProductId ?? null,
+    catalog_variant_id: it.catalogVariantId ?? null,
+    is_standard: it.isStandard ?? false,
   };
 }

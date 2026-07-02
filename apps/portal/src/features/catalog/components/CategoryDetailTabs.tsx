@@ -45,6 +45,7 @@ const FIELD_TYPE_OPTIONS: { value: FieldType; label: string }[] = [
   { value: "number", label: "Number" },
   { value: "text", label: "Text" },
   { value: "boolean", label: "Yes/No" },
+  { value: "file", label: "File upload" },
 ];
 
 export function CategoryDetailTabs({ category, fields: initialFields, products: initialProducts, pricingUnits }: Props) {
@@ -544,6 +545,9 @@ function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pr
   const [desc, setDesc] = useState(category.description || "");
   const [unit, setUnit] = useState<PrimaryUnit>(category.primaryUnit);
   const [active, setActive] = useState(category.isActive);
+  const [visAgents, setVisAgents] = useState(category.visibleAgents);
+  const [visInternal, setVisInternal] = useState(category.visibleInternal);
+  const [visMarketing, setVisMarketing] = useState(category.visibleMarketing);
   const pctStr = (v: number | null) => (v != null ? String(v) : "");
   const [commStd, setCommStd] = useState(pctStr(category.commissionStandardPct));
   const [commMaxDisc, setCommMaxDisc] = useState(pctStr(category.commissionMaxDiscountPct));
@@ -560,6 +564,9 @@ function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pr
   const hasChanges = name !== category.name || slug !== category.slug ||
     desc !== (category.description || "") || unit !== category.primaryUnit ||
     active !== category.isActive ||
+    visAgents !== category.visibleAgents ||
+    visInternal !== category.visibleInternal ||
+    visMarketing !== category.visibleMarketing ||
     commStd !== pctStr(category.commissionStandardPct) ||
     commMaxDisc !== pctStr(category.commissionMaxDiscountPct) ||
     commDisc !== pctStr(category.commissionDiscountedPct);
@@ -592,6 +599,9 @@ function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pr
       commissionMaxDiscountPct: commMaxDisc.trim() ? Number(commMaxDisc) : null,
       commissionDiscountedPct: commDisc.trim() ? Number(commDisc) : null,
       isActive: active,
+      visibleAgents: visAgents,
+      visibleInternal: visInternal,
+      visibleMarketing: visMarketing,
     });
     setSaving(false);
     if (result.success) {
@@ -694,6 +704,22 @@ function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pr
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
           Active (visible in catalog)
         </label>
+        <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+          <div className="text-sm font-medium">Surface visibility</div>
+          <p className="text-xs text-muted-foreground">Control which apps show this category. Uncheck to hide it from that surface.</p>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={visAgents} onChange={(e) => setVisAgents(e.target.checked)} />
+            Agents app
+          </label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={visInternal} onChange={(e) => setVisInternal(e.target.checked)} />
+            Internal (deals / orders)
+          </label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={visMarketing} onChange={(e) => setVisMarketing(e.target.checked)} />
+            Marketing
+          </label>
+        </div>
         <Button onClick={handleSave} disabled={saving || !hasChanges}>
           {saving ? "Saving..." : "Save Changes"}
         </Button>

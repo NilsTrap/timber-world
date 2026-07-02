@@ -22,7 +22,8 @@ function li(over: Partial<OrderLineItem>): OrderLineItem {
     quality: "A", productType: null, gradeNote: null, productNameOptionId: null, woodSpeciesOptionId: null,
     humidityOptionId: null, processingOptionId: null, qualityOptionId: null, productTypeOptionId: null,
     thickness: "20", width: "100", length: "2000", pieces: "50", volumeM3: 2, unit: "m3",
-    unitPriceCents: 45000, vatRate: null, lineTotalCents: null, notes: null, ...over,
+    unitPriceCents: 45000, vatRate: null, lineTotalCents: null, notes: null,
+    catalogProductId: null, catalogVariantId: null, isStandard: false, ...over,
   };
 }
 

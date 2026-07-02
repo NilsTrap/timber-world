@@ -20,12 +20,12 @@ export default async function ProductDetailPage({ params }: Props) {
   const [catResult, productResult, variantsResult] = await Promise.all([
     (supabase as any).from("catalog_categories")
       .select("id, name, primary_unit, commission_standard_pct, commission_max_discount_pct, commission_discounted_pct")
-      .eq("id", categoryId).single(),
+      .eq("id", categoryId).eq("visible_agents", true).single(),
     (supabase as any).from("catalog_products").select(`
       id, name, description,
       catalog_product_images(id, storage_path, is_primary, sort_order),
-      catalog_product_field_values(catalog_fields(field_label), catalog_field_options(label))
-    `).eq("id", productId).single(),
+      catalog_product_field_values(value_file_name, catalog_fields(field_label, field_type), catalog_field_options(label))
+    `).eq("id", productId).eq("visible_agents", true).single(),
     (supabase as any).from("catalog_variants").select(`
       id, sku, thickness_mm, width_mm, length_mm, is_active,
       catalog_variant_images(storage_path, is_primary, sort_order),
@@ -66,7 +66,8 @@ export default async function ProductDetailPage({ params }: Props) {
     .filter(Boolean);
 
   const specs = (product.catalog_product_field_values || []).map((fv: any) => ({
-    label: fv.catalog_fields?.field_label, value: fv.catalog_field_options?.label,
+    label: fv.catalog_fields?.field_label,
+    value: fv.catalog_fields?.field_type === "file" ? fv.value_file_name : fv.catalog_field_options?.label,
   })).filter((s: any) => s.label && s.value);
 
   const variantThumb = (v: any): string | null => {

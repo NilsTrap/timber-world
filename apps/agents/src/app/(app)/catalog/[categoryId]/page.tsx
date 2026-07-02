@@ -17,6 +17,7 @@ export default async function CategoryProductsPage({ params }: Props) {
     .from("catalog_categories")
     .select("id, name, description, primary_unit")
     .eq("id", categoryId)
+    .eq("visible_agents", true)
     .single();
 
   if (!category) notFound();
@@ -35,6 +36,7 @@ export default async function CategoryProductsPage({ params }: Props) {
       `)
       .eq("category_id", categoryId)
       .eq("is_active", true)
+      .eq("visible_agents", true)
       .order("sort_order"),
     (supabase as any)
       .from("catalog_category_field_assignments")

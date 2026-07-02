@@ -118,6 +118,61 @@ export async function listDefinitions(db: DbClient): Promise<ActionResult<Attrib
   return { success: true, data: (data ?? []).map(mapDefinition) };
 }
 
+/** A category field = a definition + how it's assigned to the category. This is
+ * the shape that drives BOTH the order form/deal picker AND the AI's questions
+ * for that category (spec §5). */
+export interface CategoryFieldDef extends AttributeDefinition {
+  appliesTo: "product" | "variant";
+  isRequired: boolean;
+  sortOrder: number;
+  options: AttributeOption[]; // active options for select fields (empty otherwise)
+}
+
+/**
+ * The fields assigned to one category (via catalog_category_field_assignments),
+ * ordered, with their active options embedded — i.e. the category's spec fields.
+ * E5: making a category's fields the AI's question set = calling this with the
+ * deal's product group.
+ */
+export async function listCategoryDefinitions(
+  db: DbClient,
+  categoryId: string,
+): Promise<ActionResult<CategoryFieldDef[]>> {
+  const c = db as DbClient;
+  const { data, error } = await c
+    .from("catalog_category_field_assignments")
+    .select(
+      "applies_to, is_required, sort_order, " +
+        "catalog_fields(" +
+        "id, field_key, field_label, field_type, unit, ref_table, is_system, dimension_role, " +
+        "catalog_field_options(id, field_id, value, label, description, sort_order, is_active, ref_value_id))",
+    )
+    .eq("category_id", categoryId)
+    .order("sort_order", { ascending: true });
+  if (error) return { success: false, error: error.message, code: "QUERY_FAILED" };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const defs: CategoryFieldDef[] = (data ?? [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .filter((row: any) => row.catalog_fields)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((row: any) => {
+      const def = mapDefinition(row.catalog_fields);
+      const options = sortOptions(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (row.catalog_fields.catalog_field_options ?? []).map(mapOption).filter((o: AttributeOption) => o.isActive),
+      );
+      return {
+        ...def,
+        appliesTo: row.applies_to,
+        isRequired: row.is_required ?? false,
+        sortOrder: row.sort_order ?? 0,
+        options,
+      };
+    });
+  return { success: true, data: defs };
+}
+
 /**
  * Get the options for one attribute, identified by its `key` (field_key).
  * Returns active options by default, sorted; pass `includeInactive` for all.

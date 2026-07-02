@@ -44,6 +44,20 @@ export const TOOLS: ToolDef[] = [
     inputSchema: { type: "object", properties: {} },
   },
   {
+    name: "timber_get_category_fields",
+    description:
+      "List the spec fields assigned to one product category (the AI's question set for that category, per E5). Identify the category by category_id (UUID) or category_slug (e.g. 'firewood', 'boards', 'stairs', 'solid-wood-panels'). Returns each field ordered, with key, label, type, unit, whether it applies to the product or variant, whether it is required, and its active select options. Use before creating a deal in a category to know exactly which attributes to ask about.",
+    readOnly: true,
+    lifecycle: "vocabulary",
+    inputSchema: {
+      type: "object",
+      properties: {
+        category_id: { type: "string", description: "Category UUID (from the catalog). Provide this OR category_slug." },
+        category_slug: { type: "string", description: "Category slug, e.g. 'firewood', 'boards', 'stairs', 'solid-wood-panels'. Resolved to the category id." },
+      },
+    },
+  },
+  {
     name: "timber_list_attribute_options",
     description:
       "List the allowed options (value + label) for one attribute, identified by its key (from timber_get_attribute_definitions). Use these exact values when creating deals/line items so they match the controlled vocabulary. Returns only active options.",

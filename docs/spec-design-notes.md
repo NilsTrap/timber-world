@@ -127,14 +127,28 @@ Unit: pure rights/field resolution + projection parity with the old strip lists.
 
 ---
 
-## E5 — Catalog consolidation (scope corrected)
+## E5 — Catalog consolidation (FINAL DESIGN 2026-07-02)
 
-**Correction (flag to Edgars):** legacy inventory can **not** be hard-decommissioned — `inventory_packages`/`ref_*`/`production_*` have 14+ FKs and back the live production feature, and a trigger already mirrors `ref_*` → `catalog_field_options`. So E5 is **consumption + UI consolidation**, not a data drop:
-- Make the modular catalog the **canonical** product/pricing definition; ensure deal line-items consume it (the `*_option_id` FKs on `order_line_items` already exist — wire the deal editor to pick from catalog).
-- Keep `ref_*` as the writable vocabulary source (synced to `catalog_field_options`).
-- Group the legacy inventory/production **UI** under the E9 legacy nav; don't delete the tables.
+**Confirmed scope (Edgars/Nils 2026-07-02):** legacy inventory + the flat stairs table run **in PARALLEL** with the catalog — NO hard decommission this stage (gated on import-readiness; see memory [[project_e5_inventory_decommission]]). E5 = make the catalog the CANONICAL product/pricing source + CONSUME it on deals + fill the named gaps. Steer: file-upload = a **catalog field type**; the deal editor gets a **full catalog picker**.
 
-**Proof:** a deal line-item is created by picking a catalog category/product/variant (option_ids populated); catalog remains the single source for attributes/pricing; no FK breakage; legacy inventory still functions but is nav-grouped.
+### Migrations (additive; legacy untouched)
+- `...13_catalog_file_field_and_riser.sql`: widen `catalog_fields.field_type` CHECK → add `'file'`; add file value columns to BOTH EAV tables (`value_storage_path`, `value_file_name`, `value_mime_type`, `value_file_size_bytes`); add `riser` global field (number/mm, for stairs); create PRIVATE `catalog-files` bucket + admin-write/authenticated-read policies (signed URLs — drawings may be proprietary).
+- `...14_catalog_surface_visibility.sql`: add `visible_agents`/`visible_internal` BOOL DEFAULT true + `visible_marketing` BOOL DEFAULT false to `catalog_categories` + `catalog_products`. Filtering is app-layer (catalog RLS is permissive all-read).
+- `...15_order_line_catalog_link.sql`: add `catalog_product_id` + `catalog_variant_id` (nullable FK, `ON DELETE SET NULL`) + `is_standard BOOL DEFAULT false` to `order_line_items` (null variant = non-standard/per-deal). Plus `orders.margin_approved_at/by` for the owner margin-approval flag (spec §5.3; auto rules deferred §1.3).
+- `...16_seed_catalog_categories.sql`: seed **firewood** (m3), **boards** (m3), **stairs** (piece) categories + field assignments + options. New select fields with direct options (no ref_table): `stair_family` (Step/Winder/Quarter), `joint_type` (FJ/FS/FJFS). Reuse existing `wood_species`/`humidity`/`fsc`/`quality`/`thickness`/`width`/`length`/`riser`. Fixed UUIDs, idempotent. Keeps the `ref_*`→`catalog_field_options` sync intact (new non-ref fields just carry their own options).
+
+### App (portal)
+- **File field type**: `FieldType` += `"file"` (`types.ts`); admin type lists + icon (`GlobalFieldsPage`, `CategoryDetailTabs`); a `DynamicField` file branch (upload widget + view/download); new actions `uploadFieldValueFile`/`getFieldValueFileUrl` (private bucket, orders-bucket signed-URL idiom); `saveProduct`/`saveVariant` round-trip the new value columns.
+- **Per-surface visibility**: surface toggles in the category + product editors; `getCategories`/`getProducts` stay admin-all; agents queries add `.eq("visible_agents", true)`; a `surface` filter helper. (marketing consumer is future — flag exists, defaults off.)
+- **Catalog-scoped vocabulary (the AI-questions link, spec §5)**: `attributes.ts` gains `listCategoryDefinitions(db, categoryId)` + `getCategoryForm(db, categoryId)` (joins `catalog_category_field_assignments`, honours `applies_to`/`is_required`/`sort_order`). New MCP tool `timber_get_category_fields` (route + tools + coverage test) so a category's fields ARE the AI's question set.
+- **Shared deal price resolver** `features/catalog/dealPricing.ts`: `resolveVariantPrice(db, variantId, currency, {pieces})` reusing `effectiveRateEurCents` + `catalog_currency_prices` cascade + `computeQuantity` → `{unitPriceCents, lineTotalCents}`. Currency-aware (EUR base / GBP derived). Kills the agent-cart duplication direction (portal-side canonical).
+- **Deal-editor catalog picker** (`DealPanel`): "Add from catalog" → category → product → variant (+ qty) populates `order_line_items.{*_option_id, catalog_product_id, catalog_variant_id, is_standard=true}` and auto-fills price via the resolver; "Add custom line" = non-standard free-text + per-deal price. New service `addCatalogLineItem` / `addCustomLineItem` on `orderDeals.ts`; the picker resolves chosen option values → `catalog_field_options.id`. Gated on the deal actor (`orders.view`); price fields respect the E4 field wall (`deal_terms` editable; standard lines auto-price without manual entry).
+- **Owner margin approval**: `approveDealMarginAction` (admin/owner-only) sets `margin_approved_at/by`; shown on the Deal view. Manual only — automatic minimum-margin rules deferred (§1.3).
+
+### Kept in parallel (NOT touched)
+`inventory_packages` / `ref_*` / `production_*` and `uk_staircase_pricing` stay; the legacy order-products form + staircase picker keep working; the `ref_*`→`catalog_field_options` sync trigger is preserved. The stairs catalog category is built ALONGSIDE `uk_staircase_pricing` (represents the sell definition; cost decomposition stays on the flat table). Nav-grouping of legacy UI = E9. Data migration + table drops = deferred (E8-style, import-gated).
+
+**Proof (DoD):** firewood/boards/stairs categories exist + drive the deal picker; a file-type field accepts + renders a drawing on a catalog product (shown on the order when picked); a standard catalog line auto-prices, a non-standard line takes a per-deal price; per-surface toggle hides a category from agents but not internal (verified); no FK breakage, legacy inventory/stairs still function. Type-check + unit + staging integration + adversarial review, all green; tasks → in-review. (Flat-stairs-data-reads-through-catalogue + former-inventory-reads-through-catalogue DoD bullets are the import-gated part — DEFERRED with the decommission.)
 
 ---
 

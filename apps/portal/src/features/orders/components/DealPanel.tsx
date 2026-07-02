@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, FileText, Download, Plus, Pencil, Trash2 } from "lucide-react";
+import { Loader2, FileText, Download, Plus, Pencil, Trash2, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 import {
   Button, Input,
   Table, TableHeader, TableBody, TableHead, TableRow, TableCell,
@@ -11,14 +12,16 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@timber/ui";
 import type { OrderLineItem, DocType, DealSide, LineUnit } from "../services/dealModel";
-import type { LineItemAmountPatch } from "../services/orderDeals";
+import type { LineItemAmountPatch, OrderDealView } from "../services/orderDeals";
 import type { OrderDealViewResult } from "../actions/dealActions";
 import { DealPipeline } from "./DealPipeline";
+import { DealLineAdder } from "./DealLineAdder";
 import { lineTotalCents } from "../services/documents/assemble";
 import {
   getOrderDealView, generateOrderDocument, getOrderDocumentUrl,
-  updateDealLineItemAmounts, deleteOrderDocument,
+  updateDealLineItemAmounts, deleteOrderDocument, setDealMarginApproval,
 } from "../actions/dealActions";
+import { removeLineItem } from "../actions/catalogPicker";
 
 const DOC_TYPE_LABELS: Record<DocType, string> = {
   sales_spec: "Sales specification",
@@ -51,6 +54,8 @@ export function DealPanel({ orderId }: { orderId: string }) {
   const [docToDelete, setDocToDelete] = useState<{ id: string; number: string } | null>(null);
   const [deletingDoc, setDeletingDoc] = useState(false);
 
+  const [savingMargin, setSavingMargin] = useState(false);
+
   const load = useCallback(async () => {
     const res = await getOrderDealView(orderId);
     if (res.success) { setDeal(res.data); setError(null); }
@@ -59,6 +64,22 @@ export function DealPanel({ orderId }: { orderId: string }) {
   }, [orderId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Add/remove line actions return the fresh OrderDealView; swap it into local
+  // state while preserving the viewer's admin flag (not carried on the view).
+  const applyView = useCallback((view: OrderDealView) => {
+    setDeal((prev) => ({ ...view, viewerIsAdmin: prev?.viewerIsAdmin ?? false }));
+    setError(null);
+  }, []);
+
+  const onToggleMargin = useCallback(async (approved: boolean) => {
+    setSavingMargin(true);
+    const res = await setDealMarginApproval({ orderId, approved });
+    setSavingMargin(false);
+    if (!res.success) { toast.error(res.error); return; }
+    setDeal((prev) => (prev ? { ...prev, marginApprovedAt: res.data.marginApprovedAt } : prev));
+    toast.success(approved ? "Margin approved" : "Margin approval revoked");
+  }, [orderId]);
 
   const onGenerate = useCallback(async () => {
     setGenerating(true);
@@ -96,6 +117,10 @@ export function DealPanel({ orderId }: { orderId: string }) {
   }
 
   const isAdmin = deal.viewerIsAdmin;
+  // Offer a price input to viewers who can set prices: admins, or when the deal
+  // already carries prices (so a non-admin editing a priced deal isn't blocked).
+  const canEditPrice = isAdmin || deal.lineItems.some((li) => li.unitPriceCents != null);
+  const marginApproved = !!deal.marginApprovedAt;
   const sellItems = deal.lineItems.filter((li) => li.side === "sell");
   const buyItems = deal.lineItems.filter((li) => li.side === "buy");
   const hasDealData = !!deal.dealCode || deal.lineItems.length > 0 || deal.documents.length > 0;
@@ -121,6 +146,28 @@ export function DealPanel({ orderId }: { orderId: string }) {
       {/* Lifecycle pipeline (stages + gates) */}
       <DealPipeline orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
 
+      {/* Owner margin approval (E5 §5.3) */}
+      <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
+        <div className="flex items-center gap-2 text-sm">
+          <ShieldCheck className={marginApproved ? "h-4 w-4 text-green-600" : "h-4 w-4 text-muted-foreground"} />
+          <span className="font-medium">Margin</span>
+          <StatusBadge variant={marginApproved ? "success" : "pending"}>
+            {marginApproved ? "Approved" : "Pending"}
+          </StatusBadge>
+        </div>
+        {isAdmin && (
+          marginApproved ? (
+            <Button variant="outline" size="sm" onClick={() => onToggleMargin(false)} disabled={savingMargin}>
+              {savingMargin ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Revoke
+            </Button>
+          ) : (
+            <Button size="sm" onClick={() => onToggleMargin(true)} disabled={savingMargin}>
+              {savingMargin ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Approve margin
+            </Button>
+          )
+        )}
+      </div>
+
       {/* Deal summary */}
       <div className="rounded-lg border bg-card p-4">
         <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
@@ -134,10 +181,17 @@ export function DealPanel({ orderId }: { orderId: string }) {
         {deal.notes && <p className="mt-3 text-sm text-muted-foreground whitespace-pre-wrap">{deal.notes}</p>}
       </div>
 
-      {/* Line items — read-only by default; admins can edit amounts (the agent
-          sometimes captures a line without a price). */}
-      <LineItemsTable title="Sell-side line items" items={sellItems} currency={deal.currency} isAdmin={isAdmin} orderId={orderId} onSaved={load} />
-      {buyItems.length > 0 && <LineItemsTable title="Buy-side line items" items={buyItems} currency={deal.currency} isAdmin={isAdmin} orderId={orderId} onSaved={load} />}
+      {/* Line items — read-only amounts by default; admins can edit amounts (the
+          agent sometimes captures a line without a price). Anyone on the Deal tab
+          can add/remove lines (the actions enforce orders.view server-side). */}
+      <LineItemsTable
+        title="Sell-side line items" side="sell" items={sellItems} currency={deal.currency}
+        isAdmin={isAdmin} canEditPrice={canEditPrice} orderId={orderId} onSaved={load} onApplied={applyView}
+      />
+      <LineItemsTable
+        title="Buy-side line items" side="buy" items={buyItems} currency={deal.currency}
+        isAdmin={isAdmin} canEditPrice={canEditPrice} orderId={orderId} onSaved={load} onApplied={applyView}
+      />
 
       {/* Documents */}
       <div className="space-y-3">
@@ -287,15 +341,29 @@ function rowChanged(li: OrderLineItem, d: AmountDraft): boolean {
 }
 
 function LineItemsTable({
-  title, items, currency, isAdmin, orderId, onSaved,
+  title, side, items, currency, isAdmin, canEditPrice, orderId, onSaved, onApplied,
 }: {
-  title: string; items: OrderLineItem[]; currency: string;
-  isAdmin: boolean; orderId: string; onSaved: () => Promise<void> | void;
+  title: string; side: DealSide; items: OrderLineItem[]; currency: string;
+  isAdmin: boolean; canEditPrice: boolean; orderId: string;
+  onSaved: () => Promise<void> | void; onApplied: (view: OrderDealView) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, AmountDraft>>({});
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [lineToRemove, setLineToRemove] = useState<OrderLineItem | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  const confirmRemove = async () => {
+    if (!lineToRemove?.id) return;
+    setRemoving(true);
+    const res = await removeLineItem({ orderId, lineItemId: lineToRemove.id });
+    setRemoving(false);
+    setLineToRemove(null);
+    if (!res.success) { toast.error(res.error); return; }
+    onApplied(res.data);
+    toast.success("Line removed");
+  };
 
   const startEdit = () => {
     const next: Record<string, AmountDraft> = {};
@@ -336,7 +404,6 @@ function LineItemsTable({
     await onSaved();
   };
 
-  if (items.length === 0) return null;
   const totalVol = items.reduce((s, li) => s + (li.volumeM3 ?? 0), 0);
   // Same computation as the service/generated document, so row · footer · PDF agree.
   const totalCents = items.reduce((s, li) => {
@@ -356,18 +423,23 @@ function LineItemsTable({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold flex items-center gap-1.5"><FileText className="h-4 w-4 text-muted-foreground" />{title}</h3>
-        {isAdmin && (
-          editing ? (
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>Cancel</Button>
-              <Button size="sm" onClick={save} disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save amounts"}
-              </Button>
-            </div>
-          ) : (
-            <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-3.5 w-3.5" /> Edit amounts</Button>
-          )
-        )}
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            editing ? (
+              <>
+                <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>Cancel</Button>
+                <Button size="sm" onClick={save} disabled={saving}>
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save amounts"}
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-3.5 w-3.5" /> Edit amounts</Button>
+            )
+          )}
+          {!editing && (
+            <DealLineAdder orderId={orderId} side={side} currency={currency} canEditPrice={canEditPrice} onApplied={onApplied} />
+          )}
+        </div>
       </div>
       {err && <p className="text-xs text-destructive">{err}</p>}
       <Table dense>
@@ -375,20 +447,32 @@ function LineItemsTable({
           <TableRow>
             <TableHead className="w-8">#</TableHead>
             <TableHead>Description</TableHead>
+            <TableHead>Type</TableHead>
             <TableHead>Dimensions (mm)</TableHead>
             <TableHead className="text-right">Pcs</TableHead>
             <TableHead className="text-right">m³</TableHead>
             <TableHead className="text-right">Unit price</TableHead>
             <TableHead className="text-right">Total</TableHead>
+            <TableHead className="w-8" />
           </TableRow>
         </TableHeader>
         <TableBody>
+          {items.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={9} className="text-center text-xs text-muted-foreground py-6">
+                No {side === "buy" ? "buy" : "sell"}-side lines yet. Add from catalog or a custom line.
+              </TableCell>
+            </TableRow>
+          )}
           {items.map((li) => {
             const d = editing && li.id ? drafts[li.id] : undefined;
             return (
               <TableRow key={li.id ?? li.lineNo}>
                 <TableCell className="text-right">{li.lineNo}</TableCell>
                 <TableCell>{lineDesc(li)}</TableCell>
+                <TableCell>
+                  <StatusBadge variant={li.isStandard ? "info" : "draft"}>{li.isStandard ? "Standard" : "Custom"}</StatusBadge>
+                </TableCell>
                 <TableCell>{lineDims(li)}</TableCell>
                 <TableCell className="text-right">
                   {d ? (
@@ -420,13 +504,49 @@ function LineItemsTable({
                       className="h-7 w-28 text-xs text-right ml-auto" />
                   ) : fmtCents(d ? draftTotalCents(li, d) : lineTotalCents(li), currency)}
                 </TableCell>
+                <TableCell className="text-right">
+                  {!editing && li.id && (
+                    <Button
+                      variant="ghost" size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => setLineToRemove(li)}
+                      aria-label={`Remove line ${li.lineNo}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </TableCell>
               </TableRow>
             );
           })}
         </TableBody>
       </Table>
       {blankQtyWarn && <p className="text-xs text-amber-600 dark:text-amber-500 text-right">A line has a price but no quantity — its total stays 0 until pieces / m³ are set.</p>}
-      <p className="text-xs text-muted-foreground text-right">Total volume {totalVol.toFixed(3)} m³ · Subtotal {fmtCents(totalCents, currency)}</p>
+      {items.length > 0 && (
+        <p className="text-xs text-muted-foreground text-right">Total volume {totalVol.toFixed(3)} m³ · Subtotal {fmtCents(totalCents, currency)}</p>
+      )}
+
+      {/* Remove-line confirm */}
+      <AlertDialog open={!!lineToRemove} onOpenChange={(o) => { if (!o) setLineToRemove(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this line?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {lineToRemove ? `Line ${lineToRemove.lineNo} — ${lineDesc(lineToRemove)}` : ""} will be removed from the deal. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmRemove(); }}
+              disabled={removing}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

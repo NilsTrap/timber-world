@@ -10,6 +10,11 @@ export default async function CatalogPage() {
     .from("catalog_categories")
     .select("id, name, slug, description, primary_unit, image_storage_path, catalog_products(id)")
     .eq("is_active", true)
+    .eq("visible_agents", true)
+    // The embedded product count must match the agents-visible product list on
+    // the category page (active + visible_agents), not every product.
+    .eq("catalog_products.is_active", true)
+    .eq("catalog_products.visible_agents", true)
     .order("sort_order");
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

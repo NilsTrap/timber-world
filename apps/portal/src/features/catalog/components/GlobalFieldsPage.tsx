@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, ChevronDown, ChevronRight, Pencil, List, Hash, Type, ToggleLeft, Search } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Pencil, List, Hash, Type, ToggleLeft, Paperclip, Search } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
 import { saveField, deleteField, saveFieldOption, deleteFieldOption } from "../actions/fields";
@@ -13,6 +13,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "number", label: "Number" },
   { value: "text", label: "Text" },
   { value: "boolean", label: "Yes/No" },
+  { value: "file", label: "File upload" },
 ];
 
 const TYPE_ICON: Record<string, typeof List> = {
@@ -20,6 +21,7 @@ const TYPE_ICON: Record<string, typeof List> = {
   number: Hash,
   text: Type,
   boolean: ToggleLeft,
+  file: Paperclip,
 };
 
 interface FieldWithAssignments extends CatalogField {
@@ -138,6 +140,7 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
           <option value="number">Number</option>
           <option value="text">Text</option>
           <option value="boolean">Boolean</option>
+          <option value="file">File</option>
         </select>
         <select
           className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"

@@ -21,6 +21,9 @@ function toProduct(row: any): CatalogProduct {
     description: row.description,
     basePriceEurCents: row.base_price_eur_cents ?? null,
     isActive: row.is_active,
+    visibleAgents: row.visible_agents ?? true,
+    visibleInternal: row.visible_internal ?? true,
+    visibleMarketing: row.visible_marketing ?? true,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -49,6 +52,10 @@ function toFieldValue(row: any): ProductFieldValue {
     optionId: row.option_id,
     valueText: row.value_text,
     valueNumber: row.value_number,
+    valueStoragePath: row.value_storage_path ?? null,
+    valueFileName: row.value_file_name ?? null,
+    valueMimeType: row.value_mime_type ?? null,
+    valueFileSizeBytes: row.value_file_size_bytes ?? null,
     field: row.catalog_fields ? {
       id: row.catalog_fields.id,
       fieldKey: row.catalog_fields.field_key,
@@ -94,6 +101,7 @@ export async function getProducts(
       catalog_product_images(id, storage_path, is_primary, sort_order),
       catalog_product_field_values(
         id, product_id, field_id, option_id, value_text, value_number,
+        value_storage_path, value_file_name, value_mime_type, value_file_size_bytes,
         catalog_fields(id, field_key, field_label, field_type, unit, is_system, dimension_role),
         catalog_field_options(id, value, label)
       )
@@ -130,6 +138,7 @@ export async function getProduct(
       catalog_product_images(id, product_id, storage_path, alt_text, is_primary, sort_order),
       catalog_product_field_values(
         id, product_id, field_id, option_id, value_text, value_number,
+        value_storage_path, value_file_name, value_mime_type, value_file_size_bytes,
         catalog_fields(id, field_key, field_label, field_type, unit, ref_table, is_system, dimension_role),
         catalog_field_options(id, field_id, ref_value_id, value, label, description, description_image_path, sort_order, is_active)
       )
@@ -165,6 +174,9 @@ export async function saveProduct(
     description: input.description ?? null,
     base_price_eur_cents: input.basePriceEurCents ?? null,
     is_active: input.isActive ?? true,
+    ...(input.visibleAgents !== undefined ? { visible_agents: input.visibleAgents } : {}),
+    ...(input.visibleInternal !== undefined ? { visible_internal: input.visibleInternal } : {}),
+    ...(input.visibleMarketing !== undefined ? { visible_marketing: input.visibleMarketing } : {}),
     sort_order: input.sortOrder ?? 0,
   };
 
@@ -209,6 +221,10 @@ export async function saveProduct(
       option_id: fv.optionId ?? null,
       value_text: fv.valueText ?? null,
       value_number: fv.valueNumber ?? null,
+      value_storage_path: fv.valueStoragePath ?? null,
+      value_file_name: fv.valueFileName ?? null,
+      value_mime_type: fv.valueMimeType ?? null,
+      value_file_size_bytes: fv.valueFileSizeBytes ?? null,
     }));
 
     const { error: fvError } = await (supabase as any)
@@ -253,6 +269,9 @@ export async function duplicateProduct(id: string): Promise<ActionResult<Catalog
       description: source.description,
       base_price_eur_cents: source.base_price_eur_cents,
       is_active: false,
+      visible_agents: source.visible_agents,
+      visible_internal: source.visible_internal,
+      visible_marketing: source.visible_marketing,
       sort_order: source.sort_order + 1,
     })
     .select()
@@ -272,6 +291,10 @@ export async function duplicateProduct(id: string): Promise<ActionResult<Catalog
       option_id: fv.option_id,
       value_text: fv.value_text,
       value_number: fv.value_number,
+      value_storage_path: fv.value_storage_path,
+      value_file_name: fv.value_file_name,
+      value_mime_type: fv.value_mime_type,
+      value_file_size_bytes: fv.value_file_size_bytes,
     }));
     await (supabase as any).from("catalog_product_field_values").insert(newFvs);
   }
@@ -314,6 +337,10 @@ export async function duplicateProduct(id: string): Promise<ActionResult<Catalog
               option_id: fv.option_id,
               value_text: fv.value_text,
               value_number: fv.value_number,
+              value_storage_path: fv.value_storage_path,
+              value_file_name: fv.value_file_name,
+              value_mime_type: fv.value_mime_type,
+              value_file_size_bytes: fv.value_file_size_bytes,
             }))
           );
         }

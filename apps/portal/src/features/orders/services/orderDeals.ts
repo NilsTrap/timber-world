@@ -25,6 +25,7 @@ import {
 } from "./dealModel";
 import { allocateCounter, buildBilateralDealCode, bilateralDealCodeScope, clientCodeFromName } from "./numbering";
 import { createSpine, type SpineProduct } from "./spines";
+import { deriveLineTotalCents } from "@/features/catalog/dealPricing";
 
 const DEFAULT_ENTITY_CODE = "TIM";
 
@@ -53,6 +54,8 @@ export interface OrderDealView {
   buyer: { id: string | null; code: string | null; name: string | null };
   spineId: string | null;
   upstreamDealId: string | null;
+  /** E5: owner margin-approval timestamp (null = not yet approved). */
+  marginApprovedAt: string | null;
   lineItems: OrderLineItem[];
   externalRefs: OrderExternalRef[];
   documents: OrderDocumentMeta[];
@@ -64,7 +67,7 @@ export type OrderDealSummary = Omit<OrderDealView, "lineItems" | "externalRefs" 
 const ORDER_SELECT = `
   id, code, deal_code, name, deal_kind, product_group, currency, status, lifecycle_stage,
   incoterms, incoterms_place, advance_pct, payment_terms, delivery_terms,
-  delivery_deadline, transport_billing, notes,
+  delivery_deadline, transport_billing, notes, margin_approved_at,
   customer_organisation_id, seller_organisation_id, producer_organisation_id,
   buyer_organisation_id, spine_id, upstream_deal_id,
   customer:organisations!orders_customer_organisation_id_fkey(id, code, name),
@@ -100,6 +103,7 @@ function mapOrderDealHeader(row: any): OrderDealSummary {
     buyer: { id: row.buyer_organisation_id ?? null, code: row.buyer?.code ?? null, name: row.buyer?.name ?? null },
     spineId: row.spine_id ?? null,
     upstreamDealId: row.upstream_deal_id ?? null,
+    marginApprovedAt: row.margin_approved_at ?? null,
   };
 }
 
@@ -239,6 +243,70 @@ export async function replaceLineItems(db: DbClient, _actor: ActorContext, order
   const { data, error } = await c.from("order_line_items").insert(rows).select("*");
   if (error) return { success: false, error: error.message, code: "INSERT_FAILED" };
   return { success: true, data: (data ?? []).map(mapLineItem) };
+}
+
+function nextLineNo(rows: Array<{ line_no?: number | null }>): number {
+  return rows.reduce((max, r) => Math.max(max, r.line_no ?? 0), 0) + 1;
+}
+
+/**
+ * E5: append ONE line item to a deal side (does NOT delete the others, unlike
+ * replaceLineItems). Used by the catalog picker + the custom-line form on the
+ * Deal tab. For a standard (catalog) line the caller passes the resolved
+ * fields incl. catalog links + option ids; for a custom line, free-text +
+ * a per-deal price. The line total is derived for volume/piece units from
+ * unit price × quantity, else taken from an explicit total when supplied.
+ * Caller enforces permission.
+ */
+export async function appendLineItem(
+  db: DbClient,
+  _actor: ActorContext,
+  orderId: string,
+  side: DealSide,
+  item: Partial<OrderLineItem>,
+): Promise<ActionResult<OrderLineItem>> {
+  if (!isValidUUID(orderId)) return { success: false, error: "Invalid order id", code: "VALIDATION_ERROR" };
+  if (item.unitPriceCents != null && item.unitPriceCents < 0) {
+    return { success: false, error: "Price cannot be negative.", code: "VALIDATION_ERROR" };
+  }
+  const c = db as DbClient;
+  const { data: existing, error: exErr } = await c
+    .from("order_line_items")
+    .select("line_no")
+    .eq("order_id", orderId)
+    .eq("side", side);
+  if (exErr) return { success: false, error: exErr.message, code: "FETCH_FAILED" };
+
+  const unit = (item.unit ?? "m3") as LineUnit;
+  // Derive the line total where we can (price × qty); keep an explicit total
+  // only for units without a quantity column (shared pure helper).
+  const lineTotalCents = deriveLineTotalCents(
+    unit,
+    item.unitPriceCents,
+    { pieces: item.pieces, volumeM3: item.volumeM3 },
+    item.lineTotalCents,
+  );
+
+  const row = lineItemToRow(orderId, { ...item, side, lineTotalCents }, nextLineNo(existing ?? []) - 1);
+  const { data, error } = await c.from("order_line_items").insert(row).select("*").single();
+  if (error) return { success: false, error: error.message, code: "INSERT_FAILED" };
+  return { success: true, data: mapLineItem(data) };
+}
+
+/** Delete one line item by id (scoped to the order). Caller enforces permission. */
+export async function deleteLineItem(
+  db: DbClient,
+  _actor: ActorContext,
+  orderId: string,
+  lineItemId: string,
+): Promise<ActionResult<{ id: string }>> {
+  if (!isValidUUID(orderId) || !isValidUUID(lineItemId)) {
+    return { success: false, error: "Invalid id", code: "VALIDATION_ERROR" };
+  }
+  const c = db as DbClient;
+  const { error } = await c.from("order_line_items").delete().eq("id", lineItemId).eq("order_id", orderId);
+  if (error) return { success: false, error: error.message, code: "DELETE_FAILED" };
+  return { success: true, data: { id: lineItemId } };
 }
 
 /** Per-line amount edit: the price/quantity fields an admin corrects when the

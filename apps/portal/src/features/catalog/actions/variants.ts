@@ -60,6 +60,10 @@ function toFieldValue(row: any): VariantFieldValue {
     optionId: row.option_id,
     valueText: row.value_text,
     valueNumber: row.value_number,
+    valueStoragePath: row.value_storage_path ?? null,
+    valueFileName: row.value_file_name ?? null,
+    valueMimeType: row.value_mime_type ?? null,
+    valueFileSizeBytes: row.value_file_size_bytes ?? null,
     field: row.catalog_fields ? {
       id: row.catalog_fields.id,
       fieldKey: row.catalog_fields.field_key,
@@ -104,6 +108,7 @@ export async function getVariants(
       catalog_variant_images(id, variant_id, storage_path, alt_text, is_primary, sort_order),
       catalog_variant_field_values(
         id, variant_id, field_id, option_id, value_text, value_number,
+        value_storage_path, value_file_name, value_mime_type, value_file_size_bytes,
         catalog_fields(id, field_key, field_label, field_type, unit, is_system, dimension_role),
         catalog_field_options(id, value, label)
       ),
@@ -186,6 +191,10 @@ export async function saveVariant(
       option_id: fv.optionId ?? null,
       value_text: fv.valueText ?? null,
       value_number: fv.valueNumber ?? null,
+      value_storage_path: fv.valueStoragePath ?? null,
+      value_file_name: fv.valueFileName ?? null,
+      value_mime_type: fv.valueMimeType ?? null,
+      value_file_size_bytes: fv.valueFileSizeBytes ?? null,
     }));
 
     const { error: fvError } = await (supabase as any)
@@ -207,6 +216,7 @@ export async function saveVariant(
       catalog_variant_images(id, variant_id, storage_path, alt_text, is_primary, sort_order),
       catalog_variant_field_values(
         id, variant_id, field_id, option_id, value_text, value_number,
+        value_storage_path, value_file_name, value_mime_type, value_file_size_bytes,
         catalog_fields(id, field_key, field_label, field_type, unit, is_system, dimension_role),
         catalog_field_options(id, value, label)
       ),
