@@ -44,6 +44,7 @@ interface FileCategorySectionProps {
 function FileCategorySection({ orderId, category, label, files, onRefresh, onPreviewPdf, showThumbnailToggle, copyToCategory }: FileCategorySectionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [togglingThumbnailId, setTogglingThumbnailId] = useState<string | null>(null);
@@ -84,26 +85,62 @@ function FileCategorySection({ orderId, category, label, files, onRefresh, onPre
   }, [copyToCategory, onRefresh]);
 
   const handleUpload = useCallback(async (fileList: FileList) => {
+    const files = Array.from(fileList).filter(Boolean);
+    if (files.length === 0) return;
+
     setUploading(true);
+    setUploadProgress({ done: 0, total: files.length });
+    let done = 0;
     let successCount = 0;
-    for (let i = 0; i < fileList.length; i++) {
-      const file = fileList[i];
-      if (!file) continue;
-      const formData = new FormData();
-      formData.set("file", file);
-      const result = await uploadOrderFile(orderId, category, formData);
-      if (result.success) {
-        successCount++;
-      } else {
-        toast.error(`Failed to upload ${file.name}: ${result.error}`);
+    const failed: string[] = [];
+
+    // Upload with limited concurrency. Each file is isolated in its own
+    // try/catch so a single failure (network hiccup, timeout, server error)
+    // never aborts the rest of the batch, and the `finally` below always
+    // clears the spinner even if something throws — previously an unhandled
+    // rejection here left the Upload button stuck spinning forever.
+    const CONCURRENCY = 3;
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < files.length) {
+        const file = files[cursor++];
+        if (!file) continue;
+        try {
+          const formData = new FormData();
+          formData.set("file", file);
+          const result = await uploadOrderFile(orderId, category, formData);
+          if (result.success) successCount++;
+          else failed.push(`${file.name} (${result.error})`);
+        } catch (err) {
+          console.error(`Upload failed for ${file.name}`, err);
+          failed.push(`${file.name} (upload error)`);
+        }
+        done++;
+        setUploadProgress({ done, total: files.length });
+        // Reveal progress as it happens rather than only at the very end.
+        if (done % 3 === 0) onRefresh();
       }
-    }
-    if (successCount > 0) {
-      toast.success(`Uploaded ${successCount} file${successCount > 1 ? "s" : ""}`);
+    };
+
+    try {
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, files.length) }, worker)
+      );
+    } finally {
+      setUploading(false);
+      setUploadProgress(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       onRefresh();
     }
-    setUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+
+    if (successCount > 0) {
+      toast.success(`Uploaded ${successCount} of ${files.length} file${files.length > 1 ? "s" : ""}`);
+    }
+    if (failed.length > 0) {
+      toast.error(
+        `${failed.length} file${failed.length > 1 ? "s" : ""} failed: ${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""}`
+      );
+    }
   }, [orderId, category, onRefresh]);
 
   const handleDownload = useCallback(async (file: OrderFile) => {
@@ -215,7 +252,9 @@ function FileCategorySection({ orderId, category, label, files, onRefresh, onPre
             disabled={uploading}
           >
             {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-            Upload
+            {uploading && uploadProgress
+              ? `Uploading ${uploadProgress.done}/${uploadProgress.total}…`
+              : "Upload"}
           </Button>
         </div>
       </div>
