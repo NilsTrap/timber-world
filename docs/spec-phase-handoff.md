@@ -1,14 +1,21 @@
 # Timber Spec phase — handoff (2026-07-02)
 
 Resume point for a **fresh-context session** continuing Nils's System Spec build (epics E0–E9).
-Read this + the bus flag + the tasks board, then continue from **E5**.
+Read this + the bus flag + the tasks board, then continue from **E6**.
 
 ## Where things are
-- **Branch:** `feature/timber-spec-phase` (off `origin/main`), **pushed**. E0 plan → E1×2 → E2×2 → E3×3 → E4 (commit `328f1d4`). `main`/prod untouched.
-- **Staging DB** (`fyzrtqsnmnizoxgcqsjc`, Frankfurt): **all migrations applied** (`20260701000001`–`20260701000012`). Verified.
-- **Staging portal APP:** the branch is **deployed** to `https://timber-portal-staging.vercel.app` (deployment `qemmi9w0k`, ● Ready, staging Supabase). New E4 routes verified live (`/admin/settings/groups` 307-auth, `/counterparties/{clients,suppliers}` 200 — not 404). CLI deploy of the branch; NOT git-linked → redeploy = the swap→`vercel --prod`→restore dance (see below). Nils logs in with real prod email/password (staging mirrors prod).
-- **Tasks board:** project `0d2f3a0a-0755-4274-9218-227812cc6083`. **E1/E2/E3/E4 = in-review** (Edgars to close). E5–E9 = todo. E0 (perf) folded into E8's region move.
-- **CI:** `NEGATIVE_TESTS_FAIL_ON_LEAK=true` repo var now set — the rls-and-perf leak gate is enforced (any RLS regression fails the build).
+- **Branch:** `feature/timber-spec-phase` (off `origin/main`), **pushed**. E0 plan → E1×2 → E2×2 → E3×3 → E4 (`328f1d4`) → E5 (`a0537e0`). `main`/prod untouched.
+- **Staging DB** (`fyzrtqsnmnizoxgcqsjc`, Frankfurt): **all migrations applied** (`20260701000001`–`20260701000016`). Verified.
+- **Staging portal APP:** the branch is **deployed** to `https://timber-portal-staging.vercel.app` (E5 deployment `9zorpf2ma`, staging Supabase). CLI deploy of the branch; NOT git-linked → redeploy = the swap→`vercel --prod`→restore dance (see below). Nils logs in with real prod email/password (staging mirrors prod).
+- **Tasks board:** project `0d2f3a0a-0755-4274-9218-227812cc6083`. **E1–E5 = in-review** (Edgars to close). E6–E9 = todo. E0 (perf) folded into E8's region move. Two E5 subtasks (retire flat stairs table, decommission inventory) = **postponed** (import-gated, bundle with E8).
+- **CI:** `NEGATIVE_TESTS_FAIL_ON_LEAK=true` repo var set — the rls-and-perf leak gate is enforced.
+
+## Done — E5 · catalog consolidation (2026-07-02) → in-review
+Migrations `...13`–`...16` (staging): `file` catalog field type + EAV file value columns + private `catalog-files` bucket; per-surface visibility (`visible_agents/internal/marketing`) on categories+products; `order_line_items.catalog_product_id/catalog_variant_id/is_standard` + `orders.margin_approved_at/by`; seeded firewood/boards/stairs categories + spec fields (slug-idempotent) + fields riser/stair_family/joint_type.
+- **Canonical + consume:** `dealPricing.ts` `resolveCatalogLine` (EUR base / derived-currency cascade, unit from calc_method, attribute option-id resolution); the **Deal-tab catalog picker** (`DealPanel` + `DealLineAdder`): category→product→variant → auto-price (standard) or a custom per-deal line; populates `order_line_items.*_option_id` + catalog links. Owner margin-approval UI. File-field admin widget + EAV persistence. Category-scoped AI vocabulary + MCP `timber_get_category_fields`.
+- **Steer (Edgars/Nils):** legacy inventory + `uk_staircase_pricing` stay **in parallel** — decommission gated on import-readiness (memory `project_e5_inventory_decommission`). The stairs catalog category is built alongside the flat table.
+- **Proof:** type-check clean (portal+agents); 303 unit assertions (35 dealPricing + 70 tools-coverage); staging integration (resolver 11/11, m2 line-total 7/7). Adversarial review (4 lenses × refuters): **6 findings all fixed** — incl. a **critical field-wall bypass** (picker/custom/remove line-writes now require `deal_terms`-editable), the m2/linear_m line-total drop, and the preview double-multiply.
+- **Needs Edgars/Nils feel-test:** the Deal tab "Add from catalog"/"Add custom" + margin approval; a `file` field on a catalog product; per-surface visibility hiding a category from the agents storefront.
 
 ## Done — E4 · group-and-rights access + field wall + bilateral RLS (2026-07-02) → in-review
 Migrations `...09` (access_groups/rights/user_access_groups/platform_settings + organisations.is_supplier + 7 seeded system groups), `...10` (bilateral direction-aware RLS: `can_access_deal_row` replaces the 3-party predicate across orders/children/spines/gate-conf/organisations-shared-context; closes `order_files`/`order_activity_log`/orders-bucket `USING(true)` holes; scoped spine-INSERT policy), `...11` (user_modules→legacy-parity groups over the EFFECTIVE org∩user set), `...12` (review fix: legacy groups get both counterparty action rights). App: `lib/access` profile engine (`getUserEnabledModules` re-backed by groups; org ceiling ∩ ∪ group module rights; signature + 109 call sites unchanged), `dealFields.ts` field-wall registry+projection (replaces 3 stripPricing sites + PRODUCTION_EDIT_FIELDS + deal-view projection; deny-by-default), `features/counterparties` (walled books + `purchasing_may_reuse_clients`), Groups settings UI (`/admin/settings/groups`) + `UserGroupsDialog`, sidebar wiring (`requiresExactModule` for the two books).
@@ -31,9 +38,8 @@ Design detail: `docs/spec-design-notes.md` + `docs/spec-implementation-plan.md` 
 - Deal → **Deal tab** → pipeline (advance / sign-off / cancel round-trips).
 - **Settings → Deal Gates** (`/admin/settings/gates`) → configure a gate, watch it block/allow.
 
-## NEXT: E5–E9 (todo)
-- **E5 · catalog consolidation** (canonical catalog + UI; legacy inventory NOT hard-dropped — 14+ FKs + live feature).
-- **E6 · documents** — in-app HTML editor (Plate) + Handlebars merge + Gotenberg render (Docker on VPS2/hetzner-openclaw2 behind Caddy+bearer) + Mammoth import; templates as open HTML in Supabase.
+## NEXT: E6–E9 (todo)
+- **E6 · documents** — in-app HTML editor (Plate) + Handlebars merge + Gotenberg render (Docker on VPS2/hetzner-openclaw2 behind Caddy+bearer) + Mammoth import; templates as open HTML in Supabase. NOTE: an interim jsPDF renderer + `DocumentGenerator` port already exist (`orders/services/documents/`); E6 swaps in the HTML-template + Gotenberg path.
 - **E7 · MCP** extend the timber-mcp surface for spine/bilateral/lifecycle.
 - **E8 · data migration + prod rollout** (incl. prod DB region move Ireland→Frankfurt; the E2 69-order migration; prod cutover). **PAUSE for Edgars before E8.**
 - **E9 · consolidate legacy sections under one nav group.**
