@@ -17,6 +17,7 @@ import {
   Braces,
   ChevronDown,
   Columns3,
+  EyeOff,
   Heading1,
   Heading2,
   Heading3,
@@ -92,6 +93,8 @@ export function Toolbar({ editor }: { editor: Editor }) {
       alignR: e.isActive({ textAlign: "right" }),
       link: e.isActive("link"),
       inTable: e.isActive("table"),
+      inMergeField: e.isActive("mergeField"),
+      hideWhenEmpty: !!e.getAttributes("mergeField").hideWhen,
     }),
   });
 
@@ -177,6 +180,20 @@ export function Toolbar({ editor }: { editor: Editor }) {
         <Rows3 className="h-4 w-4" />
         <span className="hidden sm:inline">Line items</span>
       </Btn>
+      {/* Hide-when-empty toggle — only when a merge-field pill is selected */}
+      {s.inMergeField && (
+        <Btn
+          title={
+            s.hideWhenEmpty
+              ? "Field is hidden when empty — click to always show it"
+              : "Hide this field (and its line) when it has no value"
+          }
+          active={s.hideWhenEmpty}
+          onClick={() => editor.chain().focus().toggleMergeFieldHideWhen().run()}
+        >
+          <EyeOff className="h-4 w-4" />
+        </Btn>
+      )}
       <Sep />
       {/* Table */}
       <Btn

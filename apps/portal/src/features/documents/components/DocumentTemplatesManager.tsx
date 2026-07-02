@@ -644,10 +644,12 @@ export function DocumentTemplatesManager() {
             {mainTab === "visual" && editing.docJson && (
               <VisualEditorPane
                 editorKey={editorNonce}
+                templateId={editing.id}
                 docType={editing.docType}
                 doc={editing.docJson}
                 pageSettings={editing.pageSettings}
                 onDocChange={(d) => setEditing((e) => (e ? { ...e, docJson: d } : e))}
+                onPageSettingsChange={(ps) => setEditing((e) => (e ? { ...e, pageSettings: ps } : e))}
               />
             )}
 

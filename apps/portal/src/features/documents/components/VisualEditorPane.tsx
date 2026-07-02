@@ -10,22 +10,29 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { TemplateEditor } from "../editor/TemplateEditor";
 import { previewTemplateJson } from "../actions";
+import { PageSettingsPanel } from "./PageSettingsPanel";
 import type { DocType } from "@/features/orders/services/dealModel";
 import type { PageSettings, TipTapDoc } from "../types";
 
 export function VisualEditorPane({
   editorKey,
+  templateId,
+  logoPath,
   docType,
   doc,
   pageSettings,
   onDocChange,
+  onPageSettingsChange,
 }: {
   /** Stable per loaded template — bumped only on select/create so the editor remounts with fresh content (not on every keystroke). */
   editorKey: string | number;
+  templateId?: string;
+  logoPath?: string | null;
   docType: DocType;
   doc: TipTapDoc;
   pageSettings: PageSettings | null;
   onDocChange: (d: TipTapDoc) => void;
+  onPageSettingsChange: (ps: PageSettings) => void;
 }) {
   const [previewHtml, setPreviewHtml] = useState("");
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -56,11 +63,18 @@ export function VisualEditorPane({
   }, [doc, pageSettings, runPreview]);
 
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
-      <div className="min-w-0">
-        {/* key → remount with fresh content only when a different template loads */}
-        <TemplateEditor key={editorKey} value={doc} onChange={onDocChange} />
-      </div>
+    <div className="space-y-3">
+      <PageSettingsPanel
+        templateId={templateId}
+        logoPath={logoPath}
+        pageSettings={pageSettings}
+        onChange={onPageSettingsChange}
+      />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className="min-w-0">
+          {/* key → remount with fresh content only when a different template loads */}
+          <TemplateEditor key={editorKey} value={doc} onChange={onDocChange} />
+        </div>
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
@@ -79,6 +93,7 @@ export function VisualEditorPane({
             className="h-[65vh] w-full rounded-md border bg-white"
           />
         )}
+        </div>
       </div>
     </div>
   );
