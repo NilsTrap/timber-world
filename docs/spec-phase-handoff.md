@@ -1,16 +1,27 @@
 # Timber Spec phase — handoff (2026-07-02)
 
 Resume point for a **fresh-context session** continuing Nils's System Spec build (epics E0–E9).
+Read this + the bus (agent-bus MCP) + the tasks board. **ALL spec epics E1–E9 are now BUILT + in-review on staging.** The only remaining work is the **PROD CUTOVER (E8's second half), FROZEN at Edgars's request** until staging UAT is complete and he gives the explicit go. Do NOT touch prod. Remaining before "staging complete": Edgars's browser feel-tests (per-epic checklists below) + the deliberately-deferred items (E5 inventory decommission [import-gated], E7 group-write CRUD + carrier ingest, E6 per-role doc gating + §12 palette; the WYSIWYG editor is a separate branch). E8 prod cutover context is retained below.
+
+<details><summary>(archived) former E8 resume pointer — prod cutover blocked on Edgars</summary>
+
 Read this + the bus (agent-bus MCP) + the tasks board. **E8 STAGING-SIDE IS DONE + proven; the remaining work is the PROD CUTOVER, which is BLOCKED on Edgars** (a blocking `bus_ask` is open — run `f00d3bec`). Do NOT touch prod until he answers the 4 decisions: (1) region fork A=move prod DB Ireland→Frankfurt vs B=pin functions to Dublin/dub1 [recommend B]; (2) UAT sign-off to ship E1–E7 to prod + the customer instance; (3) downtime window (if A); (4) 355 legacy production files → copy to buy legs vs accept isolation [lean accept]. When answered, execute the prod cutover (snapshot → migrations → data script → deploy → verify → region step → roll customer instance via the FLEET ENGINE only).
 
+</details>
+
 ## Where things are
-- **Branch:** `feature/timber-spec-phase` (off `origin/main`), **pushed**. E0 plan → E1×2 → E2×2 → E3×3 → E4 (`328f1d4`) → E5 (`a0537e0`) → orders-hotfix (`e2ddda2`) → E6 (`ed7b4a3`) → **E7 (`db63461`)** → **E8-staging (`7a3e1b8`)**. `main`/prod untouched.
+- **Branch:** `feature/timber-spec-phase` (off `origin/main`), **pushed**. E0 plan → E1×2 → E2×2 → E3×3 → E4 (`328f1d4`) → E5 (`a0537e0`) → orders-hotfix (`e2ddda2`) → E6 (`ed7b4a3`) → **E7 (`db63461`)** → **E8-staging (`7a3e1b8`)** → **E9 (`57d87a5`)**. `main`/prod untouched.
 - **Staging DB** (`fyzrtqsnmnizoxgcqsjc`, Frankfurt): **all migrations applied** (`20260701000001`–`20260701000018`). Verified. **E7 added NO migration** (MCP surface over existing services).
 - **Staging portal APP:** the branch is **deployed** to `https://timber-portal-staging.vercel.app` (**E7 deployment `timber-portal-staging-1rufuseb2`**, verified live). CLI deploy; NOT git-linked → redeploy = the swap→`vercel --prod`→restore dance (below). Nils logs in with real prod email/password.
 - **Gotenberg (E6 infra):** Docker on VPS2 (`hetzner-openclaw2`, loopback:3019), Caddy-proxied at `https://gotenberg.ideajetlab.com` behind a **bearer token** (401 without). `GOTENBERG_URL`+`GOTENBERG_BEARER` set on the Vercel staging project (prod+preview envs). Token lives in Caddy `/etc/caddy/Caddyfile` + `/root/.gotenberg_token` on VPS2 + the Vercel env only (Vault deferred per steer). To rotate: regen on VPS + update the Caddy block + Vercel env.
-- **Tasks board:** project `0d2f3a0a-0755-4274-9218-227812cc6083`. **E1–E7 = in-review**; **E8 = in-progress** (4 staging subtasks in-review: backfill/split, address-books, staging-validation, CI-gates; 3 prod subtasks todo: prod snapshot+migrate+deploy, region move, roll customer instance). E9 = todo. Deferred/postponed: E5 (retire flat stairs, decommission inventory — import-gated, → E8); E6 (full Plate editor — Next-16 risk; §9.5 carrier transport-pack; per-role/stage doc-creation gating; brand palette §12); **E7 (group WRITE CRUD via MCP — session/cache-bound, needs service extraction; carrier-reply transport ingest — no transport fields yet, ties to §9.5 → E8).**
+- **Tasks board:** project `0d2f3a0a-0755-4274-9218-227812cc6083`. **E1–E7 + E9 = in-review**; **E8 = in-progress** (4 staging subtasks in-review; 3 PROD subtasks todo: prod snapshot+migrate+deploy, region move, roll customer instance — frozen). Every spec epic is built on staging. Deferred/postponed: E5 (retire flat stairs, decommission inventory — import-gated, → E8); E6 (full Plate editor — Next-16 risk; §9.5 carrier transport-pack; per-role/stage doc-creation gating; brand palette §12); **E7 (group WRITE CRUD via MCP — session/cache-bound, needs service extraction; carrier-reply transport ingest — no transport fields yet, ties to §9.5 → E8).**
 - **CI:** `NEGATIVE_TESTS_FAIL_ON_LEAK=true` set. The rls-and-perf orders suite now includes the creator embed (guards the PGRST201 two-FK regression).
 - **⚠️ Account monthly spend limit was hit** mid-E6-review (Opus 4.8 sub-agents fail once reached). Raise at claude.ai/settings/usage before heavy sub-agent fan-outs; the Fable-5 orchestrator still runs.
+
+## Done — E9 · legacy nav consolidation (2026-07-02) → in-review
+Portal left-nav hygiene, commit `57d87a5`, deployed to staging (build READY). Added a collapsible **"Legacy"** group (same mechanism as "UK Agent app") holding the 6 superseded-but-still-used sections: **Inventory, Production, CMS, Competitor Pricing, Quote Requests, UK Staircase Pricing**. Main nav now = new/reworked only: Dashboard, Orders, Counterparties, CRM, Shipments, Settings, Orgs & People + the UK Agent app group. Nothing deleted/unreachable (Legacy group expanded by default; each child keeps its module gate + `LAST_ENTRY_KEYS` detail-return). Refactored the pure nav config+filter into `components/layout/navItems.ts` (SidebarWrapper stays the server component).
+- **Proof:** type-check 8/8; `navItems.test.ts` **12/12** — admin nav reaches the EXACT same destination set as before (nothing orphaned/duplicated); Legacy holds exactly the 6; main nav has none of them; a Producer sees Orders in main + a Legacy group with only Production; a role with no legacy modules sees no Legacy group; walled-counterparties gating preserved.
+- **Needs Edgars:** (a) browser feel-test the sidebar (admin + a scoped role) on staging; (b) confirm the legacy-vs-keep split — esp. whether **Inventory / Production** belong under Legacy and whether **Shipments** should join them (all trivially movable in `navItems.ts`).
 
 ## Done — E8 STAGING-SIDE (2026-07-02) → in-review; PROD cutover blocked on Edgars
 Staging-side of the data migration + prod-rollout prep. **No prod touched.** Two artifacts, commit `7a3e1b8`:
@@ -64,10 +75,10 @@ Design detail: `docs/spec-design-notes.md` + `docs/spec-implementation-plan.md` 
 - Deal → **Deal tab** → pipeline (advance / sign-off / cancel round-trips).
 - **Settings → Deal Gates** (`/admin/settings/gates`) → configure a gate, watch it block/allow.
 
-## NEXT: E8 PROD cutover (blocked on Edgars) → E9
-- **E7 · MCP** — DONE, in-review.
-- **E8 · staging-side** — DONE (see the E8 section above), in-review. **PROD cutover** — blocked on bus_ask `f00d3bec` (region fork / UAT / downtime / production-files). When answered, run the prod-cutover runbook in the E8 section. Still folds in the deferred E7 items when relevant (group WRITE CRUD via MCP; carrier-reply transport ingest + §9.5 transport fields) and the E4 `customer==buyer` write-mirror cleanup.
-- **E9 · consolidate legacy sections under one nav group.**
+## NEXT: only the E8 PROD cutover remains (FROZEN by Edgars)
+- **E7 · MCP**, **E9 · nav consolidation** — DONE, in-review. **All spec epics E1–E9 are built on staging.**
+- **E8 · staging-side** — DONE, in-review. **PROD cutover — FROZEN** at Edgars's request until staging UAT is complete + explicit go (former bus_ask `f00d3bec` withdrawn). When he says go: run the prod-cutover runbook in the E8 section + answer the 4 decisions (region fork / UAT / downtime / production-files). Still folds in the E4 `customer==buyer` write-mirror cleanup.
+- **Deferred (staging dev, not blocking prod):** E5 inventory/flat-stairs decommission (import-gated); E7 group-WRITE CRUD via MCP + carrier-reply transport ingest (§9.5 transport fields); E6 per-role/stage doc-creation gating + §12 brand palette. The WYSIWYG doc editor (E6.1) is a **separate branch** (`feature/wysiwyg-doc-editor`).
 
 ## Operational how-to (for the fresh session)
 - **Apply a migration to staging:** `PAT=$(cat ~/.supabase-ijl/pat)` then `POST https://api.supabase.com/v1/projects/fyzrtqsnmnizoxgcqsjc/database/query` with `{"query": "<sql>"}` (jq `--rawfile`/`--arg`; never print the PAT). Staging ref `fyzrtqsnmnizoxgcqsjc`, prod `psmramegggsciirwldjz`.
