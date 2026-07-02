@@ -46,6 +46,7 @@ import {
 import type { DocType } from "@/features/orders/services/dealModel";
 import type { ContentFormat, DocumentTemplateSummary, PageSettings, TipTapDoc } from "../types";
 import { compileTemplate } from "../compiler";
+import { starterFor } from "../compiler/starters";
 import {
   listTemplates,
   getTemplate,
@@ -197,24 +198,6 @@ interface EditingTemplate {
 type PreviewView = "code" | "split" | "preview";
 type MainTab = "visual" | "advanced";
 
-/** Minimal starter for a brand-new visual template (never a blank canvas). */
-const NEW_WYSIWYG_DOC: TipTapDoc = {
-  type: "doc",
-  content: [
-    { type: "heading", attrs: { level: 1 }, content: [{ type: "mergeField", attrs: { token: "docTitle", label: "Title" } }] },
-    {
-      type: "paragraph",
-      content: [
-        { type: "text", text: "No. " },
-        { type: "mergeField", attrs: { token: "docNumber", label: "Number" } },
-        { type: "text", text: " · " },
-        { type: "mergeField", attrs: { token: "fmtDate docDate", label: "Date" } },
-      ],
-    },
-    { type: "paragraph" },
-  ],
-};
-
 /**
  * DocumentTemplatesManager (E6) — the lightweight HTML-code + live-preview
  * editor for the global document templates. Left: templates grouped by doc
@@ -328,7 +311,8 @@ export function DocumentTemplatesManager() {
 
   const startCreate = () => {
     const name = addName.trim() || `New ${DOC_TYPE_LABELS[addDocType]} template`;
-    // New templates default to the VISUAL editor.
+    // New templates start from the doc type's VISUAL starter (a complete, editable page).
+    const starter = starterFor(addDocType);
     setEditing({
       docType: addDocType,
       name,
@@ -336,8 +320,8 @@ export function DocumentTemplatesManager() {
       isDefault: false,
       isActive: true,
       contentFormat: "wysiwyg",
-      docJson: NEW_WYSIWYG_DOC,
-      pageSettings: null,
+      docJson: starter.doc,
+      pageSettings: starter.pageSettings ?? null,
     });
     setMainTab("visual");
     setEditorNonce((n) => n + 1);
@@ -762,7 +746,7 @@ export function DocumentTemplatesManager() {
           <DialogHeader>
             <DialogTitle>Add template</DialogTitle>
             <DialogDescription>
-              Pick a document type. You can edit the HTML and save afterwards.
+              Pick a document type. It opens a ready-made visual template you can edit and save.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
