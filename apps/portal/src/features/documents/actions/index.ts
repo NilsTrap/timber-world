@@ -7,4 +7,5 @@ export {
   setDefaultTemplate,
   importDocxTemplate,
   previewTemplate,
+  previewTemplateJson,
 } from "./templates";
