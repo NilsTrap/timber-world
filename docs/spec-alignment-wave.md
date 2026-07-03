@@ -44,6 +44,19 @@
 
 Build order: **A → B → (C ∥ D ∥ G) → F → E**. Each epic = one parent task on the board; subtasks are full tasks with their own notes. **Read this file before starting any of them.**
 
+**Parallelization map (what can actually run concurrently).** The hard constraint is HOT FILES — `DealPanel.tsx`, `orderDocuments.ts`/`assemble.ts`, `tools.ts` are touched by A, B, D and G2/G3 — not the epic sequence itself. Recommended: **max 2–3 concurrent sessions**, every session `bus_claim`s its files before editing and rebases before push/deploy.
+
+- **Track 1 — critical path (one session at a time):** Epic A (subtask order: A1+A4 → A2 → A3 → A5) → Epic B (B1 → B5 → B2/B3/B4) → Epic C.
+- **Track 2 — independent, can start IMMEDIATELY (parallel with A):**
+  - **G1** (placeholder audit doc — research only, no code)
+  - **G4** (counterparty form completeness — counterparties UI only)
+  - **F2** (§12 colour map), **F3** (deal-code check)
+  - **E2** (confirmation audit-trail surfacing — GateConfigManager/DealAdvanceControl, untouched by A)
+- **Track 3 — after A lands:** Epic D (D2 → D1 → D3; D2 overlaps `tools.ts`/`documents/types.ts` with A4/A5 — don't run alongside A), **G3** (touches `assemble.ts` — after A4), **G2** (deal-view terms card — after A1; shares the `canEditDealTerms` mechanism with B5, coordinate or sequence after B5), **G5** (last in G), **F1** (badges could go earlier, but the pairing links want B's chain semantics — simplest after B).
+- **E1** strictly after D2 (consumes the registry).
+
+Do NOT run two sessions inside the same epic. If only one dev session is available, plain order A → B → G → D → C → F → E works fine.
+
 ### Epic A — Bilateral purity: each deal carries only its own order (spec §2.1, §2.4, §5.3) — P1
 
 - **A1. Deal view: own lines only.** `DealPanel.tsx`: remove the dual sell/buy tables; render ONE "Order specification" table = the deal's own line items. `DealLineAdder` loses its `side` prop. Keep add-from-catalog/custom + amount editing (gating changes in B5).
