@@ -79,8 +79,24 @@ export async function saveVariantStockEntry(input: {
   if (!Number.isFinite(input.quantity) || input.quantity < 0) {
     return { success: false, error: "Quantity must be zero or more." };
   }
+  if (!input.packagingTypeId) {
+    return { success: false, error: "Pick a packaging form defined for this variant." };
+  }
 
   const supabase = await createClient();
+
+  // Guard: stock can only be held in a packaging form DEFINED for this variant
+  // (its packaging assignments) — no stocking in undefined forms.
+  const { data: assigned } = await (supabase as any)
+    .from("catalog_variant_packaging_assignments")
+    .select("id")
+    .eq("variant_id", input.variantId)
+    .eq("packaging_type_id", input.packagingTypeId)
+    .maybeSingle();
+  if (!assigned) {
+    return { success: false, error: "That packaging form isn't defined for this variant. Add it in the Packaging card first." };
+  }
+
   // Find an existing line for this (variant, packaging form) — null-safe.
   let q = (supabase as any)
     .from("catalog_variant_stock")

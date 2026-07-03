@@ -87,7 +87,9 @@ export async function getPickerProducts(categoryId: string): Promise<ActionResul
   const c = (await createClient()) as any;
   const { data, error } = await c
     .from("catalog_products")
-    .select("id, name, sku")
+    // catalog_products has no SKU column (SKUs live on variants) — selecting it
+    // 400s the whole query, which silently emptied the picker's product list.
+    .select("id, name")
     .eq("category_id", categoryId)
     .eq("is_active", true)
     .eq("visible_internal", true)

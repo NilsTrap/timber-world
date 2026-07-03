@@ -15,6 +15,7 @@ import type { OrderLineItem, DocType, DealSide, LineUnit } from "../services/dea
 import type { LineItemAmountPatch, OrderDealView } from "../services/orderDeals";
 import type { OrderDealViewResult } from "../actions/dealActions";
 import { DealStageRail, DealAdvanceControl } from "./DealPipeline";
+import { OrderActivityLog } from "./OrderActivityLog";
 import { DealLineAdder } from "./DealLineAdder";
 import { lineTotalCents } from "../services/documents/assemble";
 import {
@@ -296,6 +297,12 @@ export function DealPanel({ orderId }: { orderId: string }) {
               </Button>
             )
           )}
+        </div>
+
+        {/* Activity log — status changes, edits, etc. */}
+        <div className="rounded-lg border bg-card p-4 space-y-2">
+          <h3 className="text-sm font-semibold">Activity</h3>
+          <OrderActivityLog orderId={orderId} />
         </div>
       </div>
 
