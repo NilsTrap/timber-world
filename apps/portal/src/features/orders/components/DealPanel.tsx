@@ -14,7 +14,7 @@ import {
 import type { OrderLineItem, DocType, DealSide, LineUnit } from "../services/dealModel";
 import type { LineItemAmountPatch, OrderDealView } from "../services/orderDeals";
 import type { OrderDealViewResult } from "../actions/dealActions";
-import { DealPipeline } from "./DealPipeline";
+import { DealStageRail, DealAdvanceControl } from "./DealPipeline";
 import { DealLineAdder } from "./DealLineAdder";
 import { lineTotalCents } from "../services/documents/assemble";
 import {
@@ -125,6 +125,15 @@ export function DealPanel({ orderId }: { orderId: string }) {
   const buyItems = deal.lineItems.filter((li) => li.side === "buy");
   const hasDealData = !!deal.dealCode || deal.lineItems.length > 0 || deal.documents.length > 0;
 
+  // Margin = sell revenue − buy cost, computed from the same line totals shown in
+  // the tables (row·footer·PDF all agree). Buy-side is often unpriced early on, so
+  // the margin is flagged provisional until buy lines carry prices.
+  const sellTotalCents = sellItems.reduce((s, li) => s + lineTotalCents(li), 0);
+  const buyTotalCents = buyItems.reduce((s, li) => s + lineTotalCents(li), 0);
+  const marginCents = sellTotalCents - buyTotalCents;
+  const marginPct = sellTotalCents > 0 ? (marginCents / sellTotalCents) * 100 : null;
+  const marginProvisional = buyTotalCents === 0 && sellTotalCents > 0;
+
   const summary: Array<{ label: string; value: string | null }> = [
     { label: "Deal code", value: deal.dealCode },
     { label: "Kind", value: deal.dealKind },
@@ -138,35 +147,15 @@ export function DealPanel({ orderId }: { orderId: string }) {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col lg:flex-row gap-6 items-start">
+      {/* LEFT — deal content */}
+      <div className="flex-1 min-w-0 space-y-6">
+      {/* Lifecycle stage rail (needs the width — stays in the main column) */}
+      <DealStageRail orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
+
       {!hasDealData && (
         <EmptyState message="No deal data yet. Deals captured from intake (email / PO / meeting) populate line items here; you can also generate documents below once the deal has line items." />
       )}
-
-      {/* Lifecycle pipeline (stages + gates) */}
-      <DealPipeline orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
-
-      {/* Owner margin approval (E5 §5.3) */}
-      <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
-        <div className="flex items-center gap-2 text-sm">
-          <ShieldCheck className={marginApproved ? "h-4 w-4 text-green-600" : "h-4 w-4 text-muted-foreground"} />
-          <span className="font-medium">Margin</span>
-          <StatusBadge variant={marginApproved ? "success" : "pending"}>
-            {marginApproved ? "Approved" : "Pending"}
-          </StatusBadge>
-        </div>
-        {isAdmin && (
-          marginApproved ? (
-            <Button variant="outline" size="sm" onClick={() => onToggleMargin(false)} disabled={savingMargin}>
-              {savingMargin ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Revoke
-            </Button>
-          ) : (
-            <Button size="sm" onClick={() => onToggleMargin(true)} disabled={savingMargin}>
-              {savingMargin ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Approve margin
-            </Button>
-          )
-        )}
-      </div>
 
       {/* Deal summary */}
       <div className="rounded-lg border bg-card p-4">
@@ -259,6 +248,55 @@ export function DealPanel({ orderId }: { orderId: string }) {
             </TableBody>
           </Table>
         )}
+      </div>
+      </div>{/* end LEFT column */}
+
+      {/* RIGHT — actions: advance milestone + margin */}
+      <div className="lg:w-80 shrink-0 space-y-6">
+        {/* Advance-to-next-milestone control (vertical) — the rail stays on the left */}
+        <DealAdvanceControl orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
+
+        {/* Owner margin approval (E5 §5.3) — now with the actual margin figures */}
+        <div className="rounded-lg border bg-card p-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm">
+            <ShieldCheck className={marginApproved ? "h-4 w-4 text-green-600" : "h-4 w-4 text-muted-foreground"} />
+            <span className="font-medium">Margin</span>
+            <StatusBadge variant={marginApproved ? "success" : "pending"}>
+              {marginApproved ? "Approved" : "Pending"}
+            </StatusBadge>
+          </div>
+          <dl className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Sell subtotal</dt>
+              <dd className="font-medium tabular-nums">{fmtCents(sellTotalCents, deal.currency)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Buy subtotal</dt>
+              <dd className="font-medium tabular-nums">{fmtCents(buyTotalCents, deal.currency)}</dd>
+            </div>
+            <div className="flex justify-between border-t pt-1">
+              <dt className="font-medium">Margin</dt>
+              <dd className={`font-semibold tabular-nums ${marginCents >= 0 ? "text-green-600" : "text-destructive"}`}>
+                {fmtCents(marginCents, deal.currency)}
+                {marginPct != null && <span className="ml-1 text-xs font-normal text-muted-foreground">({marginPct.toFixed(1)}%)</span>}
+              </dd>
+            </div>
+          </dl>
+          {marginProvisional && (
+            <p className="text-xs text-amber-600">Buy-side has no prices yet — margin is provisional.</p>
+          )}
+          {isAdmin && (
+            marginApproved ? (
+              <Button variant="outline" size="sm" className="w-full" onClick={() => onToggleMargin(false)} disabled={savingMargin}>
+                {savingMargin ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Revoke approval
+              </Button>
+            ) : (
+              <Button size="sm" className="w-full" onClick={() => onToggleMargin(true)} disabled={savingMargin}>
+                {savingMargin ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Approve margin
+              </Button>
+            )
+          )}
+        </div>
       </div>
 
       {/* Delete-document confirm (admin) */}

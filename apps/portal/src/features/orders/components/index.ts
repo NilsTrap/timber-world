@@ -5,4 +5,4 @@ export { OrderPackagesTable } from "./OrderPackagesTable";
 export { OrdersPageClient } from "./OrdersPageClient";
 export { OrderPricesTable } from "./OrderPricesTable";
 export { GateConfigManager } from "./GateConfigManager";
-export { DealPipeline } from "./DealPipeline";
+export { DealStageRail, DealAdvanceControl } from "./DealPipeline";

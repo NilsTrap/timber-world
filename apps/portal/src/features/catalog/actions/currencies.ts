@@ -78,7 +78,7 @@ export async function saveCurrency(input: SaveCurrencyInput): Promise<ActionResu
     .single();
 
   if (error) return { success: false, error: error.message };
-  revalidatePath("/admin/catalog/currencies");
+  revalidatePath("/admin/settings/currencies");
   return { success: true, data: toCurrency(data) };
 }
 
@@ -97,7 +97,7 @@ export async function deleteCurrency(code: string): Promise<ActionResult<null>> 
 
   const { error } = await (supabase as any).from("catalog_currencies").delete().eq("code", code);
   if (error) return { success: false, error: error.message };
-  revalidatePath("/admin/catalog/currencies");
+  revalidatePath("/admin/settings/currencies");
   return { success: true, data: null };
 }
 

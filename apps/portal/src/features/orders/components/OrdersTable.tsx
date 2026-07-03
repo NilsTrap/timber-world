@@ -766,11 +766,13 @@ export const OrdersTable = forwardRef<OrdersTableHandle, OrdersTableProps>(funct
       dateReceived: new Date().toISOString().slice(0, 10),
     });
     if (result.success) {
-      await loadOrders();
+      // Open the new order's detail (Deal view is the default) instead of dropping
+      // an empty row into the list — you land straight in the deal to fill it in.
+      router.push(`/orders/${result.data.id}`);
     } else {
       toast.error(result.error);
     }
-  }, [loadOrders]);
+  }, [router]);
 
   const hasActiveFilters = useCallback(() => {
     if (Object.values(columnFilters).some((s) => s.size > 0)) return true;

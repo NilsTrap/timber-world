@@ -7,7 +7,7 @@ import { CurrenciesPage } from "@/features/catalog/components/CurrenciesPage";
 export const metadata: Metadata = { title: "Currencies" };
 export const dynamic = "force-dynamic";
 
-export default async function CurrenciesRoute() {
+export default async function CurrenciesSettingsRoute() {
   const session = await getSession();
   if (!session) redirect("/login");
   if (!isAdmin(session)) {

@@ -1,14 +1,11 @@
-import { CatalogTabs } from "@/features/catalog/components/CatalogTabs";
-
+/**
+ * Catalog routes no longer use an in-page tab bar — Products / Categories are
+ * sidebar items and Currencies moved to Settings. This layout is now a pass-through.
+ */
 export default function CatalogLayoutWrapper({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div className="space-y-6">
-      <CatalogTabs />
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }

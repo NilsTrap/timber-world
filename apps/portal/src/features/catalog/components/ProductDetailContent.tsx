@@ -12,6 +12,7 @@ import { uploadProductImage, deleteProductImage, uploadVariantImage, deleteVaria
 import { uploadFieldValueFile, getFieldValueFileUrl } from "../actions/fieldFiles";
 import { VariantPackagingSection } from "./VariantPackagingSection";
 import { VariantsTable } from "./VariantsTable";
+import { useLightbox, ImageThumbGrid } from "./CatalogImages";
 import type {
   CatalogProduct,
   CatalogVariant,
@@ -78,6 +79,7 @@ export function ProductDetailContent({
   const [visAgents, setVisAgents] = useState(product.visibleAgents);
   const [visInternal, setVisInternal] = useState(product.visibleInternal);
   const [visMarketing, setVisMarketing] = useState(product.visibleMarketing);
+  const lightbox = useLightbox();
 
   // Product-level field values state
   const [fieldValues, setFieldValues] = useState<Record<string, FieldValueState>>(
@@ -160,29 +162,52 @@ export function ProductDetailContent({
     return result;
   };
 
+  const handleDuplicate = async () => {
+    const result = await duplicateProduct(product.id);
+    if (result.success) {
+      toast.success(`Duplicated as "${result.data.name}"`);
+      router.push(`/admin/catalog/${categoryId}/products/${result.data.id}`);
+    } else {
+      toast.error(result.error);
+    }
+  };
+
+  const handleUploadProductImage = async (file: File) => {
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const result = await uploadProductImage(product.id, fd);
+    setUploading(false);
+    if (result.success) { setImages([...images, result.data]); toast.success("Image uploaded"); }
+    else toast.error(result.error);
+  };
+
+  const handleDeleteProductImage = async (id: string) => {
+    if (!confirm("Delete this image? This cannot be undone.")) return;
+    const result = await deleteProductImage(id);
+    if (result.success) { setImages(images.filter((i) => i.id !== id)); toast.success("Image removed"); }
+    else toast.error(result.error);
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
+      {lightbox.node}
+      {/* Header — Save is the first action, next to Duplicate + Delete */}
+      <div className="flex items-center gap-2">
         <Button variant="ghost" size="icon" asChild className="shrink-0">
           <Link href={`/admin/catalog/${categoryId}`}>
             <ArrowLeft className="h-4 w-4" />
             <span className="sr-only">Back to {categoryName}</span>
           </Link>
         </Button>
-        <div className="flex-1">
-          <h1 className="text-3xl font-semibold tracking-tight">{product.name}</h1>
-          <p className="text-muted-foreground">{categoryName}</p>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight truncate">{product.name}</h1>
+          <p className="text-muted-foreground text-sm truncate">{categoryName}</p>
         </div>
-        <Button variant="outline" onClick={async () => {
-          const result = await duplicateProduct(product.id);
-          if (result.success) {
-            toast.success(`Duplicated as "${result.data.name}"`);
-            router.push(`/admin/catalog/${categoryId}/products/${result.data.id}`);
-          } else {
-            toast.error(result.error);
-          }
-        }}>
+        <Button onClick={handleSaveProduct} disabled={saving}>
+          {saving ? "Saving..." : "Save Product"}
+        </Button>
+        <Button variant="outline" onClick={handleDuplicate}>
           <Copy className="h-4 w-4 mr-2" /> Duplicate
         </Button>
         <Button variant="outline" className="text-destructive" onClick={handleDeleteProduct}>
@@ -190,136 +215,100 @@ export function ProductDetailContent({
         </Button>
       </div>
 
-      {/* Product details form */}
-      <div className="rounded-lg border bg-card p-5 space-y-4">
-        <h2 className="font-semibold">Product Details</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Name</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Slug</label>
-            <Input value={slug} onChange={(e) => setSlug(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Base price (€ / {unitSymbol})</label>
-            <Input type="number" step="0.01" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="applies to all variants unless overridden" />
-          </div>
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Description</label>
-          <textarea
-            className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-            placeholder="Product description — supports multiple lines"
-          />
-        </div>
-
-        {/* Dynamic product-level fields */}
-        {productFields.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold mb-2 text-muted-foreground">Product Attributes</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {productFields.map((field) => (
-                <DynamicField
-                  key={field.id}
-                  field={field}
-                  value={fieldValues[field.id]}
-                  onChange={(val) => setFieldValues((prev) => ({ ...prev, [field.id]: val }))}
-                  scope="product"
-                  entityId={product.id}
-                />
-              ))}
+      {/* Two-column: details + attributes on the left; images + visibility on the right */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* LEFT column */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Basic details */}
+          <div className="rounded-lg border bg-card p-5 space-y-4">
+            <h2 className="font-semibold">Product Details</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Name</label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Slug</label>
+                <Input value={slug} onChange={(e) => setSlug(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Base price (€ / {unitSymbol})</label>
+                <Input type="number" step="0.01" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="applies to all variants unless overridden" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Description</label>
+              <textarea
+                className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+                placeholder="Product description — supports multiple lines"
+              />
             </div>
           </div>
-        )}
 
-        <div className="space-y-2 rounded-md border bg-muted/20 p-3">
-          <div className="text-sm font-medium">Surface visibility</div>
-          <p className="text-xs text-muted-foreground">Control which apps show this product. Uncheck to hide it from that surface.</p>
-          <div className="flex gap-4 flex-wrap">
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={visAgents} onChange={(e) => setVisAgents(e.target.checked)} /> Agents app
-            </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={visInternal} onChange={(e) => setVisInternal(e.target.checked)} /> Internal
-            </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={visMarketing} onChange={(e) => setVisMarketing(e.target.checked)} /> Marketing
-            </label>
-          </div>
+          {/* Product attributes — a visually separate card */}
+          {productFields.length > 0 && (
+            <div className="rounded-lg border bg-card p-5 space-y-3">
+              <h2 className="font-semibold">Product Attributes</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {productFields.map((field) => (
+                  <DynamicField
+                    key={field.id}
+                    field={field}
+                    value={fieldValues[field.id]}
+                    onChange={(val) => setFieldValues((prev) => ({ ...prev, [field.id]: val }))}
+                    scope="product"
+                    entityId={product.id}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        <Button onClick={handleSaveProduct} disabled={saving}>
-          {saving ? "Saving..." : "Save Product"}
-        </Button>
-      </div>
-
-      {/* Images */}
-      <div className="rounded-lg border bg-card p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Images ({images.length})</h2>
-          <label className="inline-flex items-center gap-2 cursor-pointer">
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setUploading(true);
-                const fd = new FormData();
-                fd.append("file", file);
-                const result = await uploadProductImage(product.id, fd);
-                setUploading(false);
-                if (result.success) {
-                  setImages([...images, result.data]);
-                  toast.success("Image uploaded");
-                } else {
-                  toast.error(result.error);
-                }
-                e.target.value = "";
-              }}
-            />
-            <Button size="sm" asChild disabled={uploading}>
-              <span><Plus className="h-4 w-4 mr-1" /> {uploading ? "Uploading..." : "Upload Image"}</span>
-            </Button>
-          </label>
-        </div>
-        {images.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {images.map((img) => {
-              const url = `https://fyzrtqsnmnizoxgcqsjc.supabase.co/storage/v1/object/public/catalog/${img.storagePath}`;
-              return (
-                <div key={img.id} className="relative group rounded-lg overflow-hidden border">
-                  <img src={url} alt={img.altText || ""} className="w-full aspect-square object-cover" />
-                  {img.isPrimary && (
-                    <span className="absolute top-1 left-1 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded">Primary</span>
-                  )}
-                  <button
-                    onClick={async () => {
-                      if (!confirm("Delete this image? This cannot be undone.")) return;
-                      const result = await deleteProductImage(img.id);
-                      if (result.success) {
-                        setImages(images.filter((i) => i.id !== img.id));
-                        toast.success("Image removed");
-                      } else {
-                        toast.error(result.error);
-                      }
-                    }}
-                    className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
-              );
-            })}
+        {/* RIGHT column */}
+        <div className="space-y-6">
+          {/* Surface visibility (first) */}
+          <div className="rounded-lg border bg-card p-5 space-y-2">
+            <div className="text-sm font-medium">Surface visibility</div>
+            <p className="text-xs text-muted-foreground">Control which apps show this product. Uncheck to hide it from that surface.</p>
+            <div className="flex flex-col gap-2 pt-1">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={visAgents} onChange={(e) => setVisAgents(e.target.checked)} /> Agents app
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={visInternal} onChange={(e) => setVisInternal(e.target.checked)} /> Internal
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={visMarketing} onChange={(e) => setVisMarketing(e.target.checked)} /> Marketing
+              </label>
+            </div>
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No images yet. Upload product photos to show in the catalog.</p>
-        )}
+
+          {/* Images */}
+          <div className="rounded-lg border bg-card p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">Images ({images.length})</h2>
+              <label className="inline-flex items-center cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadProductImage(f); e.target.value = ""; }}
+                />
+                <Button size="sm" variant="outline" asChild disabled={uploading}>
+                  <span><Plus className="h-4 w-4 mr-1" /> {uploading ? "Uploading..." : "Upload"}</span>
+                </Button>
+              </label>
+            </div>
+            {images.length > 0 ? (
+              <ImageThumbGrid images={images} onDelete={handleDeleteProductImage} openLightbox={lightbox.open} />
+            ) : (
+              <p className="text-sm text-muted-foreground">No images yet. Upload product photos.</p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Variants */}
@@ -686,9 +675,28 @@ function VariantForm({
 function VariantImageSection({ variantId, initialImages }: { variantId: string; initialImages: any[] }) {
   const [images, setImages] = useState(initialImages);
   const [uploading, setUploading] = useState(false);
+  const lightbox = useLightbox();
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const result = await uploadVariantImage(variantId, fd);
+    setUploading(false);
+    if (result.success) { setImages([...images, result.data]); toast.success("Image uploaded"); }
+    else toast.error(result.error);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this image? This cannot be undone.")) return;
+    const result = await deleteVariantImage(id);
+    if (result.success) { setImages(images.filter((i: any) => i.id !== id)); toast.success("Removed"); }
+    else toast.error(result.error);
+  };
 
   return (
     <div className="space-y-2">
+      {lightbox.node}
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Variant Images ({images.length})</h4>
         <label className="inline-flex items-center gap-1 cursor-pointer">
@@ -696,53 +704,14 @@ function VariantImageSection({ variantId, initialImages }: { variantId: string; 
             type="file"
             accept="image/jpeg,image/png,image/webp"
             className="hidden"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              setUploading(true);
-              const fd = new FormData();
-              fd.append("file", file);
-              const result = await uploadVariantImage(variantId, fd);
-              setUploading(false);
-              if (result.success) {
-                setImages([...images, result.data]);
-                toast.success("Image uploaded");
-              } else {
-                toast.error(result.error);
-              }
-              e.target.value = "";
-            }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }}
           />
           <Button size="sm" variant="outline" className="h-7 text-xs" asChild disabled={uploading}>
             <span><Plus className="h-3 w-3 mr-1" /> {uploading ? "Uploading..." : "Upload"}</span>
           </Button>
         </label>
       </div>
-      {images.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {images.map((img: any) => {
-            const url = `https://fyzrtqsnmnizoxgcqsjc.supabase.co/storage/v1/object/public/catalog/${img.storagePath}`;
-            return (
-              <div key={img.id} className="relative group w-16 h-16 rounded border overflow-hidden">
-                <img src={url} alt="" className="w-full h-full object-cover" />
-                <button
-                  onClick={async () => {
-                    if (!confirm("Delete this image? This cannot be undone.")) return;
-                    const result = await deleteVariantImage(img.id);
-                    if (result.success) {
-                      setImages(images.filter((i: any) => i.id !== img.id));
-                      toast.success("Removed");
-                    }
-                  }}
-                  className="absolute inset-0 bg-red-500/60 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {images.length > 0 && <ImageThumbGrid images={images} onDelete={handleDelete} openLightbox={lightbox.open} />}
     </div>
   );
 }

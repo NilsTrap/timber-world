@@ -77,12 +77,12 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") || "list";
-  // Local view axis: the existing order content (products/packages/files) vs. the
-  // universal Deal view (line items + documents). Defaults to "order" — the
-  // operational order is the primary lens for portal users (esp. producers, who
-  // only hold orders.tab.production and can't act on the Deal); the Deal tab
-  // remains one click away. (Per Nils 2026-06-23; was "deal" in the Oscar build.)
-  const [view, setView] = useState<"order" | "deal">("order");
+  // Local view axis: the universal Deal view (line items + documents + lifecycle)
+  // vs. the legacy operational order content (products/packages/files). Defaults to
+  // "deal" — the Deal is now the primary lens and the Order tab is being retired
+  // (Nils 2026-07-03). The Order tab stays one click away for producers, who hold
+  // only orders.tab.production and act on the operational order, not the Deal.
+  const [view, setView] = useState<"order" | "deal">("deal");
   const [order, setOrder] = useState<Order | null>(null);
   const [packages, setPackages] = useState<OrderPackage[]>([]);
   const [dropdowns, setDropdowns] = useState<RefDropdowns | null>(null);

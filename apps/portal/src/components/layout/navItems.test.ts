@@ -40,7 +40,10 @@ const EXPECTED_ADMIN = new Set<string>([
   "/counterparties/clients", "/counterparties/suppliers",
   "/admin/settings/fields", "/admin/settings/gates", "/admin/settings/groups",
   "/admin/settings/document-templates", "/admin/settings/packaging", "/admin/settings/pricing-units",
-  "/admin/agents", "/admin/agent-orders", "/admin/agent-manual", "/admin/catalog",
+  "/admin/settings/currencies",
+  "/admin/agents", "/admin/agent-orders", "/admin/agent-manual",
+  // Catalogue is now a section: parent link + Products / Categories children
+  "/admin/catalog", "/admin/catalog/products", "/admin/catalog/categories",
   // the 6 legacy destinations — now under the Legacy group, still reachable
   "/admin/inventory", "/production", "/admin/marketing", "/admin/competitor-pricing",
   "/admin/quotes", "/admin/uk-staircase-pricing",
@@ -90,8 +93,11 @@ ok("salesperson still sees Counterparties (clients only)",
 // ── 6. Nav ordering + Catalog promotion (2026-07-02) ────────────────────────
 ok("Dashboard is the FIRST nav item", ADMIN_NAV_ITEMS[0]?.href === "/dashboard", ADMIN_NAV_ITEMS[0]?.href);
 const catalogItem = ADMIN_NAV_ITEMS.find((i) => i.href === "/admin/catalog");
-ok("Catalogue is a TOP-LEVEL main item (not collapsible, no children)",
-   !!catalogItem && !catalogItem.collapsible && !catalogItem.children);
+ok("Catalogue is a top-level section with Products + Categories (Products first)",
+   !!catalogItem && !catalogItem.collapsible && (catalogItem.children ?? []).length === 2 &&
+   catalogItem.children?.[0]?.href === "/admin/catalog/products" &&
+   catalogItem.children?.[1]?.href === "/admin/catalog/categories",
+   catalogItem?.children);
 ok("Catalogue is NO LONGER a child of the UK Agent app group",
    !AGENT_APP_CHILDREN.some((c) => c.href === "/admin/catalog"));
 // still no orphan: catalog remains reachable (asserted by the EXACT-set check above)
@@ -107,7 +113,9 @@ ok("route under Legacy child → 'legacy'",
 ok("counterparties child → '/counterparties'",
    activeSectionKey(ADMIN_NAV_ITEMS, "/counterparties/suppliers") === "/counterparties");
 ok("a leaf route (Dashboard) opens NO section", activeSectionKey(ADMIN_NAV_ITEMS, "/dashboard") === null);
-ok("the promoted Catalogue leaf opens NO section", activeSectionKey(ADMIN_NAV_ITEMS, "/admin/catalog") === null);
+ok("Catalogue opens its OWN section on catalog routes",
+   activeSectionKey(ADMIN_NAV_ITEMS, "/admin/catalog") === "/admin/catalog" &&
+   activeSectionKey(ADMIN_NAV_ITEMS, "/admin/catalog/products") === "/admin/catalog");
 // at most one section can match a given path (single-open is well-defined)
 for (const path of ["/admin/settings/fields", "/admin/agents", "/production", "/counterparties/clients", "/dashboard", "/admin/catalog"]) {
   const matches = ADMIN_NAV_ITEMS.filter((i) => activeSectionKey([i], path) !== null).length;

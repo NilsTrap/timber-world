@@ -90,7 +90,10 @@ export const LEGACY_ORG_CHILDREN: ModuleNavChild[] = [
 export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
   { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
   { href: "/orders", label: "Orders", iconName: "ShoppingCart" },
-  { href: "/admin/catalog", label: "Catalogue", iconName: "Layers" },
+  { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", group: "catalog", children: [
+    { href: "/admin/catalog/products", label: "Products" },
+    { href: "/admin/catalog/categories", label: "Categories" },
+  ]},
   { href: "/counterparties", label: "Counterparties", iconName: "Handshake", group: "deals", children: [
     { href: "/counterparties/clients", label: "Clients" },
     { href: "/counterparties/suppliers", label: "Suppliers" },
@@ -106,6 +109,7 @@ export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
     { href: "/admin/settings/document-templates", label: "Document Templates" },
     { href: "/admin/settings/packaging", label: "Packaging" },
     { href: "/admin/settings/pricing-units", label: "Pricing Units" },
+    { href: "/admin/settings/currencies", label: "Currencies" },
   ]},
   { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2" },
   { href: "legacy", label: "Legacy", iconName: "History", collapsible: true, children: LEGACY_ADMIN_CHILDREN },
@@ -119,7 +123,10 @@ export function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavI
   return [
     { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard", requiresModule: "dashboard.view" },
     { href: "/orders", label: "Orders", iconName: "ShoppingCart", requiresModule: "orders.view" },
-    { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", requiresModule: "catalogue.view" },
+    { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", requiresModule: "catalogue.view", group: "catalog", children: [
+      { href: "/admin/catalog/products", label: "Products" },
+      { href: "/admin/catalog/categories", label: "Categories" },
+    ]},
     { href: "/counterparties", label: "Counterparties", iconName: "Handshake", group: "deals",
       requiresAnyModule: ["counterparties.clients", "counterparties.suppliers"], children: [
       { href: "/counterparties/clients", label: "Clients", requiresExactModule: "counterparties.clients" },
@@ -133,6 +140,7 @@ export function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavI
       { href: "/admin/settings/fields", label: "Fields" },
       { href: "/admin/settings/packaging", label: "Packaging" },
       { href: "/admin/settings/pricing-units", label: "Pricing Units" },
+      { href: "/admin/settings/currencies", label: "Currencies" },
     ]},
     { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2", requiresModule: "organizations.view" },
     { href: "legacy", label: "Legacy", iconName: "History", collapsible: true,
