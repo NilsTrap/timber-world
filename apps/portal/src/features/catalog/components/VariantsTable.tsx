@@ -106,6 +106,7 @@ export function VariantsTable({
       <table className="w-full text-sm [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs">
         <thead>
           <tr className="border-b bg-muted/50 text-xs">
+            <th className="px-2 py-2 w-10"></th>
             <th className="text-left px-2 py-2 font-medium">SKU</th>
             <th className="text-left px-2 py-2 font-medium">Thick</th>
             <th className="text-left px-2 py-2 font-medium">Width</th>
@@ -130,6 +131,20 @@ export function VariantsTable({
             });
             return (
               <tr key={v.id} className="border-b last:border-0 align-middle">
+                <td className="px-1 py-1">
+                  {(() => {
+                    const img = v.images?.find((i) => i.isPrimary) ?? v.images?.[0];
+                    return img ? (
+                      <img
+                        src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/catalog/${img.storagePath}`}
+                        alt={img.altText || v.sku || ""}
+                        className="h-8 w-8 rounded object-cover border"
+                      />
+                    ) : (
+                      <div className="h-8 w-8 rounded border bg-muted/40" title="No image" />
+                    );
+                  })()}
+                </td>
                 <td className="px-2 py-1 font-mono text-xs text-muted-foreground whitespace-nowrap">{v.sku || "—"}</td>
                 <td className="px-1 py-1"><input type="number" defaultValue={v.thicknessMm ?? ""} className={cellInput} onBlur={(e) => saveScalar(v, { thicknessMm: num(e.target.value) })} /></td>
                 <td className="px-1 py-1"><input type="number" defaultValue={v.widthMm ?? ""} className={cellInput} onBlur={(e) => saveScalar(v, { widthMm: num(e.target.value) })} /></td>

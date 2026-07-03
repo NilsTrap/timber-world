@@ -300,6 +300,7 @@ export function ProductDetailContent({
                   )}
                   <button
                     onClick={async () => {
+                      if (!confirm("Delete this image? This cannot be undone.")) return;
                       const result = await deleteProductImage(img.id);
                       if (result.success) {
                         setImages(images.filter((i) => i.id !== img.id));
@@ -487,6 +488,7 @@ function FileFieldInput({
   };
 
   const handleRemove = () => {
+    if (!confirm(`Remove ${value?.valueFileName ? `"${value.valueFileName}"` : "this file"}? You can re-upload before saving.`)) return;
     onChange({
       ...value,
       valueStoragePath: null,
@@ -725,6 +727,7 @@ function VariantImageSection({ variantId, initialImages }: { variantId: string; 
                 <img src={url} alt="" className="w-full h-full object-cover" />
                 <button
                   onClick={async () => {
+                    if (!confirm("Delete this image? This cannot be undone.")) return;
                     const result = await deleteVariantImage(img.id);
                     if (result.success) {
                       setImages(images.filter((i: any) => i.id !== img.id));
