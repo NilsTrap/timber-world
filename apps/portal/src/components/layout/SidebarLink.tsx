@@ -68,26 +68,36 @@ const ICON_MAP: Record<string, LucideIcon> = {
 export type IconName = keyof typeof ICON_MAP;
 
 /** Visual grouping for colour-coding nav areas. Mirrors Sidebar's NavGroup. */
-export type NavGroup = "agent" | "deals" | "settings" | "catalog";
+export type NavGroup = "dashboard" | "orders" | "deals" | "catalog" | "agent" | "settings" | "orgs";
 
-/** Per-group colours: left accent bar + icon tint + (children) left border. */
+/** Per-group colours: left accent bar + icon tint + (children) left border. Every
+ *  primary area carries its own identity colour so the nav reads consistently. */
 const GROUP_BAR: Record<NavGroup, string> = {
-  agent: "bg-amber-500",
+  dashboard: "bg-indigo-500",
+  orders: "bg-blue-500",
   deals: "bg-emerald-500",
-  settings: "bg-slate-400",
   catalog: "bg-sky-500",
+  agent: "bg-amber-500",
+  settings: "bg-slate-400",
+  orgs: "bg-rose-500",
 };
 const GROUP_ICON: Record<NavGroup, string> = {
-  agent: "text-amber-600",
+  dashboard: "text-indigo-600",
+  orders: "text-blue-600",
   deals: "text-emerald-600",
-  settings: "text-slate-500",
   catalog: "text-sky-600",
+  agent: "text-amber-600",
+  settings: "text-slate-500",
+  orgs: "text-rose-600",
 };
 export const GROUP_CHILD_BORDER: Record<NavGroup, string> = {
-  agent: "border-amber-500/40",
+  dashboard: "border-indigo-500/40",
+  orders: "border-blue-500/40",
   deals: "border-emerald-500/40",
-  settings: "border-slate-400/40",
   catalog: "border-sky-500/40",
+  agent: "border-amber-500/40",
+  settings: "border-slate-400/40",
+  orgs: "border-rose-500/40",
 };
 
 interface SidebarLinkProps {

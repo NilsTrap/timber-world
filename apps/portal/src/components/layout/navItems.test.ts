@@ -55,12 +55,16 @@ ok("admin nav reaches EXACTLY the expected destination set (nothing dropped/adde
    adminSet.size === EXPECTED_ADMIN.size && [...EXPECTED_ADMIN].every((h) => adminSet.has(h)),
    { missing: [...EXPECTED_ADMIN].filter((h) => !adminSet.has(h)), extra: [...adminSet].filter((h) => !EXPECTED_ADMIN.has(h)) });
 
-// ── 2. The Legacy group holds exactly the 6 legacy sections, and it is collapsible ──
+// ── 2. The Legacy group holds exactly the 8 legacy sections (CRM + Shipments were
+//       demoted here from the top level), and it is collapsible ──
 const legacyItem = ADMIN_NAV_ITEMS.find((i) => i.label === "Legacy");
 ok("a 'Legacy' collapsible group exists", !!legacyItem && legacyItem.collapsible === true);
-ok("Legacy group holds exactly the 6 legacy sections",
-   !!legacyItem && (legacyItem.children ?? []).length === 6 &&
+ok("Legacy group holds exactly the 8 legacy sections",
+   !!legacyItem && (legacyItem.children ?? []).length === 8 &&
    (legacyItem.children ?? []).every((c) => LEGACY_HREFS.includes(c.href)));
+ok("Legacy group includes the demoted CRM (old) + Shipments",
+   (legacyItem?.children ?? []).some((c) => c.href === "/admin/crm") &&
+   (legacyItem?.children ?? []).some((c) => c.href === "/admin/shipments"));
 
 // ── 3. The MAIN nav (everything except the Legacy group) contains NO legacy href ──
 const mainItems = ADMIN_NAV_ITEMS.filter((i) => i.label !== "Legacy");
@@ -120,6 +124,21 @@ ok("Catalogue opens its OWN section on catalog routes",
 for (const path of ["/admin/settings/fields", "/admin/agents", "/production", "/counterparties/clients", "/dashboard", "/admin/catalog"]) {
   const matches = ADMIN_NAV_ITEMS.filter((i) => activeSectionKey([i], path) !== null).length;
   ok(`exactly ≤1 section matches "${path}" (accordion is single-open)`, matches <= 1, matches);
+}
+
+// ── 8. Nav cleanup (2026-07-04): Counterparties→"CRM"; CRM+Shipments→Legacy;
+//       every primary area carries a colour `group` ──
+const crmItem = ADMIN_NAV_ITEMS.find((i) => i.href === "/counterparties");
+ok("the counterparties hub is now labelled 'CRM'", crmItem?.label === "CRM");
+ok("no TOP-LEVEL CRM or Shipments item remains (they moved under Legacy)",
+   !ADMIN_NAV_ITEMS.some((i) => i.href === "/admin/crm" || i.href === "/admin/shipments"));
+const orgCrm = getOrgUserNavItems().find((i) => i.href === "/counterparties");
+ok("org-user counterparties hub is also labelled 'CRM'", orgCrm?.label === "CRM");
+ok("org-user nav has no top-level CRM/Shipments",
+   !getOrgUserNavItems().some((i) => i.href === "/admin/crm" || i.href === "/shipments"));
+for (const [href, group] of [["/dashboard", "dashboard"], ["/orders", "orders"], ["/counterparties", "deals"], ["/admin/organisations", "orgs"]] as const) {
+  const it = ADMIN_NAV_ITEMS.find((i) => i.href === href);
+  ok(`${href} carries a colour group (${group})`, it?.group === group, it?.group);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -60,10 +60,15 @@ export const AGENT_APP_CHILDREN: ModuleNavChild[] = [
 export const LEGACY_MODULES = [
   "inventory.view", "production.view", "marketing.view",
   "competitor-pricing.view", "quotes.view", "uk-staircase-pricing.view",
+  // CRM (the old contacts CRM — superseded by Counterparties) and Shipments were
+  // demoted here: the new deal/spine model owns those relationships + logistics.
+  "crm.view", "shipments.view",
 ];
 
 /** Children of the "Legacy" collapsible section — ADMIN hrefs (admin = no gating). */
 export const LEGACY_ADMIN_CHILDREN: ModuleNavChild[] = [
+  { href: "/admin/crm", label: "CRM (old)", iconName: "Users" },
+  { href: "/admin/shipments", label: "Shipments", iconName: "Truck" },
   { href: "/admin/inventory", label: "Inventory", iconName: "Package" },
   { href: "/production", label: "Production", iconName: "Factory" },
   { href: "/admin/marketing", label: "CMS", iconName: "Image" },
@@ -74,6 +79,8 @@ export const LEGACY_ADMIN_CHILDREN: ModuleNavChild[] = [
 
 /** Children of the "Legacy" collapsible section — ORG-USER hrefs + per-child module gates. */
 export const LEGACY_ORG_CHILDREN: ModuleNavChild[] = [
+  { href: "/admin/crm", label: "CRM (old)", iconName: "Users", requiresModule: "crm.view" },
+  { href: "/shipments", label: "Shipments", iconName: "Truck", requiresModule: "shipments.view" },
   { href: "/inventory", label: "Inventory", iconName: "Package", requiresModule: "inventory.view" },
   { href: "/production", label: "Production", iconName: "Factory", requiresModule: "production.view" },
   { href: "/admin/marketing", label: "CMS", iconName: "Image", requiresModule: "marketing.view" },
@@ -88,18 +95,18 @@ export const LEGACY_ORG_CHILDREN: ModuleNavChild[] = [
  * superseded-but-lingering sections.
  */
 export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
-  { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
-  { href: "/orders", label: "Orders", iconName: "ShoppingCart" },
+  { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard", group: "dashboard" },
+  { href: "/orders", label: "Orders", iconName: "ShoppingCart", group: "orders" },
   { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", group: "catalog", children: [
     { href: "/admin/catalog/products", label: "Products" },
     { href: "/admin/catalog/categories", label: "Categories" },
   ]},
-  { href: "/counterparties", label: "Counterparties", iconName: "Handshake", group: "deals", children: [
+  // "CRM" = the counterparties relationship hub (clients + suppliers). Renamed from
+  // "Counterparties" — it IS the new CRM (the old contacts CRM is now under Legacy).
+  { href: "/counterparties", label: "CRM", iconName: "Handshake", group: "deals", children: [
     { href: "/counterparties/clients", label: "Clients" },
     { href: "/counterparties/suppliers", label: "Suppliers" },
   ]},
-  { href: "/admin/crm", label: "CRM", iconName: "Users" },
-  { href: "/admin/shipments", label: "Shipments", iconName: "Truck" },
   { href: "agent-app", label: "UK Agent app", iconName: "Store", group: "agent", collapsible: true,
     children: AGENT_APP_CHILDREN },
   { href: "/admin/settings", label: "Settings", iconName: "Settings", group: "settings", children: [
@@ -111,7 +118,7 @@ export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
     { href: "/admin/settings/pricing-units", label: "Pricing Units" },
     { href: "/admin/settings/currencies", label: "Currencies" },
   ]},
-  { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2" },
+  { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2", group: "orgs" },
   { href: "legacy", label: "Legacy", iconName: "History", collapsible: true, children: LEGACY_ADMIN_CHILDREN },
 ];
 
@@ -121,19 +128,19 @@ export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
  */
 export function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
   return [
-    { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard", requiresModule: "dashboard.view" },
-    { href: "/orders", label: "Orders", iconName: "ShoppingCart", requiresModule: "orders.view" },
+    { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard", requiresModule: "dashboard.view", group: "dashboard" },
+    { href: "/orders", label: "Orders", iconName: "ShoppingCart", requiresModule: "orders.view", group: "orders" },
     { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", requiresModule: "catalogue.view", group: "catalog", children: [
       { href: "/admin/catalog/products", label: "Products" },
       { href: "/admin/catalog/categories", label: "Categories" },
     ]},
-    { href: "/counterparties", label: "Counterparties", iconName: "Handshake", group: "deals",
+    // "CRM" = the counterparties hub (clients + suppliers); the old contacts CRM
+    // is now under Legacy.
+    { href: "/counterparties", label: "CRM", iconName: "Handshake", group: "deals",
       requiresAnyModule: ["counterparties.clients", "counterparties.suppliers"], children: [
       { href: "/counterparties/clients", label: "Clients", requiresExactModule: "counterparties.clients" },
       { href: "/counterparties/suppliers", label: "Suppliers", requiresExactModule: "counterparties.suppliers" },
     ]},
-    { href: "/admin/crm", label: "CRM", iconName: "Users", requiresModule: "crm.view" },
-    { href: "/shipments", label: "Shipments", iconName: "Truck", badge: pendingShipmentCount, requiresModule: "shipments.view" },
     { href: "agent-app", label: "UK Agent app", iconName: "Store", group: "agent", collapsible: true,
       requiresAnyModule: AGENT_APP_MODULES, children: AGENT_APP_CHILDREN },
     { href: "/admin/settings", label: "Settings", iconName: "Settings", requiresAnyModule: ["settings.view", "catalogue.view"], group: "settings", children: [
@@ -142,7 +149,7 @@ export function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavI
       { href: "/admin/settings/pricing-units", label: "Pricing Units" },
       { href: "/admin/settings/currencies", label: "Currencies" },
     ]},
-    { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2", requiresModule: "organizations.view" },
+    { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2", requiresModule: "organizations.view", group: "orgs" },
     { href: "legacy", label: "Legacy", iconName: "History", collapsible: true,
       requiresAnyModule: LEGACY_MODULES, children: LEGACY_ORG_CHILDREN },
   ];
