@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Pencil, Trash2 } from "lucide-react";
+import { useLightbox, catalogImageUrl } from "./CatalogImages";
 import { toast } from "sonner";
 import { saveVariant, deleteVariant } from "../actions/variants";
 import { assignVariantPackaging, removeVariantPackaging } from "../actions/packaging";
@@ -35,6 +36,8 @@ export function VariantsTable({
 }: Props) {
   const unitSymbol = unit?.symbol ?? "unit";
   const calcMethod = unit?.calcMethod ?? "per_piece";
+  const lightbox = useLightbox();
+  const variantHref = (id: string) => `/admin/catalog/${categoryId}/products/${productId}/variants/${id}`;
 
   const effCurrency = (variantId: string, code: string) =>
     cPrices[`variant:${variantId}`]?.[code]?.priceCents ??
@@ -102,7 +105,9 @@ export function VariantsTable({
   if (vars.length === 0) return null;
 
   return (
-    <div className="rounded-lg border bg-card overflow-x-auto">
+    <>
+      {lightbox.node}
+      <div className="rounded-lg border bg-card overflow-x-auto">
       <table className="w-full text-sm [&_th]:h-8 [&_th]:px-1 [&_th]:py-0 [&_th]:text-xs [&_td]:px-1 [&_td]:py-0.5 [&_td]:text-xs">
         <thead>
           <tr className="border-b bg-muted/50 text-xs">
@@ -134,18 +139,20 @@ export function VariantsTable({
                 <td className="px-1 py-1">
                   {(() => {
                     const img = v.images?.find((i) => i.isPrimary) ?? v.images?.[0];
-                    return img ? (
-                      <img
-                        src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/catalog/${img.storagePath}`}
-                        alt={img.altText || v.sku || ""}
-                        className="h-8 w-8 rounded object-cover border"
-                      />
-                    ) : (
-                      <div className="h-8 w-8 rounded border bg-muted/40" title="No image" />
+                    if (!img) return <div className="h-8 w-8 rounded border bg-muted/40" title="No image" />;
+                    const url = catalogImageUrl(img.storagePath);
+                    return (
+                      <button type="button" onClick={() => lightbox.open(url, img.altText || v.sku || undefined)} title="Click to enlarge" className="block">
+                        <img src={url} alt={img.altText || v.sku || ""} className="h-8 w-8 rounded object-cover border transition hover:ring-2 hover:ring-primary/40" />
+                      </button>
                     );
                   })()}
                 </td>
-                <td className="px-2 py-1 font-mono text-xs text-muted-foreground whitespace-nowrap">{v.sku || "—"}</td>
+                <td className="px-2 py-1 whitespace-nowrap">
+                  <Link href={variantHref(v.id)} className="font-mono text-xs text-primary hover:underline" title="Edit variant">
+                    {v.sku || "—"}
+                  </Link>
+                </td>
                 <td className="px-1 py-1"><input type="number" defaultValue={v.thicknessMm ?? ""} className={cellInput} onBlur={(e) => saveScalar(v, { thicknessMm: num(e.target.value) })} /></td>
                 <td className="px-1 py-1"><input type="number" defaultValue={v.widthMm ?? ""} className={cellInput} onBlur={(e) => saveScalar(v, { widthMm: num(e.target.value) })} /></td>
                 <td className="px-1 py-1"><input type="number" defaultValue={v.lengthMm ?? ""} className={cellInput} onBlur={(e) => saveScalar(v, { lengthMm: num(e.target.value) })} /></td>
@@ -200,7 +207,7 @@ export function VariantsTable({
                 </td>
                 <td className="px-2 py-1">
                   <div className="flex gap-0.5">
-                    <Link href={`/admin/catalog/${categoryId}/products/${productId}/variants/${v.id}`} className="p-1.5 rounded hover:bg-muted" title="Open variant">
+                    <Link href={variantHref(v.id)} className="p-1.5 rounded hover:bg-muted" title="Open variant">
                       <Pencil className="h-3.5 w-3.5" />
                     </Link>
                     <button onClick={() => handleDelete(v.id)} className="p-1.5 rounded hover:bg-muted" title="Delete">
@@ -213,6 +220,7 @@ export function VariantsTable({
           })}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }

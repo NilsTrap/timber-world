@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { saveVariant, deleteVariant } from "../actions/variants";
 import { uploadVariantImage, deleteVariantImage } from "../actions/images";
 import { uploadFieldValueFile, getFieldValueFileUrl } from "../actions/fieldFiles";
+import { useLightbox, ImageThumbGrid } from "./CatalogImages";
 import type { FieldValueState } from "./ProductDetailContent";
 import { VariantPackagingSection } from "./VariantPackagingSection";
 import { setVariantCurrencyOverride, type CurrencyPriceMap } from "../actions/currencies";
@@ -64,6 +65,24 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
 
   const [images, setImages] = useState(variant.images || []);
   const [uploading, setUploading] = useState(false);
+  const lightbox = useLightbox();
+
+  const handleUploadImage = async (file: File) => {
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const result = await uploadVariantImage(variant.id, fd);
+    setUploading(false);
+    if (result.success) { setImages([...images, result.data]); toast.success("Image uploaded"); }
+    else toast.error(result.error);
+  };
+
+  const handleDeleteImage = async (id: string) => {
+    if (!confirm("Delete this image? This cannot be undone.")) return;
+    const result = await deleteVariantImage(id);
+    if (result.success) { setImages(images.filter((i: any) => i.id !== id)); toast.success("Image removed"); }
+    else toast.error(result.error);
+  };
 
   const [fieldValues, setFieldValues] = useState<Record<string, FieldValueState>>(
     () => {
@@ -136,23 +155,31 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
+      {lightbox.node}
+      {/* Header — Save is the first action, next to Delete */}
+      <div className="flex items-center gap-2">
         <Button variant="ghost" size="icon" asChild className="shrink-0">
           <Link href={backUrl}>
             <ArrowLeft className="h-4 w-4" />
             <span className="sr-only">Back to {productName}</span>
           </Link>
         </Button>
-        <div className="flex-1">
-          <h1 className="text-3xl font-semibold tracking-tight">{dimLabel}</h1>
-          <p className="text-muted-foreground">{productName} · Variant</p>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight truncate">{dimLabel}</h1>
+          <p className="text-muted-foreground text-sm truncate">{productName} · Variant</p>
         </div>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? "Saving..." : "Save Variant"}
+        </Button>
         <Button variant="outline" className="text-destructive" onClick={handleDelete}>
           <Trash2 className="h-4 w-4 mr-2" /> Delete
         </Button>
       </div>
 
+      {/* Two-column: form on the left, images + packaging on the right */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* LEFT column */}
+        <div className="lg:col-span-2 space-y-6">
       {/* Dimensions & Pricing Card */}
       <div className="rounded-lg border bg-card p-5 space-y-4">
         <h2 className="font-semibold">Dimensions & Pricing</h2>
@@ -241,77 +268,39 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
           </>
         )}
 
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Saving..." : "Save Variant"}
-        </Button>
-      </div>
+      </div>{/* end Dimensions & Pricing Card */}
+        </div>{/* end LEFT column */}
 
-      {/* Images Card */}
-      <div className="rounded-lg border bg-card p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Images ({images.length})</h2>
-          <label className="inline-flex items-center cursor-pointer">
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setUploading(true);
-                const fd = new FormData();
-                fd.append("file", file);
-                const result = await uploadVariantImage(variant.id, fd);
-                setUploading(false);
-                if (result.success) {
-                  setImages([...images, result.data]);
-                  toast.success("Image uploaded");
-                } else {
-                  toast.error(result.error);
-                }
-                e.target.value = "";
-              }}
-            />
-            <Button size="sm" asChild disabled={uploading}>
-              <span><Plus className="h-4 w-4 mr-1" /> {uploading ? "Uploading..." : "Upload Image"}</span>
-            </Button>
-          </label>
-        </div>
-        {images.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {images.map((img: any) => {
-              const url = `https://fyzrtqsnmnizoxgcqsjc.supabase.co/storage/v1/object/public/catalog/${img.storagePath}`;
-              return (
-                <div key={img.id} className="relative group rounded-lg overflow-hidden border">
-                  <img src={url} alt={img.altText || ""} className="w-full aspect-square object-cover" />
-                  {img.isPrimary && (
-                    <span className="absolute top-1 left-1 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded">Primary</span>
-                  )}
-                  <button
-                    onClick={async () => {
-                      if (!confirm("Delete this image? This cannot be undone.")) return;
-                      const result = await deleteVariantImage(img.id);
-                      if (result.success) {
-                        setImages(images.filter((i: any) => i.id !== img.id));
-                        toast.success("Image removed");
-                      }
-                    }}
-                    className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
-              );
-            })}
+        {/* RIGHT column */}
+        <div className="space-y-6">
+          {/* Images */}
+          <div className="rounded-lg border bg-card p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">Images ({images.length})</h2>
+              <label className="inline-flex items-center cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadImage(f); e.target.value = ""; }}
+                />
+                <Button size="sm" variant="outline" asChild disabled={uploading}>
+                  <span><Plus className="h-4 w-4 mr-1" /> {uploading ? "Uploading..." : "Upload"}</span>
+                </Button>
+              </label>
+            </div>
+            {images.length > 0 ? (
+              <ImageThumbGrid images={images} onDelete={handleDeleteImage} openLightbox={lightbox.open} />
+            ) : (
+              <p className="text-sm text-muted-foreground">No images yet. Upload variant-specific photos.</p>
+            )}
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No images yet. Upload variant-specific photos.</p>
-        )}
-      </div>
 
-      {/* Packaging Card */}
-      <div className="rounded-lg border bg-card p-5">
-        <VariantPackagingSection variantId={variant.id} />
+          {/* Packaging */}
+          <div className="rounded-lg border bg-card p-5">
+            <VariantPackagingSection variantId={variant.id} />
+          </div>
+        </div>
       </div>
     </div>
   );
