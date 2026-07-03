@@ -257,9 +257,9 @@ const HIDDEN_PARTY: DealPartyRef = { id: null, code: null, name: null };
  *   `supplier_identity`; on single-sided deals items are the deal's own
  *   terms and stay. A5 note (§2.1): new deals never emit side='buy' (buy goods
  *   live on the separate buy leg), so this guard now only protects RESIDUAL
- *   legacy conflated rows that the A2 migration could not place — kept as
- *   defence-in-depth until those rows are cleaned up (do NOT remove it: staging
- *   still holds one such orphan; see docs/a2-buy-line-migration-report.md).
+ *   legacy conflated rows. Staging is fully migrated (0 side='buy' lines), but
+ *   PROD is frozen/un-migrated until the E8 cutover runs A2 there — so keep this
+ *   guard until prod is migrated too (see docs/a2-buy-line-migration-report.md).
  * The seller embed stays: it is every counterparty's own deal partner.
  */
 export function projectDealView<T extends DealViewLike>(

@@ -21,8 +21,9 @@ Baseline: **2** `side='buy'` line items across **2** orders.
 
 Post-run reconciliation: **0** buy lines remain on any order that has a spine-sibling buy leg ✓. The **1** remaining buy line is the reported orphan above.
 
-## Action needed from Edgars
-- **`cf9f7705…`** — decide the fate of this orphan `buy_sell` demo row (delete it, or assign parties + a spine so a future A2 run can place its buy line). It is harmless in the UI today (all parties null ⇒ only an admin can open it), but it is why the field-wall buy-drop filter must stay (below).
+## Resolution of the orphan (2026-07-03)
+- **`cf9f7705…`** — Edgars confirmed (after checking with Nils) it was zero-risk junk demo data. Its residual `side='buy'` line (`[DEMO] Glulam Beam`, 420.00) was **deleted on staging**. Staging now has **0 `side='buy'` line items across all orders** — fully migrated.
+- Nils confirmed the model explicitly: **buying and selling are separate deals, united by the "spine" (his "specification number")** — matching spec §2.1/§2.3.
 
 ## Interaction with A5 (field-wall filter)
-The plan proposed A5 remove the `dealFields.ts` buy-drop projection (`item.side !== "buy" || dealKind !== "buy_sell" || seeSupplier`) as "dead logic". **The data proves it is NOT dead yet:** the orphan `cf9f7705…` is a `buy_sell` row still carrying a priced `side='buy'` line. Removing the filter would expose that buy price to a non-supplier viewer. **Decision: keep the filter** (documented as a defence-in-depth guard for residual legacy conflated rows) until such rows are cleaned up. A5 instead deprecates the *write* paths and annotates the column.
+The plan proposed A5 remove the `dealFields.ts` buy-drop projection (`item.side !== "buy" || dealKind !== "buy_sell" || seeSupplier`) as "dead logic". **Decision: keep the filter** as a defence-in-depth guard. Even though **staging is now fully clean** (orphan deleted, 0 buy lines), **PROD is frozen and un-migrated** — the E8 cutover (which runs the identical A2 buy-line step) hasn't run there yet, so residual conflated `buy_sell` rows with priced `side='buy'` lines can still exist in prod. Removing the filter before prod is migrated would risk leaking supplier pricing to non-supplier viewers there. Keep it until the prod cutover runs A2; A5 meanwhile deprecates the *write* paths and annotates the column so no NEW buy lines are created.
