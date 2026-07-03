@@ -7,9 +7,9 @@ import type { SlateNode } from "./slate";
 import type { DocType } from "../../orders/services/dealModel";
 
 const TITLES: Record<string, string> = {
-  sales_specification: "SALES SPECIFICATION",
-  purchase_specification: "PURCHASE SPECIFICATION",
-  sales_contract: "SALES CONTRACT",
+  sales_spec: "SALES SPECIFICATION",
+  purchase_spec: "PURCHASE SPECIFICATION",
+  contract: "SALES CONTRACT",
   proforma_invoice: "PROFORMA INVOICE",
   invoice: "INVOICE",
   packing_list: "PACKING LIST",
