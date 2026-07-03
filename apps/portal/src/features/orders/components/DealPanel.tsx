@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Loader2, FileText, Download, Plus, Pencil, Trash2, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { Loader2, FileText, Download, Plus, Pencil, Trash2, ShieldCheck, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
   Button, Input,
@@ -19,6 +19,9 @@ import { OrderActivityLog } from "./OrderActivityLog";
 import { DealLineAdder } from "./DealLineAdder";
 import { SourcingCard } from "./SourcingCard";
 import { ChainCard } from "./ChainCard";
+import { DealHeader } from "./DealHeader";
+import { DealActivitiesCard } from "./DealActivitiesCard";
+import { suggestedDocsFor } from "../services/dealActivities";
 import { lineTotalCents } from "../services/documents/assemble";
 import {
   getOrderDealView, generateOrderDocument, getOrderDocumentUrl,
@@ -58,6 +61,10 @@ export function DealPanel({ orderId }: { orderId: string }) {
   const [deletingDoc, setDeletingDoc] = useState(false);
 
   const [savingMargin, setSavingMargin] = useState(false);
+  // C3: once the deal loads, pre-select the doc type this stage+direction
+  // foregrounds (guidance only — the user can still pick any type). A ref keeps it
+  // a ONE-time default so a later reload never clobbers the user's choice.
+  const didInitDocType = useRef(false);
 
   const load = useCallback(async () => {
     const res = await getOrderDealView(orderId);
@@ -67,6 +74,14 @@ export function DealPanel({ orderId }: { orderId: string }) {
   }, [orderId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // C3: pre-select the stage-suggested doc type on first load (guidance default).
+  useEffect(() => {
+    if (didInitDocType.current || !deal) return;
+    didInitDocType.current = true;
+    const primary = suggestedDocsFor(deal.lifecycleStage, deal.viewerDirection)[0];
+    if (primary) setDocType(primary);
+  }, [deal]);
 
   // Add/remove line actions return the fresh OrderDealView; swap it into local
   // state while preserving the viewer's admin flag (not carried on the view).
@@ -84,6 +99,10 @@ export function DealPanel({ orderId }: { orderId: string }) {
       canStartSourcing: prev?.canStartSourcing ?? false,
       sourcing: prev?.sourcing ?? null,
       spineLegs: prev?.spineLegs ?? [],
+      // C1: direction + facing party depend on the parties, not this deal's own
+      // lines, so they are unchanged by an add/remove — preserve across the swap.
+      viewerDirection: prev?.viewerDirection ?? "sell",
+      facingParty: prev?.facingParty ?? { role: "customer", name: null },
     }));
     setError(null);
   }, []);
@@ -141,6 +160,14 @@ export function DealPanel({ orderId }: { orderId: string }) {
   const marginApproved = !!deal.marginApprovedAt;
   const hasDealData = !!deal.dealCode || deal.lineItems.length > 0 || deal.documents.length > 0;
 
+  // C3 · stage emphasis (no gating): the doc types this stage+direction foregrounds.
+  // Used to mark suggested options in the picker — every type stays generatable.
+  const suggestedDocs = suggestedDocsFor(deal.lifecycleStage, deal.viewerDirection);
+  const suggestedDocSet = new Set<DocType>(suggestedDocs);
+  const allDocTypes = Object.keys(DOC_TYPE_LABELS) as DocType[];
+  // Suggested types first (emphasis), the rest after — pure ordering, no filtering.
+  const orderedDocTypes = [...suggestedDocs, ...allDocTypes.filter((t) => !suggestedDocSet.has(t))];
+
   // A1 (§2.1): a deal carries ONLY its own order — one specification table, no
   // buy-side conflation. A3 (§5.3): margin = this deal's own line total (the sell
   // subtotal) − the spine-sibling BUY leg's line total, which the server resolves
@@ -172,6 +199,15 @@ export function DealPanel({ orderId }: { orderId: string }) {
     <div className="flex flex-col lg:flex-row gap-6 items-start">
       {/* LEFT — deal content */}
       <div className="flex-1 min-w-0 space-y-6">
+      {/* C1 · Direction-aware header — what this deal is, from the viewer's side. */}
+      <DealHeader
+        dealCode={deal.dealCode}
+        legacyCode={deal.code}
+        direction={deal.viewerDirection}
+        facingParty={deal.facingParty}
+        lifecycleStage={deal.lifecycleStage}
+      />
+
       {/* Lifecycle stage rail (needs the width — stays in the main column) */}
       <DealStageRail orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
 
@@ -212,8 +248,13 @@ export function DealPanel({ orderId }: { orderId: string }) {
               <Select value={docType} onValueChange={(v) => setDocType(v as DocType)}>
                 <SelectTrigger className="h-8 w-56 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(DOC_TYPE_LABELS) as DocType[]).map((t) => (
-                    <SelectItem key={t} value={t}>{DOC_TYPE_LABELS[t]}</SelectItem>
+                  {orderedDocTypes.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      <span className="flex items-center gap-1.5">
+                        {suggestedDocSet.has(t) && <Sparkles className="h-3 w-3 text-primary" />}
+                        {DOC_TYPE_LABELS[t]}
+                      </span>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -224,6 +265,18 @@ export function DealPanel({ orderId }: { orderId: string }) {
             </div>
           }
         />
+        {suggestedDocs.length > 0 && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Sparkles className="h-3 w-3 text-primary" />
+            <span>
+              Suggested at this stage:{" "}
+              <span className="text-foreground">
+                {suggestedDocs.map((t) => DOC_TYPE_LABELS[t]).join(", ")}
+              </span>
+              {" "}— every document type stays available.
+            </span>
+          </p>
+        )}
         {error && <p className="text-sm text-destructive">{error}</p>}
         {deal.documents.length === 0 ? (
           <EmptyState message="No documents generated yet. Pick a type and press Generate." />
@@ -275,6 +328,11 @@ export function DealPanel({ orderId }: { orderId: string }) {
       <div className="lg:w-80 shrink-0 space-y-6">
         {/* Advance-to-next-milestone control (vertical) — the rail stays on the left */}
         <DealAdvanceControl orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
+
+        {/* C2/C3 · §7 activities guidance for this deal's direction + stage.
+            Display-only (§1.3): no persistence, no checkboxes — the current stage
+            is emphasised, nothing is gated. */}
+        <DealActivitiesCard stage={deal.lifecycleStage} direction={deal.viewerDirection} />
 
         {/* B4 · Sourcing state (Start sourcing / Sourced link). Server sends a
             non-null `sourcing` only to viewers with sourcing rights (§9.3). */}

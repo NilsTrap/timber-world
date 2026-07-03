@@ -125,6 +125,31 @@ export function dealDirectionFor(
   return "observer";
 }
 
+/**
+ * C1 (§2.5) · The sell/buy framing of a deal for the HEADER — resolved to a
+ * concrete side (never "observer"), so the workspace can always state what the
+ * deal is from the viewer's standpoint.
+ *
+ * A party (counterparty login OR a house user whose org is the seller/buyer)
+ * gets their own leg-relative direction. The owner/super-admin is a party to
+ * neither leg of the hidden middle deal → dealDirectionFor returns "observer";
+ * we fall back to the deal's OWN kind, which is already the house's perspective
+ * (a `purchase_only` leg is the house's buy; anything else is a sell). This is
+ * why the direction cannot be derived on the client: the client does not know
+ * the viewer's org, and dealKind alone would mislabel a counterparty login (a
+ * producer's leg is `purchase_only` from the house yet a SELL to the producer).
+ */
+export function resolveViewerDirection(
+  sellerOrgId: string | null | undefined,
+  buyerOrgId: string | null | undefined,
+  viewerOrgId: string | null | undefined,
+  dealKind: string | null | undefined,
+): "sell" | "buy" {
+  const dir = dealDirectionFor(sellerOrgId, buyerOrgId, viewerOrgId);
+  if (dir === "sell" || dir === "buy") return dir;
+  return dealKind === "purchase_only" ? "buy" : "sell";
+}
+
 export async function getOrderDeal(db: DbClient, _actor: ActorContext, orderId: string): Promise<ActionResult<OrderDealView>> {
   if (!isValidUUID(orderId)) return { success: false, error: "Invalid order id", code: "VALIDATION_ERROR" };
   const c = db as DbClient;

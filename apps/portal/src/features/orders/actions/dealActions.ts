@@ -12,7 +12,7 @@ import type { AccessProfile } from "@/lib/access/types";
 import type { ActionResult } from "../types";
 import type { DealSide, DocType, OrderLineItem } from "../services/dealModel";
 import { projectDealView, resolveFieldAccess } from "../services/dealFields";
-import { getOrderDeal, updateLineItemAmounts, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
+import { getOrderDeal, updateLineItemAmounts, resolveViewerDirection, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
 import { generateDocument, getDocumentUrl, deleteDocument, type GeneratedDocument } from "../services/orderDocuments";
 import { getSpineBuyLegs, getSpineLegs, type SpineLegRef } from "../services/spineSiblings";
 import { resolveDealActor } from "./_dealActor";
@@ -60,6 +60,13 @@ export type OrderDealViewResult = OrderDealView & {
   sourcing: DealSourcingState | null;
   /** B3: every leg on the spine for the owner chain card. Empty for non-admins. */
   spineLegs: SpineLegRef[];
+  /** C1 (§2.5): the sell/buy framing of this deal FROM THE VIEWER's standpoint,
+   *  resolved server-side (the client cannot derive it — it does not know the
+   *  viewer's org, and dealKind alone mislabels counterparty logins). */
+  viewerDirection: "sell" | "buy";
+  /** C1: the counterparty the viewer's leg faces — a customer on a sell deal, a
+   *  supplier on a buy deal. Always the viewer's own deal partner, so never walled. */
+  facingParty: { role: "customer" | "supplier"; name: string | null };
 };
 
 /** Full deal view (header + line items + external refs + documents) for one order. */
@@ -78,7 +85,18 @@ export async function getOrderDealView(orderId: string): Promise<ActionResult<Or
   // returns a copy, so res.data stays raw.)
   const rawSpineId = res.data.spineId;
   const rawSeller = res.data.seller;
+  const rawBuyer = res.data.buyer;
   const rawDealKind = res.data.dealKind;
+
+  // C1 · direction + facing party, computed from the RAW parties (before the field
+  // wall) + the viewer's org. The facing party is the viewer's own transaction
+  // partner (seller on a buy, buyer/customer on a sell), which every role is
+  // entitled to see (§9.2), so it is safe to source from the raw names.
+  const viewerDirection = resolveViewerDirection(rawSeller.id, rawBuyer.id, a.orgId, rawDealKind);
+  const facingParty =
+    viewerDirection === "sell"
+      ? { role: "customer" as const, name: rawBuyer.name }
+      : { role: "supplier" as const, name: rawSeller.name };
 
   // Resolve the viewer's access profile once (non-admins) and reuse it for the
   // field wall + the B4/B5 capability flags. Admins see everything.
@@ -138,6 +156,8 @@ export async function getOrderDealView(orderId: string): Promise<ActionResult<Or
       canStartSourcing,
       sourcing,
       spineLegs,
+      viewerDirection,
+      facingParty,
     },
   };
 }
