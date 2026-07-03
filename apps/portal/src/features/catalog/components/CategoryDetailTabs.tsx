@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronRight, GripVertical,
+  List, Hash, Type, ToggleLeft, Paperclip, type LucideIcon,
 } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
@@ -48,68 +49,40 @@ const FIELD_TYPE_OPTIONS: { value: FieldType; label: string }[] = [
   { value: "file", label: "File upload" },
 ];
 
-export function CategoryDetailTabs({ category, fields: initialFields, products: initialProducts, pricingUnits }: Props) {
-  const router = useRouter();
-  const [tab, setTab] = useState<"category" | "products" | "fields">("category");
-  const [fields, setFields] = useState(initialFields);
-  const [products] = useState(initialProducts);
+/** A vector icon per field type, shown at the left of each field row. */
+const FIELD_TYPE_ICON: Record<FieldType, LucideIcon> = {
+  select: List,
+  number: Hash,
+  text: Type,
+  boolean: ToggleLeft,
+  file: Paperclip,
+};
 
-  const tabs = [
-    { id: "category" as const, label: "Category" },
-    { id: "products" as const, label: "Products", count: products.length },
-    { id: "fields" as const, label: "Fields", count: fields.length },
-  ];
+export function CategoryDetailTabs({ category, fields: initialFields, pricingUnits }: Props) {
+  const [fields, setFields] = useState(initialFields);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild className="shrink-0">
-          <Link href="/admin/catalog">
+          <Link href="/admin/catalog/categories">
             <ArrowLeft className="h-4 w-4" />
-            <span className="sr-only">Back to Catalog</span>
+            <span className="sr-only">Back to Categories</span>
           </Link>
         </Button>
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">{category.name}</h1>
-          {category.description && <p className="text-muted-foreground">{category.description}</p>}
+          <h1 className="text-2xl font-semibold tracking-tight">{category.name}</h1>
+          {category.description && <p className="text-muted-foreground text-sm">{category.description}</p>}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-0 border-b-2 border-border">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-[2px] transition-colors ${
-              tab === t.id
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t.label}
-            {t.count !== undefined && (
-              <span className="ml-1.5 text-xs bg-muted px-1.5 py-0.5 rounded-full">{t.count}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      {tab === "fields" && (
-        <FieldsTab
-          categoryId={category.id}
-          fields={fields}
-          onFieldsChange={setFields}
-        />
-      )}
-      {tab === "products" && (
-        <ProductsTab categoryId={category.id} products={products} />
-      )}
-      {tab === "category" && (
+      {/* Category settings + Fields, side by side (50/50). Products live in the
+          Products section now, so there's no Products tab here. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <SettingsTab category={category} pricingUnits={pricingUnits} />
-      )}
+        <FieldsTab categoryId={category.id} fields={fields} onFieldsChange={setFields} />
+      </div>
     </div>
   );
 }
@@ -136,6 +109,7 @@ function FieldsTab({
   const [assignDetail, setAssignDetail] = useState(true);
   const [assignPriceList, setAssignPriceList] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
 
   // For creating new global fields inline
   const [showNewField, setShowNewField] = useState(false);
@@ -225,6 +199,40 @@ function FieldsTab({
     }
   };
 
+  // Persist one assignment (applies_to / show-flags / sort order), keeping the
+  // other columns intact. Used by the inline applies_to editor and drag-reorder.
+  const persistAssignment = (f: CategoryField, patch: Partial<CategoryField>) =>
+    saveFieldAssignment({
+      id: f.assignmentId,
+      categoryId,
+      fieldId: f.id,
+      appliesTo: patch.appliesTo ?? f.appliesTo,
+      showInFilter: patch.showInFilter ?? f.showInFilter,
+      showInDetail: patch.showInDetail ?? f.showInDetail,
+      showInPriceList: patch.showInPriceList ?? f.showInPriceList,
+      sortOrder: patch.sortOrder ?? f.sortOrder,
+    });
+
+  const changeAppliesTo = async (field: CategoryField, appliesTo: AppliesTo) => {
+    onFieldsChange(fields.map((f) => (f.id === field.id ? { ...f, appliesTo } : f)));
+    const res = await persistAssignment(field, { appliesTo });
+    if (!res.success) { toast.error(res.error); onFieldsChange(fields); }
+  };
+
+  const handleDrop = async (targetIdx: number) => {
+    const from = dragIdx;
+    setDragIdx(null);
+    if (from == null || from === targetIdx) return;
+    const reordered = [...fields];
+    const [moved] = reordered.splice(from, 1);
+    if (!moved) return;
+    reordered.splice(targetIdx, 0, moved);
+    const withOrder = reordered.map((f, i) => ({ ...f, sortOrder: i }));
+    onFieldsChange(withOrder);
+    const results = await Promise.all(withOrder.map((f) => persistAssignment(f, { sortOrder: f.sortOrder })));
+    if (results.some((r) => !r.success)) toast.error("Couldn't save the new order");
+  };
+
   const assignedFieldIds = new Set(fields.map((f) => f.id));
   const availableFields = allGlobalFields.filter((f) => !assignedFieldIds.has(f.id));
 
@@ -312,55 +320,73 @@ function FieldsTab({
         </div>
       )}
 
-      {/* Field list */}
-      <div className="space-y-2">
-        {fields.map((field) => (
-          <div key={field.id}>
-            <div className="rounded-lg border bg-card px-4 py-3 flex items-center gap-3">
-              <GripVertical className="h-4 w-4 text-muted-foreground shrink-0 cursor-grab" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">{field.fieldLabel}</span>
-                  <span className="text-xs text-muted-foreground font-mono">{field.fieldKey}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${field.appliesTo === "product" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
-                    {field.appliesTo}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{field.fieldType}</span>
-                  {field.unit && <span className="text-xs text-muted-foreground">({field.unit})</span>}
-                </div>
-                <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
-                  {field.showInFilter && <span>Filter</span>}
-                  {field.showInDetail && <span>Detail</span>}
-                  {field.showInPriceList && <span>Price List</span>}
-                  {field.options && field.options.length > 0 && (
-                    <span>{field.options.length} options</span>
+      {/* Field list — drag a row to reorder; "Applies to" is an editable column */}
+      <div className="rounded-lg border bg-card overflow-hidden">
+        {fields.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-muted-foreground text-center">No fields yet. Assign a field to this category.</p>
+        ) : (
+          <div className="divide-y">
+            {fields.map((field, idx) => {
+              const TypeIcon = FIELD_TYPE_ICON[field.fieldType] ?? Type;
+              return (
+                <div key={field.id}>
+                  <div
+                    className={`flex items-center gap-2 px-2 py-2 ${dragIdx === idx ? "opacity-50" : ""}`}
+                    draggable
+                    onDragStart={() => setDragIdx(idx)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleDrop(idx)}
+                    onDragEnd={() => setDragIdx(null)}
+                  >
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0 cursor-grab" />
+                    <TypeIcon className="h-4 w-4 text-muted-foreground shrink-0" aria-label={field.fieldType} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm truncate">{field.fieldLabel}</span>
+                        <span className="text-xs text-muted-foreground font-mono truncate">{field.fieldKey}</span>
+                        {field.unit && <span className="text-xs text-muted-foreground shrink-0">({field.unit})</span>}
+                      </div>
+                      {(field.showInFilter || field.showInDetail || field.showInPriceList || (field.options?.length ?? 0) > 0) && (
+                        <div className="flex gap-2 text-[11px] text-muted-foreground mt-0.5">
+                          {field.showInFilter && <span>Filter</span>}
+                          {field.showInDetail && <span>Detail</span>}
+                          {field.showInPriceList && <span>Price&nbsp;list</span>}
+                          {field.options && field.options.length > 0 && <span>{field.options.length}&nbsp;options</span>}
+                        </div>
+                      )}
+                    </div>
+                    {/* Applies-to is now an editable column, not a static badge */}
+                    <select
+                      value={field.appliesTo}
+                      onChange={(e) => changeAppliesTo(field, e.target.value as AppliesTo)}
+                      className="h-8 rounded-md border border-input bg-background px-2 text-xs shrink-0"
+                      title="Does this field apply to the product, or to each variant?"
+                    >
+                      <option value="product">Product</option>
+                      <option value="variant">Variant</option>
+                    </select>
+                    {field.fieldType === "select" && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setExpandedId(expandedId === field.id ? null : field.id)}>
+                        {expandedId === field.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => handleRemoveAssignment(field.assignmentId)} title="Remove from category">
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </div>
+
+                  {expandedId === field.id && field.fieldType === "select" && (
+                    <div className="px-2 pb-2">
+                      <FieldOptionsPanel field={field} onFieldUpdate={(updated) => {
+                        onFieldsChange(fields.map((f) => f.id === updated.id ? updated : f));
+                      }} />
+                    </div>
                   )}
                 </div>
-              </div>
-              <div className="flex items-center gap-1">
-                {field.fieldType === "select" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setExpandedId(expandedId === field.id ? null : field.id)}
-                  >
-                    {expandedId === field.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  </Button>
-                )}
-                <Button variant="ghost" size="icon" onClick={() => handleRemoveAssignment(field.assignmentId)} title="Remove from category">
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Expanded options for select fields */}
-            {expandedId === field.id && field.fieldType === "select" && (
-              <FieldOptionsPanel field={field} onFieldUpdate={(updated) => {
-                onFieldsChange(fields.map((f) => f.id === updated.id ? updated : f));
-              }} />
-            )}
+              );
+            })}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
@@ -442,93 +468,6 @@ function FieldOptionsPanel({ field, onFieldUpdate }: { field: CategoryField; onF
         <Button size="sm" className="h-8" onClick={handleAdd} disabled={saving}>
           <Plus className="h-3 w-3 mr-1" /> Add
         </Button>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Products Tab
-// ============================================================================
-
-function ProductsTab({ categoryId, products }: { categoryId: string; products: CatalogProduct[] }) {
-  const router = useRouter();
-  const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const { saveProduct } = require("../actions/products");
-
-  const handleCreate = async () => {
-    if (!name.trim()) { toast.error("Name is required"); return; }
-    setSaving(true);
-    const result = await saveProduct({
-      categoryId,
-      name: name.trim(),
-      slug: slug.trim() || name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-    });
-    setSaving(false);
-    if (result.success) {
-      toast.success(`Product "${result.data.name}" created`);
-      router.push(`/admin/catalog/${categoryId}/products/${result.data.id}`);
-    } else {
-      toast.error(result.error);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {products.length} product{products.length !== 1 ? "s" : ""} in this category
-        </p>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
-          <Plus className="h-4 w-4 mr-1" /> Add Product
-        </Button>
-      </div>
-
-      {showForm && (
-        <div className="rounded-lg border bg-card p-5 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Name</label>
-              <Input value={name} onChange={(e) => { setName(e.target.value); if (!slug) setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-")); }} placeholder="Oak Full Stave Panel" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Slug</label>
-              <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="oak-full-stave" />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handleCreate} disabled={saving}>{saving ? "Creating..." : "Create"}</Button>
-            <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-2">
-        {products.map((p) => (
-          <Link
-            key={p.id}
-            href={`/admin/catalog/${categoryId}/products/${p.id}`}
-            className="flex items-center gap-4 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow"
-          >
-            <div className="flex-1 min-w-0">
-              <div className="font-medium">{p.name}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                {p.variantCount ?? 0} variant{(p.variantCount ?? 0) !== 1 ? "s" : ""}
-                {p.fieldValues && p.fieldValues.length > 0 && (
-                  <span className="ml-2">
-                    {p.fieldValues.map((fv) => fv.option?.label || fv.valueText || String(fv.valueNumber)).filter(Boolean).join(" · ")}
-                  </span>
-                )}
-              </div>
-            </div>
-            {!p.isActive && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800">Inactive</span>}
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </Link>
-        ))}
       </div>
     </div>
   );
@@ -624,7 +563,7 @@ function SettingsTab({ category, pricingUnits }: { category: CatalogCategory; pr
     setDeleting(false);
     if (result.success) {
       toast.success("Category deleted");
-      router.push("/admin/catalog");
+      router.push("/admin/catalog/categories");
     } else {
       toast.error(result.error);
       setConfirmOpen(false);
