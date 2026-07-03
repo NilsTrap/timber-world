@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * Visual editing pane — the Plate (WYSIWYG) editor at full width. Because the
- * editor already shows the document as it will look, there is no always-on
- * preview split; a "Preview" button opens the sample-merged render on demand in
- * a modal (useful once merge fields fill real deal data). Page settings + logo
- * live in a compact panel above the editor.
+ * Visual editing pane — a wide Plate editor (2/3) with a live, sample-merged
+ * preview (1/3) on the right. The preview compiles doc_json → Handlebars →
+ * merges representative DocumentData (server-side) so the user sees real values.
+ * On narrow screens the preview is hidden and opens as a slide-out overlay.
+ * Page settings + logo live in a compact panel above.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Eye } from "lucide-react";
 import {
   Button,
@@ -31,7 +31,6 @@ export function VisualEditorPane({
   onDocChange,
   onPageSettingsChange,
 }: {
-  /** Stable per loaded template — bumped only on select/create so the editor remounts with fresh content (not on every keystroke). */
   editorKey: string | number;
   templateId?: string;
   docType: DocType;
@@ -40,66 +39,89 @@ export function VisualEditorPane({
   onDocChange: (d: SlateValue) => void;
   onPageSettingsChange: (ps: PageSettings) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [previewHtml, setPreviewHtml] = useState("");
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [overlayOpen, setOverlayOpen] = useState(false);
+  const seq = useRef(0);
 
   const runPreview = useCallback(async () => {
+    const s = ++seq.current;
     setLoading(true);
-    setPreviewError(null);
     const res = await previewTemplateJson({ docJson: doc, docType, pageSettings });
-    if (res.success) setPreviewHtml(res.data.html);
-    else setPreviewError(res.error);
+    if (s !== seq.current) return;
+    if (res.success) {
+      setPreviewHtml(res.data.html);
+      setPreviewError(null);
+    } else {
+      setPreviewError(res.error);
+    }
     setLoading(false);
   }, [doc, docType, pageSettings]);
 
-  const openPreview = () => {
-    setOpen(true);
-    void runPreview();
-  };
+  // Debounced live preview on every doc / page-settings change.
+  useEffect(() => {
+    const t = setTimeout(runPreview, 500);
+    return () => clearTimeout(t);
+  }, [runPreview]);
+
+  const previewFrame = (className: string) =>
+    previewError ? (
+      <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
+        <p className="font-semibold">Preview error</p>
+        <p className="mt-1 whitespace-pre-wrap font-mono">{previewError}</p>
+      </div>
+    ) : (
+      <iframe title="Live preview" sandbox="" srcDoc={previewHtml} className={className} />
+    );
 
   return (
     <div className="space-y-3">
-      <PageSettingsPanel
-        templateId={templateId}
-        pageSettings={pageSettings}
-        onChange={onPageSettingsChange}
-      />
-
-      <div className="flex items-center justify-end">
-        <Button variant="outline" size="sm" onClick={openPreview}>
-          <Eye className="h-4 w-4" /> Preview with sample data
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <PageSettingsPanel
+            templateId={templateId}
+            pageSettings={pageSettings}
+            onChange={onPageSettingsChange}
+          />
+        </div>
+        {/* Narrow screens: open the preview as an overlay. */}
+        <Button variant="outline" size="sm" className="lg:hidden" onClick={() => setOverlayOpen(true)}>
+          <Eye className="h-4 w-4" /> Preview
         </Button>
       </div>
 
-      {/* Full-width WYSIWYG editor. key → remount with fresh content only when a different template loads. */}
-      <div className="rounded-md border bg-background shadow-sm">
-        <TimberPlateEditor key={editorKey} value={doc} onChange={onDocChange} />
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Editor — 2/3 */}
+        <div className="min-w-0 lg:col-span-2">
+          <div className="rounded-md border bg-background shadow-sm">
+            <TimberPlateEditor key={editorKey} value={doc} onChange={onDocChange} />
+          </div>
+        </div>
+
+        {/* Live preview — 1/3, wide screens only */}
+        <div className="hidden min-w-0 lg:block">
+          <div className="sticky top-4 space-y-2">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+              Live preview · sample deal data
+            </div>
+            {previewFrame("h-[75vh] w-full rounded-md border bg-white")}
+          </div>
+        </div>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl">
+      {/* Narrow-screen preview overlay */}
+      <Dialog open={overlayOpen} onOpenChange={setOverlayOpen}>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               Preview
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              <span className="text-xs font-normal text-muted-foreground">(sample deal data)</span>
+              <span className="text-xs font-normal text-muted-foreground">sample deal data</span>
             </DialogTitle>
           </DialogHeader>
-          {previewError ? (
-            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
-              <p className="font-semibold">Preview error</p>
-              <p className="mt-1 whitespace-pre-wrap font-mono">{previewError}</p>
-            </div>
-          ) : (
-            <iframe
-              title="Visual preview"
-              sandbox=""
-              srcDoc={previewHtml}
-              className="h-[70vh] w-full rounded-md border bg-white"
-            />
-          )}
+          {previewFrame("h-[75vh] w-full rounded-md border bg-white")}
         </DialogContent>
       </Dialog>
     </div>

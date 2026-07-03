@@ -14,6 +14,7 @@ import {
   Columns2,
   FileText,
   PenLine,
+  ChevronLeft,
 } from "lucide-react";
 import {
   Button,
@@ -22,7 +23,9 @@ import {
   Switch,
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
   Dialog,
@@ -487,142 +490,54 @@ export function DocumentTemplatesManager() {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
-      {/* ── Left: template list grouped by doc type ─────────────────────── */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Templates</h2>
-          <Button size="sm" onClick={() => guardNav(() => setAddOpen(true))}>
-            <Plus className="h-4 w-4" /> Add template
-          </Button>
+    <div className="space-y-4">
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : summaries.length === 0 ? (
-          <EmptyState message="No templates yet. Click here to add one." onClick={() => setAddOpen(true)} />
-        ) : (
-          <div className="space-y-4">
-            {grouped.map((group) =>
-              group.items.length === 0 ? null : (
-                <div key={group.docType} className="space-y-1">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {DOC_TYPE_LABELS[group.docType]}
-                  </p>
-                  <div className="space-y-1">
-                    {group.items.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => guardNav(() => selectTemplate(t.id))}
-                        className={cn(
-                          "flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors hover:bg-muted",
-                          editing?.id === t.id ? "border-primary bg-muted" : "border-transparent"
-                        )}
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <span className="truncate">{t.name}</span>
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1">
-                          {t.isDefault && <StatusBadge variant="success">Default</StatusBadge>}
-                          {!t.isActive && <StatusBadge variant="draft">Inactive</StatusBadge>}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )
+      ) : editing ? (
+        /* ── Editor view: the document list collapses into the picker dropdown ── */
+        <div className="space-y-4">
+          {/* Picker + document actions */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => guardNav(() => setEditing(null))}>
+              <ChevronLeft className="h-4 w-4" /> All templates
+            </Button>
+            {editing.id && (
+              <Select value={editing.id} onValueChange={(id) => guardNav(() => selectTemplate(id))}>
+                <SelectTrigger className="w-64">
+                  <SelectValue placeholder="Switch document" />
+                </SelectTrigger>
+                <SelectContent>
+                  {grouped.map((group) =>
+                    group.items.length === 0 ? null : (
+                      <SelectGroup key={group.docType}>
+                        <SelectLabel>{DOC_TYPE_LABELS[group.docType]}</SelectLabel>
+                        {group.items.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    )
+                  )}
+                </SelectContent>
+              </Select>
             )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Right: editor ───────────────────────────────────────────────── */}
-      <div className="min-w-0">
-        {loadingTemplate ? (
-          <div className="flex items-center justify-center py-24">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : !editing ? (
-          <div className="flex h-full min-h-[300px] items-center justify-center rounded-lg border border-dashed">
-            <p className="text-sm text-muted-foreground">
-              Select a template on the left, or add a new one to start editing.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Meta row */}
-            <div className="flex flex-wrap items-end gap-4">
-              <div className="min-w-[220px] flex-1 space-y-1">
-                <label htmlFor="tpl-name" className="text-xs text-muted-foreground">
-                  Name
-                </label>
-                <Input
-                  id="tpl-name"
-                  value={editing.name}
-                  onChange={(e) => edit({ name: e.target.value })}
-                  placeholder="Template name"
-                  disabled={saving}
-                />
-              </div>
-              <div className="w-56 space-y-1">
-                <label className="text-xs text-muted-foreground">Document type</label>
-                {editing.id ? (
-                  <Input value={DOC_TYPE_LABELS[editing.docType]} disabled readOnly />
-                ) : (
-                  <Select
-                    value={editing.docType}
-                    onValueChange={(v) => edit({ docType: v as DocType })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DOC_TYPES.map((dt) => (
-                        <SelectItem key={dt} value={dt}>
-                          {DOC_TYPE_LABELS[dt]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+            <Button variant="outline" size="sm" onClick={() => guardNav(() => setAddOpen(true))}>
+              <Plus className="h-4 w-4" /> Add
+            </Button>
+            <div className="ml-auto flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Switch id="tpl-default" checked={editing.isDefault} onCheckedChange={(c) => edit({ isDefault: c })} disabled={saving} />
+                <label htmlFor="tpl-default" className="text-sm">Default</label>
               </div>
               <div className="flex items-center gap-2">
-                <Switch
-                  id="tpl-default"
-                  checked={editing.isDefault}
-                  onCheckedChange={(c) => edit({ isDefault: c })}
-                  disabled={saving}
-                />
-                <label htmlFor="tpl-default" className="text-sm">
-                  Default
-                </label>
+                <Switch id="tpl-active" checked={editing.isActive} onCheckedChange={(c) => edit({ isActive: c })} disabled={saving} />
+                <label htmlFor="tpl-active" className="text-sm">Active</label>
               </div>
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="tpl-active"
-                  checked={editing.isActive}
-                  onCheckedChange={(c) => edit({ isActive: c })}
-                  disabled={saving}
-                />
-                <label htmlFor="tpl-active" className="text-sm">
-                  Active
-                </label>
-              </div>
-            </div>
-
-            {/* Action bar: Save / Delete (visual editor only — no raw-HTML mode) */}
-            <div className="flex flex-wrap items-center justify-end gap-2">
               {editing.id && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDeleteTarget(editing)}
-                  disabled={saving || deleting}
-                >
+                <Button variant="outline" size="sm" onClick={() => setDeleteTarget(editing)} disabled={saving || deleting}>
                   <Trash2 className="h-4 w-4" /> Delete
                 </Button>
               )}
@@ -631,23 +546,97 @@ export function DocumentTemplatesManager() {
                 Save
               </Button>
             </div>
-
-            {/* ── Visual editor ──────────────────────────────────────────── */}
-            {editing.docJson && (
-              <VisualEditorPane
-                editorKey={editorNonce}
-                templateId={editing.id}
-                docType={editing.docType}
-                doc={editing.docJson}
-                pageSettings={editing.pageSettings}
-                onDocChange={(d) => edit({ docJson: d })}
-                onPageSettingsChange={(ps) => edit({ pageSettings: ps })}
-              />
-            )}
-
           </div>
-        )}
-      </div>
+
+          {/* Name + type */}
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="min-w-[220px] flex-1 space-y-1">
+              <label htmlFor="tpl-name" className="text-xs text-muted-foreground">Name</label>
+              <Input id="tpl-name" value={editing.name} onChange={(e) => edit({ name: e.target.value })} placeholder="Template name" disabled={saving} />
+            </div>
+            <div className="w-56 space-y-1">
+              <label className="text-xs text-muted-foreground">Document type</label>
+              {editing.id ? (
+                <Input value={DOC_TYPE_LABELS[editing.docType]} disabled readOnly />
+              ) : (
+                <Select value={editing.docType} onValueChange={(v) => edit({ docType: v as DocType })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOC_TYPES.map((dt) => (
+                      <SelectItem key={dt} value={dt}>
+                        {DOC_TYPE_LABELS[dt]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+
+          {/* Editor (2/3) + live preview (1/3) */}
+          {editing.docJson && (
+            <VisualEditorPane
+              editorKey={editorNonce}
+              templateId={editing.id}
+              docType={editing.docType}
+              doc={editing.docJson}
+              pageSettings={editing.pageSettings}
+              onDocChange={(d) => edit({ docJson: d })}
+              onPageSettingsChange={(ps) => edit({ pageSettings: ps })}
+            />
+          )}
+        </div>
+      ) : loadingTemplate ? (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        /* ── List view: pick a document to edit ── */
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Templates</h2>
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Plus className="h-4 w-4" /> Add template
+            </Button>
+          </div>
+          {summaries.length === 0 ? (
+            <EmptyState message="No templates yet. Click here to add one." onClick={() => setAddOpen(true)} />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {grouped.map((group) =>
+                group.items.length === 0 ? null : (
+                  <div key={group.docType} className="space-y-1 rounded-lg border p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {DOC_TYPE_LABELS[group.docType]}
+                    </p>
+                    <div className="space-y-1">
+                      {group.items.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => selectTemplate(t.id)}
+                          className="flex w-full items-center justify-between gap-2 rounded-md border border-transparent px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{t.name}</span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-1">
+                            {t.isDefault && <StatusBadge variant="success">Default</StatusBadge>}
+                            {!t.isActive && <StatusBadge variant="draft">Inactive</StatusBadge>}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Add-template dialog (pick a doc type) */}
       <Dialog open={addOpen} onOpenChange={(o) => setAddOpen(o)}>
