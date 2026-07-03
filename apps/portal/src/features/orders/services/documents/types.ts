@@ -5,7 +5,7 @@
  * fixture with no database. Salvaged from features/deals during E2.4; the full
  * generation port + data assembly that feed these is built in E3.
  */
-import type { DocType } from "../dealModel";
+import type { DocType, DocState } from "../dealModel";
 
 export interface PartyCard {
   name: string;
@@ -44,6 +44,9 @@ export interface DocTotals {
 export interface DocumentData {
   docType: DocType;
   docTitle: string;
+  /** D1 (§8.2): quotation|firm for the sales_spec; null for other types. Drives the
+   *  heading (via titleFor) so ONE spec document reads QUOTATION then ORDER SPECIFICATION. */
+  docState: DocState | null;
   docNumber: string;
   /** ISO date string for the document. */
   docDate: string;
@@ -69,12 +72,6 @@ export interface RenderedDocument {
   mimeType: "application/pdf";
 }
 
-export const DOC_TITLES: Record<DocType, string> = {
-  sales_spec: "SALES SPECIFICATION",
-  purchase_spec: "PURCHASE SPECIFICATION",
-  contract: "SALES CONTRACT",
-  proforma_invoice: "PROFORMA / ADVANCE INVOICE",
-  invoice: "INVOICE",
-  packing_list: "PACKING LIST",
-  cmr: "CMR",
-};
+// DOC_TITLES + the doc-type enumeration moved to the D2 single-source registry
+// (services/documents/registry.ts). Re-exported here for the existing import sites.
+export { DOC_TITLES, DOC_TYPE_LABELS, DOC_TYPES, titleFor, affinityOf } from "./registry";

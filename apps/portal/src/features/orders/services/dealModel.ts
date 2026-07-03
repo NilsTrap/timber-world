@@ -11,6 +11,12 @@ export type DealSide = "sell" | "buy";
 export type DealKind = "buy_sell" | "sale_only" | "purchase_only";
 export type TransportBilling = "in_price" | "separate_line" | "separate_invoice";
 export type LineUnit = "m3" | "m2" | "piece" | "linear_m" | "package" | "crate" | "loose_m3";
+/**
+ * The set of document types. This UNION is the type source; the runtime VALUES,
+ * labels, PDF titles and direction affinity live in ONE place —
+ * services/documents/registry.ts (the D2 single-source registry). Keep this union
+ * and that registry in sync (the registry has a compile-time completeness guard).
+ */
 export type DocType =
   | "sales_spec"
   | "purchase_spec"
@@ -19,6 +25,13 @@ export type DocType =
   | "invoice"
   | "packing_list"
   | "cmr";
+
+/**
+ * D1 (§8.2) · the "Quotation → order specification" is ONE document in two states.
+ * `doc_state` is orthogonal to `order_documents.status` (draft|issued) and is only
+ * meaningful for the `sales_spec` doc type. null = a plain/legacy spec.
+ */
+export type DocState = "quotation" | "firm";
 
 export interface ActorContext {
   portalUserId: string | null;
@@ -84,6 +97,8 @@ export interface OrderDocumentMeta {
   side: DealSide;
   docNumber: string;
   status: "draft" | "issued";
+  /** D1: quotation|firm for the sales_spec; null otherwise. */
+  docState: DocState | null;
   storagePath: string | null;
   fileName: string | null;
   oscarDocId: string | null;

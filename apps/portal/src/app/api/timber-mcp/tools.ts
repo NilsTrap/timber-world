@@ -6,6 +6,7 @@
  * LIFECYCLE_STEPS is served by ≥1 tool, enforcing the completeness rule
  * (every deterministic lifecycle step is MCP-callable — no UI-only mutations).
  */
+import { DOC_TYPES } from "@/features/orders/services/documents/registry";
 
 /** Deterministic deal-lifecycle steps that MUST each have at least one MCP tool. */
 export const LIFECYCLE_STEPS = [
@@ -34,7 +35,8 @@ export interface ToolDef {
   inputSchema: Record<string, unknown>;
 }
 
-const DOC_TYPE_ENUM = ["sales_spec", "purchase_spec", "contract", "proforma_invoice", "invoice", "packing_list", "cmr"];
+// D2: doc-type enum comes from the single-source registry (not a hardcoded list).
+const DOC_TYPE_ENUM = DOC_TYPES;
 const STATUS_ENUM = ["draft", "pending", "confirmed", "in_progress", "shipped", "completed", "loaded", "cancelled"];
 
 export const TOOLS: ToolDef[] = [

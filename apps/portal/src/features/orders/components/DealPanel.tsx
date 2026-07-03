@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Loader2, FileText, Download, Plus, Pencil, Trash2, ShieldCheck, Sparkles } from "lucide-react";
+import { Loader2, FileText, Download, Plus, Pencil, Trash2, ShieldCheck, Sparkles, CheckCircle2, Circle, BadgeCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
   Button, Input,
@@ -22,22 +22,14 @@ import { ChainCard } from "./ChainCard";
 import { DealHeader } from "./DealHeader";
 import { DealActivitiesCard } from "./DealActivitiesCard";
 import { suggestedDocsFor } from "../services/dealActivities";
+import { DOC_TYPE_LABELS, expectedDocsForDealKind } from "../services/documents/registry";
 import { lineTotalCents } from "../services/documents/assemble";
 import {
   getOrderDealView, generateOrderDocument, getOrderDocumentUrl,
   updateDealLineItemAmounts, deleteOrderDocument, setDealMarginApproval,
+  firmOrderSpecification,
 } from "../actions/dealActions";
 import { removeLineItem } from "../actions/catalogPicker";
-
-const DOC_TYPE_LABELS: Record<DocType, string> = {
-  sales_spec: "Sales specification",
-  purchase_spec: "Purchase specification",
-  contract: "Contract",
-  proforma_invoice: "Proforma / advance invoice",
-  invoice: "Invoice",
-  packing_list: "Packing list",
-  cmr: "CMR",
-};
 
 function fmtCents(cents: number | null, currency: string): string {
   if (cents == null) return "—";
@@ -59,6 +51,7 @@ export function DealPanel({ orderId }: { orderId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [docToDelete, setDocToDelete] = useState<{ id: string; number: string } | null>(null);
   const [deletingDoc, setDeletingDoc] = useState(false);
+  const [firmingId, setFirmingId] = useState<string | null>(null);
 
   const [savingMargin, setSavingMargin] = useState(false);
   // C3: once the deal loads, pre-select the doc type this stage+direction
@@ -133,6 +126,17 @@ export function DealPanel({ orderId }: { orderId: string }) {
     else setError(res.error);
   }, []);
 
+  // D1: firm a quotation into the order specification (regenerate in place).
+  const onMakeFirm = useCallback(async (documentId: string) => {
+    setFirmingId(documentId);
+    setError(null);
+    const res = await firmOrderSpecification({ orderId, documentId });
+    setFirmingId(null);
+    if (!res.success) { setError(res.error); return; }
+    if (res.data.url) window.open(res.data.url, "_blank", "noopener");
+    await load();
+  }, [orderId, load]);
+
   const onConfirmDelete = useCallback(async () => {
     if (!docToDelete) return;
     setDeletingDoc(true);
@@ -167,6 +171,12 @@ export function DealPanel({ orderId }: { orderId: string }) {
   const allDocTypes = Object.keys(DOC_TYPE_LABELS) as DocType[];
   // Suggested types first (emphasis), the rest after — pure ordering, no filtering.
   const orderedDocTypes = [...suggestedDocs, ...allDocTypes.filter((t) => !suggestedDocSet.has(t))];
+
+  // D3 (§8.2) · the expected document set for this deal's direction (informational
+  // only — §8.1: stage never gates existence). exists/missing from what's generated.
+  const expectedDocs = expectedDocsForDealKind(deal.dealKind);
+  const existingDocTypes = new Set(deal.documents.map((d) => d.docType));
+  const canFirm = isAdmin || deal.canEditDealTerms;
 
   // A1 (§2.1): a deal carries ONLY its own order — one specification table, no
   // buy-side conflation. A3 (§5.3): margin = this deal's own line total (the sell
@@ -277,6 +287,33 @@ export function DealPanel({ orderId }: { orderId: string }) {
             </span>
           </p>
         )}
+
+        {/* D3 (§8.2) · expected document set for this deal's direction — informational
+            (§8.1: the stage never gates which documents exist; missing ≠ blocked). */}
+        <div className="rounded-md border bg-muted/30 p-2.5">
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+            {/* §8.2: the document set belongs to the DEAL (its own direction), so no
+                viewer-relative sell/buy word here — that avoids contradicting the
+                viewer-relative header for a counterparty login. */}
+            Expected documents for this deal (guide only — nothing is required):
+          </p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {expectedDocs.map((t) => {
+              const has = existingDocTypes.has(t);
+              return (
+                <span key={t} className="flex items-center gap-1 text-xs">
+                  {has ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5 text-muted-foreground/40" />
+                  )}
+                  <span className={has ? "text-foreground" : "text-muted-foreground"}>{DOC_TYPE_LABELS[t]}</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
         {error && <p className="text-sm text-destructive">{error}</p>}
         {deal.documents.length === 0 ? (
           <EmptyState message="No documents generated yet. Pick a type and press Generate." />
@@ -295,11 +332,31 @@ export function DealPanel({ orderId }: { orderId: string }) {
               {deal.documents.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell className="font-medium">{d.docNumber}</TableCell>
-                  <TableCell>{DOC_TYPE_LABELS[d.docType] ?? d.docType}</TableCell>
+                  <TableCell>
+                    <span className="flex items-center gap-1.5">
+                      {DOC_TYPE_LABELS[d.docType] ?? d.docType}
+                      {/* D1: the sales_spec's quotation→firm state. */}
+                      {d.docState === "quotation" && <StatusBadge variant="draft">Quotation</StatusBadge>}
+                      {d.docState === "firm" && <StatusBadge variant="success">Firm</StatusBadge>}
+                    </span>
+                  </TableCell>
                   <TableCell>{d.side}</TableCell>
                   <TableCell><StatusBadge variant={d.status === "issued" ? "success" : "draft"}>{d.status}</StatusBadge></TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {/* D1: firm a quotation into the order specification (house users). */}
+                      {canFirm && d.docType === "sales_spec" && d.docState === "quotation" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onMakeFirm(d.id)}
+                          disabled={firmingId === d.id}
+                          title="Accepted → make the order specification firm"
+                        >
+                          {firmingId === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BadgeCheck className="h-3.5 w-3.5" />}
+                          Make firm
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" onClick={() => onDownload(d.id)}>
                         <Download className="h-4 w-4" /> PDF
                       </Button>

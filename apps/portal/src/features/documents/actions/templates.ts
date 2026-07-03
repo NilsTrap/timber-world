@@ -13,8 +13,8 @@ import mammoth from "mammoth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { mergeTemplate } from "@/features/orders/services/documents/templateMerge";
-import { DOC_TITLES } from "@/features/orders/services/documents/types";
 import type { DocumentData } from "@/features/orders/services/documents/types";
+import { DOC_TYPES, titleFor } from "@/features/orders/services/documents/registry";
 import type { DocType } from "@/features/orders/services/dealModel";
 import { compileSlateTemplate } from "@/features/documents/compiler/slate";
 import type {
@@ -29,15 +29,7 @@ import type {
   SlateValue,
 } from "../types";
 
-const DOC_TYPES: DocType[] = [
-  "sales_spec",
-  "purchase_spec",
-  "contract",
-  "proforma_invoice",
-  "invoice",
-  "packing_list",
-  "cmr",
-];
+// DOC_TYPES is the D2 single-source registry list (imported above).
 
 /** READ gate: platform admin OR the documents.view module. Returns the session on ok. */
 async function requireDocumentsAccess(): Promise<
@@ -364,9 +356,11 @@ export async function previewTemplateJson(
 /** Representative sample used by previewTemplate so the editor shows live output. */
 function buildSampleDocumentData(docType: DocType): DocumentData {
   const isPurchase = docType === "purchase_spec";
+  const docState = docType === "sales_spec" ? "quotation" : null;
   return {
     docType,
-    docTitle: DOC_TITLES[docType],
+    docTitle: titleFor(docType, docState),
+    docState,
     docNumber: "No. 1",
     docDate: new Date().toISOString(),
     dealCode: "TIMSOM001",

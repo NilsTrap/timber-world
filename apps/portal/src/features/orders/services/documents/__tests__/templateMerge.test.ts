@@ -59,6 +59,7 @@ eq("pct null → empty", pct(null), "");
 const sample: DocumentData = {
   docType: "sales_spec",
   docTitle: "SALES SPECIFICATION",
+  docState: null,
   docNumber: "Spec No 1",
   docDate: "2026-07-02",
   dealCode: "TIMSOM001",

@@ -11,11 +11,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
-import type { ActorContext, DealSide, DocType, DbClient } from "./dealModel";
+import type { ActorContext, DealSide, DocType, DocState, DbClient } from "./dealModel";
 import { getOrderDeal } from "./orderDeals";
 import { allocateCounter, buildDocNumber, docNumberScope } from "./numbering";
 import { buildDocumentData, defaultSideFor } from "./documents/assemble";
 import type { DocumentData, PartyCard } from "./documents/types";
+import { canGenerateOnDeal } from "./documents/registry";
 import { getDocumentGenerator } from "./documents/port";
 
 const STORAGE_BUCKET = "deal-documents";
@@ -29,12 +30,19 @@ export interface DocumentRequest {
   docType: DocType;
   /** Defaults: purchase docs → buy side, everything else → sell. */
   side?: DealSide;
+  /** D1: quotation|firm for the sales_spec. A fresh sales_spec generate defaults to
+   *  'quotation'; other types stay null. */
+  docState?: DocState | null;
+  /** D1 regenerate-in-place: reuse this existing doc number (skip counter alloc). */
+  reuseDocNumber?: string;
 }
 
 export interface AssembledDocument {
   data: DocumentData;
   seq: number;
   side: DealSide;
+  /** The resolved quotation|firm state stored with the row (null for non-specs). */
+  docState: DocState | null;
 }
 
 export interface GeneratedDocument {
@@ -108,6 +116,16 @@ export async function assembleDocumentData(db: DbClient, actor: ActorContext, in
   if (!dealRes.success) return dealRes as ActionResult<AssembledDocument>;
   const deal = dealRes.data;
 
+  // D3 (§8.2/§8.1) · generation affinity: a document may be GENERATED only on the
+  // leg it belongs to (a purchase order on the buy deal, a sales spec on the sell
+  // deal); shared docs generate anywhere. Checked BEFORE counter allocation so a
+  // rejected generate never burns a doc number. Uploads use a different path and
+  // are never gated (§9.2: a Client uploads their own purchase order onto a sell
+  // deal). This gate is intentionally on the deal's KIND (its own direction), not
+  // the viewer.
+  const gate = canGenerateOnDeal(input.docType, deal.dealKind);
+  if (!gate.ok) return { success: false, error: gate.reason, code: "WRONG_LEG" };
+
   const side: DealSide = input.side ?? defaultSideFor(input.docType);
   const admin = createAdminClient() as AnyDb;
 
@@ -126,17 +144,29 @@ export async function assembleDocumentData(db: DbClient, actor: ActorContext, in
   const entityCode = (deal.seller.code || DEFAULT_ENTITY_CODE).toUpperCase();
   const docDate = new Date().toISOString();
 
-  let seq: number;
-  try {
-    seq = await allocateCounter(db, docNumberScope(input.docType, entityCode, docDate, deal.id));
-  } catch (e) {
-    return { success: false, error: (e as Error).message, code: "COUNTER_FAILED" };
+  // D1: the sales_spec is the "Quotation → Order specification" — a fresh generate
+  // is a non-binding quotation; other types carry no doc_state.
+  const docState: DocState | null = input.docState ?? (input.docType === "sales_spec" ? "quotation" : null);
+
+  // D1 regenerate-in-place (firming) reuses the existing number; a fresh generate
+  // allocates the next sequence.
+  let seq = 0;
+  let docNumber: string;
+  if (input.reuseDocNumber) {
+    docNumber = input.reuseDocNumber;
+  } else {
+    try {
+      seq = await allocateCounter(db, docNumberScope(input.docType, entityCode, docDate, deal.id));
+    } catch (e) {
+      return { success: false, error: (e as Error).message, code: "COUNTER_FAILED" };
+    }
+    docNumber = buildDocNumber({ docType: input.docType, entityCode, date: docDate, seq });
   }
-  const docNumber = buildDocNumber({ docType: input.docType, entityCode, date: docDate, seq });
 
   const data = buildDocumentData({
     docType: input.docType,
     side,
+    docState,
     docNumber,
     docDate,
     dealCode: deal.dealCode || deal.code,
@@ -165,7 +195,7 @@ export async function assembleDocumentData(db: DbClient, actor: ActorContext, in
       : deal.lineItems,
   });
 
-  return { success: true, data: { data, seq, side } };
+  return { success: true, data: { data, seq, side, docState } };
 }
 
 /**
@@ -175,7 +205,7 @@ export async function assembleDocumentData(db: DbClient, actor: ActorContext, in
 export async function generateDocument(db: DbClient, actor: ActorContext, input: DocumentRequest): Promise<ActionResult<GeneratedDocument>> {
   const assembled = await assembleDocumentData(db, actor, input);
   if (!assembled.success) return assembled as ActionResult<GeneratedDocument>;
-  const { data, seq, side } = assembled.data;
+  const { data, seq, side, docState } = assembled.data;
 
   const generator = getDocumentGenerator();
   let result;
@@ -201,6 +231,7 @@ export async function generateDocument(db: DbClient, actor: ActorContext, input:
       side,
       doc_number: data.docNumber,
       status: "draft",
+      doc_state: docState, // D1: quotation on a fresh sales_spec; null otherwise
       storage_path: storagePath,
       file_name: rendered.fileName,
       payload: data,
@@ -223,6 +254,92 @@ export async function generateDocument(db: DbClient, actor: ActorContext, input:
       id: docRow.id,
       orderId: input.orderId,
       docType: input.docType,
+      docNumber: data.docNumber,
+      fileName: rendered.fileName,
+      storagePath,
+      generator: generator.name,
+      url: signed?.signedUrl ?? null,
+    },
+  };
+}
+
+/**
+ * D1 (§8.2) · Regenerate a document IN PLACE, transitioning its doc_state.
+ *
+ * The "Quotation → Order specification" is one document in two states: firming it
+ * keeps the SAME row + SAME doc_number, re-renders the PDF (now titled ORDER
+ * SPECIFICATION off doc_state), overwrites the stored file at the existing path,
+ * and stamps doc_state='firm' + firmed_at/by. Only the sales_spec has states.
+ * Idempotent target: re-firming a firm spec just re-renders and re-stamps.
+ */
+export async function regenerateDocument(
+  db: DbClient,
+  actor: ActorContext,
+  input: { documentId: string; docState: DocState },
+): Promise<ActionResult<GeneratedDocument>> {
+  if (!isValidUUID(input.documentId)) return { success: false, error: "Invalid document id", code: "VALIDATION_ERROR" };
+  const admin = createAdminClient() as AnyDb;
+  const { data: row, error: rowErr } = await admin
+    .from("order_documents")
+    .select("id, order_id, doc_type, doc_number, storage_path, side, doc_state")
+    .eq("id", input.documentId)
+    .maybeSingle();
+  if (rowErr) return { success: false, error: rowErr.message, code: "FETCH_FAILED" };
+  if (!row) return { success: false, error: "Document not found", code: "NOT_FOUND" };
+  if (row.doc_type !== "sales_spec") {
+    return { success: false, error: "Only the sales specification has quotation/firm states", code: "NOT_APPLICABLE" };
+  }
+  if (!row.storage_path) {
+    return { success: false, error: "This document has no stored file to replace", code: "NO_FILE" };
+  }
+
+  // Re-assemble with the SAME number + the new state (RLS-scoped read via `db`).
+  const assembled = await assembleDocumentData(db, actor, {
+    orderId: row.order_id as string,
+    docType: "sales_spec",
+    side: (row.side as DealSide) ?? "sell",
+    docState: input.docState,
+    reuseDocNumber: row.doc_number as string,
+  });
+  if (!assembled.success) return assembled as ActionResult<GeneratedDocument>;
+  const { data } = assembled.data;
+
+  const generator = getDocumentGenerator();
+  let result;
+  try {
+    result = await generator.generate(data);
+  } catch (e) {
+    return { success: false, error: (e as Error).message, code: "GENERATION_FAILED" };
+  }
+  const { rendered, oscarDocId, oscarDocUrl } = result;
+
+  const storagePath = row.storage_path as string; // reuse the SAME path (same number)
+  const { error: uploadErr } = await admin.storage
+    .from(STORAGE_BUCKET)
+    .upload(storagePath, rendered.bytes, { contentType: rendered.mimeType, upsert: true });
+  if (uploadErr) return { success: false, error: `Storage upload failed: ${uploadErr.message}`, code: "UPLOAD_FAILED" };
+
+  const patch: Record<string, unknown> = {
+    doc_state: input.docState,
+    file_name: rendered.fileName,
+    payload: data,
+    oscar_doc_id: oscarDocId ?? null,
+    oscar_doc_url: oscarDocUrl ?? null,
+  };
+  if (input.docState === "firm") {
+    patch.firmed_at = new Date().toISOString();
+    patch.firmed_by = actor.portalUserId;
+  }
+  const { error: updErr } = await admin.from("order_documents").update(patch).eq("id", input.documentId);
+  if (updErr) return { success: false, error: updErr.message, code: "UPDATE_FAILED" };
+
+  const { data: signed } = await admin.storage.from(STORAGE_BUCKET).createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+  return {
+    success: true,
+    data: {
+      id: input.documentId,
+      orderId: row.order_id as string,
+      docType: "sales_spec",
       docNumber: data.docNumber,
       fileName: rendered.fileName,
       storagePath,

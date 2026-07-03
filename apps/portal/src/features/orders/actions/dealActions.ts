@@ -13,7 +13,7 @@ import type { ActionResult } from "../types";
 import type { DealSide, DocType, OrderLineItem } from "../services/dealModel";
 import { projectDealView, resolveFieldAccess } from "../services/dealFields";
 import { getOrderDeal, updateLineItemAmounts, resolveViewerDirection, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
-import { generateDocument, getDocumentUrl, deleteDocument, type GeneratedDocument } from "../services/orderDocuments";
+import { generateDocument, regenerateDocument, getDocumentUrl, deleteDocument, type GeneratedDocument } from "../services/orderDocuments";
 import { getSpineBuyLegs, getSpineLegs, type SpineLegRef } from "../services/spineSiblings";
 import { resolveDealActor } from "./_dealActor";
 import { requireLineWriteAccess } from "./_lineAccess";
@@ -195,6 +195,23 @@ export async function generateOrderDocument(input: { orderId: string; docType: D
   const a = await resolveDealActor();
   if (!a.ok) return { success: false, error: a.error, code: a.code };
   const res = await generateDocument(a.db, a.actor, { orderId: input.orderId, docType: input.docType, side: input.side });
+  if (res.success) revalidatePath(`/orders/${input.orderId}`);
+  return res;
+}
+
+/**
+ * D1 (§8.2) · Firm a quotation into the order specification — regenerate the spec
+ * PDF in place (same row + number), flipping doc_state to 'firm'. A house action:
+ * platform admin OR a deal_terms-editable user (Salesperson on the sell deal); a
+ * client-login "accept" can drive this later (§9.2). Re-checked server-side.
+ */
+export async function firmOrderSpecification(input: { orderId: string; documentId: string }): Promise<ActionResult<GeneratedDocument>> {
+  const a = await resolveDealActor();
+  if (!a.ok) return { success: false, error: a.error, code: a.code };
+  if (!(await requireLineWriteAccess(a.actor, a.orgId))) {
+    return { success: false, error: "You cannot firm this specification", code: "FORBIDDEN" };
+  }
+  const res = await regenerateDocument(a.db, a.actor, { documentId: input.documentId, docState: "firm" });
   if (res.success) revalidatePath(`/orders/${input.orderId}`);
   return res;
 }

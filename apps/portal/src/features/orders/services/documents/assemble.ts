@@ -5,10 +5,11 @@
  * from a fixture. The DB-bound wrapper (fetch + number allocation) lives in
  * features/orders/services/orderDocuments.ts.
  */
-import type { DealSide, DocType, OrderLineItem, OrderExternalRef } from "../dealModel";
+import type { DealSide, DocType, DocState, OrderLineItem, OrderExternalRef } from "../dealModel";
 import { resolveVat } from "../vat";
 import { amountInWords } from "./amountInWords";
-import { DOC_TITLES, type DocumentData, type DocLineItem, type PartyCard } from "./types";
+import { titleFor } from "./registry";
+import type { DocumentData, DocLineItem, PartyCard } from "./types";
 
 /**
  * Compute a line's total in cents: prefer an explicit total; else unit price ×
@@ -57,6 +58,8 @@ export function refLabel(refType: string): string {
 export interface BuildDocumentDataInput {
   docType: DocType;
   side: DealSide;
+  /** D1: quotation|firm for the sales_spec; null/omitted for other types. */
+  docState?: DocState | null;
   docNumber: string;
   /** ISO date string for the document. */
   docDate: string;
@@ -94,9 +97,11 @@ export function buildDocumentData(input: BuildDocumentDataInput): DocumentData {
   const vatCents = Math.round((subtotalCents * vat.rate) / 100);
   const totalCents = subtotalCents + vatCents;
 
+  const docState = input.docState ?? null;
   return {
     docType: input.docType,
-    docTitle: DOC_TITLES[input.docType],
+    docTitle: titleFor(input.docType, docState),
+    docState,
     docNumber: input.docNumber,
     docDate: input.docDate,
     dealCode: input.dealCode,

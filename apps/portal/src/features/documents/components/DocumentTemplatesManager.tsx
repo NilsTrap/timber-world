@@ -47,6 +47,7 @@ import {
   cn,
 } from "@timber/ui";
 import type { DocType } from "@/features/orders/services/dealModel";
+import { DOC_TYPES, DOC_TYPE_LABELS } from "@/features/orders/services/documents/registry";
 import type { ContentFormat, DocumentTemplateSummary, PageSettings, SlateValue } from "../types";
 import { compileSlateTemplate } from "../compiler/slate";
 import { slateStarterFor } from "../compiler/slate-starters";
@@ -60,26 +61,8 @@ import {
 } from "../actions";
 import { VisualEditorPane } from "./VisualEditorPane";
 
-/** Ordered doc types + human labels for grouping the list and the type picker. */
-const DOC_TYPES: DocType[] = [
-  "sales_spec",
-  "purchase_spec",
-  "contract",
-  "proforma_invoice",
-  "invoice",
-  "packing_list",
-  "cmr",
-];
-
-const DOC_TYPE_LABELS: Record<DocType, string> = {
-  sales_spec: "Sales Specification",
-  purchase_spec: "Purchase Specification",
-  contract: "Sales Contract",
-  proforma_invoice: "Proforma / Advance Invoice",
-  invoice: "Invoice",
-  packing_list: "Packing List",
-  cmr: "CMR",
-};
+// Ordered doc types + labels come from the D2 single-source registry (imported
+// above) — the templates editor can never mint a type outside it.
 
 /**
  * Curated merge-variable palette — the common DocumentData bindings + the four

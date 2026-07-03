@@ -8,27 +8,19 @@
  * layouts (contract clauses, CMR boxes, packing-list columns, …).
  */
 import type { DocumentData, RenderedDocument } from "./types";
+import { DOC_TYPES } from "./registry";
 import { renderSpecification } from "./specification";
 
 export * from "./types";
 
 export function renderDocument(data: DocumentData): RenderedDocument {
-  switch (data.docType) {
-    case "sales_spec":
-    case "purchase_spec":
-    case "contract":
-    case "proforma_invoice":
-    case "invoice":
-    case "packing_list":
-    case "cmr":
-      // Interim: one generic renderer for all types (title from DOC_TITLES).
-      return renderSpecification(data);
-    default:
-      throw new Error(`Unknown document type: ${data.docType}`);
-  }
+  // Interim: every registered type routes through the one generic, title-driven
+  // renderer (title from the D2 registry via assemble's titleFor).
+  if (isRendererImplemented(data.docType)) return renderSpecification(data);
+  throw new Error(`Unknown document type: ${data.docType}`);
 }
 
-/** All known doc types render under the interim local generator. */
+/** All known doc types (the D2 registry) render under the interim local generator. */
 export function isRendererImplemented(docType: DocumentData["docType"]): boolean {
-  return ["sales_spec", "purchase_spec", "contract", "proforma_invoice", "invoice", "packing_list", "cmr"].includes(docType);
+  return DOC_TYPES.includes(docType);
 }
