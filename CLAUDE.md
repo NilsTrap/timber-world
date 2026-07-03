@@ -200,6 +200,24 @@ This project uses **Supabase cloud only** - no local Docker database is used.
 
 The `supabase/config.toml` file is required for the Supabase CLI to work with migrations, but it does not mean a local database is used. All database operations are performed against the cloud Supabase instance.
 
+## Deploying to staging (IMPORTANT — read before deploying)
+
+Staging = the Vercel project **`timber-portal-staging`** (scope `nils-projects-ee818bb8`), serving **https://timber-portal-staging.vercel.app**. Nils logs in with prod credentials. Staging Supabase = `fyzrtqsnmnizoxgcqsjc` (keys/PAT in `~/.supabase-ijl/`).
+
+**Deploy from the REPO ROOT with a plain `vercel --prod` — do NOT deploy from `apps/portal`.**
+
+```bash
+# from the repo root (timber-world/), root .vercel linked to timber-portal-staging:
+vercel --prod --yes --scope nils-projects-ee818bb8
+# first time only, to link the root: vercel link --yes --project timber-portal-staging --scope nils-projects-ee818bb8
+```
+
+Then verify: deployment `● Ready` (region **fra1**) via `vercel inspect <url> --scope nils-projects-ee818bb8`, and `curl -sL -o /dev/null -w '%{http_code}' https://timber-portal-staging.vercel.app/` → **200** (it 307-redirects to `/login`).
+
+**Why root, not `apps/portal`:** the old "swap dance" (backup `.vercel/project.json` → link → deploy → restore, run *inside* `apps/portal`) now makes Vercel's builder die at `pnpm install` with `ERR_PNPM_META_FETCH_FAIL … Value of "this" must be of type URLSearchParams` (pnpm 9.15.4 + Vercel's current builder Node — surfaces as repeated `ERR_INVALID_THIS` fetching registry.npmjs.org). It fails identically on Node 20/22/24, so it is NOT a Node-version or `engines.node` fix. Deploying from the **repo root** (Root Directory = `apps/portal` handles the monorepo) builds clean on the same pinned pnpm. **Do not "fix" this by bumping pnpm — switch directories.** (Learned 2026-07-03, ~1h detour.)
+
+Type-check gate before any deploy: `pnpm type-check` (must be 8/8). The hand-rolled unit suites run via `../../tests/rls-and-perf/node_modules/.bin/tsx <path>` from `apps/portal` (not vitest).
+
 ## Component Standards
 
 ### DataEntryTable (Inventory / Production / Product Tables)
