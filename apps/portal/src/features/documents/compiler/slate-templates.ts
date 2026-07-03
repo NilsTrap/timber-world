@@ -32,19 +32,18 @@ const labeled = (label: string, token: string): N => p([txt(label + ": "), field
 /** A bare optional value line (e.g. address), hidden when empty. */
 const optLine = (token: string): N => p([field(token)], { hideWhen: token });
 
-/** A party column: heading + name + optional address/reg/vat (+ contact + bank). */
-const party = (label: string, base: string, opts: { contact?: boolean; bank?: boolean } = {}): N =>
-  col([
-    heading(3, [txt(label)]),
-    p([field(`${base}.name`)]),
-    optLine(`${base}.address`),
-    labeled("Reg. No", `${base}.regNo`),
-    labeled("VAT", `${base}.vatNo`),
-    ...(opts.contact ? [optLine(`${base}.email`), optLine(`${base}.phone`)] : []),
-    ...(opts.bank
-      ? [labeled("Bank", `${base}.bankName`), labeled("Account", `${base}.bankAccount`), labeled("SWIFT", `${base}.bankSwift`)]
-      : []),
-  ]);
+/** A party column's blocks: heading + name + optional address/reg/vat (+ contact + bank). */
+const party = (label: string, base: string, opts: { contact?: boolean; bank?: boolean } = {}): N[] => [
+  heading(3, [txt(label)]),
+  p([field(`${base}.name`)]),
+  optLine(`${base}.address`),
+  labeled("Reg. No", `${base}.regNo`),
+  labeled("VAT", `${base}.vatNo`),
+  ...(opts.contact ? [optLine(`${base}.email`), optLine(`${base}.phone`)] : []),
+  ...(opts.bank
+    ? [labeled("Bank", `${base}.bankName`), labeled("Account", `${base}.bankAccount`), labeled("SWIFT", `${base}.bankSwift`)]
+    : []),
+];
 
 const GOODS = ["lineNo", "description", "dimensions", "pieces", "volumeM3", "unitPriceCents", "lineTotalCents"];
 const PACKING = ["lineNo", "description", "dimensions", "pieces", "volumeM3"];
@@ -98,7 +97,7 @@ const notesBlock = (): N => p([field("notes")], { hideWhen: "notes" });
 // ── Templates ────────────────────────────────────────────────────────────────
 const salesSpec: SlateNode[] = [
   ...letterhead(),
-  cols([party("Seller", "seller", { contact: true, bank: true })], [party("Buyer", "buyer", { contact: true })]),
+  cols(party("Seller", "seller", { contact: true, bank: true }), party("Buyer", "buyer", { contact: true })),
   heading(3, [txt("Terms")]),
   ...termsBlock(),
   heading(3, [txt("Goods")]),
@@ -111,7 +110,7 @@ const salesSpec: SlateNode[] = [
 
 const purchaseSpec: SlateNode[] = [
   ...letterhead(),
-  cols([party("Buyer", "seller", { contact: true, bank: true })], [party("Supplier", "buyer", { contact: true })]),
+  cols(party("Buyer", "seller", { contact: true, bank: true }), party("Supplier", "buyer", { contact: true })),
   heading(3, [txt("Terms")]),
   ...termsBlock(),
   heading(3, [txt("Goods")]),
@@ -124,7 +123,7 @@ const purchaseSpec: SlateNode[] = [
 
 const contract: SlateNode[] = [
   ...letterhead(),
-  cols([party("Seller", "seller", { contact: true, bank: true })], [party("Buyer", "buyer", { contact: true })]),
+  cols(party("Seller", "seller", { contact: true, bank: true }), party("Buyer", "buyer", { contact: true })),
   ...clause(1, "Subject of the contract", [
     p([txt("The Seller sells and the Buyer buys the timber goods specified in the schedule below, on the terms set out in this contract.")]),
   ]),
@@ -140,7 +139,7 @@ const contract: SlateNode[] = [
 
 const proformaInvoice: SlateNode[] = [
   ...letterhead(),
-  cols([party("Supplier", "seller")], [party("Bill to", "buyer")]),
+  cols(party("Supplier", "seller"), party("Bill to", "buyer")),
   lineItems(GOODS),
   ...totalsBlock({ grandLabel: "Total due" }),
   p([txt("In words: ", { italic: true }), field("totals.amountInWords")], { hideWhen: "totals.amountInWords" }),
@@ -150,7 +149,7 @@ const proformaInvoice: SlateNode[] = [
 
 const invoice: SlateNode[] = [
   ...letterhead(),
-  cols([party("Supplier", "seller")], [party("Bill to", "buyer")]),
+  cols(party("Supplier", "seller"), party("Bill to", "buyer")),
   lineItems(GOODS),
   ...totalsBlock({ grandLabel: "Total due" }),
   p([txt("In words: ", { italic: true }), field("totals.amountInWords")], { hideWhen: "totals.amountInWords" }),
@@ -160,7 +159,7 @@ const invoice: SlateNode[] = [
 
 const packingList: SlateNode[] = [
   ...letterhead(),
-  cols([party("Shipper", "seller", { contact: true })], [party("Consignee", "buyer", { contact: true })]),
+  cols(party("Shipper", "seller", { contact: true }), party("Consignee", "buyer", { contact: true })),
   heading(3, [txt("Terms")]),
   ...termsBlock(),
   heading(3, [txt("Packing")]),
@@ -173,7 +172,7 @@ const packingList: SlateNode[] = [
 
 const cmr: SlateNode[] = [
   ...letterhead(),
-  cols([party("Sender", "seller", { contact: true })], [party("Consignee", "buyer", { contact: true })]),
+  cols(party("Sender", "seller", { contact: true }), party("Consignee", "buyer", { contact: true })),
   heading(3, [txt("Terms")]),
   ...termsBlock(),
   heading(3, [txt("Goods")]),
