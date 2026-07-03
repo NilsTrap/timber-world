@@ -122,6 +122,10 @@ export interface Order {
   valueCents: number | null;
   currency: "EUR" | "GBP" | "USD";
   status: OrderStatus;
+  /** Deal code (e.g. ORD-172) — the order's canonical number. Populated by getOrders. */
+  dealCode?: string | null;
+  /** Deal lifecycle stage (draft/confirmed/produced/loaded/delivered/cancelled). Populated by getOrders. */
+  lifecycleStage?: string | null;
   notes: string | null;
   createdBy: string | null;
   /** Creator name for display */
