@@ -8,13 +8,22 @@
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { getAccessProfile } from "@/lib/access";
+import type { AccessProfile } from "@/lib/access/types";
 import type { ActionResult } from "../types";
 import type { DealSide, DocType, OrderLineItem } from "../services/dealModel";
 import { projectDealView, resolveFieldAccess } from "../services/dealFields";
 import { getOrderDeal, updateLineItemAmounts, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
 import { generateDocument, getDocumentUrl, deleteDocument, type GeneratedDocument } from "../services/orderDocuments";
-import { getSpineBuyLegCost } from "../services/spineSiblings";
+import { getSpineBuyLegs, getSpineLegs, type SpineLegRef } from "../services/spineSiblings";
 import { resolveDealActor } from "./_dealActor";
+import { requireLineWriteAccess } from "./_lineAccess";
+
+/** B4: a viewer may start / see sourcing when they can reach the suppliers book —
+ *  the walled-book gate (action `counterparty:suppliers` AND module
+ *  `counterparties.suppliers`), or platform admin. Mirrors requireBookAccess. */
+function hasSuppliersBookAccess(profile: AccessProfile): boolean {
+  return profile.actions.has("counterparty:suppliers") && profile.modules.has("counterparties.suppliers");
+}
 
 /** Deal view + whether the current viewer is a platform admin (drives the Deal
  * tab's admin-only edit/delete affordances; the actions re-check server-side).
@@ -23,6 +32,16 @@ import { resolveDealActor } from "./_dealActor";
  * spine-sibling BUY leg's line total (buy subtotal). The buy-side figures are
  * cross-leg cost data — owner/admin ONLY (§9.1) — so they are resolved and
  * attached here behind the admin gate, never derived on the client. */
+export interface DealSourcingState {
+  /** Whether a spine-sibling buy leg already exists. */
+  hasBuyLeg: boolean;
+  buyLegOrderId: string | null;
+  buyLegDealCode: string | null;
+  buyLegStage: string | null;
+  /** Supplier (= the buy leg's seller); only populated for supplier_identity viewers (§9.2). */
+  supplierName: string | null;
+}
+
 export type OrderDealViewResult = OrderDealView & {
   viewerIsAdmin: boolean;
   /** Summed line total (cents) of this deal's spine-sibling buy leg(s), for the
@@ -32,6 +51,15 @@ export type OrderDealViewResult = OrderDealView & {
   hasSiblingBuyLeg: boolean;
   /** Whether the sibling buy leg carries any price (else margin stays provisional). */
   siblingBuyLegPriced: boolean;
+  /** B5: may this viewer edit line amounts (admin OR deal_terms editable). Drives
+   *  the client edit affordances; the action re-checks server-side. */
+  canEditDealTerms: boolean;
+  /** B4: may this viewer start / see sourcing (admin OR suppliers-book access). */
+  canStartSourcing: boolean;
+  /** B4: sourcing state on a SELL deal, for canStartSourcing viewers only (else null). */
+  sourcing: DealSourcingState | null;
+  /** B3: every leg on the spine for the owner chain card. Empty for non-admins. */
+  spineLegs: SpineLegRef[];
 };
 
 /** Full deal view (header + line items + external refs + documents) for one order. */
@@ -41,47 +69,91 @@ export async function getOrderDealView(orderId: string): Promise<ActionResult<Or
   const res = await getOrderDeal(a.db, a.actor, orderId);
   if (!res.success) return res as ActionResult<OrderDealViewResult>;
   let view = res.data;
-  // E4 field wall: non-admin deal views are projected through the caller's
-  // field grants (terms, chain linkage, party identities, buy-side items).
-  if (!a.actor.isPlatformAdmin) {
+  const isAdmin = a.actor.isPlatformAdmin;
+  // RAW spine identity captured BEFORE the field-wall projection nulls `spineId`
+  // for viewers without the `chain` grant. The cross-leg resolvers below run on the
+  // admin client and are independently owner/sourcing-gated, so the field wall must
+  // NOT gate their lookup key — else a suppliers-book non-admin would always see the
+  // deal as "unsourced" and could spawn a duplicate buy leg. (projectDealView
+  // returns a copy, so res.data stays raw.)
+  const rawSpineId = res.data.spineId;
+  const rawSeller = res.data.seller;
+  const rawDealKind = res.data.dealKind;
+
+  // Resolve the viewer's access profile once (non-admins) and reuse it for the
+  // field wall + the B4/B5 capability flags. Admins see everything.
+  let profile: AccessProfile | null = null;
+  if (!isAdmin) {
     const session = await getSession();
-    const profile = await getAccessProfile(session?.portalUserId ?? null, a.orgId);
+    profile = await getAccessProfile(session?.portalUserId ?? null, a.orgId);
+    // E4 field wall: project the view through the caller's field grants.
     view = projectDealView(view, resolveFieldAccess(profile), a.orgId);
   }
-  // A3 (§5.3 / §9.1): resolve the spine-sibling buy-leg cost for the margin block —
-  // owner/admin ONLY. Cross-leg cost data must never reach ordinary users, so this
-  // stays behind the isPlatformAdmin gate and non-admins receive nulls.
+
+  const canEditDealTerms = await requireLineWriteAccess(a.actor, a.orgId); // B5 (admin | deal_terms editable)
+  const canStartSourcing = isAdmin || (profile ? hasSuppliersBookAccess(profile) : false); // B4
+  const seeSupplier = isAdmin || (profile ? resolveFieldAccess(profile).domainVisible("supplier_identity") : false);
+  const isBuyLeg = rawDealKind === "purchase_only";
+
+  // Cross-leg resolution (§2.3 spine-resolved) — OWNER/sourcing gated (§9.1/§6.2):
+  // margin needs the buy-leg total (admin), sourcing needs the buy-leg ref
+  // (canStartSourcing), the chain card needs all legs (admin). Never client-derived.
   let siblingBuyLegTotalCents: number | null = null;
   let hasSiblingBuyLeg = false;
   let siblingBuyLegPriced = false;
-  if (a.actor.isPlatformAdmin) {
-    const buyCost = await getSpineBuyLegCost({
-      id: orderId, spineId: view.spineId, dealKind: view.dealKind, seller: view.seller,
-    });
-    if (buyCost) {
-      siblingBuyLegTotalCents = buyCost.totalCents;
+  let sourcing: DealSourcingState | null = null;
+  let spineLegs: SpineLegRef[] = [];
+
+  if ((isAdmin || canStartSourcing) && !isBuyLeg) {
+    const buyLegs = await getSpineBuyLegs({ id: orderId, spineId: rawSpineId, dealKind: rawDealKind, seller: rawSeller });
+    if (isAdmin && buyLegs) {
+      siblingBuyLegTotalCents = buyLegs.totalCents;
       hasSiblingBuyLeg = true;
-      siblingBuyLegPriced = buyCost.priced;
+      siblingBuyLegPriced = buyLegs.priced;
+    }
+    if (canStartSourcing) {
+      const first = buyLegs?.legs[0] ?? null;
+      sourcing = {
+        hasBuyLeg: !!buyLegs,
+        buyLegOrderId: first?.orderId ?? null,
+        buyLegDealCode: first?.dealCode ?? null,
+        buyLegStage: first?.lifecycleStage ?? null,
+        supplierName: seeSupplier ? (first?.supplierName ?? null) : null,
+      };
     }
   }
+  if (isAdmin) {
+    spineLegs = await getSpineLegs(rawSpineId); // B3 chain card — owner only (raw spine)
+  }
+
   return {
     success: true,
     data: {
       ...view,
-      viewerIsAdmin: a.actor.isPlatformAdmin,
+      viewerIsAdmin: isAdmin,
       siblingBuyLegTotalCents,
       hasSiblingBuyLeg,
       siblingBuyLegPriced,
+      canEditDealTerms,
+      canStartSourcing,
+      sourcing,
+      spineLegs,
     },
   };
 }
 
-/** Admin-only: edit price/quantity on a deal's line items (e.g. fill a price the
- * agent left blank). Re-checks admin server-side — never trusts the client. */
+/** B5: edit price/quantity on a deal's line items. Allowed for platform admins OR
+ * actors whose access-group grants `deal_terms` editable (Salesperson / Purchasing).
+ * The profile check is side-blind; which DEALS the actor can write is enforced by
+ * RLS row visibility (side.sell / side.buy) on the underlying update — so a
+ * Purchasing user prices only buy legs, a Salesperson only sell legs. Re-checked
+ * server-side; never trusts the client. */
 export async function updateDealLineItemAmounts(input: { orderId: string; items: LineItemAmountPatch[] }): Promise<ActionResult<OrderLineItem[]>> {
   const a = await resolveDealActor();
   if (!a.ok) return { success: false, error: a.error, code: a.code };
-  if (!a.actor.isPlatformAdmin) return { success: false, error: "Only admins can edit deal amounts", code: "FORBIDDEN" };
+  if (!(await requireLineWriteAccess(a.actor, a.orgId))) {
+    return { success: false, error: "You cannot edit deal amounts", code: "FORBIDDEN" };
+  }
   const res = await updateLineItemAmounts(a.db, a.actor, input.orderId, input.items);
   if (res.success) revalidatePath(`/orders/${input.orderId}`);
   return res;

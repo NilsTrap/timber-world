@@ -14,31 +14,13 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession } from "@/lib/auth";
-import { getAccessProfile } from "@/lib/access";
 import { resolveDealActor } from "./_dealActor";
+import { requireLineWriteAccess } from "./_lineAccess";
 import { appendLineItem, deleteLineItem, getOrderDeal } from "../services/orderDeals";
-import { resolveFieldAccess } from "../services/dealFields";
 import { resolveCatalogLine } from "@/features/catalog/dealPricing";
 import type { ActionResult } from "../types";
 import type { DealSide } from "../services/dealModel";
 import type { OrderDealView } from "../services/orderDeals";
-
-/**
- * A line item's price + total are `deal_terms` (E4 field wall). Adding,
- * removing, or catalog-pricing a line therefore requires the caller to be
- * able to EDIT deal_terms (a Salesperson/Purchasing group) or be an admin —
- * mirroring updateDealLineItemAmounts. Without this a producer/warehouse
- * group with orders.view could write prices the wall hides from them.
- */
-async function requireLineWriteAccess(
-  actor: { isPlatformAdmin: boolean; portalUserId: string | null },
-  orgId: string | null,
-): Promise<boolean> {
-  if (actor.isPlatformAdmin) return true;
-  const profile = await getAccessProfile(actor.portalUserId, orgId);
-  return resolveFieldAccess(profile).domainEditable("deal_terms");
-}
 
 export interface PickerCategory {
   id: string;

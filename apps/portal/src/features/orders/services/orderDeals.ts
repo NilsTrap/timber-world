@@ -24,7 +24,8 @@ import {
   lineItemToRow,
 } from "./dealModel";
 import { allocateCounter, buildBilateralDealCode, bilateralDealCodeScope, clientCodeFromName } from "./numbering";
-import { createSpine, type SpineProduct } from "./spines";
+import { createSpine, attachDealToSpine, type SpineProduct } from "./spines";
+import { getSpineBuyLegs } from "./spineSiblings";
 import { deriveLineTotalCents } from "@/features/catalog/dealPricing";
 
 const DEFAULT_ENTITY_CODE = "TIM";
@@ -548,27 +549,171 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
   }
 
   // Auto-spawn the matching BUY deal on the SAME spine when this sale needs
-  // sourcing (a sale fulfilled from own stock spawns nothing). The buy leg is
-  // strictly bilateral too (supplier → the house) and never spawns further.
+  // sourcing (a sale fulfilled from own stock spawns nothing). The buy leg copies
+  // the sell lines with prices blanked (B1). Shared with the standalone startSourcing.
   if (input.needsSourcing && input.sourceOrganisationId) {
-    const buyRes = await createDeal(db, actor, {
-      name: `${dealName} — sourcing`,
-      dealKind: "purchase_only",
+    await spawnBuyLeg(db, actor, {
+      sellOrderId: orderId,
+      sellName: dealName,
       productGroup: input.productGroup ?? null,
-      sellerOrganisationId: input.sourceOrganisationId, // supplier sells to us
-      buyerOrganisationId: sellerOrgId, // the house buys
-      // Legacy customer slot mirrors the buyer (customer == buyer invariant on
-      // every row until the E8 data migration retires the 3-party columns).
-      // RLS is bilateral seller+buyer since E4 (20260701000010); this write
-      // only keeps legacy list UI columns populated.
-      customerOrganisationId: sellerOrgId,
-      spineId, // SAME spine — no new spine spawned
+      houseOrgId: sellerOrgId,
+      spineId,
       currency: input.currency ?? "EUR",
+      supplierOrgId: input.sourceOrganisationId,
+      lineItems: (input.lineItems ?? []).map(blankBuyLegLine),
     });
-    if (buyRes.success) {
-      await c.from("orders").update({ upstream_deal_id: buyRes.data.id }).eq("id", orderId);
-    }
   }
 
   return getOrderDeal(db, actor, orderId);
+}
+
+/**
+ * B1 (§2.4/§5.3): blank a copied line for the BUY leg. Keep the product DEFINITION
+ * (attributes + option ids), the catalog links, the unit, dimensions, quantities
+ * and notes; NULL the MONEY only — Purchasing negotiates + enters the buy price
+ * (target flow: "the same product-definition lines, prices blank"). Quantities are
+ * kept as a sensible default (you source what you sell); Purchasing edits them if
+ * the buy quantity differs.
+ */
+export function blankBuyLegLine(li: Partial<OrderLineItem>): Partial<OrderLineItem> {
+  return {
+    productName: li.productName ?? null,
+    woodSpecies: li.woodSpecies ?? null,
+    humidity: li.humidity ?? null,
+    processing: li.processing ?? null,
+    quality: li.quality ?? null,
+    productType: li.productType ?? null,
+    gradeNote: li.gradeNote ?? null,
+    productNameOptionId: li.productNameOptionId ?? null,
+    woodSpeciesOptionId: li.woodSpeciesOptionId ?? null,
+    humidityOptionId: li.humidityOptionId ?? null,
+    processingOptionId: li.processingOptionId ?? null,
+    qualityOptionId: li.qualityOptionId ?? null,
+    productTypeOptionId: li.productTypeOptionId ?? null,
+    thickness: li.thickness ?? null,
+    width: li.width ?? null,
+    length: li.length ?? null,
+    pieces: li.pieces ?? null,
+    volumeM3: li.volumeM3 ?? null,
+    unit: li.unit ?? "m3",
+    catalogProductId: li.catalogProductId ?? null,
+    catalogVariantId: li.catalogVariantId ?? null,
+    isStandard: li.isStandard ?? false,
+    notes: li.notes ?? null,
+    // MONEY blanked — the buy price is Purchasing's to enter (§5.3):
+    unitPriceCents: null,
+    vatRate: null,
+    lineTotalCents: null,
+  };
+}
+
+interface SpawnBuyLegOpts {
+  sellOrderId: string;
+  sellName: string;
+  productGroup: string | null;
+  houseOrgId: string | null;
+  spineId: string | null;
+  currency: string;
+  supplierOrgId: string;
+  /** Already-blanked copies of the sell lines (see blankBuyLegLine). */
+  lineItems: Partial<OrderLineItem>[];
+}
+
+/**
+ * Create the BUY leg for a sale that needs sourcing: a `purchase_only` deal on the
+ * SAME spine (supplier → the house) carrying the copied blanked lines, then cache
+ * `upstream_deal_id` on the sell leg (legacy only — the spine is the model, §2.3)
+ * and write the split activity log. Shared by createDeal's auto-spawn + startSourcing.
+ *
+ * ACTIVITY-LOG WALL (§9.2 review finding): `order_activity_log` on the sell leg is
+ * readable by the customer, so the sell-leg entry is GENERIC ("Sourcing started");
+ * the supplier identity + buy-deal code go on the BUY leg's own log only (which the
+ * customer is not a party to and cannot read).
+ */
+async function spawnBuyLeg(db: DbClient, actor: ActorContext, opts: SpawnBuyLegOpts): Promise<ActionResult<OrderDealView>> {
+  const c = db as DbClient;
+  const buyRes = await createDeal(db, actor, {
+    name: `${opts.sellName} — sourcing`,
+    dealKind: "purchase_only",
+    productGroup: opts.productGroup,
+    sellerOrganisationId: opts.supplierOrgId, // supplier sells to us
+    buyerOrganisationId: opts.houseOrgId, // the house buys
+    // Legacy customer slot mirrors the buyer (customer == buyer invariant until E8
+    // retires the 3-party columns; RLS is bilateral seller+buyer since E4).
+    customerOrganisationId: opts.houseOrgId,
+    spineId: opts.spineId, // SAME spine — no new spine spawned
+    currency: opts.currency,
+    lineItems: opts.lineItems.length > 0 ? opts.lineItems : undefined,
+  });
+  if (!buyRes.success) return buyRes;
+
+  await c.from("orders").update({ upstream_deal_id: buyRes.data.id }).eq("id", opts.sellOrderId);
+
+  // Split activity log (see fn doc). Fire-and-forget: a log failure must not fail
+  // sourcing. Uses the actor's own client (has access to both legs it just made).
+  try {
+    const supplierLabel = buyRes.data.seller.name ?? "supplier";
+    const buyCode = buyRes.data.dealCode ? ` · ${buyRes.data.dealCode}` : "";
+    await c.from("order_activity_log").insert([
+      { order_id: opts.sellOrderId, user_id: actor.portalUserId, action: "sourcing_started", details: "Sourcing started", tab: "list" },
+      { order_id: buyRes.data.id, user_id: actor.portalUserId, action: "sourcing_started", details: `Sourcing from ${supplierLabel}${buyCode}`, tab: "list" },
+    ]);
+  } catch {
+    // best-effort audit; ignore
+  }
+  return buyRes;
+}
+
+/**
+ * B1 (§9.3/§10): start sourcing an EXISTING sell deal — spawn its buy leg on the
+ * same spine, seller = the chosen supplier, with the sell deal's lines copied
+ * (product definition + catalog links + quantities; prices blank). Returns the new
+ * BUY leg's view. Permission is enforced by the caller (startSourcingAction).
+ */
+export async function startSourcing(
+  db: DbClient,
+  actor: ActorContext,
+  sellOrderId: string,
+  supplierOrgId: string,
+): Promise<ActionResult<OrderDealView>> {
+  if (!isValidUUID(sellOrderId) || !isValidUUID(supplierOrgId)) {
+    return { success: false, error: "Invalid id", code: "VALIDATION_ERROR" };
+  }
+  const dealRes = await getOrderDeal(db, actor, sellOrderId);
+  if (!dealRes.success) return dealRes;
+  const deal = dealRes.data;
+  if (deal.dealKind === "purchase_only") {
+    return { success: false, error: "A buy deal cannot itself be sourced", code: "VALIDATION_ERROR" };
+  }
+
+  // At most ONE active buy leg per spine — a sale is sourced from one supplier at a
+  // time; changing supplier goes through B2 (cancel + respawn). This guards the
+  // mutation even if a stale client shows the "Start sourcing" CTA (getSpineBuyLegs
+  // excludes cancelled legs, so B2's post-cancel respawn passes here).
+  const active = await getSpineBuyLegs({ id: sellOrderId, spineId: deal.spineId, dealKind: deal.dealKind, seller: deal.seller });
+  if (active && active.legs.length > 0) {
+    return { success: false, error: "This deal already has an active sourcing deal — replace the supplier instead", code: "CONFLICT" };
+  }
+
+  // The buy leg MUST share the sell deal's spine (§2.3). Every deal normally has one
+  // (createDeal seeds it); ensure it for any legacy row that predates the spine model.
+  let spineId = deal.spineId;
+  if (!spineId) {
+    const sp = await createSpine(db, actor, { title: deal.name ?? "Deal", productGroup: deal.productGroup });
+    if (sp.success) {
+      spineId = sp.data.id;
+      await attachDealToSpine(db, actor, sellOrderId, spineId);
+    }
+  }
+
+  return spawnBuyLeg(db, actor, {
+    sellOrderId,
+    sellName: deal.name ?? "Deal",
+    productGroup: deal.productGroup,
+    houseOrgId: deal.seller.id, // the house is the seller on the sell leg (§2.4)
+    spineId,
+    currency: deal.currency,
+    supplierOrgId,
+    lineItems: deal.lineItems.map(blankBuyLegLine),
+  });
 }

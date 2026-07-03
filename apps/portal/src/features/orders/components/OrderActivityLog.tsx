@@ -19,6 +19,7 @@ const ACTION_LABELS: Record<string, string> = {
   file_uploaded: "Uploaded file",
   file_deleted: "Deleted file",
   thumbnail_changed: "Changed thumbnail",
+  sourcing_started: "Sourcing started",
 };
 
 interface OrderActivityLogProps {

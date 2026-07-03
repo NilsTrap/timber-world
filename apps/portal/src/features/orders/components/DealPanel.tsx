@@ -17,6 +17,8 @@ import type { OrderDealViewResult } from "../actions/dealActions";
 import { DealStageRail, DealAdvanceControl } from "./DealPipeline";
 import { OrderActivityLog } from "./OrderActivityLog";
 import { DealLineAdder } from "./DealLineAdder";
+import { SourcingCard } from "./SourcingCard";
+import { ChainCard } from "./ChainCard";
 import { lineTotalCents } from "../services/documents/assemble";
 import {
   getOrderDealView, generateOrderDocument, getOrderDocumentUrl,
@@ -72,11 +74,16 @@ export function DealPanel({ orderId }: { orderId: string }) {
     setDeal((prev) => ({
       ...view,
       viewerIsAdmin: prev?.viewerIsAdmin ?? false,
-      // Sibling buy-leg cost is owner-resolved server-side (A3) and unaffected by
-      // editing THIS deal's own lines — preserve it across optimistic view swaps.
+      // The server-resolved, owner-gated extras (A3 sibling cost, B3 chain, B4
+      // sourcing, B5 capability) are unaffected by editing THIS deal's own lines —
+      // preserve them across the optimistic view swap (a full load() refreshes them).
       siblingBuyLegTotalCents: prev?.siblingBuyLegTotalCents ?? null,
       hasSiblingBuyLeg: prev?.hasSiblingBuyLeg ?? false,
       siblingBuyLegPriced: prev?.siblingBuyLegPriced ?? false,
+      canEditDealTerms: prev?.canEditDealTerms ?? false,
+      canStartSourcing: prev?.canStartSourcing ?? false,
+      sourcing: prev?.sourcing ?? null,
+      spineLegs: prev?.spineLegs ?? [],
     }));
     setError(null);
   }, []);
@@ -126,9 +133,11 @@ export function DealPanel({ orderId }: { orderId: string }) {
   }
 
   const isAdmin = deal.viewerIsAdmin;
-  // Offer a price input to viewers who can set prices: admins, or when the deal
-  // already carries prices (so a non-admin editing a priced deal isn't blocked).
-  const canEditPrice = isAdmin || deal.lineItems.some((li) => li.unitPriceCents != null);
+  // B5: price inputs show to viewers who may edit deal terms (admin OR a
+  // deal_terms-editable group — Salesperson on sell legs, Purchasing on buy legs;
+  // side isolation is RLS's job), or when the deal already carries prices. The
+  // blank-priced buy leg case relies on canEditDealTerms so Purchasing gets inputs.
+  const canEditPrice = deal.canEditDealTerms || deal.lineItems.some((li) => li.unitPriceCents != null);
   const marginApproved = !!deal.marginApprovedAt;
   const hasDealData = !!deal.dealCode || deal.lineItems.length > 0 || deal.documents.length > 0;
 
@@ -190,7 +199,7 @@ export function DealPanel({ orderId }: { orderId: string }) {
           add/remove lines (the actions enforce orders.view server-side). */}
       <LineItemsTable
         items={deal.lineItems} currency={deal.currency}
-        isAdmin={isAdmin} canEditPrice={canEditPrice} orderId={orderId} onSaved={load} onApplied={applyView}
+        canEdit={deal.canEditDealTerms} canEditPrice={canEditPrice} orderId={orderId} onSaved={load} onApplied={applyView}
       />
 
       {/* Documents */}
@@ -262,10 +271,16 @@ export function DealPanel({ orderId }: { orderId: string }) {
       </div>
       </div>{/* end LEFT column */}
 
-      {/* RIGHT — actions: advance milestone + margin */}
+      {/* RIGHT — actions: advance milestone + sourcing + margin + chain */}
       <div className="lg:w-80 shrink-0 space-y-6">
         {/* Advance-to-next-milestone control (vertical) — the rail stays on the left */}
         <DealAdvanceControl orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
+
+        {/* B4 · Sourcing state (Start sourcing / Sourced link). Server sends a
+            non-null `sourcing` only to viewers with sourcing rights (§9.3). */}
+        {deal.sourcing && (
+          <SourcingCard orderId={orderId} sourcing={deal.sourcing} onChanged={load} />
+        )}
 
         {/* Owner margin approval (§5.3). A3: sell subtotal = this deal's own lines;
             buy subtotal = the spine-sibling buy leg's line total (§2.3), resolved
@@ -315,6 +330,10 @@ export function DealPanel({ orderId }: { orderId: string }) {
           )}
         </div>
         )}
+
+        {/* B3 · Chain card — every leg on the spine. Owner/admin only (§6.2); the
+            server sends an empty array to everyone else (ChainCard renders nothing). */}
+        <ChainCard legs={deal.spineLegs} currentOrderId={orderId} currency={deal.currency} />
 
         {/* Activity log — status changes, edits, etc. */}
         <div className="rounded-lg border bg-card p-4 space-y-2">
@@ -403,10 +422,10 @@ function rowChanged(li: OrderLineItem, d: AmountDraft): boolean {
 }
 
 function LineItemsTable({
-  items, currency, isAdmin, canEditPrice, orderId, onSaved, onApplied,
+  items, currency, canEdit, canEditPrice, orderId, onSaved, onApplied,
 }: {
   items: OrderLineItem[]; currency: string;
-  isAdmin: boolean; canEditPrice: boolean; orderId: string;
+  canEdit: boolean; canEditPrice: boolean; orderId: string;
   onSaved: () => Promise<void> | void; onApplied: (view: OrderDealView) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -486,7 +505,7 @@ function LineItemsTable({
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold flex items-center gap-1.5"><FileText className="h-4 w-4 text-muted-foreground" />Order specification</h3>
         <div className="flex items-center gap-2">
-          {isAdmin && (
+          {canEdit && (
             editing ? (
               <>
                 <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>Cancel</Button>
