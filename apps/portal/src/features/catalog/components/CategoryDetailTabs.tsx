@@ -109,7 +109,6 @@ function FieldsTab({
   const [assignDetail, setAssignDetail] = useState(true);
   const [assignPriceList, setAssignPriceList] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
 
   // For creating new global fields inline
   const [showNewField, setShowNewField] = useState(false);
@@ -213,38 +212,47 @@ function FieldsTab({
       sortOrder: patch.sortOrder ?? f.sortOrder,
     });
 
-  const changeAppliesTo = async (field: CategoryField, appliesTo: AppliesTo) => {
-    onFieldsChange(fields.map((f) => (f.id === field.id ? { ...f, appliesTo } : f)));
-    const res = await persistAssignment(field, { appliesTo });
-    if (!res.success) { toast.error(res.error); onFieldsChange(fields); }
-  };
-
-  const handleDrop = async (targetIdx: number) => {
-    const from = dragIdx;
-    setDragIdx(null);
-    if (from == null || from === targetIdx) return;
-    const reordered = [...fields];
-    const [moved] = reordered.splice(from, 1);
-    if (!moved) return;
-    reordered.splice(targetIdx, 0, moved);
-    const withOrder = reordered.map((f, i) => ({ ...f, sortOrder: i }));
+  // Persist a new full ordering (product group then variant group) — every row's
+  // applies_to + sort_order — so drag-reorder and cross-group moves both stick.
+  const applyOrdering = async (combined: CategoryField[]) => {
+    const withOrder = combined.map((f, i) => ({ ...f, sortOrder: i }));
     onFieldsChange(withOrder);
-    const results = await Promise.all(withOrder.map((f) => persistAssignment(f, { sortOrder: f.sortOrder })));
-    if (results.some((r) => !r.success)) toast.error("Couldn't save the new order");
+    const results = await Promise.all(withOrder.map((f) => persistAssignment(f, { appliesTo: f.appliesTo, sortOrder: f.sortOrder })));
+    if (results.some((r) => !r.success)) toast.error("Couldn't save changes");
   };
 
+  // Move a field to the other group (product↔variant), appended at its end.
+  const changeAppliesTo = (field: CategoryField, appliesTo: AppliesTo) => {
+    const others = fields.filter((f) => f.id !== field.id);
+    const moved = { ...field, appliesTo };
+    const prods = others.filter((f) => f.appliesTo === "product");
+    const vars = others.filter((f) => f.appliesTo === "variant");
+    if (appliesTo === "product") prods.push(moved); else vars.push(moved);
+    applyOrdering([...prods, ...vars]);
+  };
+
+  // Reorder within one group (from a drag) → recombine both groups + persist.
+  const reorderGroup = (which: AppliesTo, newGroup: CategoryField[]) => {
+    const prods = fields.filter((f) => f.appliesTo === "product");
+    const vars = fields.filter((f) => f.appliesTo === "variant");
+    applyOrdering(which === "product" ? [...newGroup, ...vars] : [...prods, ...newGroup]);
+  };
+
+  const productFields = fields.filter((f) => f.appliesTo === "product");
+  const variantFields = fields.filter((f) => f.appliesTo === "variant");
   const assignedFieldIds = new Set(fields.map((f) => f.id));
   const availableFields = allGlobalFields.filter((f) => !assignedFieldIds.has(f.id));
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Assign global fields to this category. Fields can be reused across categories.
-        </p>
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">Fields</h2>
+          <p className="text-xs text-muted-foreground">Reusable across categories. Product fields apply once; variant fields apply per variant.</p>
+        </div>
         {!showAssignForm && (
-          <Button size="sm" onClick={handleOpenAssign}>
-            <Plus className="h-4 w-4 mr-1" /> Assign Field
+          <Button size="sm" onClick={handleOpenAssign} className="shrink-0">
+            <Plus className="h-4 w-4 mr-1" /> Assign field
           </Button>
         )}
       </div>
@@ -320,74 +328,145 @@ function FieldsTab({
         </div>
       )}
 
-      {/* Field list — drag a row to reorder; "Applies to" is an editable column */}
+      {/* Grouped list — drag rows to reorder within a group; change the dropdown to
+          move a field between Product and Variant. */}
       <div className="rounded-lg border bg-card overflow-hidden">
         {fields.length === 0 ? (
           <p className="px-4 py-6 text-sm text-muted-foreground text-center">No fields yet. Assign a field to this category.</p>
         ) : (
-          <div className="divide-y">
-            {fields.map((field, idx) => {
-              const TypeIcon = FIELD_TYPE_ICON[field.fieldType] ?? Type;
-              return (
-                <div key={field.id}>
-                  <div
-                    className={`flex items-center gap-2 px-2 py-2 ${dragIdx === idx ? "opacity-50" : ""}`}
-                    draggable
-                    onDragStart={() => setDragIdx(idx)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={() => handleDrop(idx)}
-                    onDragEnd={() => setDragIdx(null)}
-                  >
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0 cursor-grab" />
-                    <TypeIcon className="h-4 w-4 text-muted-foreground shrink-0" aria-label={field.fieldType} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm truncate">{field.fieldLabel}</span>
-                        <span className="text-xs text-muted-foreground font-mono truncate">{field.fieldKey}</span>
-                        {field.unit && <span className="text-xs text-muted-foreground shrink-0">({field.unit})</span>}
-                      </div>
-                      {(field.showInFilter || field.showInDetail || field.showInPriceList || (field.options?.length ?? 0) > 0) && (
-                        <div className="flex gap-2 text-[11px] text-muted-foreground mt-0.5">
-                          {field.showInFilter && <span>Filter</span>}
-                          {field.showInDetail && <span>Detail</span>}
-                          {field.showInPriceList && <span>Price&nbsp;list</span>}
-                          {field.options && field.options.length > 0 && <span>{field.options.length}&nbsp;options</span>}
-                        </div>
-                      )}
-                    </div>
-                    {/* Applies-to is now an editable column, not a static badge */}
-                    <select
-                      value={field.appliesTo}
-                      onChange={(e) => changeAppliesTo(field, e.target.value as AppliesTo)}
-                      className="h-8 rounded-md border border-input bg-background px-2 text-xs shrink-0"
-                      title="Does this field apply to the product, or to each variant?"
-                    >
-                      <option value="product">Product</option>
-                      <option value="variant">Variant</option>
-                    </select>
-                    {field.fieldType === "select" && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setExpandedId(expandedId === field.id ? null : field.id)}>
-                        {expandedId === field.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => handleRemoveAssignment(field.assignmentId)} title="Remove from category">
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
-                  </div>
+          <>
+            <FieldGroup
+              title="Product fields" which="product" groupFields={productFields}
+              onReorder={(g) => reorderGroup("product", g)} onChangeAppliesTo={changeAppliesTo}
+              onRemove={handleRemoveAssignment} expandedId={expandedId} setExpandedId={setExpandedId}
+              onFieldUpdate={(u) => onFieldsChange(fields.map((f) => (f.id === u.id ? u : f)))}
+            />
+            <FieldGroup
+              title="Variant fields" which="variant" groupFields={variantFields}
+              onReorder={(g) => reorderGroup("variant", g)} onChangeAppliesTo={changeAppliesTo}
+              onRemove={handleRemoveAssignment} expandedId={expandedId} setExpandedId={setExpandedId}
+              onFieldUpdate={(u) => onFieldsChange(fields.map((f) => (f.id === u.id ? u : f)))}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
-                  {expandedId === field.id && field.fieldType === "select" && (
-                    <div className="px-2 pb-2">
-                      <FieldOptionsPanel field={field} onFieldUpdate={(updated) => {
-                        onFieldsChange(fields.map((f) => f.id === updated.id ? updated : f));
-                      }} />
+// ============================================================================
+// Field Group (one applies-to section: header + drag-reorderable rows)
+// ============================================================================
+
+function FieldGroup({
+  title, which, groupFields, onReorder, onChangeAppliesTo, onRemove, expandedId, setExpandedId, onFieldUpdate,
+}: {
+  title: string;
+  which: AppliesTo;
+  groupFields: CategoryField[];
+  onReorder: (g: CategoryField[]) => void;
+  onChangeAppliesTo: (field: CategoryField, appliesTo: AppliesTo) => void;
+  onRemove: (assignmentId: string) => void;
+  expandedId: string | null;
+  setExpandedId: (id: string | null) => void;
+  onFieldUpdate: (f: CategoryField) => void;
+}) {
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  const drop = (targetIdx: number) => {
+    const from = dragIdx;
+    setDragIdx(null);
+    setOverIdx(null);
+    if (from == null || from === targetIdx) return;
+    const reordered = [...groupFields];
+    const [moved] = reordered.splice(from, 1);
+    if (!moved) return;
+    reordered.splice(from < targetIdx ? targetIdx - 1 : targetIdx, 0, moved);
+    onReorder(reordered);
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 border-y bg-muted/40 px-3 py-1.5 first:border-t-0">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</span>
+        <span className="text-[10px] text-muted-foreground">{groupFields.length}</span>
+      </div>
+      {groupFields.length === 0 ? (
+        <p className="px-3 py-3 text-xs text-muted-foreground">No {which} fields — set a field's dropdown to “{which}” to move it here.</p>
+      ) : (
+        groupFields.map((field, idx) => {
+          const TypeIcon = FIELD_TYPE_ICON[field.fieldType] ?? Type;
+          return (
+            <div key={field.id}>
+              {/* drop indicator (line) above the hovered row */}
+              <div className={`mx-2 h-0.5 rounded ${dragIdx != null && overIdx === idx ? "bg-primary" : "bg-transparent"}`} />
+              <div
+                className="group flex items-center gap-2 px-2 py-1.5"
+                style={{ opacity: dragIdx === idx ? 0.4 : 1 }}
+                draggable
+                onDragStart={() => setDragIdx(idx)}
+                onDragOver={(e) => { e.preventDefault(); setOverIdx(idx); }}
+                onDrop={() => drop(idx)}
+                onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+              >
+                <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted" title={field.fieldType}>
+                  <TypeIcon className="h-5 w-5 text-muted-foreground" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">{field.fieldLabel}</span>
+                    <span className="truncate font-mono text-xs text-muted-foreground">{field.fieldKey}</span>
+                    {field.unit && <span className="shrink-0 text-xs text-muted-foreground">({field.unit})</span>}
+                  </div>
+                  {(field.showInFilter || field.showInDetail || field.showInPriceList || (field.options?.length ?? 0) > 0) && (
+                    <div className="mt-0.5 flex gap-2 text-[11px] text-muted-foreground">
+                      {field.showInFilter && <span>Filter</span>}
+                      {field.showInDetail && <span>Detail</span>}
+                      {field.showInPriceList && <span>Price&nbsp;list</span>}
+                      {field.options && field.options.length > 0 && <span>{field.options.length}&nbsp;options</span>}
                     </div>
                   )}
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                <select
+                  value={field.appliesTo}
+                  onChange={(e) => onChangeAppliesTo(field, e.target.value as AppliesTo)}
+                  className="h-8 shrink-0 rounded-md border border-input bg-background px-2 text-xs"
+                  title="Does this field apply to the product, or to each variant?"
+                >
+                  <option value="product">Product</option>
+                  <option value="variant">Variant</option>
+                </select>
+                <Button asChild variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Edit the field definition (Settings → Fields)">
+                  <Link href="/admin/settings/fields"><Pencil className="h-3.5 w-3.5" /></Link>
+                </Button>
+                {field.fieldType === "select" && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setExpandedId(expandedId === field.id ? null : field.id)}>
+                    {expandedId === field.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </Button>
+                )}
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => onRemove(field.assignmentId)} title="Remove from category">
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+              </div>
+              {expandedId === field.id && field.fieldType === "select" && (
+                <div className="px-2 pb-2">
+                  <FieldOptionsPanel field={field} onFieldUpdate={onFieldUpdate} />
+                </div>
+              )}
+              {/* drop indicator at the very end of the group */}
+              {idx === groupFields.length - 1 && (
+                <div
+                  className={`mx-2 h-0.5 rounded ${dragIdx != null && overIdx === groupFields.length ? "bg-primary" : "bg-transparent"}`}
+                  onDragOver={(e) => { e.preventDefault(); setOverIdx(groupFields.length); }}
+                  onDrop={() => drop(groupFields.length)}
+                />
+              )}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }
@@ -426,6 +505,7 @@ function FieldOptionsPanel({ field, onFieldUpdate }: { field: CategoryField; onF
   };
 
   const handleDelete = async (id: string) => {
+    if (!confirm("Delete this option? This cannot be undone.")) return;
     const result = await deleteFieldOption(id);
     if (result.success) {
       const updated = options.filter((o) => o.id !== id);
@@ -437,17 +517,42 @@ function FieldOptionsPanel({ field, onFieldUpdate }: { field: CategoryField; onF
     }
   };
 
+  // Edit an existing option's value / label / description in place.
+  const handleEdit = async (opt: FieldOption, patch: Partial<FieldOption>) => {
+    const merged = { ...opt, ...patch };
+    if (!merged.value.trim() || !merged.label.trim()) { toast.error("Value and label are required"); return; }
+    if (merged.value === opt.value && merged.label === opt.label && (merged.description ?? "") === (opt.description ?? "")) return;
+    const result = await saveFieldOption({
+      id: opt.id,
+      fieldId: field.id,
+      value: merged.value.trim(),
+      label: merged.label.trim(),
+      description: merged.description?.trim() || null,
+      sortOrder: opt.sortOrder,
+    });
+    if (result.success) {
+      const updated = options.map((o) => (o.id === opt.id ? result.data : o));
+      setOptions(updated);
+      onFieldUpdate({ ...field, options: updated });
+    } else {
+      toast.error(result.error);
+    }
+  };
+
   return (
     <div className="ml-8 mt-1 mb-2 rounded-lg border bg-muted/30 p-4 space-y-3">
       <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Options for &quot;{field.fieldLabel}&quot;
       </h4>
+      <div className="grid grid-cols-[6rem_1fr_1fr_auto] gap-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span>Value</span><span>Label</span><span>Description</span><span />
+      </div>
       {options.map((opt) => (
-        <div key={opt.id} className="flex items-center gap-2 text-sm">
-          <span className="font-medium w-24 truncate">{opt.value}</span>
-          <span className="text-muted-foreground flex-1 truncate">{opt.label}</span>
-          {opt.description && <span className="text-xs text-muted-foreground truncate max-w-[200px]">{opt.description}</span>}
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(opt.id)}>
+        <div key={opt.id} className="grid grid-cols-[6rem_1fr_1fr_auto] items-center gap-2">
+          <Input defaultValue={opt.value} onBlur={(e) => handleEdit(opt, { value: e.target.value })} className="h-8 text-sm" placeholder="value" />
+          <Input defaultValue={opt.label} onBlur={(e) => handleEdit(opt, { label: e.target.value })} className="h-8 text-sm" placeholder="label" />
+          <Input defaultValue={opt.description ?? ""} onBlur={(e) => handleEdit(opt, { description: e.target.value })} className="h-8 text-sm" placeholder="—" />
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => handleDelete(opt.id)} title="Delete option">
             <X className="h-3 w-3" />
           </Button>
         </div>
