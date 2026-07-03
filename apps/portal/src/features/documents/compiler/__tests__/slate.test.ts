@@ -109,6 +109,35 @@ has("brace entity", inj, "&#123;&#123;evil");
 const injHref = body([{ type: "p", children: [{ type: "a", url: "{{leak}}", children: [{ text: "x" }] }] }]);
 absent("link href brace neutralised", injHref, 'href="{{leak}}"');
 
+// ── Merge fields (mention nodes → {{token}}) ───────────────────────────────
+has(
+  "merge field emits token",
+  body([{ type: "p", children: [{ type: "mention", value: "seller.name", children: [{ text: "" }] }] }]),
+  "{{seller.name}}",
+);
+has(
+  "merge field with helper",
+  body([{ type: "p", children: [{ type: "mention", value: "money totals.totalCents", children: [{ text: "" }] }] }]),
+  "{{money totals.totalCents}}",
+);
+absent(
+  "unsafe merge-field token dropped",
+  body([{ type: "p", children: [{ type: "mention", value: "#each x}}{{evil", children: [{ text: "" }] }] }]),
+  "{{",
+);
+
+// ── Line-items table (→ {{#each lineItems}}) ───────────────────────────────
+const li = body([{ type: "line_items", columns: ["lineNo", "description", "pieces", "lineTotalCents"], children: [{ text: "" }] }]);
+has("line-items table class", li, '<table class="items">');
+has("line-items each open", li, "{{#each lineItems}}");
+has("line-items each close", li, "{{/each}}");
+has("line-items header", li, "<th>Description</th>");
+has("line-items numeric header", li, '<th class="num">#</th>');
+has("line-items item cell", li, "{{description}}");
+has("line-items money cell", li, "{{money lineTotalCents}}");
+const liDefault = body([{ type: "line_items", children: [{ text: "" }] }]);
+has("line-items default columns", liDefault, "Dimensions (mm)");
+
 // ── Shell + golden chain ───────────────────────────────────────────────────
 const doc = body([{ type: "h1", children: [{ text: "SALES SPEC" }] }, { type: "p", children: [{ text: "body" }] }]);
 has("shell doctype", doc, "<!DOCTYPE html>");

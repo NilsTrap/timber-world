@@ -18,7 +18,22 @@
  */
 import { escapeAttr, escapeText } from "./nodes";
 import { compileShell } from "./shell";
+import { LINE_ITEM_COLUMNS, DEFAULT_LINE_ITEM_COLUMNS } from "./registry";
 import type { CompileOptions } from "./types";
+
+/**
+ * A merge-field token: an optional single helper prefix ("money x", "fmtDate x")
+ * then a dotted data path. Anything outside this shape is dropped, so authored
+ * fields can NEVER open a Handlebars block or inject an unbalanced expression.
+ */
+const SAFE_TOKEN = /^(?:[a-zA-Z][a-zA-Z0-9]* )?[a-zA-Z_][\w.]*$/;
+
+/** A Plate mention node carries the Handlebars token in `value` → `{{token}}`. */
+function mergeFieldHtml(value: unknown): string {
+  const token = typeof value === "string" ? value.trim() : "";
+  if (!token || !SAFE_TOKEN.test(token)) return "";
+  return `{{${token}}}`;
+}
 
 export interface SlateText {
   text: string;
@@ -71,9 +86,9 @@ function serializeInline(nodes: SlateNode[] | undefined): string {
           const href = typeof el.url === "string" ? el.url : "#";
           return `<a href="${escapeAttr(href)}">${serializeInline(el.children)}</a>`;
         }
-        // Merge fields are deferred — render the mention label as plain text.
+        // A merge field — emit the Handlebars token (filled per-deal at render).
         case "mention":
-          return escapeText(typeof el.value === "string" ? el.value : "");
+          return mergeFieldHtml(el.value);
         default:
           return serializeInline(el.children);
       }
@@ -131,6 +146,33 @@ function serializeTable(el: SlateElement): string {
   return `<table class="rt-table">${rows}</table>`;
 }
 
+/**
+ * The repeating line-items table. The Slate node stores only the chosen column
+ * keys; the header + item-scoped cell expressions come from LINE_ITEM_COLUMNS,
+ * and the body row is wrapped in {{#each lineItems}}…{{/each}} (the seeded look).
+ */
+function serializeLineItems(el: SlateElement): string {
+  const chosen = Array.isArray((el as { columns?: unknown }).columns)
+    ? ((el as { columns: unknown[] }).columns.filter(
+        (k): k is string => typeof k === "string" && Object.prototype.hasOwnProperty.call(LINE_ITEM_COLUMNS, k),
+      ))
+    : [];
+  const cols = chosen.length ? chosen : DEFAULT_LINE_ITEM_COLUMNS;
+  const th = cols
+    .map((k) => {
+      const d = LINE_ITEM_COLUMNS[k]!;
+      return `<th${d.num ? ' class="num"' : ""}>${escapeText(d.header)}</th>`;
+    })
+    .join("");
+  const td = cols
+    .map((k) => {
+      const d = LINE_ITEM_COLUMNS[k]!;
+      return `<td${d.num ? ' class="num"' : ""}>${d.cell}</td>`;
+    })
+    .join("");
+  return `<table class="items"><thead><tr>${th}</tr></thead><tbody>{{#each lineItems}}<tr>${td}</tr>{{/each}}</tbody></table>`;
+}
+
 /** A single non-list block element. */
 function serializeBlock(el: SlateElement): string {
   switch (el.type) {
@@ -154,6 +196,8 @@ function serializeBlock(el: SlateElement): string {
         .join("\n");
       return `<pre><code>${code}</code></pre>`;
     }
+    case "line_items":
+      return serializeLineItems(el);
     case "table":
       return serializeTable(el);
     case "img":
