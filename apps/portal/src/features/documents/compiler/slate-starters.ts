@@ -1,35 +1,18 @@
 /**
- * Plate (Slate) starter documents for new / converted templates. v1 keeps them
- * simple — a titled skeleton the user fills in visually. Merge fields come
- * later; for now these are plain rich-text scaffolds per document type.
+ * Starter document for a new template of a given type — the full, faithful
+ * Plate version of that document (parties, line-items, totals, etc.) so a new
+ * template opens ready-to-edit and generates the same PDF as the seeded one.
  */
 import type { SlateNode } from "./slate";
 import type { DocType } from "../../orders/services/dealModel";
-
-const TITLES: Record<string, string> = {
-  sales_spec: "SALES SPECIFICATION",
-  purchase_spec: "PURCHASE SPECIFICATION",
-  contract: "SALES CONTRACT",
-  proforma_invoice: "PROFORMA INVOICE",
-  invoice: "INVOICE",
-  packing_list: "PACKING LIST",
-  cmr: "CMR CONSIGNMENT NOTE",
-};
-
-/** A minimal, valid Slate document skeleton for the given document type. */
-export function slateStarterFor(docType: DocType): SlateNode[] {
-  const title = TITLES[docType] ?? "DOCUMENT";
-  return [
-    { type: "h1", children: [{ text: title }] },
-    { type: "p", children: [{ text: "" }] },
-    { type: "h3", children: [{ text: "Seller" }] },
-    { type: "p", children: [{ text: "" }] },
-    { type: "h3", children: [{ text: "Buyer" }] },
-    { type: "p", children: [{ text: "" }] },
-    { type: "h3", children: [{ text: "Details" }] },
-    { type: "p", children: [{ text: "" }] },
-  ];
-}
+import { SLATE_TEMPLATES } from "./slate-templates";
 
 /** Plate's minimum valid document (one empty paragraph). */
 export const EMPTY_SLATE_DOC: SlateNode[] = [{ type: "p", children: [{ text: "" }] }];
+
+/** A fresh, independent copy of the doc type's full Plate template. */
+export function slateStarterFor(docType: DocType): SlateNode[] {
+  const tpl = SLATE_TEMPLATES[docType];
+  // Deep clone so editing a new template never mutates the shared source.
+  return tpl ? (JSON.parse(JSON.stringify(tpl)) as SlateNode[]) : [...EMPTY_SLATE_DOC];
+}

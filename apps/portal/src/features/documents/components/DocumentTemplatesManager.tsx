@@ -309,6 +309,10 @@ export function DocumentTemplatesManager() {
       return;
     }
     const t = res.data;
+    // Everything opens in the visual editor now (no raw-HTML mode). A legacy
+    // html template with no doc_json is loaded from its doc type's full Plate
+    // template so it opens ready-to-edit (and saving upgrades it to wysiwyg).
+    const hasVisual = t.contentFormat === "wysiwyg" && Array.isArray(t.docJson) && t.docJson.length > 0;
     setEditing({
       id: t.id,
       docType: t.docType,
@@ -316,12 +320,11 @@ export function DocumentTemplatesManager() {
       html: t.html,
       isDefault: t.isDefault,
       isActive: t.isActive,
-      contentFormat: t.contentFormat,
-      docJson: t.docJson,
+      contentFormat: "wysiwyg",
+      docJson: hasVisual ? t.docJson : slateStarterFor(t.docType),
       pageSettings: t.pageSettings,
     });
-    // Open in the surface that matches the template's format.
-    setMainTab(t.contentFormat === "wysiwyg" ? "visual" : "advanced");
+    setMainTab("visual");
     setEditorNonce((n) => n + 1);
     setDirty(false);
     setPreviewHtml("");
@@ -611,59 +614,26 @@ export function DocumentTemplatesManager() {
               </div>
             </div>
 
-            {/* Action bar: Visual | Advanced(HTML) tabs + shared Save/Delete */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="inline-flex rounded-md border p-0.5">
+            {/* Action bar: Save / Delete (visual editor only — no raw-HTML mode) */}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {editing.id && (
                 <Button
-                  variant={mainTab === "visual" ? "secondary" : "ghost"}
+                  variant="outline"
                   size="sm"
-                  title={
-                    editing.docJson
-                      ? undefined
-                      : "This template is raw HTML — start a visual version from a matching template"
-                  }
-                  onClick={() => {
-                    // Visual editing needs a visual document. A raw-HTML template
-                    // (no doc_json) offers to start from the matching visual starter.
-                    if (editing.docJson) setMainTab("visual");
-                    else setStartVisualWarnOpen(true);
-                  }}
+                  onClick={() => setDeleteTarget(editing)}
+                  disabled={saving || deleting}
                 >
-                  <PenLine className="h-4 w-4" /> Visual
+                  <Trash2 className="h-4 w-4" /> Delete
                 </Button>
-                <Button
-                  variant={mainTab === "advanced" ? "secondary" : "ghost"}
-                  size="sm"
-                  onClick={() => {
-                    // Opening Advanced on a visual template is a one-way switch to raw HTML.
-                    if (editing.contentFormat === "wysiwyg") setSwitchWarnOpen(true);
-                    else setMainTab("advanced");
-                  }}
-                >
-                  <Code2 className="h-4 w-4" /> Advanced (HTML)
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                {editing.id && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDeleteTarget(editing)}
-                    disabled={saving || deleting}
-                  >
-                    <Trash2 className="h-4 w-4" /> Delete
-                  </Button>
-                )}
-                <Button size="sm" onClick={handleSave} disabled={saving}>
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Save
-                </Button>
-              </div>
+              )}
+              <Button size="sm" onClick={handleSave} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save
+              </Button>
             </div>
 
-            {/* ── Visual tab ─────────────────────────────────────────────── */}
-            {mainTab === "visual" && editing.docJson && (
+            {/* ── Visual editor ──────────────────────────────────────────── */}
+            {editing.docJson && (
               <VisualEditorPane
                 editorKey={editorNonce}
                 templateId={editing.id}
@@ -675,105 +645,6 @@ export function DocumentTemplatesManager() {
               />
             )}
 
-            {/* ── Advanced (HTML) tab ────────────────────────────────────── */}
-            {mainTab === "advanced" && (
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  {/* View toggle */}
-                  <div className="inline-flex rounded-md border p-0.5">
-                    <Button variant={view === "code" ? "secondary" : "ghost"} size="sm" onClick={() => setView("code")}>
-                      <Code2 className="h-4 w-4" /> Code
-                    </Button>
-                    <Button variant={view === "split" ? "secondary" : "ghost"} size="sm" onClick={() => setView("split")}>
-                      <Columns2 className="h-4 w-4" /> Split
-                    </Button>
-                    <Button variant={view === "preview" ? "secondary" : "ghost"} size="sm" onClick={() => setView("preview")}>
-                      <Eye className="h-4 w-4" /> Preview
-                    </Button>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => runPreview(editing.html, editing.docType)}
-                      disabled={previewLoading || view === "code"}
-                    >
-                      {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                      Refresh preview
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleImportClick} disabled={importing}>
-                      {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                      Import .docx
-                    </Button>
-                    <input ref={fileRef} type="file" accept=".docx" className="hidden" onChange={handleImportFile} />
-                  </div>
-                </div>
-
-                <div className={cn("grid gap-4", view === "split" ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1")}>
-                  {/* Code view + palette */}
-                  {view !== "preview" && (
-                    <div className="space-y-3">
-                      <Textarea
-                        ref={htmlRef}
-                        value={editing.html}
-                        onChange={(e) => edit({ html: e.target.value })}
-                        spellCheck={false}
-                        className="h-[65vh] resize-none font-mono text-xs leading-relaxed"
-                        placeholder="Template HTML (Handlebars) — e.g. <h1>{{docTitle}}</h1>"
-                      />
-                      <div className="space-y-2 rounded-md border p-3">
-                        <p className="text-xs font-semibold">Insert variable</p>
-                        <div className="space-y-2">
-                          {PALETTE.map((g) => (
-                            <div key={g.heading}>
-                              <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                {g.heading}
-                              </p>
-                              <div className="flex flex-wrap gap-1">
-                                {g.items.map((it) => (
-                                  <button
-                                    key={g.heading + it.label}
-                                    type="button"
-                                    onClick={() => insertToken(it.token)}
-                                    title={it.token}
-                                    className="rounded border bg-muted/40 px-2 py-0.5 font-mono text-[11px] hover:bg-muted"
-                                  >
-                                    {it.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Live preview (sandboxed iframe — no allow-scripts) */}
-                  {view !== "code" && (
-                    <div className="space-y-2">
-                      {previewError ? (
-                        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
-                          <p className="font-semibold">Template error</p>
-                          <p className="mt-1 whitespace-pre-wrap font-mono">{previewError}</p>
-                        </div>
-                      ) : (
-                        <iframe
-                          title="Template preview"
-                          sandbox=""
-                          srcDoc={previewHtml}
-                          className="h-[65vh] w-full rounded-md border bg-white"
-                        />
-                      )}
-                      <p className="text-[11px] text-muted-foreground">
-                        Preview merges the template against a sample deal. Scripts are disabled.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -849,43 +720,6 @@ export function DocumentTemplatesManager() {
               {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {deleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* One-way visual → raw HTML switch confirmation */}
-      <AlertDialog open={switchWarnOpen} onOpenChange={(o) => setSwitchWarnOpen(o)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Switch to Advanced (HTML)?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This converts the template to raw HTML and disconnects the visual editor. The current
-              layout is kept as HTML, but you won&apos;t be able to edit it visually again unless you
-              rebuild it. This takes effect when you save.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmSwitchToHtml}>Switch to HTML</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Start a visual version of a raw-HTML template */}
-      <AlertDialog open={startVisualWarnOpen} onOpenChange={(o) => setStartVisualWarnOpen(o)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Edit this template visually?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This template is raw HTML, which can&apos;t be edited visually directly. We&apos;ll start
-              you from a ready-made visual version for this document type that you can edit. Your
-              current raw HTML is replaced only when you Save — until then you can switch back to the
-              Advanced (HTML) tab or cancel.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmStartVisual}>Start visual editing</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
