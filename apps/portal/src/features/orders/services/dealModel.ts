@@ -117,6 +117,13 @@ export interface DealFieldsPatch {
   deliveryTerms?: string | null;
   deliveryDeadline?: string | null;
   transportBilling?: TransportBilling;
+  /** G2: free-text deal notes (editable from the deal-terms card). */
+  notes?: string | null;
+  /** G3: per-deal signee overrides (edited via the deal-terms card). */
+  sellerSigneeName?: string | null;
+  sellerSigneeRole?: string | null;
+  buyerSigneeName?: string | null;
+  buyerSigneeRole?: string | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

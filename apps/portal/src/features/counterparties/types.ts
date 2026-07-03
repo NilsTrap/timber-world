@@ -27,6 +27,13 @@ export interface CounterpartyRow {
   email: string | null;
   phone: string | null;
   website: string | null;
+  // G4: bank details — consumed by PartyCard on invoices/proformas.
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  bankSwiftCode: string | null;
+  // G3: default signature block for this counterparty's documents.
+  defaultSigneeName: string | null;
+  defaultSigneeRole: string | null;
   isActive: boolean;
 }
 
@@ -41,6 +48,11 @@ export interface CounterpartyInput {
   email?: string | null;
   phone?: string | null;
   website?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankSwiftCode?: string | null;
+  defaultSigneeName?: string | null;
+  defaultSigneeRole?: string | null;
   /** Only read on update. */
   isActive?: boolean;
 }

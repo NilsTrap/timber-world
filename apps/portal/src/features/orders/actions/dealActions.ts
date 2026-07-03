@@ -12,7 +12,8 @@ import type { AccessProfile } from "@/lib/access/types";
 import type { ActionResult } from "../types";
 import type { DealSide, DocType, OrderLineItem } from "../services/dealModel";
 import { projectDealView, resolveFieldAccess } from "../services/dealFields";
-import { getOrderDeal, updateLineItemAmounts, resolveViewerDirection, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
+import { getOrderDeal, updateLineItemAmounts, updateDealFields, resolveViewerDirection, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
+import { logOrderActivity } from "./logOrderActivity";
 import { generateDocument, regenerateDocument, getDocumentUrl, deleteDocument, type GeneratedDocument } from "../services/orderDocuments";
 import { getSpineBuyLegs, getSpineLegs, type SpineLegRef } from "../services/spineSiblings";
 import { resolveDealActor } from "./_dealActor";
@@ -160,6 +161,62 @@ export async function getOrderDealView(orderId: string): Promise<ActionResult<Or
       facingParty,
     },
   };
+}
+
+/**
+ * G2 · The editable deal-term fields (§8 merge-field sources). A closed whitelist —
+ * dealKind / productGroup / transportBilling are deliberately NOT here, so the
+ * terms card can never re-classify a deal.
+ */
+export interface DealTermsInput {
+  incoterms?: string | null;
+  incotermsPlace?: string | null;
+  advancePct?: number | null;
+  paymentTerms?: string | null;
+  deliveryTerms?: string | null;
+  deliveryDeadline?: string | null;
+  notes?: string | null;
+  /** G3 per-deal signee overrides. */
+  sellerSigneeName?: string | null;
+  sellerSigneeRole?: string | null;
+  buyerSigneeName?: string | null;
+  buyerSigneeRole?: string | null;
+}
+
+/**
+ * G2 · Edit a deal's commercial terms (incoterms, advance, payment/delivery terms,
+ * deadline, notes) + per-deal signee overrides from the deal view. Same field-wall
+ * gate as B5 (admin OR deal_terms editable); side isolation is RLS's job. The
+ * portal previously exposed these read-only (MCP timber_update_deal was the only
+ * writer). Logs to the deal's own activity log.
+ */
+export async function updateDealTerms(input: { orderId: string; terms: DealTermsInput }): Promise<ActionResult<true>> {
+  const a = await resolveDealActor();
+  if (!a.ok) return { success: false, error: a.error, code: a.code };
+  if (!(await requireLineWriteAccess(a.actor, a.orgId))) {
+    return { success: false, error: "You cannot edit deal terms", code: "FORBIDDEN" };
+  }
+  const t = input.terms;
+  // Whitelist explicitly (never forward dealKind/etc. from the client).
+  const patch = {
+    incoterms: t.incoterms,
+    incotermsPlace: t.incotermsPlace,
+    advancePct: t.advancePct,
+    paymentTerms: t.paymentTerms,
+    deliveryTerms: t.deliveryTerms,
+    deliveryDeadline: t.deliveryDeadline,
+    notes: t.notes,
+    sellerSigneeName: t.sellerSigneeName,
+    sellerSigneeRole: t.sellerSigneeRole,
+    buyerSigneeName: t.buyerSigneeName,
+    buyerSigneeRole: t.buyerSigneeRole,
+  };
+  const res = await updateDealFields(a.db, a.actor, input.orderId, patch);
+  if (res.success) {
+    await logOrderActivity(input.orderId, a.actor.portalUserId, "Deal terms updated", undefined, "list");
+    revalidatePath(`/orders/${input.orderId}`);
+  }
+  return res;
 }
 
 /** B5: edit price/quantity on a deal's line items. Allowed for platform admins OR

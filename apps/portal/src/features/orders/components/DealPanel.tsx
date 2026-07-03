@@ -21,6 +21,7 @@ import { SourcingCard } from "./SourcingCard";
 import { ChainCard } from "./ChainCard";
 import { DealHeader } from "./DealHeader";
 import { DealActivitiesCard } from "./DealActivitiesCard";
+import { DealTermsEditor } from "./DealTermsEditor";
 import { suggestedDocsFor } from "../services/dealActivities";
 import { DOC_TYPE_LABELS, expectedDocsForDealKind } from "../services/documents/registry";
 import { lineTotalCents } from "../services/documents/assemble";
@@ -225,8 +226,33 @@ export function DealPanel({ orderId }: { orderId: string }) {
         <EmptyState message="No deal data yet. Deals captured from intake (email / PO / meeting) populate line items here; you can also generate documents below once the deal has line items." />
       )}
 
-      {/* Deal summary */}
+      {/* Deal summary + G2 terms editor */}
       <div className="rounded-lg border bg-card p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Terms</h3>
+          {/* G2: edit the commercial terms + signee (deal_terms field-wall gate). */}
+          {deal.canEditDealTerms && (
+            <DealTermsEditor
+              orderId={orderId}
+              values={{
+                incoterms: deal.incoterms,
+                incotermsPlace: deal.incotermsPlace,
+                advancePct: deal.advancePct,
+                paymentTerms: deal.paymentTerms,
+                deliveryTerms: deal.deliveryTerms,
+                deliveryDeadline: deal.deliveryDeadline,
+                notes: deal.notes,
+                sellerSigneeName: deal.sellerSigneeName,
+                sellerSigneeRole: deal.sellerSigneeRole,
+                buyerSigneeName: deal.buyerSigneeName,
+                buyerSigneeRole: deal.buyerSigneeRole,
+              }}
+              sellerName={deal.seller.name}
+              buyerName={deal.buyer.name}
+              onSaved={load}
+            />
+          )}
+        </div>
         <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
           {summary.map((row) => (
             <div key={row.label} className="flex flex-col">

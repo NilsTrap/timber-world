@@ -100,6 +100,9 @@ async function fetchPartyCard(admin: AnyDb, orgId: string | null): Promise<Party
     bankName: pick(merged, ["bank_name", "bank"]),
     bankAccount: pick(merged, ["bank_account_number", "iban", "account_number"]),
     bankSwift: pick(merged, ["bank_swift_code", "swift_code", "swift", "bic"]),
+    // G3: the org's DEFAULT signee (a per-deal override is overlaid by the caller).
+    signeeName: pick(merged, ["default_signee_name"]),
+    signeeRole: pick(merged, ["default_signee_role"]),
   };
 }
 
@@ -140,6 +143,13 @@ export async function assembleDocumentData(db: DbClient, actor: ActorContext, in
     ? (deal.producer.id ?? deal.buyer.id ?? deal.customer.id)
     : (deal.buyer.id ?? deal.customer.id);
   const buyerCard = await fetchPartyCard(admin, buyerOrgId);
+
+  // G3 · signee resolves deal-override → org default (the card already holds the org
+  // default). The override is per SIDE of the deal (seller_* / buyer_*).
+  if (deal.sellerSigneeName != null) sellerCard.signeeName = deal.sellerSigneeName;
+  if (deal.sellerSigneeRole != null) sellerCard.signeeRole = deal.sellerSigneeRole;
+  if (deal.buyerSigneeName != null) buyerCard.signeeName = deal.buyerSigneeName;
+  if (deal.buyerSigneeRole != null) buyerCard.signeeRole = deal.buyerSigneeRole;
 
   const entityCode = (deal.seller.code || DEFAULT_ENTITY_CODE).toUpperCase();
   const docDate = new Date().toISOString();

@@ -29,6 +29,11 @@ interface EditorState {
   email: string;
   phone: string;
   website: string;
+  bankName: string;
+  bankAccountNumber: string;
+  bankSwiftCode: string;
+  defaultSigneeName: string;
+  defaultSigneeRole: string;
   isActive: boolean;
 }
 
@@ -43,6 +48,11 @@ const EMPTY_EDITOR: EditorState = {
   email: "",
   phone: "",
   website: "",
+  bankName: "",
+  bankAccountNumber: "",
+  bankSwiftCode: "",
+  defaultSigneeName: "",
+  defaultSigneeRole: "",
   isActive: true,
 };
 
@@ -83,6 +93,11 @@ export function CounterpartyManager({ book }: { book: CounterpartyBook }) {
       email: r.email ?? "",
       phone: r.phone ?? "",
       website: r.website ?? "",
+      bankName: r.bankName ?? "",
+      bankAccountNumber: r.bankAccountNumber ?? "",
+      bankSwiftCode: r.bankSwiftCode ?? "",
+      defaultSigneeName: r.defaultSigneeName ?? "",
+      defaultSigneeRole: r.defaultSigneeRole ?? "",
       isActive: r.isActive,
     });
 
@@ -110,6 +125,11 @@ export function CounterpartyManager({ book }: { book: CounterpartyBook }) {
       email: editor.email,
       phone: editor.phone,
       website: editor.website,
+      bankName: editor.bankName,
+      bankAccountNumber: editor.bankAccountNumber,
+      bankSwiftCode: editor.bankSwiftCode,
+      defaultSigneeName: editor.defaultSigneeName,
+      defaultSigneeRole: editor.defaultSigneeRole,
     };
     const res = editor.id
       ? await updateCounterparty(book, editor.id, { ...card, isActive: editor.isActive })
@@ -246,6 +266,34 @@ export function CounterpartyManager({ book }: { book: CounterpartyBook }) {
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground" htmlFor="cp-phone">Phone</label>
                   <Input id="cp-phone" value={editor.phone} onChange={(e) => set({ phone: e.target.value })} />
+                </div>
+              </div>
+
+              {/* G4 · bank details (used on invoices / proformas). */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground" htmlFor="cp-bank">Bank name</label>
+                  <Input id="cp-bank" value={editor.bankName} onChange={(e) => set({ bankName: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground" htmlFor="cp-iban">Bank account / IBAN</label>
+                  <Input id="cp-iban" value={editor.bankAccountNumber} onChange={(e) => set({ bankAccountNumber: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground" htmlFor="cp-swift">SWIFT / BIC</label>
+                  <Input id="cp-swift" value={editor.bankSwiftCode} onChange={(e) => set({ bankSwiftCode: e.target.value })} />
+                </div>
+              </div>
+
+              {/* G3 · default signee (signature block on generated documents). */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground" htmlFor="cp-signee-name">Default signee (name)</label>
+                  <Input id="cp-signee-name" value={editor.defaultSigneeName} onChange={(e) => set({ defaultSigneeName: e.target.value })} placeholder="e.g. Jānis Bērziņš" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground" htmlFor="cp-signee-role">Default signee (role)</label>
+                  <Input id="cp-signee-role" value={editor.defaultSigneeRole} onChange={(e) => set({ defaultSigneeRole: e.target.value })} placeholder="e.g. Director" />
                 </div>
               </div>
 

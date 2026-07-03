@@ -39,7 +39,7 @@ const BOOK_MODULE: Record<CounterpartyBook, string> = {
 };
 
 const COUNTERPARTY_COLUMNS =
-  "id, code, name, registration_number, vat_number, legal_address, country, email, phone, website, is_active, is_customer, is_supplier, is_producer";
+  "id, code, name, registration_number, vat_number, legal_address, country, email, phone, website, bank_name, bank_account_number, bank_swift_code, default_signee_name, default_signee_role, is_active, is_customer, is_supplier, is_producer";
 
 /** Trim a value; empty → null (blank card fields store as NULL). */
 function nn(v: string | null | undefined): string | null {
@@ -60,6 +60,11 @@ function mapRow(row: any): CounterpartyRow {
     email: (row.email as string | null) ?? null,
     phone: (row.phone as string | null) ?? null,
     website: (row.website as string | null) ?? null,
+    bankName: (row.bank_name as string | null) ?? null,
+    bankAccountNumber: (row.bank_account_number as string | null) ?? null,
+    bankSwiftCode: (row.bank_swift_code as string | null) ?? null,
+    defaultSigneeName: (row.default_signee_name as string | null) ?? null,
+    defaultSigneeRole: (row.default_signee_role as string | null) ?? null,
     isActive: row.is_active === true,
   };
 }
@@ -254,6 +259,11 @@ export async function createCounterparty(
         email: nn(input.email),
         phone: nn(input.phone),
         website: nn(input.website),
+        bank_name: nn(input.bankName),
+        bank_account_number: nn(input.bankAccountNumber),
+        bank_swift_code: nn(input.bankSwiftCode),
+        default_signee_name: nn(input.defaultSigneeName),
+        default_signee_role: nn(input.defaultSigneeRole),
       })
       .select(COUNTERPARTY_COLUMNS)
       .single();
@@ -316,6 +326,11 @@ export async function updateCounterparty(
       email: nn(input.email),
       phone: nn(input.phone),
       website: nn(input.website),
+      bank_name: nn(input.bankName),
+      bank_account_number: nn(input.bankAccountNumber),
+      bank_swift_code: nn(input.bankSwiftCode),
+      default_signee_name: nn(input.defaultSigneeName),
+      default_signee_role: nn(input.defaultSigneeRole),
       ...(typeof input.isActive === "boolean" ? { is_active: input.isActive } : {}),
     })
     .eq("id", id)

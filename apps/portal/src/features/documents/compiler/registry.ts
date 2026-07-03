@@ -49,6 +49,8 @@ export const MERGE_FIELD_GROUPS: MergeFieldGroup[] = [
       { label: "Seller bank", token: "seller.bankName" },
       { label: "Seller account", token: "seller.bankAccount" },
       { label: "Seller SWIFT", token: "seller.bankSwift" },
+      { label: "Seller signee (name)", token: "seller.signeeName" },
+      { label: "Seller signee (role)", token: "seller.signeeRole" },
     ],
   },
   {
@@ -64,6 +66,8 @@ export const MERGE_FIELD_GROUPS: MergeFieldGroup[] = [
       { label: "Buyer bank", token: "buyer.bankName" },
       { label: "Buyer account", token: "buyer.bankAccount" },
       { label: "Buyer SWIFT", token: "buyer.bankSwift" },
+      { label: "Buyer signee (name)", token: "buyer.signeeName" },
+      { label: "Buyer signee (role)", token: "buyer.signeeRole" },
     ],
   },
   {
@@ -82,6 +86,7 @@ export const MERGE_FIELD_GROUPS: MergeFieldGroup[] = [
       { label: "Total volume m³", token: "fmtM3 totals.totalVolumeM3" },
       { label: "Subtotal", token: "money totals.subtotalCents" },
       { label: "VAT rate", token: "pct totals.vatRate" },
+      { label: "VAT reference", token: "totals.vatReference" },
       { label: "VAT amount", token: "money totals.vatCents" },
       { label: "Total", token: "money totals.totalCents" },
       { label: "Total (with currency)", token: "moneyCur totals.totalCents" },

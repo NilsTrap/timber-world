@@ -18,6 +18,9 @@ export interface PartyCard {
   bankName?: string | null;
   bankAccount?: string | null;
   bankSwift?: string | null;
+  /** G3 · the person who signs (signature block). Resolved deal-override → org default. */
+  signeeName?: string | null;
+  signeeRole?: string | null;
 }
 
 export interface DocLineItem {

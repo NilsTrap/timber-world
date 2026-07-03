@@ -49,6 +49,11 @@ export interface OrderDealView {
   deliveryDeadline: string | null;
   transportBilling: string;
   notes: string | null;
+  /** G3 · per-deal signee overrides (default from the party org at deal creation). */
+  sellerSigneeName: string | null;
+  sellerSigneeRole: string | null;
+  buyerSigneeName: string | null;
+  buyerSigneeRole: string | null;
   customer: { id: string | null; code: string | null; name: string | null };
   seller: { id: string | null; code: string | null; name: string | null };
   producer: { id: string | null; code: string | null; name: string | null };
@@ -69,6 +74,7 @@ const ORDER_SELECT = `
   id, code, deal_code, name, deal_kind, product_group, currency, status, lifecycle_stage,
   incoterms, incoterms_place, advance_pct, payment_terms, delivery_terms,
   delivery_deadline, transport_billing, notes, margin_approved_at,
+  seller_signee_name, seller_signee_role, buyer_signee_name, buyer_signee_role,
   customer_organisation_id, seller_organisation_id, producer_organisation_id,
   buyer_organisation_id, spine_id, upstream_deal_id,
   customer:organisations!orders_customer_organisation_id_fkey(id, code, name),
@@ -98,6 +104,10 @@ function mapOrderDealHeader(row: any): OrderDealSummary {
     deliveryDeadline: row.delivery_deadline ?? null,
     transportBilling: row.transport_billing ?? "in_price",
     notes: row.notes ?? null,
+    sellerSigneeName: row.seller_signee_name ?? null,
+    sellerSigneeRole: row.seller_signee_role ?? null,
+    buyerSigneeName: row.buyer_signee_name ?? null,
+    buyerSigneeRole: row.buyer_signee_role ?? null,
     customer: { id: row.customer_organisation_id ?? null, code: row.customer?.code ?? null, name: row.customer?.name ?? null },
     seller: { id: row.seller_organisation_id ?? null, code: row.seller?.code ?? null, name: row.seller?.name ?? null },
     producer: { id: row.producer_organisation_id ?? null, code: row.producer?.code ?? null, name: row.producer?.name ?? null },
@@ -253,6 +263,11 @@ export async function updateDealFields(db: DbClient, _actor: ActorContext, order
   if (patch.deliveryTerms !== undefined) u.delivery_terms = patch.deliveryTerms;
   if (patch.deliveryDeadline !== undefined) u.delivery_deadline = patch.deliveryDeadline;
   if (patch.transportBilling !== undefined) u.transport_billing = patch.transportBilling;
+  if (patch.notes !== undefined) u.notes = patch.notes;
+  if (patch.sellerSigneeName !== undefined) u.seller_signee_name = patch.sellerSigneeName;
+  if (patch.sellerSigneeRole !== undefined) u.seller_signee_role = patch.sellerSigneeRole;
+  if (patch.buyerSigneeName !== undefined) u.buyer_signee_name = patch.buyerSigneeName;
+  if (patch.buyerSigneeRole !== undefined) u.buyer_signee_role = patch.buyerSigneeRole;
   if (Object.keys(u).length === 0) return { success: true, data: true };
   const { error } = await c.from("orders").update(u).eq("id", orderId);
   if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
