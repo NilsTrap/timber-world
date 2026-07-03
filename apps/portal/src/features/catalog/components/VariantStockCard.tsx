@@ -8,41 +8,41 @@ import {
   getVariantStock, saveVariantStockEntry, deleteVariantStockEntry,
   type VariantStockSummary,
 } from "../actions/stock";
-import { getPackagingTypes, type PackagingType } from "../actions/packagingTypes";
+import { getVariantPackaging, type VariantPackaging } from "../actions/packaging";
 
-const LOOSE = "loose";
 const fmtPcs = (n: number) => `${n.toLocaleString("en-GB")} pcs`;
 
 /**
- * Manual per-variant stock, broken down by packaging form. Packaging *options*
- * (which forms the variant comes in + price) live in the Packaging card; this is
- * HOW MUCH is on hand in each form. Quantities are editable inline; the total is
- * rolled up in pieces.
+ * Manual per-variant stock, broken down by packaging form. You can only stock a
+ * variant in a packaging form that's DEFINED for it (its packaging assignments) —
+ * e.g. you can't stock firewood "in pieces" unless a piece-level packaging option
+ * has been added. The Packaging card is where those options are defined; this card
+ * says HOW MUCH is on hand in each. Quantities are inline-editable; total in pieces.
  */
 export function VariantStockCard({ variantId }: { variantId: string }) {
   const [summary, setSummary] = useState<VariantStockSummary | null>(null);
-  const [packagingTypes, setPackagingTypes] = useState<PackagingType[]>([]);
+  const [packaging, setPackaging] = useState<VariantPackaging[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
-  const [formPackaging, setFormPackaging] = useState<string>(LOOSE);
+  const [formPackaging, setFormPackaging] = useState<string>("");
   const [formQty, setFormQty] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const [s, pt] = await Promise.all([getVariantStock(variantId), getPackagingTypes()]);
+    const [s, pk] = await Promise.all([getVariantStock(variantId), getVariantPackaging(variantId)]);
     if (s.success) setSummary(s.data);
-    if (pt.success) setPackagingTypes(pt.data);
+    if (pk.success) setPackaging(pk.data);
     setLoading(false);
   }, [variantId]);
 
   useEffect(() => { load(); }, [load]);
 
   const entries = summary?.entries ?? [];
-  const usedPackaging = new Set(entries.map((e) => e.packagingTypeId ?? LOOSE));
-  const availableOptions = [
-    ...(usedPackaging.has(LOOSE) ? [] : [{ id: LOOSE, name: "Loose pieces", piecesPerPackage: null as number | null }]),
-    ...packagingTypes.filter((p) => !usedPackaging.has(p.id)).map((p) => ({ id: p.id, name: p.name, piecesPerPackage: p.piecesPerPackage })),
-  ];
+  const usedPackaging = new Set(entries.map((e) => e.packagingTypeId).filter(Boolean) as string[]);
+  // Only packaging forms DEFINED for this variant (and not already stocked) can be added.
+  const availableOptions = packaging
+    .filter((p) => !usedPackaging.has(p.packagingTypeId))
+    .map((p) => ({ id: p.packagingTypeId, name: p.name, piecesPerPackage: p.piecesPerPackage }));
 
   const saveQty = async (packagingTypeId: string | null, quantity: number) => {
     const res = await saveVariantStockEntry({ variantId, packagingTypeId, quantity });
@@ -53,11 +53,12 @@ export function VariantStockCard({ variantId }: { variantId: string }) {
 
   const handleAdd = async () => {
     const qty = Number(formQty);
+    if (!formPackaging) { toast.error("Pick a packaging form"); return; }
     if (!Number.isFinite(qty) || qty < 0) { toast.error("Enter a valid quantity"); return; }
     setSaving(true);
-    const ok = await saveQty(formPackaging === LOOSE ? null : formPackaging, qty);
+    const ok = await saveQty(formPackaging, qty);
     setSaving(false);
-    if (ok) { toast.success("Stock added"); setAdding(false); setFormQty(""); setFormPackaging(LOOSE); }
+    if (ok) { toast.success("Stock added"); setAdding(false); setFormQty(""); setFormPackaging(""); }
   };
 
   const handleDelete = async (id: string) => {
@@ -76,7 +77,7 @@ export function VariantStockCard({ variantId }: { variantId: string }) {
           Stock {summary && <span className="text-muted-foreground font-normal">· {fmtPcs(summary.totalPieces)}</span>}
         </h2>
         {availableOptions.length > 0 && !adding && (
-          <Button size="sm" variant="outline" onClick={() => { setFormPackaging(availableOptions[0]?.id ?? LOOSE); setAdding(true); }}>
+          <Button size="sm" variant="outline" onClick={() => { setFormPackaging(availableOptions[0]?.id ?? ""); setAdding(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Add stock
           </Button>
         )}
@@ -84,6 +85,10 @@ export function VariantStockCard({ variantId }: { variantId: string }) {
 
       {loading ? (
         <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+      ) : packaging.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No packaging options defined for this variant. Add packaging forms in the Packaging card below before recording stock.
+        </p>
       ) : entries.length === 0 && !adding ? (
         <p className="text-sm text-muted-foreground">No stock recorded. Add how many are on hand in each packaging form.</p>
       ) : (
@@ -142,9 +147,7 @@ export function VariantStockCard({ variantId }: { variantId: string }) {
               onChange={(e) => setFormPackaging(e.target.value)}
             >
               {availableOptions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}{o.piecesPerPackage != null ? ` (×${o.piecesPerPackage})` : ""}
-                </option>
+                <option key={o.id} value={o.id}>{o.name} (×{o.piecesPerPackage})</option>
               ))}
             </select>
           </div>
