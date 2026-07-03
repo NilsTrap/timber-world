@@ -109,6 +109,26 @@ has("brace entity", inj, "&#123;&#123;evil");
 const injHref = body([{ type: "p", children: [{ type: "a", url: "{{leak}}", children: [{ text: "x" }] }] }]);
 absent("link href brace neutralised", injHref, 'href="{{leak}}"');
 
+// ── Layout: columns, callout box, hide-when-empty ──────────────────────────
+const cols = body([
+  {
+    type: "column_group",
+    children: [
+      { type: "column", children: [{ type: "p", children: [{ text: "L" }] }] },
+      { type: "column", children: [{ type: "p", children: [{ text: "R" }] }] },
+    ],
+  },
+]);
+has("column group wrapper", cols, '<div class="doc-cols">');
+has("column cells", cols, '<div class="doc-col"><p>L</p></div><div class="doc-col"><p>R</p></div>');
+const callout = body([{ type: "callout", children: [{ type: "p", children: [{ text: "Pay here" }] }] }]);
+has("callout box", callout, '<div class="callout-box"><p>Pay here</p></div>');
+const hide = body([{ type: "p", hideWhen: "seller.address", children: [{ type: "mention", value: "seller.address", children: [{ text: "" }] }] }]);
+has("hide-when wrap open", hide, "{{#if seller.address}}");
+has("hide-when wrap close", hide, "{{/if}}");
+const hideHelper = body([{ type: "p", hideWhen: "money totals.vatCents", children: [{ text: "x" }] }]);
+has("hide-when strips helper to base path", hideHelper, "{{#if totals.vatCents}}");
+
 // ── Merge fields (mention nodes → {{token}}) ───────────────────────────────
 has(
   "merge field emits token",

@@ -18,7 +18,7 @@
  */
 import { escapeAttr, escapeText } from "./nodes";
 import { compileShell } from "./shell";
-import { LINE_ITEM_COLUMNS, DEFAULT_LINE_ITEM_COLUMNS } from "./registry";
+import { LINE_ITEM_COLUMNS, DEFAULT_LINE_ITEM_COLUMNS, basePathOf } from "./registry";
 import type { CompileOptions } from "./types";
 
 /**
@@ -33,6 +33,20 @@ function mergeFieldHtml(value: unknown): string {
   const token = typeof value === "string" ? value.trim() : "";
   if (!token || !SAFE_TOKEN.test(token)) return "";
   return `{{${token}}}`;
+}
+
+/**
+ * Optional hide-when-empty: a block carrying `hideWhen: "<token>"` is wrapped in
+ * {{#if <basePath>}}…{{/if}} so it collapses when the deal has no value (mirrors
+ * the seeded templates' `{{#if seller.address}}` line guards). Only a safe token
+ * produces a wrapper; anything else renders the block unconditionally.
+ */
+function withHideWhen(el: SlateElement, html: string): string {
+  const hw = (el as { hideWhen?: unknown }).hideWhen;
+  if (typeof hw === "string" && SAFE_TOKEN.test(hw.trim())) {
+    return `{{#if ${basePathOf(hw.trim())}}}${html}{{/if}}`;
+  }
+  return html;
 }
 
 export interface SlateText {
@@ -186,8 +200,10 @@ function serializeBlock(el: SlateElement): string {
     case "h6":
       return `<h3${alignAttr(el)}>${serializeInline(el.children)}</h3>`;
     case "blockquote":
-    case "callout":
       return `<blockquote${alignAttr(el)}>${serializeInline(el.children)}</blockquote>`;
+    // A callout = the bordered "box" look (payment details, notes highlight).
+    case "callout":
+      return `<div class="callout-box">${serializeBlocks(el.children)}</div>`;
     case "hr":
       return "<hr>";
     case "code_block": {
@@ -205,9 +221,13 @@ function serializeBlock(el: SlateElement): string {
       const url = typeof el.url === "string" ? el.url : "";
       return url ? `<img src="${escapeAttr(url)}">` : "";
     }
+    // Side-by-side columns (e.g. Seller | Buyer). Each column flexes equally.
     case "column_group":
-      return (el.children ?? []).map((c) => serializeBlock(c as SlateElement)).join("");
+      return `<div class="doc-cols">${(el.children ?? [])
+        .map((c) => `<div class="doc-col">${serializeBlocks((c as SlateElement).children)}</div>`)
+        .join("")}</div>`;
     case "column":
+      return `<div class="doc-col">${serializeBlocks(el.children)}</div>`;
     case "toggle":
       return serializeBlocks(el.children);
     case "p":
@@ -247,7 +267,7 @@ function serializeBlocks(nodes: SlateNode[] | undefined): string {
       out.push(serializeListRun(run));
       continue;
     }
-    out.push(serializeBlock(el));
+    out.push(withHideWhen(el, serializeBlock(el)));
     i++;
   }
   return out.join("");

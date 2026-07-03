@@ -36,6 +36,14 @@ table.rt-table { width: 100%; border-collapse: collapse; margin: 8px 0; table-la
 table.rt-table td, table.rt-table th { border: 1px solid #cbd5e1; padding: 4px 6px; font-size: 10px; vertical-align: top; }
 table.rt-table th { background: #f1f5f9; font-weight: 600; text-align: left; }
 .num { text-align: right; }
+/* Side-by-side columns (Seller | Buyer) */
+.doc-cols { display: flex; gap: 24px; }
+.doc-col { flex: 1; }
+.doc-col > p { margin: 2px 0; }
+/* Callout / bordered box (payment details, highlights) */
+.callout-box { border: 1px solid #3c525c; border-radius: 4px; padding: 10px 12px; background: #f4f7f8; margin: 8px 0; }
+.callout-box > p { margin: 2px 0; }
+.callout-box h3 { margin-top: 0; }
 /* Letterhead + footer */
 .doc-logo { margin-bottom: 10px; }
 .doc-logo img { max-height: 64px; }
