@@ -44,9 +44,9 @@ import {
   cn,
 } from "@timber/ui";
 import type { DocType } from "@/features/orders/services/dealModel";
-import type { ContentFormat, DocumentTemplateSummary, PageSettings, TipTapDoc } from "../types";
-import { compileTemplate } from "../compiler";
-import { starterFor } from "../compiler/starters";
+import type { ContentFormat, DocumentTemplateSummary, PageSettings, SlateValue } from "../types";
+import { compileSlateTemplate } from "../compiler/slate";
+import { slateStarterFor } from "../compiler/slate-starters";
 import {
   listTemplates,
   getTemplate,
@@ -191,7 +191,7 @@ interface EditingTemplate {
   isDefault: boolean;
   isActive: boolean;
   contentFormat: ContentFormat;
-  docJson: TipTapDoc | null;
+  docJson: SlateValue | null;
   pageSettings: PageSettings | null;
 }
 
@@ -330,8 +330,7 @@ export function DocumentTemplatesManager() {
 
   const startCreate = () => {
     const name = addName.trim() || `New ${DOC_TYPE_LABELS[addDocType]} template`;
-    // New templates start from the doc type's VISUAL starter (a complete, editable page).
-    const starter = starterFor(addDocType);
+    // New templates start from the doc type's VISUAL starter (an editable skeleton).
     setEditing({
       docType: addDocType,
       name,
@@ -339,8 +338,8 @@ export function DocumentTemplatesManager() {
       isDefault: false,
       isActive: true,
       contentFormat: "wysiwyg",
-      docJson: starter.doc,
-      pageSettings: starter.pageSettings ?? null,
+      docJson: slateStarterFor(addDocType),
+      pageSettings: null,
     });
     setMainTab("visual");
     setEditorNonce((n) => n + 1);
@@ -445,7 +444,7 @@ export function DocumentTemplatesManager() {
         ? {
             ...e,
             contentFormat: "html",
-            html: e.docJson ? compileTemplate(e.docJson, { pageSettings: e.pageSettings ?? undefined, docType: e.docType }) : e.html,
+            html: e.docJson ? compileSlateTemplate(e.docJson, { pageSettings: e.pageSettings ?? undefined, docType: e.docType }) : e.html,
             docJson: null,
           }
         : e
@@ -459,10 +458,10 @@ export function DocumentTemplatesManager() {
   /** Start a visual version of a raw-HTML template from its doc type's visual starter. */
   const confirmStartVisual = () => {
     if (!editing) return;
-    const starter = starterFor(editing.docType);
+    const starterDoc = slateStarterFor(editing.docType);
     setDirty(true);
     setEditing((e) =>
-      e ? { ...e, contentFormat: "wysiwyg", docJson: starter.doc, pageSettings: starter.pageSettings ?? null } : e
+      e ? { ...e, contentFormat: "wysiwyg", docJson: starterDoc, pageSettings: e.pageSettings ?? null } : e
     );
     setEditorNonce((n) => n + 1);
     setStartVisualWarnOpen(false);

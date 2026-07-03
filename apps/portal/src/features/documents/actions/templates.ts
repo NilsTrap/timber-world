@@ -16,8 +16,7 @@ import { mergeTemplate } from "@/features/orders/services/documents/templateMerg
 import { DOC_TITLES } from "@/features/orders/services/documents/types";
 import type { DocumentData } from "@/features/orders/services/documents/types";
 import type { DocType } from "@/features/orders/services/dealModel";
-import { compileTemplate } from "@/features/documents/compiler";
-import type { TipTapDoc } from "@/features/documents/compiler";
+import { compileSlateTemplate } from "@/features/documents/compiler/slate";
 import type {
   ActionResult,
   ContentFormat,
@@ -27,6 +26,7 @@ import type {
   PreviewTemplateInput,
   PreviewTemplateJsonInput,
   SaveTemplateInput,
+  SlateValue,
 } from "../types";
 
 const DOC_TYPES: DocType[] = [
@@ -171,16 +171,17 @@ export async function saveTemplate(input: SaveTemplateInput): Promise<ActionResu
   // service-role client, so the server is the sole trust boundary. doc_json is the
   // source of truth; html is the derived artifact (and the only render input).
   let html: string;
-  let docJson: TipTapDoc | null = null;
+  let docJson: SlateValue | null = null;
   let pageSettings: SaveTemplateInput["pageSettings"] = null;
 
   if (contentFormat === "wysiwyg") {
     const doc = input.docJson;
-    if (!doc || typeof doc !== "object" || (doc as { type?: string }).type !== "doc") {
+    // A Plate (Slate) document is a non-empty array of block nodes.
+    if (!Array.isArray(doc) || doc.length === 0) {
       return { success: false, error: "Visual document is required", code: "VALIDATION" };
     }
     try {
-      html = compileTemplate(doc, { pageSettings: input.pageSettings ?? undefined, docType: input.docType });
+      html = compileSlateTemplate(doc, { pageSettings: input.pageSettings ?? undefined, docType: input.docType });
     } catch {
       return { success: false, error: "Failed to compile the visual template", code: "COMPILE_FAILED" };
     }
@@ -348,7 +349,7 @@ export async function previewTemplateJson(
   if (!gate.ok) return gate.result;
 
   try {
-    const compiled = compileTemplate(input.docJson, {
+    const compiled = compileSlateTemplate(input.docJson, {
       pageSettings: input.pageSettings ?? undefined,
       docType: input.docType,
     });

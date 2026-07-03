@@ -8,11 +8,11 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { TemplateEditor } from "../editor/TemplateEditor";
+import { TimberPlateEditor } from "../editor/TimberPlateEditor";
 import { previewTemplateJson } from "../actions";
 import { PageSettingsPanel } from "./PageSettingsPanel";
 import type { DocType } from "@/features/orders/services/dealModel";
-import type { PageSettings, TipTapDoc } from "../types";
+import type { PageSettings, SlateValue } from "../types";
 
 export function VisualEditorPane({
   editorKey,
@@ -27,9 +27,9 @@ export function VisualEditorPane({
   editorKey: string | number;
   templateId?: string;
   docType: DocType;
-  doc: TipTapDoc;
+  doc: SlateValue;
   pageSettings: PageSettings | null;
-  onDocChange: (d: TipTapDoc) => void;
+  onDocChange: (d: SlateValue) => void;
   onPageSettingsChange: (ps: PageSettings) => void;
 }) {
   const [previewHtml, setPreviewHtml] = useState("");
@@ -38,7 +38,7 @@ export function VisualEditorPane({
   const seq = useRef(0);
 
   const runPreview = useCallback(
-    async (d: TipTapDoc, ps: PageSettings | null) => {
+    async (d: SlateValue, ps: PageSettings | null) => {
       const s = ++seq.current;
       setLoading(true);
       const res = await previewTemplateJson({ docJson: d, docType, pageSettings: ps });
@@ -70,7 +70,7 @@ export function VisualEditorPane({
       <div className="grid gap-4 xl:grid-cols-2">
         <div className="min-w-0">
           {/* key → remount with fresh content only when a different template loads */}
-          <TemplateEditor key={editorKey} value={doc} onChange={onDocChange} />
+          <TimberPlateEditor key={editorKey} value={doc} onChange={onDocChange} />
         </div>
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">

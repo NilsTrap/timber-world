@@ -97,6 +97,7 @@ function serializeListRun(items: SlateElement[]): string {
     let inner = "";
     while (idx < items.length) {
       const it = items[idx];
+      if (!it) break;
       const ind = indentOf(it);
       if (ind < level) break;
       if (ind > level) {
@@ -110,7 +111,8 @@ function serializeListRun(items: SlateElement[]): string {
     }
     return `<${tag}>${inner}</${tag}>`;
   }
-  return items.length ? build(indentOf(items[0])) : "";
+  const first = items[0];
+  return first ? build(indentOf(first)) : "";
 }
 
 function serializeTable(el: SlateElement): string {

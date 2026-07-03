@@ -13,8 +13,12 @@
  */
 import type { DocType } from "@/features/orders/services/dealModel";
 import type { PageSettings, TipTapDoc } from "@/features/documents/compiler";
+import type { SlateNode } from "@/features/documents/compiler/slate";
 
 export type { PageSettings, TipTapDoc };
+
+/** A Plate (Slate) document value — the wysiwyg editable source of truth. */
+export type SlateValue = SlateNode[];
 
 /** Which editor surface a template opens in / is authored with. */
 export type ContentFormat = "html" | "wysiwyg";
@@ -39,8 +43,8 @@ export interface DocumentTemplate {
   updatedAt: string;
   /** 'wysiwyg' → edit via doc_json (visual); 'html' → edit raw html (Advanced tab). */
   contentFormat: ContentFormat;
-  /** TipTap ProseMirror document — the editable source of truth for wysiwyg rows; null for html rows. */
-  docJson: TipTapDoc | null;
+  /** Plate (Slate) document — the editable source of truth for wysiwyg rows; null for html rows. */
+  docJson: SlateValue | null;
   /** A4 margin / footer / logo URL for wysiwyg rows; null for html rows. */
   pageSettings: PageSettings | null;
   /** Storage object path of the uploaded logo (for replace/cleanup); null if none. */
@@ -73,7 +77,7 @@ export interface SaveTemplateInput {
   isDefault: boolean;
   isActive: boolean;
   contentFormat?: ContentFormat;
-  docJson?: TipTapDoc | null;
+  docJson?: SlateValue | null;
   pageSettings?: PageSettings | null;
 }
 
@@ -90,7 +94,7 @@ export interface PreviewTemplateInput {
 
 /** Preview a WYSIWYG template: compile doc_json → merge sample DocumentData → html. */
 export interface PreviewTemplateJsonInput {
-  docJson: TipTapDoc;
+  docJson: SlateValue;
   docType: DocType;
   pageSettings?: PageSettings | null;
 }
