@@ -16,6 +16,14 @@ import * as React from 'react';
 import { useMounted } from '@/features/documents/plate/hooks/use-mounted';
 import { inlineSuggestionVariants } from '@/features/documents/plate/lib/suggestion';
 import { cn } from '@/features/documents/plate/lib/utils';
+import { MERGE_FIELD_LABELS, basePathOf } from '@/features/documents/compiler/registry';
+
+/** Friendly label for a merge-field token (helper-stripped fallback). */
+function mergeFieldLabel(value: unknown): string {
+  const raw = typeof value === 'string' ? value : '';
+  const base = basePathOf(raw);
+  return MERGE_FIELD_LABELS[raw] ?? MERGE_FIELD_LABELS[base] ?? base ?? raw;
+}
 
 import {
   InlineCombobox,
@@ -61,13 +69,13 @@ export function MentionElement(
         <>
           {props.children}
           {props.prefix}
-          {element.value}
+          {mergeFieldLabel(element.value)}
         </>
       ) : (
         // Others like Android https://github.com/ianstormtaylor/slate/pull/5360
         <>
           {props.prefix}
-          {element.value}
+          {mergeFieldLabel(element.value)}
           {props.children}
         </>
       )}
