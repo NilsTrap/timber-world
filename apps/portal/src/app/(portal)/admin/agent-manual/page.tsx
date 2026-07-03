@@ -96,7 +96,7 @@ export default async function AgentManualPage() {
               <tr><td className={td}>Manage reusable fields (Species, Quality…)</td><td className={td}><Link className="text-primary hover:underline" href="/admin/settings/fields">Settings → Fields</Link></td></tr>
               <tr><td className={td}>Define package types (pieces per pack)</td><td className={td}><Link className="text-primary hover:underline" href="/admin/settings/packaging">Settings → Packaging</Link></td></tr>
               <tr><td className={td}>Set up units (m², m³, m, piece)</td><td className={td}><Link className="text-primary hover:underline" href="/admin/settings/pricing-units">Settings → Pricing Units</Link></td></tr>
-              <tr><td className={td}>Manage currencies &amp; GBP conversion</td><td className={td}><Link className="text-primary hover:underline" href="/admin/catalog/currencies">Catalog → Currencies</Link></td></tr>
+              <tr><td className={td}>Manage currencies &amp; GBP conversion</td><td className={td}><Link className="text-primary hover:underline" href="/admin/settings/currencies">Settings → Currencies</Link></td></tr>
               <tr><td className={td}>Approve / reject agents</td><td className={td}><Link className="text-primary hover:underline" href="/admin/agents">Agents</Link></td></tr>
               <tr><td className={td}>Review &amp; confirm agent orders</td><td className={td}><Link className="text-primary hover:underline" href="/admin/agent-orders">Agent Orders</Link></td></tr>
             </tbody>
@@ -166,7 +166,7 @@ export default async function AgentManualPage() {
         <h2 className={h2}>6. Pricing &amp; the EUR → GBP conversion</h2>
         <p className={p}><strong>EUR is the single source of truth.</strong> You only ever type EUR prices. The agent app shows GBP.</p>
         <ul className={ul}>
-          <li>On <Link className="text-primary hover:underline" href="/admin/catalog/currencies">Catalog → Currencies</Link>, press <strong>“Update prices”</strong> to fetch the latest ECB exchange rate and recompute every GBP price.</li>
+          <li>On <Link className="text-primary hover:underline" href="/admin/settings/currencies">Settings → Currencies</Link>, press <strong>“Update prices”</strong> to fetch the latest ECB exchange rate and recompute every GBP price.</li>
           <li>Converted prices are then passed through a <strong>charm-rounding</strong> rule so they end on tidy numbers. The rule is a set of bands, checked top to bottom — the first matching “up to” wins; leave the last band’s limit empty for “and above”. Prices always round <em>up</em> to the charm price.</li>
           <li>You can set a <strong>manual GBP override</strong> on a variant. Manual overrides are kept and are <em>not</em> overwritten the next time you run “Update prices” (marked with a ✎).</li>
         </ul>
