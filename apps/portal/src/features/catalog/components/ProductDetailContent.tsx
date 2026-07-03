@@ -269,6 +269,23 @@ export function ProductDetailContent({
 
         {/* RIGHT column */}
         <div className="space-y-6">
+          {/* Surface visibility (first) */}
+          <div className="rounded-lg border bg-card p-5 space-y-2">
+            <div className="text-sm font-medium">Surface visibility</div>
+            <p className="text-xs text-muted-foreground">Control which apps show this product. Uncheck to hide it from that surface.</p>
+            <div className="flex flex-col gap-2 pt-1">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={visAgents} onChange={(e) => setVisAgents(e.target.checked)} /> Agents app
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={visInternal} onChange={(e) => setVisInternal(e.target.checked)} /> Internal
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={visMarketing} onChange={(e) => setVisMarketing(e.target.checked)} /> Marketing
+              </label>
+            </div>
+          </div>
+
           {/* Images */}
           <div className="rounded-lg border bg-card p-5 space-y-3">
             <div className="flex items-center justify-between">
@@ -290,23 +307,6 @@ export function ProductDetailContent({
             ) : (
               <p className="text-sm text-muted-foreground">No images yet. Upload product photos.</p>
             )}
-          </div>
-
-          {/* Surface visibility */}
-          <div className="rounded-lg border bg-card p-5 space-y-2">
-            <div className="text-sm font-medium">Surface visibility</div>
-            <p className="text-xs text-muted-foreground">Control which apps show this product. Uncheck to hide it from that surface.</p>
-            <div className="flex flex-col gap-2 pt-1">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" checked={visAgents} onChange={(e) => setVisAgents(e.target.checked)} /> Agents app
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" checked={visInternal} onChange={(e) => setVisInternal(e.target.checked)} /> Internal
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" checked={visMarketing} onChange={(e) => setVisMarketing(e.target.checked)} /> Marketing
-              </label>
-            </div>
           </div>
         </div>
       </div>

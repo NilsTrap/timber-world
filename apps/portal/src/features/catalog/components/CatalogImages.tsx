@@ -73,6 +73,9 @@ export function ImageThumbGrid({
   size?: "sm" | "md";
 }) {
   const dim = size === "sm" ? "h-16 w-16" : "h-20 w-20";
+  // Badge only ONE primary, even if the data ever carries more than one (belt-and-
+  // suspenders alongside the DB single-primary guard).
+  const primaryId = images.find((i) => i.isPrimary)?.id;
   return (
     <div className="flex flex-wrap gap-2">
       {images.map((img) => {
@@ -88,7 +91,7 @@ export function ImageThumbGrid({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={url} alt={img.altText || ""} className="h-full w-full object-cover" />
             </button>
-            {img.isPrimary && (
+            {img.id === primaryId && (
               <span className="pointer-events-none absolute left-1 top-1 rounded bg-primary px-1 py-0.5 text-[9px] font-medium text-primary-foreground">
                 Primary
               </span>
