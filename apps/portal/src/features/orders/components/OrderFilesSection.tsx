@@ -169,6 +169,7 @@ function FileCategorySection({ orderId, category, label, files, onRefresh, onPre
   }, [files]);
 
   const handleDelete = useCallback(async (file: OrderFile) => {
+    if (!confirm(`Delete "${file.fileName}"? This cannot be undone.`)) return;
     const result = await deleteOrderFile(file.id);
     if (result.success) {
       toast.success(`Deleted ${file.fileName}`);

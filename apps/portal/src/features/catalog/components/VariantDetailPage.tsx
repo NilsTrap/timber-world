@@ -289,6 +289,7 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
                   )}
                   <button
                     onClick={async () => {
+                      if (!confirm("Delete this image? This cannot be undone.")) return;
                       const result = await deleteVariantImage(img.id);
                       if (result.success) {
                         setImages(images.filter((i: any) => i.id !== img.id));
