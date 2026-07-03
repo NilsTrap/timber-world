@@ -17,6 +17,8 @@ interface ProductWithCategory {
   createdAt: string;
   updatedAt: string;
   variantCount: number;
+  primaryImagePath: string | null;
+  stockPieces: number;
   fieldValues: { option?: { label: string } | null; valueText: string | null }[];
 }
 
@@ -36,7 +38,8 @@ export async function getAllProducts(): Promise<ActionResult<ProductWithCategory
     .select(`
       *,
       catalog_categories!inner(id, name, slug),
-      catalog_variants(id),
+      catalog_product_images(storage_path, is_primary, sort_order),
+      catalog_variants(id, catalog_variant_stock(quantity, catalog_packaging_types(pieces_per_package))),
       catalog_product_field_values(
         id, option_id, value_text,
         catalog_field_options(label)
@@ -62,6 +65,17 @@ export async function getAllProducts(): Promise<ActionResult<ProductWithCategory
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     variantCount: row.catalog_variants?.length ?? 0,
+    primaryImagePath: (() => {
+      const imgs = row.catalog_product_images || [];
+      const primary = imgs.find((i: any) => i.is_primary) ?? imgs[0];
+      return primary?.storage_path ?? null;
+    })(),
+    stockPieces: (row.catalog_variants || []).reduce((sum: number, v: any) =>
+      sum + (v.catalog_variant_stock || []).reduce((s: number, st: any) => {
+        const ppp = st.catalog_packaging_types?.pieces_per_package ?? null;
+        const qty = Number(st.quantity) || 0;
+        return s + (ppp != null ? qty * Number(ppp) : qty);
+      }, 0), 0),
     fieldValues: (row.catalog_product_field_values || []).map((fv: any) => ({
       option: fv.catalog_field_options ? { label: fv.catalog_field_options.label } : null,
       valueText: fv.value_text,

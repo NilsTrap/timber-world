@@ -10,6 +10,7 @@ import { saveVariant, deleteVariant } from "../actions/variants";
 import { uploadVariantImage, deleteVariantImage } from "../actions/images";
 import { uploadFieldValueFile, getFieldValueFileUrl } from "../actions/fieldFiles";
 import { useLightbox, ImageThumbGrid } from "./CatalogImages";
+import { VariantStockCard } from "./VariantStockCard";
 import type { FieldValueState } from "./ProductDetailContent";
 import { VariantPackagingSection } from "./VariantPackagingSection";
 import { setVariantCurrencyOverride, type CurrencyPriceMap } from "../actions/currencies";
@@ -295,6 +296,9 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
               <p className="text-sm text-muted-foreground">No images yet. Upload variant-specific photos.</p>
             )}
           </div>
+
+          {/* Stock (manual, by packaging form) */}
+          <VariantStockCard variantId={variant.id} />
 
           {/* Packaging */}
           <div className="rounded-lg border bg-card p-5">
