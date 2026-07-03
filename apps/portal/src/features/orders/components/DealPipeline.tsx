@@ -35,54 +35,25 @@ function confirmTargetOf(block: GateBlock): { blockType: "party_signoff" | "acce
 }
 
 /**
- * Deal lifecycle pipeline (E3): a horizontal rail of the 5 milestones with the
- * current stage highlighted, an Advance control that surfaces unmet gate blocks
- * (and lets a party sign-off / acceptance be recorded inline), and a guarded
- * Cancel action.
+ * Deal lifecycle STAGE RAIL (E3): the horizontal rail of the 5 milestones with the
+ * current stage highlighted, plus the guarded Cancel action. Kept in the wide
+ * (center) column because the rail needs the width; the Advance control lives
+ * separately in the action column (see {@link DealAdvanceControl}).
  */
-export function DealPipeline({
+export function DealStageRail({
   orderId, lifecycleStage, onChanged,
 }: {
   orderId: string;
   lifecycleStage: string;
   onChanged: () => Promise<void> | void;
 }) {
-  const [evaluation, setEvaluation] = useState<AdvanceEvaluation | null>(null);
-  const [loadingEval, setLoadingEval] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   const cancelled = lifecycleStage === CANCELLED_STAGE;
-
-  const evaluate = useCallback(async () => {
-    setLoadingEval(true);
-    const res = await evaluateAdvanceAction(orderId);
-    if (res.success) { setEvaluation(res.data); setError(null); }
-    else setError(res.error);
-    setLoadingEval(false);
-  }, [orderId]);
-
-  useEffect(() => { evaluate(); }, [evaluate, lifecycleStage]);
-
-  const onAdvance = useCallback(async () => {
-    setBusy(true);
-    setError(null);
-    const res = await advanceDealAction(orderId);
-    setBusy(false);
-    if (!res.success) { setError(res.error); await evaluate(); return; }
-    await onChanged();
-  }, [orderId, onChanged, evaluate]);
-
-  const onConfirm = useCallback(async (blockType: "party_signoff" | "acceptance", blockKey: string) => {
-    if (!evaluation) return;
-    setBusy(true);
-    setError(null);
-    const res = await recordGateConfirmationAction(orderId, evaluation.currentStage, blockType, blockKey);
-    setBusy(false);
-    if (!res.success) { setError(res.error); return; }
-    await evaluate();
-  }, [orderId, evaluation, evaluate]);
+  const currentRank = LIFECYCLE_RANK[lifecycleStage] ?? -1;
+  const canCancel = isCancellableStage(lifecycleStage);
 
   const onCancel = useCallback(async () => {
     setBusy(true);
@@ -93,13 +64,6 @@ export function DealPipeline({
     if (!res.success) { setError(res.error); return; }
     await onChanged();
   }, [orderId, onChanged]);
-
-  const currentRank = LIFECYCLE_RANK[lifecycleStage] ?? -1;
-  const nextStage = evaluation?.nextStage ?? null;
-  const satisfied = evaluation?.satisfied ?? false;
-  const unmet = evaluation?.unmet ?? [];
-  const canAdvance = !cancelled && !!nextStage;
-  const canCancel = isCancellableStage(lifecycleStage);
 
   return (
     <div className="space-y-3">
@@ -146,52 +110,6 @@ export function DealPipeline({
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {/* Advance control + gate state */}
-      {canAdvance && (
-        <div className="rounded-lg border bg-card p-3 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm">
-              <span className="text-muted-foreground">Next milestone: </span>
-              <span className="font-medium">{stageLabel(nextStage)}</span>
-              {loadingEval ? (
-                <span className="ml-2 text-xs text-muted-foreground">checking gate…</span>
-              ) : satisfied ? (
-                <span className="ml-2 text-xs text-green-600">gate satisfied</span>
-              ) : (
-                <span className="ml-2 text-xs text-amber-600">{unmet.length} requirement{unmet.length === 1 ? "" : "s"} outstanding</span>
-              )}
-            </div>
-            <Button size="sm" onClick={onAdvance} disabled={busy || loadingEval || !satisfied}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-              Advance to {stageLabel(nextStage)}
-            </Button>
-          </div>
-
-          {!loadingEval && !satisfied && unmet.length > 0 && (
-            <ul className="space-y-1.5">
-              {unmet.map((block, idx) => {
-                const target = confirmTargetOf(block);
-                return (
-                  <li key={idx} className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-1.5">
-                    <span className="text-sm">
-                      <span className="text-amber-600 mr-1.5">•</span>
-                      {describeBlock(block)}
-                    </span>
-                    {target ? (
-                      <Button variant="outline" size="sm" onClick={() => onConfirm(target.blockType, target.blockKey)} disabled={busy}>
-                        <Check className="h-3.5 w-3.5" /> {target.label}
-                      </Button>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">satisfied outside this panel</span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      )}
-
       {/* Cancel confirm (no window.confirm — inline dialog) */}
       <AlertDialog open={confirmCancel} onOpenChange={(o) => { if (!o) setConfirmCancel(false); }}>
         <AlertDialogContent>
@@ -214,6 +132,116 @@ export function DealPipeline({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+/**
+ * The "Advance to next milestone" control — surfaces the next stage, whether its
+ * gate is satisfied, and the unmet blocks (with inline sign-off / acceptance).
+ * Laid out VERTICALLY (label above the button) so it fits the narrow action
+ * column. Renders nothing when there is nowhere to advance (cancelled / final).
+ */
+export function DealAdvanceControl({
+  orderId, lifecycleStage, onChanged,
+}: {
+  orderId: string;
+  lifecycleStage: string;
+  onChanged: () => Promise<void> | void;
+}) {
+  const [evaluation, setEvaluation] = useState<AdvanceEvaluation | null>(null);
+  const [loadingEval, setLoadingEval] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const cancelled = lifecycleStage === CANCELLED_STAGE;
+
+  const evaluate = useCallback(async () => {
+    setLoadingEval(true);
+    const res = await evaluateAdvanceAction(orderId);
+    if (res.success) { setEvaluation(res.data); setError(null); }
+    else setError(res.error);
+    setLoadingEval(false);
+  }, [orderId]);
+
+  useEffect(() => { evaluate(); }, [evaluate, lifecycleStage]);
+
+  const onAdvance = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    const res = await advanceDealAction(orderId);
+    setBusy(false);
+    if (!res.success) { setError(res.error); await evaluate(); return; }
+    await onChanged();
+  }, [orderId, onChanged, evaluate]);
+
+  const onConfirm = useCallback(async (blockType: "party_signoff" | "acceptance", blockKey: string) => {
+    if (!evaluation) return;
+    setBusy(true);
+    setError(null);
+    const res = await recordGateConfirmationAction(orderId, evaluation.currentStage, blockType, blockKey);
+    setBusy(false);
+    if (!res.success) { setError(res.error); return; }
+    await evaluate();
+  }, [orderId, evaluation, evaluate]);
+
+  const nextStage = evaluation?.nextStage ?? null;
+  const satisfied = evaluation?.satisfied ?? false;
+  const unmet = evaluation?.unmet ?? [];
+  const canAdvance = !cancelled && !!nextStage;
+
+  if (!canAdvance) {
+    // Nothing to advance to (final stage / cancelled) — surface any error only.
+    return error ? <p className="text-sm text-destructive">{error}</p> : null;
+  }
+
+  return (
+    <div className="rounded-lg border bg-card p-3 space-y-3">
+      {/* Label above the button (vertical) */}
+      <div className="space-y-2">
+        <div className="text-sm">
+          <div>
+            <span className="text-muted-foreground">Next milestone: </span>
+            <span className="font-medium">{stageLabel(nextStage)}</span>
+          </div>
+          {loadingEval ? (
+            <span className="text-xs text-muted-foreground">checking gate…</span>
+          ) : satisfied ? (
+            <span className="text-xs text-green-600">gate satisfied</span>
+          ) : (
+            <span className="text-xs text-amber-600">{unmet.length} requirement{unmet.length === 1 ? "" : "s"} outstanding</span>
+          )}
+        </div>
+        <Button className="w-full" size="sm" onClick={onAdvance} disabled={busy || loadingEval || !satisfied}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+          Advance to {stageLabel(nextStage)}
+        </Button>
+      </div>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {!loadingEval && !satisfied && unmet.length > 0 && (
+        <ul className="space-y-1.5">
+          {unmet.map((block, idx) => {
+            const target = confirmTargetOf(block);
+            return (
+              <li key={idx} className="space-y-1.5 rounded-md border bg-muted/30 px-3 py-2">
+                <span className="block text-sm">
+                  <span className="text-amber-600 mr-1.5">•</span>
+                  {describeBlock(block)}
+                </span>
+                {target ? (
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => onConfirm(target.blockType, target.blockKey)} disabled={busy}>
+                    <Check className="h-3.5 w-3.5" /> {target.label}
+                  </Button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">satisfied outside this panel</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

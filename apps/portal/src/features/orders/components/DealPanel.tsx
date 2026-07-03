@@ -14,7 +14,7 @@ import {
 import type { OrderLineItem, DocType, DealSide, LineUnit } from "../services/dealModel";
 import type { LineItemAmountPatch, OrderDealView } from "../services/orderDeals";
 import type { OrderDealViewResult } from "../actions/dealActions";
-import { DealPipeline } from "./DealPipeline";
+import { DealStageRail, DealAdvanceControl } from "./DealPipeline";
 import { DealLineAdder } from "./DealLineAdder";
 import { lineTotalCents } from "../services/documents/assemble";
 import {
@@ -150,6 +150,9 @@ export function DealPanel({ orderId }: { orderId: string }) {
     <div className="flex flex-col lg:flex-row gap-6 items-start">
       {/* LEFT — deal content */}
       <div className="flex-1 min-w-0 space-y-6">
+      {/* Lifecycle stage rail (needs the width — stays in the main column) */}
+      <DealStageRail orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
+
       {!hasDealData && (
         <EmptyState message="No deal data yet. Deals captured from intake (email / PO / meeting) populate line items here; you can also generate documents below once the deal has line items." />
       )}
@@ -248,10 +251,10 @@ export function DealPanel({ orderId }: { orderId: string }) {
       </div>
       </div>{/* end LEFT column */}
 
-      {/* RIGHT — actions: deal flow + margin */}
+      {/* RIGHT — actions: advance milestone + margin */}
       <div className="lg:w-80 shrink-0 space-y-6">
-        {/* Lifecycle pipeline (stages + gates) — advance / cancel the deal */}
-        <DealPipeline orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
+        {/* Advance-to-next-milestone control (vertical) — the rail stays on the left */}
+        <DealAdvanceControl orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
 
         {/* Owner margin approval (E5 §5.3) — now with the actual margin figures */}
         <div className="rounded-lg border bg-card p-4 space-y-3">
