@@ -1,8 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@plugin "tailwind-scrollbar-hide";
+
 /* Include UI package classes */
 @source "../../../../packages/ui/src/**/*.tsx";
+/* Plate editor components (namespaced) */
+@source "../features/documents/plate/**/*.tsx";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -53,6 +57,11 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
+
+  /* Plate editor */
+  --color-highlight: var(--highlight);
+  --color-brand: var(--brand);
+  --font-heading: var(--font-inter);
 }
 
 :root {
@@ -100,6 +109,10 @@
   --sidebar-accent-foreground: #1B4332;
   --sidebar-border: #E5DFD7;
   --sidebar-ring: #1B4332;
+
+  /* Plate editor (brand accent + highlight) */
+  --brand: #1B4332;
+  --highlight: oklch(0.852 0.199 91.936);
 }
 
 .dark {
@@ -139,6 +152,10 @@
   --sidebar-accent-foreground: #FAF6F1;
   --sidebar-border: #3D4447;
   --sidebar-ring: #4A9D6E;
+
+  /* Plate editor (brand accent + highlight) */
+  --brand: #4A9D6E;
+  --highlight: oklch(0.852 0.199 91.936);
 }
 
 @layer base {
