@@ -8,7 +8,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@timber/ui";
-import type { DealSide, LineUnit } from "../services/dealModel";
+import type { LineUnit } from "../services/dealModel";
 import type { OrderDealView } from "../services/orderDeals";
 import {
   getPickerCategories, getPickerProducts, getPickerVariants,
@@ -35,16 +35,16 @@ function variantLabel(v: PickerVariant): string {
 }
 
 /**
- * E5 · Per-side "add line" affordances for the Deal tab: a catalog picker
- * (category → product → variant → quantity, live-priced) and a free-text
- * custom line. Both append via the deal actions and hand the fresh deal view
+ * E5 · "Add line" affordances for the Deal tab: a catalog picker (category →
+ * product → variant → quantity, live-priced) and a free-text custom line. Both
+ * append to THIS deal's own order specification (A1 §2.1 — a deal carries only
+ * its own lines; there is no sell/buy side to pick) and hand the fresh deal view
  * back to the parent, which swaps it into local state.
  */
 export function DealLineAdder({
-  orderId, side, currency, canEditPrice, onApplied,
+  orderId, currency, canEditPrice, onApplied,
 }: {
   orderId: string;
-  side: DealSide;
   currency: string;
   canEditPrice: boolean;
   onApplied: (view: OrderDealView) => void;
@@ -62,13 +62,13 @@ export function DealLineAdder({
       </Button>
       {catalogOpen && (
         <CatalogDialog
-          orderId={orderId} side={side} currency={currency}
+          orderId={orderId} currency={currency}
           onClose={() => setCatalogOpen(false)} onApplied={onApplied}
         />
       )}
       {customOpen && (
         <CustomDialog
-          orderId={orderId} side={side} currency={currency} canEditPrice={canEditPrice}
+          orderId={orderId} currency={currency} canEditPrice={canEditPrice}
           onClose={() => setCustomOpen(false)} onApplied={onApplied}
         />
       )}
@@ -77,9 +77,9 @@ export function DealLineAdder({
 }
 
 function CatalogDialog({
-  orderId, side, currency, onClose, onApplied,
+  orderId, currency, onClose, onApplied,
 }: {
-  orderId: string; side: DealSide; currency: string;
+  orderId: string; currency: string;
   onClose: () => void; onApplied: (view: OrderDealView) => void;
 }) {
   const [categories, setCategories] = useState<PickerCategory[]>([]);
@@ -151,19 +151,19 @@ function CatalogDialog({
     if (!variantId || qty == null || qty <= 0) { setErr("Pick a variant and a quantity greater than zero."); return; }
     setSubmitting(true);
     setErr(null);
-    const res = await addCatalogLineItem({ orderId, side, variantId, quantity: qty });
+    const res = await addCatalogLineItem({ orderId, variantId, quantity: qty });
     setSubmitting(false);
     if (!res.success) { setErr(res.error); toast.error(res.error); return; }
     onApplied(res.data);
     toast.success("Catalog line added");
     onClose();
-  }, [orderId, side, variantId, quantity, onApplied, onClose]);
+  }, [orderId, variantId, quantity, onApplied, onClose]);
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add {side === "buy" ? "buy-side" : "sell-side"} line from catalog</DialogTitle>
+          <DialogTitle>Add line from catalog</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -224,9 +224,9 @@ function CatalogDialog({
 }
 
 function CustomDialog({
-  orderId, side, currency, canEditPrice, onClose, onApplied,
+  orderId, currency, canEditPrice, onClose, onApplied,
 }: {
-  orderId: string; side: DealSide; currency: string; canEditPrice: boolean;
+  orderId: string; currency: string; canEditPrice: boolean;
   onClose: () => void; onApplied: (view: OrderDealView) => void;
 }) {
   const [productName, setProductName] = useState("");
@@ -250,7 +250,6 @@ function CustomDialog({
     setErr(null);
     const res = await addCustomLineItem({
       orderId,
-      side,
       productName: productName.trim(),
       woodSpecies: woodSpecies.trim() === "" ? null : woodSpecies.trim(),
       thickness: thickness.trim() === "" ? null : thickness.trim(),
@@ -266,13 +265,13 @@ function CustomDialog({
     onApplied(res.data);
     toast.success("Custom line added");
     onClose();
-  }, [orderId, side, productName, woodSpecies, thickness, width, length, unit, pieces, volumeM3, unitPrice, canEditPrice, onApplied, onClose]);
+  }, [orderId, productName, woodSpecies, thickness, width, length, unit, pieces, volumeM3, unitPrice, canEditPrice, onApplied, onClose]);
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add {side === "buy" ? "buy-side" : "sell-side"} custom line</DialogTitle>
+          <DialogTitle>Add custom line</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">

@@ -69,7 +69,15 @@ export function DealPanel({ orderId }: { orderId: string }) {
   // Add/remove line actions return the fresh OrderDealView; swap it into local
   // state while preserving the viewer's admin flag (not carried on the view).
   const applyView = useCallback((view: OrderDealView) => {
-    setDeal((prev) => ({ ...view, viewerIsAdmin: prev?.viewerIsAdmin ?? false }));
+    setDeal((prev) => ({
+      ...view,
+      viewerIsAdmin: prev?.viewerIsAdmin ?? false,
+      // Sibling buy-leg cost is owner-resolved server-side (A3) and unaffected by
+      // editing THIS deal's own lines — preserve it across optimistic view swaps.
+      siblingBuyLegTotalCents: prev?.siblingBuyLegTotalCents ?? null,
+      hasSiblingBuyLeg: prev?.hasSiblingBuyLeg ?? false,
+      siblingBuyLegPriced: prev?.siblingBuyLegPriced ?? false,
+    }));
     setError(null);
   }, []);
 
@@ -122,18 +130,22 @@ export function DealPanel({ orderId }: { orderId: string }) {
   // already carries prices (so a non-admin editing a priced deal isn't blocked).
   const canEditPrice = isAdmin || deal.lineItems.some((li) => li.unitPriceCents != null);
   const marginApproved = !!deal.marginApprovedAt;
-  const sellItems = deal.lineItems.filter((li) => li.side === "sell");
-  const buyItems = deal.lineItems.filter((li) => li.side === "buy");
   const hasDealData = !!deal.dealCode || deal.lineItems.length > 0 || deal.documents.length > 0;
 
-  // Margin = sell revenue − buy cost, computed from the same line totals shown in
-  // the tables (row·footer·PDF all agree). Buy-side is often unpriced early on, so
-  // the margin is flagged provisional until buy lines carry prices.
-  const sellTotalCents = sellItems.reduce((s, li) => s + lineTotalCents(li), 0);
-  const buyTotalCents = buyItems.reduce((s, li) => s + lineTotalCents(li), 0);
+  // A1 (§2.1): a deal carries ONLY its own order — one specification table, no
+  // buy-side conflation. A3 (§5.3): margin = this deal's own line total (the sell
+  // subtotal) − the spine-sibling BUY leg's line total, which the server resolves
+  // via spine_id and hands over owner-only (§9.1). The buy figure is NOT derivable
+  // from this deal's own lines. The margin card is hidden entirely for non-admins,
+  // and on buy legs (a buy leg has no margin of its own — it IS the cost side).
+  const isBuyLeg = deal.dealKind === "purchase_only";
+  const showMargin = isAdmin && !isBuyLeg;
+  const sellTotalCents = deal.lineItems.reduce((s, li) => s + lineTotalCents(li), 0);
+  const buyTotalCents = deal.siblingBuyLegTotalCents ?? 0;
   const marginCents = sellTotalCents - buyTotalCents;
   const marginPct = sellTotalCents > 0 ? (marginCents / sellTotalCents) * 100 : null;
-  const marginProvisional = buyTotalCents === 0 && sellTotalCents > 0;
+  // Provisional until a sibling buy leg exists AND carries prices.
+  const marginProvisional = !deal.hasSiblingBuyLeg || !deal.siblingBuyLegPriced;
 
   const summary: Array<{ label: string; value: string | null }> = [
     { label: "Deal code", value: deal.dealCode },
@@ -171,15 +183,13 @@ export function DealPanel({ orderId }: { orderId: string }) {
         {deal.notes && <p className="mt-3 text-sm text-muted-foreground whitespace-pre-wrap">{deal.notes}</p>}
       </div>
 
-      {/* Line items — read-only amounts by default; admins can edit amounts (the
-          agent sometimes captures a line without a price). Anyone on the Deal tab
-          can add/remove lines (the actions enforce orders.view server-side). */}
+      {/* A1 (§2.1): ONE order-specification table = this deal's own line items.
+          No sell/buy split — the buy leg is a separate deal on the same spine.
+          Read-only amounts by default; admins can edit amounts (the agent
+          sometimes captures a line without a price). Anyone on the Deal tab can
+          add/remove lines (the actions enforce orders.view server-side). */}
       <LineItemsTable
-        title="Sell-side line items" side="sell" items={sellItems} currency={deal.currency}
-        isAdmin={isAdmin} canEditPrice={canEditPrice} orderId={orderId} onSaved={load} onApplied={applyView}
-      />
-      <LineItemsTable
-        title="Buy-side line items" side="buy" items={buyItems} currency={deal.currency}
+        items={deal.lineItems} currency={deal.currency}
         isAdmin={isAdmin} canEditPrice={canEditPrice} orderId={orderId} onSaved={load} onApplied={applyView}
       />
 
@@ -257,7 +267,11 @@ export function DealPanel({ orderId }: { orderId: string }) {
         {/* Advance-to-next-milestone control (vertical) — the rail stays on the left */}
         <DealAdvanceControl orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
 
-        {/* Owner margin approval (E5 §5.3) — now with the actual margin figures */}
+        {/* Owner margin approval (§5.3). A3: sell subtotal = this deal's own lines;
+            buy subtotal = the spine-sibling buy leg's line total (§2.3), resolved
+            server-side. Owner/admin ONLY (§9.1) — never shown to ordinary users,
+            and not on a buy leg. */}
+        {showMargin && (
         <div className="rounded-lg border bg-card p-4 space-y-3">
           <div className="flex items-center gap-2 text-sm">
             <ShieldCheck className={marginApproved ? "h-4 w-4 text-green-600" : "h-4 w-4 text-muted-foreground"} />
@@ -272,8 +286,8 @@ export function DealPanel({ orderId }: { orderId: string }) {
               <dd className="font-medium tabular-nums">{fmtCents(sellTotalCents, deal.currency)}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Buy subtotal</dt>
-              <dd className="font-medium tabular-nums">{fmtCents(buyTotalCents, deal.currency)}</dd>
+              <dt className="text-muted-foreground">Buy subtotal <span className="text-muted-foreground/70">(sourcing)</span></dt>
+              <dd className="font-medium tabular-nums">{deal.hasSiblingBuyLeg ? fmtCents(buyTotalCents, deal.currency) : "—"}</dd>
             </div>
             <div className="flex justify-between border-t pt-1">
               <dt className="font-medium">Margin</dt>
@@ -284,20 +298,23 @@ export function DealPanel({ orderId }: { orderId: string }) {
             </div>
           </dl>
           {marginProvisional && (
-            <p className="text-xs text-amber-600">Buy-side has no prices yet — margin is provisional.</p>
+            <p className="text-xs text-amber-600">
+              {deal.hasSiblingBuyLeg
+                ? "The sourced buy leg has no prices yet — margin is provisional."
+                : "No sourced buy leg yet — margin is provisional."}
+            </p>
           )}
-          {isAdmin && (
-            marginApproved ? (
-              <Button variant="outline" size="sm" className="w-full" onClick={() => onToggleMargin(false)} disabled={savingMargin}>
-                {savingMargin ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Revoke approval
-              </Button>
-            ) : (
-              <Button size="sm" className="w-full" onClick={() => onToggleMargin(true)} disabled={savingMargin}>
-                {savingMargin ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Approve margin
-              </Button>
-            )
+          {marginApproved ? (
+            <Button variant="outline" size="sm" className="w-full" onClick={() => onToggleMargin(false)} disabled={savingMargin}>
+              {savingMargin ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Revoke approval
+            </Button>
+          ) : (
+            <Button size="sm" className="w-full" onClick={() => onToggleMargin(true)} disabled={savingMargin}>
+              {savingMargin ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Approve margin
+            </Button>
           )}
         </div>
+        )}
 
         {/* Activity log — status changes, edits, etc. */}
         <div className="rounded-lg border bg-card p-4 space-y-2">
@@ -386,9 +403,9 @@ function rowChanged(li: OrderLineItem, d: AmountDraft): boolean {
 }
 
 function LineItemsTable({
-  title, side, items, currency, isAdmin, canEditPrice, orderId, onSaved, onApplied,
+  items, currency, isAdmin, canEditPrice, orderId, onSaved, onApplied,
 }: {
-  title: string; side: DealSide; items: OrderLineItem[]; currency: string;
+  items: OrderLineItem[]; currency: string;
   isAdmin: boolean; canEditPrice: boolean; orderId: string;
   onSaved: () => Promise<void> | void; onApplied: (view: OrderDealView) => void;
 }) {
@@ -467,7 +484,7 @@ function LineItemsTable({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold flex items-center gap-1.5"><FileText className="h-4 w-4 text-muted-foreground" />{title}</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-1.5"><FileText className="h-4 w-4 text-muted-foreground" />Order specification</h3>
         <div className="flex items-center gap-2">
           {isAdmin && (
             editing ? (
@@ -482,7 +499,7 @@ function LineItemsTable({
             )
           )}
           {!editing && (
-            <DealLineAdder orderId={orderId} side={side} currency={currency} canEditPrice={canEditPrice} onApplied={onApplied} />
+            <DealLineAdder orderId={orderId} currency={currency} canEditPrice={canEditPrice} onApplied={onApplied} />
           )}
         </div>
       </div>
@@ -505,7 +522,7 @@ function LineItemsTable({
           {items.length === 0 && (
             <TableRow>
               <TableCell colSpan={9} className="text-center text-xs text-muted-foreground py-6">
-                No {side === "buy" ? "buy" : "sell"}-side lines yet. Add from catalog or a custom line.
+                No line items yet. Add from catalog or a custom line.
               </TableCell>
             </TableRow>
           )}

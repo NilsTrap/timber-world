@@ -255,7 +255,11 @@ const HIDDEN_PARTY: DealPartyRef = { id: null, code: null, name: null };
  * - buy-side line items on a conflated legacy `buy_sell` row are the
  *   upstream purchase (supplier pricing) → dropped without
  *   `supplier_identity`; on single-sided deals items are the deal's own
- *   terms and stay
+ *   terms and stay. A5 note (§2.1): new deals never emit side='buy' (buy goods
+ *   live on the separate buy leg), so this guard now only protects RESIDUAL
+ *   legacy conflated rows that the A2 migration could not place — kept as
+ *   defence-in-depth until those rows are cleaned up (do NOT remove it: staging
+ *   still holds one such orphan; see docs/a2-buy-line-migration-report.md).
  * The seller embed stays: it is every counterparty's own deal partner.
  */
 export function projectDealView<T extends DealViewLike>(
@@ -269,6 +273,10 @@ export function projectDealView<T extends DealViewLike>(
   const seeSupplier = access.domainVisible("supplier_identity");
 
   const lineItems = view.lineItems
+    // A5 defence-in-depth: drop supplier-priced buy lines on a RESIDUAL legacy
+    // conflated buy_sell row from viewers without supplier_identity. New deals
+    // never produce side='buy' (buy goods live on the buy leg), so this is a no-op
+    // for them — but it must stay while any legacy buy_sell+buy-line row survives.
     .filter((item) => item.side !== "buy" || view.dealKind !== "buy_sell" || seeSupplier)
     .map((item) =>
       seeTerms ? item : { ...item, unitPriceCents: null, vatRate: null, lineTotalCents: null },

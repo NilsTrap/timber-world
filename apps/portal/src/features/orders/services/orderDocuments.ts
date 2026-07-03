@@ -111,8 +111,16 @@ export async function assembleDocumentData(db: DbClient, actor: ActorContext, in
   const side: DealSide = input.side ?? defaultSideFor(input.docType);
   const admin = createAdminClient() as AnyDb;
 
+  // A4 (§8.2): a document's parties are the deal's bilateral seller/buyer.
+  // Buy-side docs (purchase_spec): on a spawned buy leg `producer` is NULL and the
+  // house is the buyer, so fall through producer → the `buyer` embed (the house) —
+  // this fixes the empty buyer card on buy legs. On a LEGACY conflated buy_sell row
+  // the producer is the sourcing party, so keep it as the purchase doc's buyer (no
+  // regression). Sell-side docs use the bilateral buyer (== customer on legacy rows).
   const sellerCard = await fetchPartyCard(admin, deal.seller.id);
-  const buyerOrgId = side === "buy" ? deal.producer.id : deal.customer.id;
+  const buyerOrgId = side === "buy"
+    ? (deal.producer.id ?? deal.buyer.id ?? deal.customer.id)
+    : (deal.buyer.id ?? deal.customer.id);
   const buyerCard = await fetchPartyCard(admin, buyerOrgId);
 
   const entityCode = (deal.seller.code || DEFAULT_ENTITY_CODE).toUpperCase();
@@ -143,7 +151,18 @@ export async function assembleDocumentData(db: DbClient, actor: ActorContext, in
     deliveryDeadline: deal.deliveryDeadline,
     notes: deal.notes,
     externalRefs: deal.externalRefs,
-    lineItems: deal.lineItems,
+    // A4 (§2.1/§8.2): assemble from the deal's OWN lines — this deal-aware scoping
+    // lives here because buildDocumentData is pure (no dealKind). A single-sided leg
+    // (a sell leg, or a purchase_only BUY leg) holds only its own lines, all stored
+    // side='sell', so assemble them ALL — this is the A4 fix (the old
+    // side===docSide filter wrongly dropped a buy leg's own lines). A LEGACY
+    // conflated buy_sell row still carries BOTH sides on one order, so there we pick
+    // the doc's own side: keeps supplier buy lines OUT of a sell document (no leak,
+    // since the doc path bypasses projectDealView) and sell lines out of a purchase
+    // document — exactly the pre-A4 behaviour for those residual rows.
+    lineItems: deal.dealKind === "buy_sell"
+      ? deal.lineItems.filter((li) => li.side === side)
+      : deal.lineItems,
   });
 
   return { success: true, data: { data, seq, side } };

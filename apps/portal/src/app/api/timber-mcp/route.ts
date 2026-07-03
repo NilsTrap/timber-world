@@ -179,8 +179,11 @@ async function callTool(name: string, args: any, role: Role) {
     }
     case "timber_upsert_deal_line_items": {
       if (!args?.deal_id) return toolErr("deal_id is required");
-      const side: DealSide = args?.side === "buy" ? "buy" : "sell";
-      const res = await replaceLineItems(db, SERVICE_ACTOR, args.deal_id, side, mapLineItemArgs(args?.items));
+      // A5 (§2.1): a deal carries only its OWN lines (always stored side='sell').
+      // The `side` arg is DEPRECATED and ignored — buy-side goods live on the
+      // separate buy-leg deal (upsert them by targeting that deal's id). Forcing
+      // 'sell' guarantees no new side='buy' writes.
+      const res = await replaceLineItems(db, SERVICE_ACTOR, args.deal_id, "sell", mapLineItemArgs(args?.items));
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     case "timber_allocate_deal_code": {

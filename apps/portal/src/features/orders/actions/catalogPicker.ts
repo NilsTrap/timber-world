@@ -131,7 +131,9 @@ export async function getPickerVariants(productId: string): Promise<ActionResult
  */
 export async function addCatalogLineItem(input: {
   orderId: string;
-  side: DealSide;
+  /** A1/A5 (§2.1): a deal carries only its OWN lines (always stored side 'sell').
+   *  Retained optional for back-compat; the UI no longer passes it. */
+  side?: DealSide;
   variantId: string;
   quantity: number;
 }): Promise<ActionResult<OrderDealView>> {
@@ -164,7 +166,7 @@ export async function addCatalogLineItem(input: {
       ? Math.round(resolved.unitPriceCents * input.quantity)
       : null;
 
-  const res = await appendLineItem(a.db, a.actor, input.orderId, input.side, {
+  const res = await appendLineItem(a.db, a.actor, input.orderId, input.side ?? "sell", {
     productName: resolved.productName,
     woodSpecies: resolved.woodSpecies,
     humidity: resolved.humidity,
@@ -201,7 +203,9 @@ export async function addCatalogLineItem(input: {
  */
 export async function addCustomLineItem(input: {
   orderId: string;
-  side: DealSide;
+  /** A1/A5 (§2.1): a deal carries only its OWN lines (always stored side 'sell').
+   *  Retained optional for back-compat; the UI no longer passes it. */
+  side?: DealSide;
   productName?: string | null;
   woodSpecies?: string | null;
   thickness?: string | null;
@@ -218,7 +222,7 @@ export async function addCustomLineItem(input: {
   if (!(await requireLineWriteAccess(a.actor, a.orgId))) {
     return { success: false, error: "You cannot price deal lines", code: "FORBIDDEN" };
   }
-  const res = await appendLineItem(a.db, a.actor, input.orderId, input.side, {
+  const res = await appendLineItem(a.db, a.actor, input.orderId, input.side ?? "sell", {
     productName: input.productName ?? null,
     woodSpecies: input.woodSpecies ?? null,
     thickness: input.thickness ?? null,

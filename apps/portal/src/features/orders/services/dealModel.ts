@@ -30,6 +30,13 @@ export interface ActorContext {
 export interface OrderLineItem {
   id?: string;
   orderId?: string;
+  /**
+   * A5 (spec §2.1): DEPRECATED as a discriminator. A deal carries only its OWN
+   * lines, always stored 'sell' — the UI + MCP + createDeal write paths never emit
+   * 'buy'. The column is RETAINED (not dropped) for legacy rows + rollback safety;
+   * do NOT write 'buy'. Residual legacy 'buy' rows on conflated buy_sell deals are
+   * handled by the A2 migration + the dealFields buy-drop guard.
+   */
   side: DealSide;
   lineNo: number;
   productName: string | null;
@@ -136,6 +143,8 @@ export function mapLineItem(row: any): OrderLineItem {
 export function lineItemToRow(orderId: string, it: Partial<OrderLineItem>, index: number) {
   return {
     order_id: orderId,
+    // A5 (§2.1): default 'sell'; the write paths never pass 'buy' (a deal owns
+    // only its own lines). Column retained for legacy/rollback — do not write 'buy'.
     side: it.side ?? "sell",
     line_no: it.lineNo ?? index + 1,
     product_name: it.productName ?? null,

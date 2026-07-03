@@ -52,7 +52,8 @@ eq("defaultSide purchase", defaultSideFor("purchase_spec"), "buy");
 eq("defaultSide sales", defaultSideFor("sales_spec"), "sell");
 eq("refLabel po", refLabel("client_po"), "Client PO");
 
-// buildDocumentData — LV seller → GB buyer = export 0% VAT; only 'sell' items; drop 'other' refs
+// buildDocumentData — LV seller → GB buyer = export 0% VAT; assembles from the
+// deal's OWN lines regardless of legacy `side` value (A4); drop 'other' refs
 const data = buildDocumentData({
   docType: "sales_spec", side: "sell", docNumber: "Spec No 1", docDate: "2026-06-16T00:00:00Z",
   dealCode: "TIMSOM001", currency: "EUR",
@@ -66,15 +67,17 @@ const data = buildDocumentData({
   ],
   lineItems: [
     li({ side: "sell", lineNo: 1, productName: "Oak board", unit: "m3", volumeM3: 2, unitPriceCents: 45000 }),
-    li({ side: "buy", lineNo: 1, productName: "Buy-side noise", unit: "m3", volumeM3: 99, unitPriceCents: 1 }),
+    // A line carrying a legacy side='buy' tag on the SAME order is STILL assembled:
+    // a document reads the deal's own lines, not a side subset (A4). 99 m³ × 1c = 99c.
+    li({ side: "buy", lineNo: 2, productName: "Second own line (legacy buy tag)", unit: "m3", volumeM3: 99, unitPriceCents: 1 }),
   ],
 });
 eq("title", data.docTitle, "SALES SPECIFICATION");
-eq("only sell line included", data.lineItems.length, 1);
-eq("subtotal", data.totals.subtotalCents, 90000);
+eq("both own lines included regardless of side", data.lineItems.length, 2);
+eq("subtotal = all own lines", data.totals.subtotalCents, 90099);
 eq("export VAT 0%", data.totals.vatRate, 0);
-eq("total = subtotal at 0% VAT", data.totals.totalCents, 90000);
-eq("total volume only sell", data.totals.totalVolumeM3, 2);
+eq("total = subtotal at 0% VAT", data.totals.totalCents, 90099);
+eq("total volume = all own lines", data.totals.totalVolumeM3, 101);
 eq("incoterms with place", data.incoterms, "FCA Riga");
 eq("'other' ref filtered out, po kept", data.externalRefs, [{ label: "Client PO", value: "PO-9" }]);
 ok("amountInWords non-empty", typeof data.totals.amountInWords === "string" && data.totals.amountInWords.length > 0);

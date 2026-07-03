@@ -34,6 +34,7 @@ import { createAdminClient } from "@timber/database";
 import type { ActorContext } from "@/features/orders/services/dealModel";
 import { createSpine, attachDealToSpine } from "@/features/orders/services/spines";
 import { allocateDealCode, createDeal } from "@/features/orders/services/orderDeals";
+import { runBuyLineMigration } from "./lib/buyLineMigration.mts";
 
 const APPLY = process.argv.includes("--apply");
 
@@ -126,6 +127,11 @@ async function main() {
 
   if (!APPLY) {
     console.log(`\nDry-run only. Re-run with --apply to execute.`);
+    // Preview the buy-line phase too (read-only under apply=false). NOTE: buy legs
+    // that THIS run's split step would spawn don't exist yet in a dry-run, so orders
+    // awaiting a fresh buy leg may show here as "no buy leg" — they resolve once
+    // --apply creates the legs. Already-split + in-place cases preview accurately.
+    await runBuyLineMigration(db, false);
     return;
   }
 
@@ -214,6 +220,12 @@ async function main() {
   const bookMapped = await mapAddressBooks(db);
   console.log(`Address books: +${bookMapped.customers} is_customer, +${bookMapped.suppliers} is_supplier (additive)`);
 
+  // ── 5) buy-line normalization (Spec-Alignment Wave · A2) ─────────────────────
+  // Move any conflated side='buy' lines onto their owning buy leg (the buy legs
+  // spawned above), stored side='sell'. IDENTICAL logic to the standalone A2
+  // staging migration (shared lib) so the cutover stays coherent (spec §2.1/§2.3).
+  const buyLineRes = await runBuyLineMigration(db, APPLY);
+
   // ── reconcile ──────────────────────────────────────────────────────────────
   const { data: after } = await db
     .from("orders")
@@ -265,13 +277,15 @@ async function main() {
   if (linkErrors.length) linkErrors.slice(0, 20).forEach((e) => console.log(`  link: ${e}`));
   if (orphanBuyLegs.length) console.log(`  orphan buy-leg ids: ${orphanBuyLegs.map((o) => o.id).join(", ")}`);
 
+  console.log(`buy-line normalization:  ${buyLineRes.ok ? "ok" : "FAILED"}  (moved ${buyLineRes.movedLines} line[s]; ${buyLineRes.unresolved.length} reported)`);
   const okReconcile =
     validNoSpine.length === 0 &&
     validNoCode.length === 0 &&
     stillUnsplit.length === 0 &&
     linkErrors.length === 0 &&
     dupLinks.length === 0 &&
-    orphanBuyLegs.length === 0;
+    orphanBuyLegs.length === 0 &&
+    buyLineRes.ok;
   console.log(`\n${okReconcile ? "✓ RECONCILED" : "✗ RECONCILE FAILED"}`);
   if (!okReconcile) process.exitCode = 1;
 }

@@ -33,6 +33,8 @@ const ALL_TYPES: DocType[] = ["sales_spec", "purchase_spec", "contract", "profor
   for (const docType of ALL_TYPES) {
     ok(`${docType} renderer implemented`, isRendererImplemented(docType));
     const data = buildDocumentData({
+      // `side` is the doc-level numbering/labelling side (purchase docs → buy);
+      // it no longer selects lines (A4) — the deal's own lines assemble as-is.
       docType, side: docType === "purchase_spec" ? "buy" : "sell",
       docNumber: "TEST-1", docDate: "2026-06-16T00:00:00Z", dealCode: "TIMSOM001", currency: "EUR",
       seller: { name: "Timber International", country: "LV", regNo: "40000", vatNo: "LV40000", bankName: "Swedbank", bankAccount: "LV00..." },
@@ -40,7 +42,7 @@ const ALL_TYPES: DocType[] = ["sales_spec", "purchase_spec", "contract", "profor
       incoterms: "FCA", incotermsPlace: "Riga", advancePct: 30, paymentTerms: "30/70 advance/balance",
       deliveryTerms: "By road", deliveryDeadline: "July 2026", notes: "Handle with care",
       externalRefs: [{ refType: "client_po", refValue: "PO-9", label: null }],
-      lineItems: [li({ lineNo: 1 }), li({ lineNo: 2, side: docType === "purchase_spec" ? "buy" : "sell", productName: "Ash board", woodSpecies: "Ash", volumeM3: 1.5, unitPriceCents: 38000 })],
+      lineItems: [li({ lineNo: 1 }), li({ lineNo: 2, productName: "Ash board", woodSpecies: "Ash", volumeM3: 1.5, unitPriceCents: 38000 })],
     });
     const rendered = renderDocument(data);
     ok(`${docType} mime`, rendered.mimeType === "application/pdf");

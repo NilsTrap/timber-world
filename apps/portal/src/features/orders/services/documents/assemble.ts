@@ -72,13 +72,20 @@ export interface BuildDocumentDataInput {
   deliveryDeadline: string | null;
   notes: string | null;
   externalRefs: OrderExternalRef[];
-  /** All line items for the deal; filtered to `side` here. */
+  /** The deal's OWN line items (A4 §2.1/§8.2 — a document assembles from the deal
+   *  that owns the lines; `side` no longer subsets them). */
   lineItems: OrderLineItem[];
 }
 
 /** Pure: build the render-ready DocumentData (VAT from the parties' countries). */
 export function buildDocumentData(input: BuildDocumentDataInput): DocumentData {
-  const items = input.lineItems.filter((li) => li.side === input.side);
+  // A4 (§2.1/§8.2): assemble every line handed in — this pure fn no longer subsets
+  // by `side` (the old `li.side === input.side` filter wrongly dropped a spawned buy
+  // leg's own lines, which are stored side='sell'). The DEAL-AWARE scoping of "the
+  // deal's own lines" (excluding residual conflated buy_sell buy lines so supplier
+  // pricing can't leak into a doc) is done by the caller assembleDocumentData, which
+  // has the deal's dealKind. `side` stays only for numbering/labelling.
+  const items = input.lineItems;
   const docLines = items.map(toDocLine);
   const subtotalCents = docLines.reduce((s, l) => s + (l.lineTotalCents ?? 0), 0);
   const totalVolumeM3 = items.reduce((s, l) => s + (l.volumeM3 ?? 0), 0);

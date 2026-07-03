@@ -200,14 +200,14 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "timber_upsert_deal_line_items",
-    description: "Replace all line items for a deal side ('sell' or 'buy') with the provided list. Idempotent (full replace).",
+    description: "Replace ALL of a deal's own line items with the provided list. Idempotent (full replace). A deal carries only its own lines (spec §2.1); buy-side goods live on the separate buy-leg deal — upsert them by targeting that deal's id.",
     readOnly: false,
     lifecycle: "line_items",
     inputSchema: {
       type: "object",
       properties: {
         deal_id: { type: "string", description: "Deal UUID." },
-        side: { type: "string", enum: ["sell", "buy"], description: "Which side's items to replace (default 'sell')." },
+        side: { type: "string", enum: ["sell", "buy"], description: "DEPRECATED & ignored (A5, spec §2.1): a deal has only its own lines. Retained for back-compat; the deal's own lines are always replaced." },
         items: { type: "array", description: "Line items (see timber_create_deal.line_items shape).", items: { type: "object" } },
       },
       required: ["deal_id", "items"],
