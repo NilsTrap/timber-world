@@ -27,6 +27,7 @@ import { FixedToolbarKit } from '@/features/documents/plate/editor/plugins/fixed
 import { FloatingToolbarKit } from '@/features/documents/plate/editor/plugins/floating-toolbar-kit';
 import { FontKit } from '@/features/documents/plate/editor/plugins/font-kit';
 import { LineHeightKit } from '@/features/documents/plate/editor/plugins/line-height-kit';
+import { LineItemsKit } from '@/features/documents/plate/editor/plugins/line-items-kit';
 import { LinkKit } from '@/features/documents/plate/editor/plugins/link-kit';
 import { ListKit } from '@/features/documents/plate/editor/plugins/list-kit';
 import { MarkdownKit } from '@/features/documents/plate/editor/plugins/markdown-kit';
@@ -47,6 +48,7 @@ export const EditorKit = [
   ...BasicBlocksKit,
   ...CodeBlockKit,
   ...TableKit,
+  ...LineItemsKit,
   ...ToggleKit,
   ...TocKit,
   ...MediaKit,
