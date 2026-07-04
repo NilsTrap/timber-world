@@ -66,6 +66,7 @@ Created 2026-07-04. Every subtask's full spec is THIS file §2 — read it first
 | M — Chain visibility | `px77xq` | M1 `5s8w33` (supersedes `ey65kr`) |
 | N — Meeting fixes | `tjda6t` | N1 `737vy5` · N4 `dccjvb` · N2 `khx3vd` · N3 `qns35x` |
 | O — Inventory migration | `xq363b` | O1 `jkcdxu` (updates `9va5xt`) |
+| P — Add-product buttons (UAT 2026-07-04 evening: product creation has NO UI path — full spec in the task notes) | `mugtxc` | P1 `tdcw5p` — runs as an EXTRA parallel sub-agent (owns AllProductsPage, CategoryDetailTabs, NewProductDialog; zero overlap with streams 1–5) |
 
 ## 4. Parallelization for the orchestrator (sub-agent streams)
 
