@@ -17,12 +17,24 @@ import { useMounted } from '@/features/documents/plate/hooks/use-mounted';
 import { inlineSuggestionVariants } from '@/features/documents/plate/lib/suggestion';
 import { cn } from '@/features/documents/plate/lib/utils';
 import { MERGE_FIELD_LABELS, basePathOf } from '@/features/documents/compiler/registry';
+import { useCatalogTemplateFields } from '@/features/documents/plate/hooks/use-catalog-template-fields';
 
-/** Friendly label for a merge-field token (helper-stripped fallback). */
-function mergeFieldLabel(value: unknown): string {
+/**
+ * Friendly label for a merge-field token. `dynamic` is the composed-on-top
+ * `attr.<key>` → label map (catalog fields, S1); the static MERGE_FIELD_LABELS is
+ * never mutated. Falls back to the helper-stripped base path, then the raw token.
+ */
+function mergeFieldLabel(value: unknown, dynamic: Record<string, string> = {}): string {
   const raw = typeof value === 'string' ? value : '';
   const base = basePathOf(raw);
-  return MERGE_FIELD_LABELS[raw] ?? MERGE_FIELD_LABELS[base] ?? base ?? raw;
+  return (
+    dynamic[raw] ??
+    MERGE_FIELD_LABELS[raw] ??
+    dynamic[base] ??
+    MERGE_FIELD_LABELS[base] ??
+    base ??
+    raw
+  );
 }
 
 import {
@@ -44,6 +56,10 @@ export function MentionElement(
   const focused = useFocused();
   const mounted = useMounted();
   const readOnly = useReadOnly();
+  // Dynamic catalog-field labels (attr.<key>) composed over the static map so a
+  // placed catalog-column pill reads its friendly field label (S1).
+  const { labelMap } = useCatalogTemplateFields();
+  const label = mergeFieldLabel(element.value, labelMap);
 
   return (
     <PlateElement
@@ -69,13 +85,13 @@ export function MentionElement(
         <>
           {props.children}
           {props.prefix}
-          {mergeFieldLabel(element.value)}
+          {label}
         </>
       ) : (
         // Others like Android https://github.com/ianstormtaylor/slate/pull/5360
         <>
           {props.prefix}
-          {mergeFieldLabel(element.value)}
+          {label}
           {props.children}
         </>
       )}

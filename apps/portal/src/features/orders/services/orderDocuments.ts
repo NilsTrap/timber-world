@@ -12,11 +12,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sanitizeStorageFileName } from "@/lib/utils/storage";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
-import type { ActorContext, DealSide, DocType, DocState, DbClient } from "./dealModel";
+import type { ActorContext, DealSide, DocType, DocState, DbClient, OrderLineItem } from "./dealModel";
 import { getOrderDeal } from "./orderDeals";
 import { allocateCounter, buildDocNumber, docNumberScope } from "./numbering";
-import { buildDocumentData, defaultSideFor } from "./documents/assemble";
+import { buildDocumentData, defaultSideFor, type AssemblyLine } from "./documents/assemble";
 import type { DocumentData, PartyCard } from "./documents/types";
+import { readLineFieldValues } from "@/features/catalog/services/lineFieldValues";
+import { FIELD_KEY_TO_LINE_ATTR } from "@/features/catalog/dealPricing";
 import { canGenerateOnDeal } from "./documents/registry";
 import { getDocumentGenerator } from "./documents/port";
 
@@ -108,6 +110,67 @@ async function fetchPartyCard(admin: AnyDb, orgId: string | null): Promise<Party
 }
 
 /**
+ * S2 · Resolve a line's render-ready `attr` map (custom catalog field values →
+ * display strings), merging product ∪ variant (variant wins, done inside the
+ * reader) and FALLING BACK to the line's OWN stored classic scalar when a catalog
+ * value is absent for a classic key (wood_species / humidity / processing /
+ * quality / product-type). Reserved keys `_packaging` / `_piecesPerPackage` carry
+ * the variant's default packaging. Pure over the pre-fetched values.
+ */
+async function buildLineAttr(admin: AnyDb, li: OrderLineItem): Promise<Record<string, string>> {
+  const attr: Record<string, string> = {};
+  if (li.catalogVariantId || li.catalogProductId) {
+    const { fields, packaging } = await readLineFieldValues(admin, {
+      variantId: li.catalogVariantId,
+      productId: li.catalogProductId,
+    });
+    for (const [key, v] of Object.entries(fields)) attr[key] = v.value;
+    if (packaging) {
+      if (packaging.name) attr._packaging = packaging.name;
+      if (packaging.piecesPerPackage) attr._piecesPerPackage = String(packaging.piecesPerPackage);
+    }
+  }
+  // Fallback: a classic catalog key with no catalog value uses the line's stored scalar.
+  const scalars = li as unknown as Record<string, unknown>;
+  for (const [fieldKey, m] of Object.entries(FIELD_KEY_TO_LINE_ATTR)) {
+    if (attr[fieldKey]) continue;
+    const v = scalars[m.value as string];
+    if (v != null && v !== "") attr[fieldKey] = String(v);
+  }
+  return attr;
+}
+
+/**
+ * S2 · The house user who generated the document — populated HOUSE-ONLY. A
+ * counterparty or the service agent (MCP) must never leak the generating person's
+ * identity onto a document the other party reads. Condition: the actor has a
+ * concrete portal user, is NOT a service agent, AND is either a platform admin
+ * (owner) or a member of the deal's SELLER org (the house on a sell deal). A
+ * non-admin house user on a BUY leg (house = buyer there) yields null — safe (no
+ * leak); such purchase docs are typically owner/admin-generated anyway.
+ */
+async function resolveIssuer(
+  admin: AnyDb,
+  actor: ActorContext,
+  sellerOrgId: string | null,
+): Promise<DocumentData["issuer"]> {
+  if (!actor.portalUserId || actor.isServiceAgent) return null;
+  const { data: u } = await admin
+    .from("portal_users")
+    .select("name, email, phone, organisation_id")
+    .eq("id", actor.portalUserId)
+    .maybeSingle();
+  if (!u) return null;
+  const isHouse = actor.isPlatformAdmin || (!!u.organisation_id && u.organisation_id === sellerOrgId);
+  if (!isHouse) return null;
+  return {
+    name: (u.name as string | null) ?? "",
+    email: (u.email as string | null) ?? null,
+    phone: (u.phone as string | null) ?? null,
+  };
+}
+
+/**
  * Assemble the full render-ready DocumentData for a deal + doc type + side,
  * allocating the document number (Timber owns numbering). This is the payload
  * the Oscar generator consumes (timber_get_document_data) and that the local
@@ -190,6 +253,36 @@ export async function assembleDocumentData(db: DbClient, actor: ActorContext, in
     docNumber = buildDocNumber({ docType: input.docType, entityCode, date: docDate, seq });
   }
 
+  // A4 (§2.1/§8.2): assemble from the deal's OWN lines — this deal-aware scoping
+  // lives here because buildDocumentData is pure (no dealKind). A single-sided leg
+  // (a sell leg, or a purchase_only BUY leg) holds only its own lines, all stored
+  // side='sell', so assemble them ALL — this is the A4 fix (the old
+  // side===docSide filter wrongly dropped a buy leg's own lines). A LEGACY
+  // conflated buy_sell row still carries BOTH sides on one order, so there we pick
+  // the doc's own side: keeps supplier buy lines OUT of a sell document (no leak,
+  // since the doc path bypasses projectDealView) and sell lines out of a purchase
+  // document — exactly the pre-A4 behaviour for those residual rows.
+  const scopedLines: OrderLineItem[] = deal.dealKind === "buy_sell"
+    ? deal.lineItems.filter((li) => li.side === side)
+    : deal.lineItems;
+
+  // S2 · enrich each line with its custom catalog attributes (attr.<field_key>),
+  // resolve the house-only issuer + the deal's spine code — in parallel. The admin
+  // client reads catalog values / portal user / spine regardless of the caller's
+  // RLS (same pattern as the party cards above). The pure assembler only copies
+  // `attr` / issuer / spineCode through, so assemble.ts stays DB-free.
+  const [assemblyLines, issuer, spineCode] = await Promise.all([
+    Promise.all(
+      scopedLines.map(async (li): Promise<AssemblyLine> => ({ ...li, attr: await buildLineAttr(admin, li) })),
+    ),
+    resolveIssuer(admin, actor, deal.seller.id),
+    (async (): Promise<string | null> => {
+      if (!deal.spineId) return null;
+      const { data: sp } = await admin.from("spines").select("code").eq("id", deal.spineId).maybeSingle();
+      return (sp?.code as string | null) ?? null;
+    })(),
+  ]);
+
   const data = buildDocumentData({
     docType: input.docType,
     side,
@@ -200,6 +293,8 @@ export async function assembleDocumentData(db: DbClient, actor: ActorContext, in
     currency: deal.currency,
     seller: sellerCard,
     buyer: buyerCard,
+    issuer,
+    spineCode,
     incoterms: deal.incoterms,
     incotermsPlace: deal.incotermsPlace,
     advancePct: deal.advancePct,
@@ -208,18 +303,7 @@ export async function assembleDocumentData(db: DbClient, actor: ActorContext, in
     deliveryDeadline: deal.deliveryDeadline,
     notes: deal.notes,
     externalRefs: deal.externalRefs,
-    // A4 (§2.1/§8.2): assemble from the deal's OWN lines — this deal-aware scoping
-    // lives here because buildDocumentData is pure (no dealKind). A single-sided leg
-    // (a sell leg, or a purchase_only BUY leg) holds only its own lines, all stored
-    // side='sell', so assemble them ALL — this is the A4 fix (the old
-    // side===docSide filter wrongly dropped a buy leg's own lines). A LEGACY
-    // conflated buy_sell row still carries BOTH sides on one order, so there we pick
-    // the doc's own side: keeps supplier buy lines OUT of a sell document (no leak,
-    // since the doc path bypasses projectDealView) and sell lines out of a purchase
-    // document — exactly the pre-A4 behaviour for those residual rows.
-    lineItems: deal.dealKind === "buy_sell"
-      ? deal.lineItems.filter((li) => li.side === side)
-      : deal.lineItems,
+    lineItems: assemblyLines,
   });
 
   return { success: true, data: { data, seq, side, docState } };

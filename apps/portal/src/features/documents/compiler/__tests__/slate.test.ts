@@ -10,6 +10,7 @@
  */
 import { compileSlateTemplate, type SlateNode } from "../slate";
 import { mergeTemplate } from "../../../orders/services/documents/templateMerge";
+import { catalogFieldColumn, catalogFieldLabelLookup, type CatalogTemplateField } from "../registry";
 
 let pass = 0;
 let fail = 0;
@@ -172,6 +173,18 @@ const merged = mergeTemplate(doc, {
 } as never);
 ok("golden chain: no-token doc survives merge", typeof merged === "string" && merged.includes("SALES SPEC") && merged.includes("<h1>"),
   `merged head: ${String(merged).slice(0, 200)}`);
+
+// ── S1 · dynamic catalog-field builders (columns + pill labels) ─────────────
+const glulam: CatalogTemplateField = { fieldKey: "glulam_grade", fieldLabel: "Glulam grade", fieldType: "select", unit: null, categories: [] };
+const strength: CatalogTemplateField = { fieldKey: "char_strength", fieldLabel: "Char. strength", fieldType: "number", unit: "N/mm²", categories: [] };
+const gcol = catalogFieldColumn(glulam);
+ok("catalogFieldColumn key", gcol.key === "attr.glulam_grade");
+ok("catalogFieldColumn header", gcol.header === "Glulam grade");
+ok("catalogFieldColumn cell = robust lookup", gcol.cell === '{{lookup attr "glulam_grade"}}');
+ok("catalogFieldColumn select not numeric", gcol.num === false);
+ok("catalogFieldColumn number → num", catalogFieldColumn(strength).num === true);
+const lut = catalogFieldLabelLookup([glulam, strength]);
+ok("labelLookup maps attr token → label", lut["attr.glulam_grade"] === "Glulam grade" && lut["attr.char_strength"] === "Char. strength");
 
 // ── Report ─────────────────────────────────────────────────────────────────
 console.log(`\nSlate compiler: ${pass} passed, ${fail} failed`);

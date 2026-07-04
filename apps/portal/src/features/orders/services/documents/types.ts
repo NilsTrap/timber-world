@@ -32,6 +32,16 @@ export interface DocLineItem {
   unit: string;
   unitPriceCents: number | null;
   lineTotalCents: number | null;
+  /**
+   * S2 · Per-line CUSTOM catalog field values (field_key → display string), so a
+   * document can place dynamic `{{lookup attr "<field_key>"}}` columns for any
+   * catalog attribute (glulam extras, coatings, …) — previously impossible, since
+   * order lines carried only the 6 classic attribute option-ids. Populated by the
+   * DB assembler (orderDocuments.assembleDocumentData); the pure assembler only
+   * copies it through. Reserved keys: `_packaging`, `_piecesPerPackage`. Always an
+   * object (may be empty).
+   */
+  attr: Record<string, string>;
 }
 
 export interface DocTotals {
@@ -63,6 +73,13 @@ export interface DocumentData {
    *  generic externalRefs block). null when not set on the deal. */
   customerOrderNo: string | null;
   supplierOrderNo: string | null;
+  /** S2 · the house user who GENERATED the document (name/email/phone). Populated
+   *  HOUSE-ONLY (a counterparty / service-agent generate resolves to null) so a
+   *  counterparty document can never leak the generating person's identity. */
+  issuer: { name: string; email: string | null; phone: string | null } | null;
+  /** S2 · the deal's spine chain identity (SP-###), resolved from the spine;
+   *  null when the deal has no spine. */
+  spineCode: string | null;
   incoterms: string | null;
   paymentTerms: string | null;
   deliveryTerms: string | null;
