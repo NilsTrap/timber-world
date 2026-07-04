@@ -13,7 +13,7 @@ import { useLightbox, ImageThumbGrid } from "./CatalogImages";
 import { VariantStockCard } from "./VariantStockCard";
 import type { FieldValueState } from "./ProductDetailContent";
 import { VariantPackagingSection } from "./VariantPackagingSection";
-import type { VariantStockSummary } from "../actions/stock";
+import type { VariantStockSummary } from "../services/stock";
 import type { VariantPackaging } from "../actions/packaging";
 import type { PackagingType } from "../actions/packagingTypes";
 import { setVariantCurrencyOverride, type CurrencyPriceMap } from "../actions/currencies";

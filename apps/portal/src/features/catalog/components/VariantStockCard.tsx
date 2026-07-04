@@ -4,10 +4,8 @@ import { useState, useCallback } from "react";
 import { Plus, Trash2, Loader2, Boxes, AlertTriangle } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
-import {
-  getVariantStock, saveVariantStockEntry, deleteVariantStockEntry,
-  type VariantStockSummary,
-} from "../actions/stock";
+import { getVariantStock, saveVariantStockEntry, deleteVariantStockEntry } from "../actions/stock";
+import type { VariantStockSummary } from "../services/stock";
 import { getVariantPackaging, type VariantPackaging } from "../actions/packaging";
 
 const fmtPcs = (n: number) => `${n.toLocaleString("en-GB")} pcs`;

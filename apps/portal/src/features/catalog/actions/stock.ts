@@ -8,13 +8,15 @@ import {
   getVariantStock as getVariantStockService,
   saveVariantStockEntry as saveVariantStockEntryService,
   deleteVariantStockEntry as deleteVariantStockEntryService,
-  type VariantStockEntry,
   type VariantStockSummary,
 } from "../services/stock";
 
-// Re-export the stock types from their new service home (back-compat for existing
-// UI imports from this action module).
-export type { VariantStockEntry, VariantStockSummary };
+// NOTE: a "use server" file must export ONLY async server actions. Do NOT
+// re-export types from here (`export type { … }`) — Turbopack tries to resolve
+// re-exported names in this route's server-action manifest and fails the build
+// ("export VariantStockSummary was not found"), and the same resolution failure
+// surfaced at runtime as the masked P0 crash (9xcebr). Import these types from
+// `../services/stock` (their real home) instead.
 
 async function assertCatalogueAccess() {
   const session = await getSession();
