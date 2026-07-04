@@ -3,11 +3,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Trash2, Search, ImageIcon } from "lucide-react";
+import { Trash2, Search, ImageIcon, Plus } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
 import { deleteProduct } from "../actions/products";
 import { catalogImageUrl } from "./CatalogImages";
+import { NewProductDialog } from "./NewProductDialog";
 import type { CatalogCategory } from "../types";
 
 interface ProductWithCategory {
@@ -55,6 +56,7 @@ export function AllProductsPage({ products: initialProducts, categories }: Props
   const [deleting, setDeleting] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [showNewProduct, setShowNewProduct] = useState(false);
 
   const countByCategory = useMemo(() => {
     const m: Record<string, number> = {};
@@ -110,11 +112,23 @@ export function AllProductsPage({ products: initialProducts, categories }: Props
           <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
           <p className="text-sm text-muted-foreground">{products.length} products across {categories.length} categories</p>
         </div>
-        <div className="relative w-64 max-w-full">
-          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products…" className="h-9 pl-8" />
+        <div className="flex items-center gap-2">
+          <div className="relative w-64 max-w-full">
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products…" className="h-9 pl-8" />
+          </div>
+          <Button className="h-9 shrink-0" onClick={() => setShowNewProduct(true)}>
+            <Plus className="h-4 w-4 mr-1.5" /> Add product
+          </Button>
         </div>
       </div>
+
+      <NewProductDialog
+        open={showNewProduct}
+        onOpenChange={setShowNewProduct}
+        categories={categories}
+        defaultCategoryId={categoryFilter !== "all" ? categoryFilter : undefined}
+      />
 
       {/* Category filter chips with counts */}
       <div className="flex flex-wrap gap-1.5">
