@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { z } from "zod";
-import { Loader2, UserPlus, UserCheck } from "lucide-react";
+import { Loader2, UserPlus, Search, ShieldAlert } from "lucide-react";
 import {
   Button,
   Input,
@@ -14,15 +12,18 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
+  Checkbox,
   Badge,
 } from "@timber/ui";
 import {
   createOrganisationUser,
-  searchUserByEmail,
   addExistingUserToOrganisation,
+  getAddPersonContext,
+  searchAddablePeople,
 } from "../actions";
-import type { ExistingUserInfo } from "../actions";
+import type { AddPersonContext, AddablePerson } from "../addPersonTypes";
 
 interface AddUserDialogProps {
   organisationId: string;
@@ -31,29 +32,18 @@ interface AddUserDialogProps {
   onSuccess: () => void;
 }
 
-// Form schema for adding a user
-const addUserSchema = z.object({
-  name: z
-    .string()
-    .min(1, "Name is required")
-    .max(100, "Name must be 100 characters or less")
-    .trim(),
-  email: z
-    .string()
-    .email("Invalid email address")
-    .max(255, "Email must be 255 characters or less")
-    .trim()
-    .toLowerCase(),
-});
-
-type AddUserInput = z.infer<typeof addUserSchema>;
+const emailSchema = z.string().email().max(255);
 
 /**
- * Add User Dialog
+ * Add Person Dialog (K3 · one obvious flow)
  *
- * Modal form for adding a user to an organisation.
- * - If email matches an existing user, offers to add them to this org
- * - Otherwise creates a new user with status='created'
+ * One pass: (1) search existing platform users and add them, or (2) create a new
+ * user — and in BOTH branches assign access groups inline. Admin vs book-scoped
+ * (salesperson/purchasing) is decided by the server via getAddPersonContext:
+ *  - admin  → full access-group picker.
+ *  - scoped → the group is forced server-side (shown read-only, no picker).
+ *  - forbidden → the caller may not add people here.
+ * The client only reflects this; the create/add server actions re-enforce it.
  */
 export function AddUserDialog({
   organisationId,
@@ -61,308 +51,289 @@ export function AddUserDialog({
   onOpenChange,
   onSuccess,
 }: AddUserDialogProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [ctx, setCtx] = useState<AddPersonContext | null>(null);
+  const [ctxLoading, setCtxLoading] = useState(true);
+
+  // Inline group selection (admin only; scoped forces the group server-side).
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
+
+  // Existing-user typeahead
+  const [query, setQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [existingUser, setExistingUser] = useState<ExistingUserInfo | null>(null);
-  const [searchedEmail, setSearchedEmail] = useState<string>("");
+  const [results, setResults] = useState<AddablePerson[]>([]);
+  const [addingId, setAddingId] = useState<string | null>(null);
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm<AddUserInput>({
-    resolver: zodResolver(addUserSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-    },
-  });
+  // Create-new form
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
-  const emailValue = watch("email");
+  const groupIdsForSubmit = () =>
+    ctx?.mode === "admin" ? Array.from(selectedGroups) : undefined;
 
-  // Reset form and state when dialog opens/closes
+  // Load context + reset on open.
   useEffect(() => {
-    if (open) {
-      reset({ name: "", email: "" });
-      setExistingUser(null);
-      setSearchedEmail("");
-    }
-  }, [open, reset]);
+    if (!open) return;
+    setCtx(null);
+    setCtxLoading(true);
+    setSelectedGroups(new Set());
+    setQuery("");
+    setResults([]);
+    setName("");
+    setEmail("");
+    getAddPersonContext(organisationId).then((r) => {
+      if (r.success) setCtx(r.data);
+      else toast.error(r.error);
+      setCtxLoading(false);
+    });
+  }, [open, organisationId]);
 
-  // Debounced email search
+  // Debounced typeahead search.
   useEffect(() => {
-    const normalizedEmail = emailValue?.trim().toLowerCase() || "";
-
-    // Don't search if email hasn't changed or is invalid
-    if (normalizedEmail === searchedEmail) return;
-    if (!normalizedEmail || !normalizedEmail.includes("@")) {
-      setExistingUser(null);
+    if (!open || !ctx || ctx.mode === "forbidden") return;
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
       return;
     }
-
-    const timeoutId = setTimeout(async () => {
+    const t = setTimeout(async () => {
       setIsSearching(true);
-      const result = await searchUserByEmail(normalizedEmail);
-      setSearchedEmail(normalizedEmail);
-
-      if (result.success && result.data) {
-        setExistingUser(result.data);
-        // Pre-fill name if found
-        setValue("name", result.data.name);
-      } else {
-        setExistingUser(null);
-      }
+      const r = await searchAddablePeople(organisationId, q);
+      if (r.success) setResults(r.data);
+      else setResults([]);
       setIsSearching(false);
-    }, 500);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [query, open, ctx, organisationId]);
 
-    return () => clearTimeout(timeoutId);
-  }, [emailValue, searchedEmail, setValue]);
+  const toggleGroup = (id: string) =>
+    setSelectedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
-  // Check if existing user is already in this organisation
-  const isAlreadyMember = existingUser?.currentOrganisations.some(
-    (org) => org.id === organisationId
-  );
-
-  const onSubmit = async (data: AddUserInput) => {
-    setIsSubmitting(true);
-
-    try {
-      if (existingUser && !isAlreadyMember) {
-        // Add existing user to organisation
-        const result = await addExistingUserToOrganisation(
-          existingUser.id,
-          organisationId
-        );
-
-        if (result.success) {
-          toast.success(`${existingUser.name} added to organisation`);
-          reset();
-          onOpenChange(false);
-          onSuccess();
-        } else {
-          if (result.code === "ALREADY_MEMBER") {
-            toast.error("User is already a member of this organisation");
-          } else {
-            toast.error(result.error);
-          }
-        }
-      } else {
-        // Create new user
-        const result = await createOrganisationUser(organisationId, data);
-
-        if (result.success) {
-          toast.success("User created");
-          reset();
-          onOpenChange(false);
-          onSuccess();
-        } else {
-          if (result.code === "DUPLICATE_EMAIL") {
-            toast.error("Email already registered");
-          } else {
-            toast.error(result.error);
-          }
-        }
-      }
-    } catch {
-      toast.error("An unexpected error occurred");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleAddExistingUser = async () => {
-    if (!existingUser || isAlreadyMember) return;
-
-    setIsSubmitting(true);
-    try {
-      const result = await addExistingUserToOrganisation(
-        existingUser.id,
-        organisationId
-      );
-
-      if (result.success) {
-        toast.success(`${existingUser.name} added to organisation`);
-        reset();
+  const handleAddExisting = useCallback(
+    async (person: AddablePerson) => {
+      setAddingId(person.id);
+      const r = await addExistingUserToOrganisation(person.id, organisationId, groupIdsForSubmit());
+      setAddingId(null);
+      if (r.success) {
+        toast.success(`${person.name} added to organisation`);
         onOpenChange(false);
         onSuccess();
+      } else if (r.code === "ALREADY_MEMBER") {
+        toast.error("User is already a member of this organisation");
       } else {
-        toast.error(result.error);
+        toast.error(r.error);
       }
-    } catch {
-      toast.error("An unexpected error occurred");
-    } finally {
-      setIsSubmitting(false);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [organisationId, selectedGroups, ctx],
+  );
+
+  const handleCreate = async () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      toast.error("Name is required");
+      return;
+    }
+    if (!emailSchema.safeParse(email.trim()).success) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    setIsCreating(true);
+    const r = await createOrganisationUser(
+      organisationId,
+      { name: trimmedName, email: email.trim().toLowerCase() },
+      groupIdsForSubmit(),
+    );
+    setIsCreating(false);
+    if (r.success) {
+      toast.success("User created");
+      onOpenChange(false);
+      onSuccess();
+    } else if (r.code === "DUPLICATE_EMAIL") {
+      toast.error("Email already registered");
+    } else {
+      toast.error(r.error);
     }
   };
 
-  const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen) {
-      reset();
-      setExistingUser(null);
-      setSearchedEmail("");
-    }
-    onOpenChange(newOpen);
-  };
+  const orgLabel = ctx?.orgName ? `to ${ctx.orgName}` : "to this organisation";
+  const busy = addingId !== null || isCreating;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add User</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5" />
+            Add person
+          </DialogTitle>
+          <DialogDescription>Add an existing person {orgLabel}, or create a new user.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">
-              Email <span className="text-destructive">*</span>
-            </Label>
-            <div className="relative">
-              <Input
-                id="email"
-                type="email"
-                placeholder="Enter email address"
-                {...register("email")}
-                aria-invalid={!!errors.email}
-                aria-describedby={errors.email ? "email-error" : undefined}
-              />
-              {isSearching && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        {ctxLoading ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : ctx?.mode === "forbidden" ? (
+          <div className="flex items-start gap-2 rounded-lg border bg-muted/50 p-4 text-sm">
+            <ShieldAlert className="h-5 w-5 text-destructive shrink-0" />
+            <span>You don&apos;t have permission to add people to this organisation.</span>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Inline access-group step */}
+            {ctx?.mode === "admin" ? (
+              <div className="space-y-2">
+                <Label>Access groups</Label>
+                {ctx.groups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No access groups available.</p>
+                ) : (
+                  <div className="space-y-1 rounded-lg border p-2">
+                    {ctx.groups.map((g) => (
+                      <div key={g.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`grp-${g.id}`}
+                          checked={selectedGroups.has(g.id)}
+                          onCheckedChange={() => toggleGroup(g.id)}
+                          disabled={busy}
+                        />
+                        <label htmlFor={`grp-${g.id}`} className="flex-1 text-sm cursor-pointer">
+                          {g.name}
+                          <span className="ml-2 font-mono text-xs text-muted-foreground">{g.key}</span>
+                        </label>
+                        {g.isSystem && (
+                          <Badge variant="secondary" className="text-[10px]">System</Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Applied to whichever person you add or create below.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-muted/50 p-3 text-sm">
+                New members are added to the{" "}
+                <Badge variant="secondary">{ctx?.forcedGroupName}</Badge> group.
+              </div>
+            )}
+
+            {/* Find existing person */}
+            <div className="space-y-2">
+              <Label htmlFor="person-search">Find an existing person</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="person-search"
+                  className="pl-9"
+                  placeholder="Search by name or email"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  disabled={busy}
+                />
+                {isSearching && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+              {query.trim().length >= 2 && !isSearching && results.length === 0 && (
+                <p className="text-sm text-muted-foreground">No matching people. Create a new user below.</p>
+              )}
+              {results.length > 0 && (
+                <div className="space-y-1 rounded-lg border p-1">
+                  {results.map((p) => (
+                    <div key={p.id} className="flex items-center gap-2 rounded-md p-2 hover:bg-accent/30">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{p.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{p.email}</p>
+                      </div>
+                      {p.alreadyMember ? (
+                        <span className="text-xs text-amber-600 font-medium">Already a member</span>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => handleAddExisting(p)}
+                          disabled={busy}
+                        >
+                          {addingId === p.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <UserPlus className="h-4 w-4 mr-1" /> Add
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-            {errors.email && (
-              <p id="email-error" className="text-sm text-destructive" role="alert">
-                {errors.email.message}
-              </p>
-            )}
-          </div>
 
-          {/* Existing User Found */}
-          {existingUser && (
-            <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <UserCheck className="h-5 w-5 text-primary" />
-                <span className="font-medium">Existing user found</span>
+            {/* Divider */}
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
               </div>
-              <div className="text-sm space-y-1">
-                <p>
-                  <span className="text-muted-foreground">Name:</span>{" "}
-                  <span className="font-medium">{existingUser.name}</span>
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Email:</span>{" "}
-                  <span className="font-medium">{existingUser.email}</span>
-                </p>
-                {existingUser.currentOrganisations.length > 0 && (
-                  <div>
-                    <span className="text-muted-foreground">Current organisations:</span>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {existingUser.currentOrganisations.map((org) => (
-                        <Badge
-                          key={org.id}
-                          variant={org.id === organisationId ? "default" : "secondary"}
-                        >
-                          {org.code}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
+              <div className="relative flex justify-center">
+                <span className="bg-background px-2 text-xs uppercase text-muted-foreground">or create a new user</span>
               </div>
-
-              {isAlreadyMember ? (
-                <p className="text-sm text-amber-600 font-medium">
-                  This user is already a member of this organisation.
-                </p>
-              ) : (
-                <Button
-                  type="button"
-                  onClick={handleAddExistingUser}
-                  disabled={isSubmitting}
-                  className="w-full"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="h-4 w-4 mr-2" />
-                      Add to This Organisation
-                    </>
-                  )}
-                </Button>
-              )}
             </div>
-          )}
 
-          {/* New User Form (only show if no existing user found) */}
-          {!existingUser && (
-            <>
+            {/* Create new user */}
+            <div className="space-y-3">
               <div className="space-y-2">
-                <Label htmlFor="name">
+                <Label htmlFor="new-email">
+                  Email <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="new-email"
+                  type="email"
+                  placeholder="Enter email address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={busy}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-name">
                   Name <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  id="name"
+                  id="new-name"
                   placeholder="Enter user's full name"
-                  {...register("name")}
-                  aria-invalid={!!errors.name}
-                  aria-describedby={errors.name ? "name-error" : undefined}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={busy}
                 />
-                {errors.name && (
-                  <p id="name-error" className="text-sm text-destructive" role="alert">
-                    {errors.name.message}
-                  </p>
-                )}
               </div>
-
-              <p className="text-sm text-muted-foreground">
-                The user will be created with &quot;Created&quot; status. Login credentials can be generated separately.
+              <p className="text-xs text-muted-foreground">
+                Created with &quot;Created&quot; status. Login credentials can be generated separately.
               </p>
+            </div>
 
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleOpenChange(false)}
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSubmitting || isSearching}>
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create User"
-                  )}
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-
-          {/* Cancel button when existing user is shown */}
-          {existingUser && (
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleOpenChange(false)}
-                disabled={isSubmitting}
-              >
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
                 Cancel
               </Button>
+              <Button type="button" onClick={handleCreate} disabled={busy}>
+                {isCreating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating...
+                  </>
+                ) : (
+                  "Create user"
+                )}
+              </Button>
             </DialogFooter>
-          )}
-        </form>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

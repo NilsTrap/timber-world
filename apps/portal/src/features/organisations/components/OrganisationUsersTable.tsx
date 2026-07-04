@@ -16,6 +16,7 @@ import {
   KeyRound,
   Trash2,
   Settings2,
+  UserMinus,
 } from "lucide-react";
 import {
   Button,
@@ -42,6 +43,7 @@ import {
   resendUserCredentials,
   resetUserPassword,
   deleteOrganisationUser,
+  removeUserFromOrganisation,
 } from "../actions";
 import dynamic from "next/dynamic";
 import { getOrgUsersGroups } from "@/features/access/actions/groups";
@@ -145,6 +147,10 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
   // Delete confirmation state
   const [deleteUser, setDeleteUser] = useState<OrganisationUser | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Remove-from-organisation confirmation state (K3)
+  const [removeUser, setRemoveUser] = useState<OrganisationUser | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
 
   // Send/Resend credentials state
   const [sendingCredentialsFor, setSendingCredentialsFor] = useState<string | null>(null);
@@ -318,6 +324,27 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
     setDeleteUser(null);
   };
 
+  // Confirm remove-from-organisation (deactivates the membership; refuses the
+  // user's last/primary org — the server is the wall).
+  const confirmRemoveUser = async () => {
+    if (!removeUser) return;
+
+    setIsRemoving(true);
+    const result = await removeUserFromOrganisation(removeUser.id, organisationId);
+
+    if (result.success) {
+      toast.success(`"${removeUser.name}" removed from this organisation`);
+      setRemoveUser(null);
+      loadUsers();
+    } else {
+      // Keep the dialog open on a refusal (e.g. primary/last org) so the message
+      // stays visible and the admin can act on it.
+      toast.error(result.error);
+    }
+
+    setIsRemoving(false);
+  };
+
   const handleSuccess = () => {
     loadUsers();
   };
@@ -335,7 +362,7 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
       <div className="flex justify-end">
         <Button onClick={() => setIsAddOpen(true)}>
           <Plus className="h-4 w-4" />
-          Add User
+          Add person
         </Button>
       </div>
 
@@ -344,7 +371,7 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
           <p className="text-muted-foreground">No users in this organisation yet</p>
           <Button onClick={() => setIsAddOpen(true)} variant="outline" className="mt-4">
             <Plus className="h-4 w-4" />
-            Add First User
+            Add first person
           </Button>
         </div>
       ) : (
@@ -520,6 +547,15 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          onClick={() => setRemoveUser(user)}
+                          aria-label={`Remove ${user.name} from this organisation`}
+                          title="Remove from this organisation"
+                        >
+                          <UserMinus className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
                           onClick={() => handleDeleteUser(user)}
                           aria-label={`Delete ${user.name}`}
                           title="Delete user"
@@ -634,6 +670,43 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                 </>
               ) : (
                 "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Remove From Organisation Confirmation Dialog (K3) */}
+      <AlertDialog
+        open={!!removeUser}
+        onOpenChange={(open) => {
+          if (!open && !isRemoving) {
+            setRemoveUser(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove from organisation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove <strong>{removeUser?.name}</strong> from this organisation?
+              <br />
+              <br />
+              Their membership and access groups here are revoked. Their account and any other
+              organisations are unaffected. The user&apos;s primary or only organisation cannot be
+              removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRemoving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRemoveUser} disabled={isRemoving}>
+              {isRemoving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Removing...
+                </>
+              ) : (
+                "Remove"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
