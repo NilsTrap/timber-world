@@ -16,6 +16,8 @@ import { getOrderDeal, updateLineItemAmounts, updateDealFields, setMarginApprova
 import { logOrderActivity } from "./logOrderActivity";
 import { generateDocument, regenerateDocument, getDocumentUrl, deleteDocument, uploadSignedDocument, getSignedDocumentUrl, deleteSignedDocument, type GeneratedDocument } from "../services/orderDocuments";
 import { getSpineBuyLegs, getSpineLegs, type SpineLegRef } from "../services/spineSiblings";
+import { getSpine } from "../services/spines";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveDealActor } from "./_dealActor";
 import { requireLineWriteAccess } from "./_lineAccess";
 
@@ -64,6 +66,9 @@ export type OrderDealViewResult = OrderDealView & {
   sourcing: DealSourcingState | null;
   /** B3: every leg on the spine for the owner chain card. Empty for non-admins. */
   spineLegs: SpineLegRef[];
+  /** M1: the spine code (SP-NNN) for the owner ChainCard header. Null for
+   *  non-admins (§6.2 — parties never see the spine beyond their own deal). */
+  spineCode: string | null;
   /** C1 (§2.5): the sell/buy framing of this deal FROM THE VIEWER's standpoint,
    *  resolved server-side (the client cannot derive it — it does not know the
    *  viewer's org, and dealKind alone mislabels counterparty logins). */
@@ -147,8 +152,16 @@ export async function getOrderDealView(orderId: string): Promise<ActionResult<Or
       };
     }
   }
+  let spineCode: string | null = null;
   if (isAdmin) {
     spineLegs = await getSpineLegs(rawSpineId); // B3 chain card — owner only (raw spine)
+    // M1 · the spine's SP-NNN code for the ChainCard header (owner only). Read
+    // via the service-role client — consistent with getSpineLegs (spine reads
+    // don't go through the RLS client).
+    if (rawSpineId) {
+      const sp = await getSpine(createAdminClient(), a.actor, rawSpineId);
+      if (sp.success) spineCode = sp.data.code;
+    }
   }
 
   return {
@@ -164,6 +177,7 @@ export async function getOrderDealView(orderId: string): Promise<ActionResult<Or
       canStartSourcing,
       sourcing,
       spineLegs,
+      spineCode,
       viewerDirection,
       facingParty,
     },

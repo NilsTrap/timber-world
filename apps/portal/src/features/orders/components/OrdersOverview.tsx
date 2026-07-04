@@ -9,6 +9,7 @@ import { getOrders } from "../actions/getOrders";
 import { NewDealDialog } from "./NewDealDialog";
 import { StageBadge } from "./StageBadge";
 import { stageLabel } from "../services/stageColors";
+import { partyOrderNumbers } from "../services/partyOrderNumbers";
 import { fmtDateLV, initialsOf } from "../format";
 import type { Order } from "../types";
 
@@ -35,6 +36,11 @@ const DIRECTION_META: Record<"sell" | "buy", { label: string; cls: string }> = {
   buy:  { label: "Buy",  cls: "bg-violet-50 text-violet-700 ring-1 ring-violet-200" },
 };
 
+function fmtVol(v: number | null | undefined): string {
+  if (v == null) return "—";
+  return `${v.toLocaleString("en-GB", { maximumFractionDigits: 3 })} m³`;
+}
+
 function FilterSelect({ value, onChange, label, options }: {
   value: string; onChange: (v: string) => void; label: string; options: { value: string; label: string }[];
 }) {
@@ -54,8 +60,11 @@ function FilterSelect({ value, onChange, label, options }: {
  * Orders = one minimalistic OVERVIEW of the deals. No per-user-group tabs (that's
  * an access-rights concern, handled in Settings, not tabs). Status is the deal-flow
  * lifecycle stage (§12 palette via StageBadge); a row click opens the deal detail.
- * F1: a Sell/Buy direction badge + filter, and — for the owner/admin only — a
- * pairing hint linking a sell leg to its spine-sibling buy leg.
+ * F1: a Sell/Buy direction badge + filter, and — for the owner/admin only (M1) —
+ * the spine code (SP-NNN) on paired rows, a spine filter/grouping affordance, a
+ * volume column, and the parties' own order numbers under the Reference. Every
+ * spine/pairing hint stays behind `isAdmin` (§6.2 wall): non-admins see none of it
+ * (the server also never sends them spineCode/externalRefs).
  */
 export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?: boolean; userOrgId?: string | null }) {
   const router = useRouter();
@@ -67,6 +76,7 @@ export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?
   const [directionFilter, setDirectionFilter] = useState("all");
   const [customerFilter, setCustomerFilter] = useState("all");
   const [manufacturerFilter, setManufacturerFilter] = useState("all");
+  const [spineFilter, setSpineFilter] = useState("all");
 
   useEffect(() => {
     getOrders().then((res) => {
@@ -86,26 +96,45 @@ export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?
     () => [...new Set(orders.map((o) => o.lifecycleStage).filter(Boolean) as string[])],
     [orders]);
 
-  // F1 · pairing: a spine shared by ≥2 rows links a sell leg to its buy leg.
-  // Owner/admin ONLY (§6.2) — spineId is field-walled to null for everyone else,
-  // and we still gate the hint on isAdmin. Counted over ALL rows so it is global.
+  // F1/M1 · pairing: a spine shared by ≥2 rows links a sell leg to its buy leg.
+  // Owner/admin ONLY (§6.2) — spineId/spineCode are field-walled to null for
+  // everyone else, and we still gate the hints on isAdmin. Counted over ALL rows
+  // so it is global.
   const spineCounts = useMemo(() => {
     const m = new Map<string, number>();
     if (isAdmin) for (const o of orders) if (o.spineId) m.set(o.spineId, (m.get(o.spineId) ?? 0) + 1);
     return m;
   }, [orders, isAdmin]);
 
+  // M1 · spine filter/grouping affordance (admin only): the spine codes that
+  // actually pair ≥2 legs, so selecting one isolates that chain's legs.
+  const pairedSpineCodes = useMemo(() => {
+    if (!isAdmin) return [] as string[];
+    const codes = new Map<string, string>(); // spineCode → itself, deduped
+    for (const o of orders) {
+      if (o.spineId && o.spineCode && (spineCounts.get(o.spineId) ?? 0) >= 2) codes.set(o.spineCode, o.spineCode);
+    }
+    return [...codes.keys()].sort();
+  }, [orders, isAdmin, spineCounts]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return orders.filter((o) =>
-      (statusFilter === "all" || o.lifecycleStage === statusFilter) &&
-      (directionFilter === "all" || directionOf(o, userOrgId) === directionFilter) &&
-      (customerFilter === "all" || o.customerOrganisationName === customerFilter) &&
-      (manufacturerFilter === "all" || o.sellerOrganisationName === manufacturerFilter) &&
-      (q === "" || [o.dealCode, o.code, o.name, o.customerOrganisationName, o.sellerOrganisationName, o.createdByName, o.projectNumber, o.notes]
-        .some((v) => (v ?? "").toString().toLowerCase().includes(q)))
-    );
-  }, [orders, search, statusFilter, directionFilter, customerFilter, manufacturerFilter, userOrgId]);
+    return orders.filter((o) => {
+      const pon = isAdmin ? partyOrderNumbers(o.externalRefs) : { customerOrderNo: null, supplierOrderNo: null };
+      return (
+        (statusFilter === "all" || o.lifecycleStage === statusFilter) &&
+        (directionFilter === "all" || directionOf(o, userOrgId) === directionFilter) &&
+        (customerFilter === "all" || o.customerOrganisationName === customerFilter) &&
+        (manufacturerFilter === "all" || o.sellerOrganisationName === manufacturerFilter) &&
+        (spineFilter === "all" || o.spineCode === spineFilter) &&
+        (q === "" || [o.dealCode, o.code, o.name, o.customerOrganisationName, o.sellerOrganisationName, o.createdByName, o.projectNumber, o.notes, o.spineCode, pon.customerOrderNo, pon.supplierOrderNo]
+          .some((v) => (v ?? "").toString().toLowerCase().includes(q)))
+      );
+    });
+  }, [orders, search, statusFilter, directionFilter, customerFilter, manufacturerFilter, spineFilter, userOrgId, isAdmin]);
+
+  // Admin gets one extra (Volume) column — keep the empty-state colSpan in sync.
+  const colCount = isAdmin ? 9 : 8;
 
   return (
     <div className="space-y-4">
@@ -129,6 +158,10 @@ export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?
         <FilterSelect value={directionFilter} onChange={setDirectionFilter} label="All directions" options={[{ value: "sell", label: "Sell" }, { value: "buy", label: "Buy" }]} />
         <FilterSelect value={customerFilter} onChange={setCustomerFilter} label="All customers" options={customers.map((c) => ({ value: c, label: c }))} />
         <FilterSelect value={manufacturerFilter} onChange={setManufacturerFilter} label="All manufacturers" options={manufacturers.map((m) => ({ value: m, label: m }))} />
+        {/* M1 · spine grouping — admin only (§6.2). Only paired spines are worth grouping. */}
+        {isAdmin && pairedSpineCodes.length > 0 && (
+          <FilterSelect value={spineFilter} onChange={setSpineFilter} label="All spines" options={pairedSpineCodes.map((c) => ({ value: c, label: c }))} />
+        )}
       </div>
 
       {loading ? (
@@ -143,6 +176,7 @@ export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?
                 <th>Direction</th>
                 <th>Buyer</th>
                 <th>Manufacturer</th>
+                {isAdmin && <th className="text-right">Volume</th>}
                 <th>Created</th>
                 <th>Status</th>
                 <th className="w-16 text-center">By</th>
@@ -152,6 +186,7 @@ export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?
               {filtered.map((o) => {
                 const dm = DIRECTION_META[directionOf(o, userOrgId)];
                 const paired = isAdmin && !!o.spineId && (spineCounts.get(o.spineId) ?? 0) >= 2;
+                const pon = isAdmin ? partyOrderNumbers(o.externalRefs) : { customerOrderNo: null, supplierOrderNo: null };
                 return (
                   <tr
                     key={o.id}
@@ -162,18 +197,35 @@ export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?
                       <span className="inline-flex items-center gap-1.5">
                         {o.dealCode || o.code || "—"}
                         {paired && (
-                          <span title="Part of a linked sell/buy chain" aria-label="Part of a linked sell/buy chain">
+                          <span
+                            className="inline-flex items-center gap-1"
+                            title={`Part of a linked sell/buy chain${o.spineCode ? ` · ${o.spineCode}` : ""}`}
+                            aria-label={`Part of a linked sell/buy chain${o.spineCode ? ` (spine ${o.spineCode})` : ""}`}
+                          >
                             <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                            {o.spineCode && (
+                              <span className="rounded bg-muted px-1 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground">{o.spineCode}</span>
+                            )}
                           </span>
                         )}
                       </span>
                     </td>
-                    <td className="text-muted-foreground">{o.name && o.name.trim() !== "-" ? o.name : "—"}</td>
+                    <td className="text-muted-foreground">
+                      <div>{o.name && o.name.trim() !== "-" ? o.name : "—"}</div>
+                      {/* M1/N3 · the parties' own order numbers (admin only). */}
+                      {isAdmin && (pon.customerOrderNo || pon.supplierOrderNo) && (
+                        <div className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-muted-foreground/80">
+                          {pon.customerOrderNo && <span>Cust #: <span className="tabular-nums">{pon.customerOrderNo}</span></span>}
+                          {pon.supplierOrderNo && <span>Supp #: <span className="tabular-nums">{pon.supplierOrderNo}</span></span>}
+                        </div>
+                      )}
+                    </td>
                     <td>
                       <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${dm.cls}`}>{dm.label}</span>
                     </td>
                     <td className="text-muted-foreground">{o.customerOrganisationName || "—"}</td>
                     <td className="text-muted-foreground">{o.sellerOrganisationName || "—"}</td>
+                    {isAdmin && <td className="whitespace-nowrap text-right tabular-nums text-muted-foreground">{fmtVol(o.volumeM3)}</td>}
                     <td className="whitespace-nowrap text-muted-foreground">{fmtDateLV(o.createdAt)}</td>
                     <td>
                       <StageBadge stage={o.lifecycleStage} strikeThrough={o.lifecycleStage === "cancelled"} />
@@ -195,7 +247,7 @@ export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-10 text-center text-muted-foreground">
+                  <td colSpan={colCount} className="px-3 py-10 text-center text-muted-foreground">
                     {orders.length === 0 ? "No orders yet. Create one to start a deal." : "No orders match these filters."}
                   </td>
                 </tr>
