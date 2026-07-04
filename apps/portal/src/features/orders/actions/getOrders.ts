@@ -263,6 +263,36 @@ export async function getOrders(options?: {
     }
   }
 
+  // 6b. M1 · Spine codes (SP-NNN) + the canonical party order numbers for the
+  //     overview — ADMIN ONLY (§6.2: non-admins get no spine/pairing hints, and
+  //     these overview surfaces are admin-only). Cheap batch reads scoped to the
+  //     already-RLS-filtered visible order ids; skipped entirely for non-admins so
+  //     the data never reaches the wire.
+  const spineCodeById = new Map<string, string>();
+  const refsByOrderId = new Map<string, Array<{ refType: string; refValue: string; label: string | null }>>();
+  if (userIsAdmin && visibleOrderIds.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const adminForExtras = createAdminClient() as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const spineIds = [...new Set((data as any[]).map((r) => r.spine_id).filter(Boolean))] as string[];
+    const [{ data: spineRows }, { data: refRows }] = await Promise.all([
+      spineIds.length > 0
+        ? adminForExtras.from("spines").select("id, code").in("id", spineIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; code: string }> }),
+      adminForExtras
+        .from("order_external_refs")
+        .select("order_id, ref_type, ref_value, label")
+        .in("order_id", visibleOrderIds)
+        .in("ref_type", ["customer_order_no", "supplier_order_no"]),
+    ]);
+    for (const s of (spineRows ?? []) as Array<{ id: string; code: string }>) spineCodeById.set(s.id, s.code);
+    for (const r of (refRows ?? []) as Array<{ order_id: string; ref_type: string; ref_value: string; label: string | null }>) {
+      const list = refsByOrderId.get(r.order_id) ?? [];
+      list.push({ refType: r.ref_type, refValue: r.ref_value, label: r.label ?? null });
+      refsByOrderId.set(r.order_id, list);
+    }
+  }
+
   // 7. Transform to Order type
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const orders: Order[] = (data || []).map((row: any) => {
@@ -461,6 +491,9 @@ export async function getOrders(options?: {
     dealCode: (row.deal_code as string) ?? null,
     dealKind: (row.deal_kind as string) ?? null,
     spineId: (row.spine_id as string) ?? null,
+    // M1 · admin-only extras (empty for non-admins — never fetched above).
+    spineCode: spineCodeById.get(row.spine_id as string) ?? null,
+    externalRefs: refsByOrderId.get(row.id as string) ?? [],
     lifecycleStage: (row.lifecycle_stage as string) ?? null,
     notes: row.notes as string | null,
     createdBy: row.created_by as string | null,

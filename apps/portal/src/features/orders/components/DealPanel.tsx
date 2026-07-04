@@ -100,6 +100,7 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
       canStartSourcing: prev?.canStartSourcing ?? false,
       sourcing: prev?.sourcing ?? null,
       spineLegs: prev?.spineLegs ?? [],
+      spineCode: prev?.spineCode ?? null,
       // C1: direction + facing party depend on the parties, not this deal's own
       // lines, so they are unchanged by an add/remove — preserve across the swap.
       viewerDirection: prev?.viewerDirection ?? "sell",
@@ -629,7 +630,7 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
 
         {/* B3 · Chain card — every leg on the spine. Owner/admin only (§6.2); the
             server sends an empty array to everyone else (ChainCard renders nothing). */}
-        <ChainCard legs={deal.spineLegs} currentOrderId={orderId} currency={deal.currency} />
+        <ChainCard legs={deal.spineLegs} currentOrderId={orderId} currency={deal.currency} spineCode={deal.spineCode} />
 
         {/* Activity log — status changes, edits, etc. (self-contained card) */}
         <OrderActivityLog orderId={orderId} />

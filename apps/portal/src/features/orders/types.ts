@@ -130,6 +130,14 @@ export interface Order {
   dealKind?: string | null;
   /** Spine id linking the sell/buy legs of a chain. Owner/admin only (field-walled to the `chain` domain). */
   spineId?: string | null;
+  /** M1 · Spine code (SP-NNN) for the deal's spine. Owner/admin only — fetched
+   *  for admins + field-walled to the `chain` domain (§6.2: non-admins see no
+   *  spine hints). Null when the deal has no spine yet. */
+  spineCode?: string | null;
+  /** M1/N3 · a deal's external reference codes (incl. the canonical customer /
+   *  supplier order numbers). Fetched for admins only in getOrders; read with
+   *  partyOrderNumbers() for the overview Reference column. */
+  externalRefs?: Array<{ refType: string; refValue: string; label: string | null }>;
   /** Deal lifecycle stage (draft/confirmed/produced/loaded/delivered/cancelled). Populated by getOrders. */
   lifecycleStage?: string | null;
   notes: string | null;

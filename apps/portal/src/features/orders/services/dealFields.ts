@@ -105,6 +105,7 @@ export const ORDER_FIELD_DOMAINS: Record<string, FieldSpec> = {
   // chain linkage (admin-only by seed; spec §2.6 — parties never see the
   // spine beyond their own deal)
   spineId: f("chain"),
+  spineCode: f("chain"),
   upstreamDealId: f("chain"),
 };
 

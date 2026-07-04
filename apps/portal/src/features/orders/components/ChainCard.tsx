@@ -16,19 +16,24 @@ function fmtCents(cents: number, currency: string): string {
  * (the server sends an empty array to everyone else). Sell ↔ buy navigation.
  */
 export function ChainCard({
-  legs, currentOrderId, currency,
+  legs, currentOrderId, currency, spineCode,
 }: {
   legs: SpineLegRef[];
   currentOrderId: string;
   currency: string;
+  /** M1 · the spine's SP-NNN code, shown in the header (owner only). */
+  spineCode?: string | null;
 }) {
   if (legs.length === 0) return null;
 
   return (
     <div className="rounded-lg border bg-card p-4 space-y-3">
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <Link2 className="h-4 w-4 text-muted-foreground" />
         <span className="font-medium">Chain</span>
+        {spineCode && (
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums" title="Spine code">{spineCode}</span>
+        )}
         <span className="text-xs text-muted-foreground">{legs.length} leg{legs.length === 1 ? "" : "s"} on the spine</span>
       </div>
       <ul className="space-y-2">
