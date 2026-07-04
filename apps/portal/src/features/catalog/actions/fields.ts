@@ -135,6 +135,13 @@ export async function saveField(input: SaveFieldInput): Promise<ActionResult<Cat
     if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
+  // Injection guard: field_key is interpolated verbatim into document line-item cell
+  // expressions ({{lookup attr "<key>"}}), so it MUST be a plain slug — a key with a
+  // quote/brace could break out and inject template syntax (Epic S review finding #2).
+  if (input.fieldKey && !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(input.fieldKey)) {
+    return { success: false, error: "Field key must be letters, digits and underscores only (starting with a letter or underscore).", code: "INVALID_FIELD_KEY" };
+  }
+
   const supabase = await createClient();
 
   // System (dimension) fields: protect key + type from edits; only label/unit may change.

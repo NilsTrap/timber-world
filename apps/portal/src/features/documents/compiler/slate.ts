@@ -18,7 +18,7 @@
  */
 import { escapeAttr, escapeText } from "./nodes";
 import { compileShell } from "./shell";
-import { LINE_ITEM_COLUMNS, DEFAULT_LINE_ITEM_COLUMNS, basePathOf, type LineItemColumn } from "./registry";
+import { LINE_ITEM_COLUMNS, DEFAULT_LINE_ITEM_COLUMNS, basePathOf, isSafeFieldKey, type LineItemColumn } from "./registry";
 import type { CompileOptions } from "./types";
 
 /**
@@ -186,7 +186,8 @@ function resolveLineItemColumn(
     if (!fieldKey) return null;
     const def = defs?.[key];
     const header = typeof def?.header === "string" ? def.header : fieldKey;
-    return { key, header, cell: `{{lookup attr "${fieldKey}"}}`, num: def?.num === true };
+    // Defence in depth: a non-slug fieldKey can't inject Handlebars — render empty.
+    return { key, header, cell: isSafeFieldKey(fieldKey) ? `{{lookup attr "${fieldKey}"}}` : "", num: def?.num === true };
   }
   return null;
 }

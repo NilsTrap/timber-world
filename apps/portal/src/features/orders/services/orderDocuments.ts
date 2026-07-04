@@ -126,8 +126,9 @@ async function buildLineAttr(admin: AnyDb, li: OrderLineItem): Promise<Record<st
     });
     for (const [key, v] of Object.entries(fields)) attr[key] = v.value;
     if (packaging) {
-      if (packaging.name) attr._packaging = packaging.name;
-      if (packaging.piecesPerPackage) attr._piecesPerPackage = String(packaging.piecesPerPackage);
+      // Don't clobber a real catalog field that happens to use these reserved keys.
+      if (packaging.name && attr._packaging == null) attr._packaging = packaging.name;
+      if (packaging.piecesPerPackage && attr._piecesPerPackage == null) attr._piecesPerPackage = String(packaging.piecesPerPackage);
     }
   }
   // Fallback: a classic catalog key with no catalog value uses the line's stored scalar.
@@ -145,15 +146,13 @@ async function buildLineAttr(admin: AnyDb, li: OrderLineItem): Promise<Record<st
  * counterparty or the service agent (MCP) must never leak the generating person's
  * identity onto a document the other party reads. Condition: the actor has a
  * concrete portal user, is NOT a service agent, AND is either a platform admin
- * (owner) or a member of the deal's SELLER org (the house on a sell deal). A
- * non-admin house user on a BUY leg (house = buyer there) yields null — safe (no
- * leak); such purchase docs are typically owner/admin-generated anyway.
+ * (owner) or an INTERNAL house user (their org is a trader/manufacturer). This is
+ * topology-INDEPENDENT: on a purchase BUY leg the deal's SELLER is the external
+ * supplier, so comparing the actor against the seller org would wrongly authorise a
+ * supplier user — a role check on the actor's OWN org can never leak a counterparty's
+ * identity onto a document (Epic S review finding #1).
  */
-async function resolveIssuer(
-  admin: AnyDb,
-  actor: ActorContext,
-  sellerOrgId: string | null,
-): Promise<DocumentData["issuer"]> {
+async function resolveIssuer(admin: AnyDb, actor: ActorContext): Promise<DocumentData["issuer"]> {
   if (!actor.portalUserId || actor.isServiceAgent) return null;
   const { data: u } = await admin
     .from("portal_users")
@@ -161,7 +160,15 @@ async function resolveIssuer(
     .eq("id", actor.portalUserId)
     .maybeSingle();
   if (!u) return null;
-  const isHouse = actor.isPlatformAdmin || (!!u.organisation_id && u.organisation_id === sellerOrgId);
+  let isHouse = actor.isPlatformAdmin;
+  if (!isHouse && u.organisation_id) {
+    const { data: org } = await admin
+      .from("organisations")
+      .select("is_trader, is_manufacturer")
+      .eq("id", u.organisation_id)
+      .maybeSingle();
+    isHouse = !!org && (org.is_trader === true || org.is_manufacturer === true);
+  }
   if (!isHouse) return null;
   return {
     name: (u.name as string | null) ?? "",
@@ -275,7 +282,7 @@ export async function assembleDocumentData(db: DbClient, actor: ActorContext, in
     Promise.all(
       scopedLines.map(async (li): Promise<AssemblyLine> => ({ ...li, attr: await buildLineAttr(admin, li) })),
     ),
-    resolveIssuer(admin, actor, deal.seller.id),
+    resolveIssuer(admin, actor),
     (async (): Promise<string | null> => {
       if (!deal.spineId) return null;
       const { data: sp } = await admin.from("spines").select("code").eq("id", deal.spineId).maybeSingle();

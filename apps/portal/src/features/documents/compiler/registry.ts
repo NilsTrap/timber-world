@@ -185,11 +185,21 @@ export interface CatalogTemplateField {
  * NOT gated by SAFE_TOKEN, unlike scalar mentions), resolving the display string
  * the assembler put on DocLineItem.attr. `num` right-aligns numeric fields.
  */
+/** A catalog field_key safe to interpolate into a Handlebars line-item cell
+ *  expression `{{lookup attr "…"}}` — a plain slug with no quotes/braces/spaces
+ *  that could break out of the string literal and inject template syntax. */
+export const SAFE_FIELD_KEY = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+export function isSafeFieldKey(key: string): boolean {
+  return SAFE_FIELD_KEY.test(key);
+}
+
 export function catalogFieldColumn(field: CatalogTemplateField): LineItemColumn {
   return {
     key: `attr.${field.fieldKey}`,
     header: field.fieldLabel,
-    cell: `{{lookup attr "${field.fieldKey}"}}`,
+    // Defence in depth: only a slug-safe key emits a lookup cell; an unsafe key
+    // (rejected at creation by saveField) renders empty rather than injecting.
+    cell: isSafeFieldKey(field.fieldKey) ? `{{lookup attr "${field.fieldKey}"}}` : "",
     num: field.fieldType === "number",
   };
 }
