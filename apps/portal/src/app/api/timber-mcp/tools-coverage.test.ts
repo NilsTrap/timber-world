@@ -79,5 +79,42 @@ const createDealProps =
 ok("create_deal exposes needs_sourcing", "needs_sourcing" in createDealProps);
 ok("create_deal exposes source_organisation_id", "source_organisation_id" in createDealProps);
 
+// ── J (2026-07-04): MCP parity for Vilma — every new UI action is a tool ──────
+// The completeness rule becomes EXECUTABLE for the J additions: a future UI action
+// shipped without its MCP tool (or a lost registration) FAILS this build.
+const props = (n: string) =>
+  ((byName.get(n)?.inputSchema as { properties?: Record<string, unknown> })?.properties) ?? {};
+const isWrite = (n: string) => { const t = byName.get(n); return t != null && t.readOnly === false; };
+const isRead = (n: string) => { const t = byName.get(n); return t != null && t.readOnly === true; };
+
+// J1 · deal-flow parity — firming / sourcing / margin each MUST have a write tool.
+for (const step of ["firming", "sourcing", "margin"] as const) {
+  const stepTools = TOOLS.filter((t) => t.lifecycle === step);
+  ok(`"${step}" step has a write tool`, stepTools.some((t) => !t.readOnly));
+}
+ok("J1: timber_firm_order_specification is a full-token write", isWrite("timber_firm_order_specification"));
+ok("J1: timber_start_sourcing is a full-token write", isWrite("timber_start_sourcing"));
+ok("J1: timber_set_margin_approval is a full-token write", isWrite("timber_set_margin_approval"));
+// J1 · signee overrides (G3) settable via update_deal.
+for (const f of ["seller_signee_name", "seller_signee_role", "buyer_signee_name", "buyer_signee_role"]) {
+  ok(`J1: update_deal exposes ${f}`, f in props("timber_update_deal"));
+}
+
+// J2 · CRM parity — org step has BOTH create AND update; update_org carries the role flags.
+ok("J2: org step has a create tool", byName.has("timber_create_org"));
+ok("J2: org step has an update tool (timber_update_org)", isWrite("timber_update_org"));
+for (const f of ["is_customer", "is_manufacturer", "is_producer", "is_supplier", "is_active"]) {
+  ok(`J2: update_org exposes role/status flag ${f}`, f in props("timber_update_org"));
+}
+
+// J4 · catalog & stock — the step needs reads AND a stock write; the write guard is on the service.
+const catalogTools = TOOLS.filter((t) => t.lifecycle === "catalog");
+ok("catalog step has a read tool", catalogTools.some((t) => t.readOnly));
+ok("catalog step has a write tool", catalogTools.some((t) => !t.readOnly));
+ok("J4: timber_list_catalog_products is a read", isRead("timber_list_catalog_products"));
+ok("J4: timber_get_catalog_variant is a read", isRead("timber_get_catalog_variant"));
+ok("J4: timber_get_variant_stock is a read", isRead("timber_get_variant_stock"));
+ok("J4: timber_set_variant_stock is a full-token write", isWrite("timber_set_variant_stock"));
+
 console.log(`\n${passed} passed, ${failed} failed — ${TOOLS.length} tools across ${LIFECYCLE_STEPS.length} lifecycle steps`);
 if (failed > 0) process.exitCode = 1;
