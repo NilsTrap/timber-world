@@ -1,23 +1,144 @@
-# Template placeholder → data-source audit (Epic G1)
+# Template placeholder → data-source audit (Epic S refresh)
 
-_Dated 2026-07-03. Deliverable for **Epic G1** (spec §8 — Documents / merge fields)._
+_Refreshed **2026-07-05** for **Epic S** (Documents — dynamic catalog placeholders + template
+validation). Supersedes the Epic-G1 snapshot (2026-07-03), whose per-group tables below stay accurate
+for the classic scalar tokens; this refresh adds the tokens that landed since G1 and the **dynamic**
+mechanism G1 could not describe._
 
 This document walks **every merge-field token the document templates can place** and maps each to
 (a) its data source (a real DB column, a value computed in `assemble.ts`, or a hardcoded constant),
 (b) where a house user edits that source in the portal today (or `NONE`), and
-(c) a status. It is the input for the Epic G subtasks **G2** (deal-terms editor), **G3** (signee),
-**G4** (counterparty form), **G5** (orphan/unused sweep). Every row resolves to a definite source —
-there are **no `unknown` rows**.
+(c) a status. Originally the input for the Epic G subtasks **G2** (deal-terms editor), **G3** (signee),
+**G4** (counterparty form), **G5** (orphan/unused sweep) — all now landed. Every row resolves to a
+definite source — there are **no `unknown` rows**.
+
+**What changed since the G1 snapshot** — the net-new tokens + the dynamic mechanism are tabulated in
+§"Epic S — dynamic placeholders" below; the six G-group tables further down stay as the classic-scalar
+reference (still accurate for the rows they list):
+- **G3 · signee** → `seller.signeeName/signeeRole` + `buyer.signeeName/signeeRole` (4 new tokens).
+- **N3 · party order numbers** → `customerOrderNo` / `supplierOrderNo` scalar tokens (2 new).
+- **G5 · VAT basis** → the once-orphaned `totals.vatReference` now HAS a token (1 new; the G1 "data
+  with no token" loose end is closed).
+- **S1/S2 · issuer + spine** → a new **Issuer** group (`issuer.name/email/phone`, 3 new, house-gated) +
+  `spineCode` (1 new).
+- **S1–S3 · dynamic catalog fields** → per-line `attr.<field_key>` line-item COLUMNS (unbounded), the
+  first placeholders whose token set is DATA-DRIVEN, not hardcoded in the registry.
+- **S4 · template validation** → a WARN-only pass that flags placeholders that won't resolve.
 
 **Authoritative token list:** `apps/portal/src/features/documents/compiler/registry.ts`
-(`MERGE_FIELD_GROUPS` lines 27–91, `LINE_ITEM_COLUMNS` lines 108–117).
-**Render shapes:** `apps/portal/src/features/orders/services/documents/types.ts`.
+(`MERGE_FIELD_GROUPS` lines 27–111 — Document/Seller/Buyer/**Issuer**/Terms/Totals,
+`LINE_ITEM_COLUMNS` lines 128–137, dynamic-column builder `catalogFieldColumn` lines 188–195).
+**Render shapes:** `apps/portal/src/features/orders/services/documents/types.ts` (`DocumentData`,
+`DocLineItem.attr`).
 **Population logic:** `apps/portal/src/features/orders/services/documents/assemble.ts` (pure) +
-`apps/portal/src/features/orders/services/orderDocuments.ts` (DB-bound, party cards).
+`apps/portal/src/features/orders/services/orderDocuments.ts` (DB-bound: party cards, `attr` enrichment,
+house-only issuer, spine-code lookup).
+**Dynamic-field plumbing:** reader `apps/portal/src/features/catalog/services/lineFieldValues.ts` ·
+action `apps/portal/src/features/catalog/actions/fields.ts::getCatalogTemplateFields` ·
+editor hook `apps/portal/src/features/documents/plate/hooks/use-catalog-template-fields.ts` ·
+validator `apps/portal/src/features/documents/compiler/validate.ts`.
 
 Status legend: **OK** = correct source + edit UI (or correctly system-computed, no edit needed) ·
 **no-UI** = has a DB column but no portal edit surface · **no-column** = no backing column anywhere ·
-**hardcoded** = value fixed in code · **orphan** = token renders empty with no data home.
+**hardcoded** = value fixed in code · **dynamic** = token/column set is resolved from catalog data at
+edit time (not a fixed registry entry) · **orphan** = token renders empty with no data home.
+
+---
+
+## Epic S — dynamic placeholders (2026-07-05 refresh)
+
+Epic S turned the template merge-field set from a **fixed registry** into a **static core + a data-driven
+tail**. Three things landed: (1) the classic scalar registry grew (issuer group, spine code, party order
+numbers, the VAT-reference token); (2) documents can now place **per-line custom catalog fields** as
+`attr.<field_key>` line-item COLUMNS whose set is resolved from the live catalog, not hardcoded; and
+(3) a **WARN-only validator** flags placeholders that won't resolve. This section is the authoritative
+map for everything new; the classic Document/Seller/Buyer/Terms/Totals/Line-item tables below are the
+G1 baseline for the rows they already covered.
+
+### S.a · New scalar tokens (registry.ts `MERGE_FIELD_GROUPS`)
+
+| Token | Group | Data source | Population | Status |
+|---|---|---|---|---|
+| `spineCode` | Document | `spines.code` (SP-###) resolved via `deal.spineId` | orderDocuments.ts (`admin.from("spines").select("code")…`) → threaded through `assemble.ts`; **null** when the deal has no spine | OK (system, no edit UI — spine identity is assigned, not typed) |
+| `customerOrderNo` | Document | the deal's external ref of type `customer_order_no` | `assemble.ts` `refValueOf(CUSTOMER_ORDER_NO_REF_TYPE)`; also stays in the `externalRefs` block; **null** when unset | OK — editable via MCP `timber_set_external_refs` / the refs editor |
+| `supplierOrderNo` | Document | external ref of type `supplier_order_no` | `assemble.ts` `refValueOf(SUPPLIER_ORDER_NO_REF_TYPE)`; **null** when unset | OK — same editor |
+| `issuer.name` | **Issuer** (new group) | the house `portal_users.name` of the user who GENERATED the doc | `orderDocuments.resolveIssuer` — **house-only gate** | OK (system; identity of the generator) |
+| `issuer.email` | Issuer | `portal_users.email` of the generator | `resolveIssuer` | OK |
+| `issuer.phone` | Issuer | `portal_users.phone` of the generator | `resolveIssuer` | OK |
+| `seller.signeeName` / `seller.signeeRole` | Seller | `PartyCard.signee*` — deal override → seller org default (`default_signee_*`) (G3) | fetched in the party card; per-deal override via `seller_signee_name` on `timber_create_deal`/`update_deal` | OK — edit UI: org card default + deal-panel override |
+| `buyer.signeeName` / `buyer.signeeRole` | Buyer | same, from the buyer org / `buyer_signee_name` override | party card | OK |
+| `totals.vatReference` | Totals | `resolveVat(...).reference` — the legal VAT-basis clause, route-selected | computed in `assemble.ts` (G1's "data with no token" loose end — G5 added the token) | OK (derived) |
+
+**Issuer house-only gate (S2, `resolveIssuer`).** `issuer` is populated ONLY when the acting user is a
+concrete portal user, is **NOT a service agent**, and is either a platform admin or a member of the deal's
+**seller (house)** org. A **counterparty** generate, or **any MCP / service-actor** generate, resolves
+`issuer = null` → the three `issuer.*` tokens render empty (and their hide-when-empty blocks vanish). This
+is deliberate: a document the other party reads must never leak the generating person's identity.
+*Verified live on staging:* an MCP `SERVICE_ACTOR` generation returned `issuer: null` while the custom
+fields + `spineCode` still populated (see `epic-s-verification.md`).
+
+### S.b · Dynamic per-line catalog columns — `attr.<field_key>` (S1–S3)
+
+Custom catalog attributes (a glulam grade, strength class, coating, moisture %, …) are **per-line-item**,
+so they surface as dynamic **line-item COLUMNS**, never scalar mentions (a scalar `attr.<key>` outside the
+`{{#each lineItems}}` loop would render empty). The token set is **data-driven** — it is whatever custom
+fields the catalog currently defines — so it can't live as fixed registry rows. The mechanism, end to end:
+
+1. **Discovery** — `getCatalogTemplateFields()` (`catalog/actions/fields.ts`) returns the catalog's CUSTOM
+   fields (`getAllFields` minus system dimension fields), each as `{ fieldKey, fieldLabel, fieldType,
+   unit, categories }`.
+2. **Editor load** — the Plate editor's `useCatalogTemplateFields()` hook
+   (`documents/plate/hooks/use-catalog-template-fields.ts`) fetches them ONCE (module-cached, one
+   round-trip per page; degrades to `[]` on failure — the editor never crashes because catalog fields
+   failed). It also builds the `attr.<fieldKey> → fieldLabel` map that is **composed on top of** the
+   static `MERGE_FIELD_LABELS` for friendly pill labels — the static map is never mutated.
+3. **Column build** — `catalogFieldColumn(field)` (`compiler/registry.ts`) emits a `LineItemColumn` keyed
+   `attr.<fieldKey>`, header = the field label, cell = **`{{lookup attr "<fieldKey>"}}`** (a robust lookup
+   that resolves ANY key and is NOT gated by the scalar `SAFE_TOKEN` guard), `num` right-aligns `number`
+   fields. The S3 column designer stores the chosen columns on the `line_items` node as `columns` +
+   `columnDefs` (so the compiler stays **DB-free** — the resolved header/num travel in the doc JSON).
+4. **Compile** — `compileSlateTemplate` renders the `line_items` node to `…<th>Grade</th>…{{lookup attr
+   "demo_grade"}}…` inside the `{{#each lineItems}}` loop. A deleted field still compiles (header falls
+   back to the key, cell resolves to empty) — no crash.
+5. **Data (assembler enrichment, S2)** — `orderDocuments.assembleDocumentData` enriches each order line
+   with `attr` via `buildLineAttr` → **`readLineFieldValues`** (`catalog/services/lineFieldValues.ts`),
+   which reads `catalog_variant_field_values` ∪ `catalog_product_field_values` (variant wins) and resolves
+   each value to a display string: **option_id → option label**, else **value_text verbatim**, else
+   **value_number + unit** (`"12 %"`, `"470 kg/m3"`). The pure `assemble.ts` only copies `attr` through, so
+   it stays DB-free. Classic keys (`wood_species`/`humidity`/`processing`/`quality`/`panel_type`) fall back
+   to the line's own stored scalar when the catalog has no value.
+6. **Render** — `mergeTemplate` (the same merge Gotenberg drives) resolves `{{lookup attr "demo_grade"}}`
+   against `DocLineItem.attr` → the per-line value, empty (not `undefined`) when absent.
+
+| Placeholder | Data source | Populated by | Status |
+|---|---|---|---|
+| `attr.<field_key>` (line-item column) | catalog EAV: `catalog_variant_field_values` ∪ `catalog_product_field_values` → display string | `buildLineAttr` → `readLineFieldValues`; copied through `assemble.ts`; rendered `{{lookup attr "<key>"}}` | **dynamic** (set resolved from the live catalog; editable in Catalog → Fields) |
+| `attr._packaging` (reserved) | the variant's DEFAULT packaging **name** | `readLineFieldValues` reads `catalog_variant_packaging_assignments` (is_default row, else first) → `buildLineAttr` writes `attr._packaging` | **dynamic** — best-effort; empty when no default packaging |
+| `attr._piecesPerPackage` (reserved) | that packaging's `pieces_per_package` | same | **dynamic** — best-effort |
+
+*Verified live on staging* (order `ART-TWG-067` / ORD-171, spine SP-078): two glulam lines returned
+distinct `attr.demo_grade` = **"B - Standard"** / **"C - Utility"**, plus `demo_strength_class="GL28h"`,
+number-with-unit values (`demo_moisture_pct="12 %"`, `demo_density="470 kg/m3"`), and reserved
+`_packaging`/`_piecesPerPackage` per line — then rendered through the real compile→merge pipeline into
+per-line `<td>B - Standard</td>` / `<td>C - Utility</td>` cells (`epic-s-verification.md`).
+
+### S.c · Template validation (S4, `compiler/validate.ts`)
+
+`validateTemplate(...)` is a **PURE, WARN-only, never-throws** pass wired into `saveTemplate`
+(WARN-only — it never blocks a save) and run live in the editor. It walks the Plate tree and reports three
+kinds of placeholder that WON'T resolve at generation time, so a house author catches a stale binding
+before it ships as a silently-empty field:
+
+| Warning kind | Fires when | Example message |
+|---|---|---|
+| `unknown_token` | a scalar `mention` whose base path is neither a known `DocumentData` binding nor a live catalog `attr.<key>` | `Placeholder "{{seller.bogus}}" won't resolve — no matching deal field.` |
+| `unknown_field` | a line-items `attr.<key>` COLUMN whose `<key>` is no longer a catalog field (deleted/renamed) | `Table column "gone_field" refers to a catalog field that no longer exists.` |
+| `unknown_condition` | a block `hideWhen` referencing an unknown path (the `{{#if}}` is always-false → block always hidden) | `Hide-when-empty condition "ghost.path" references an unknown field.` |
+
+Resolution is base-path aware (a valid binding minus its helper prefix still resolves). `attr.<key>` checks
+are **SKIPPED** when the catalog field set is `null` (a transient DB read failure / still loading) so a load
+glitch never produces false "deleted field" warnings; pass `[]` only when the catalog is genuinely empty.
+The DB read that supplies `catalogFieldKeys` happens in the CALLER — the validator only compares strings.
 
 ---
 
@@ -210,8 +331,18 @@ until data is supplied — G5 impact):
 
 ## Findings → G-subtask routing
 
-**Counts:** 46 tokens total (Document 6 · Seller 10 · Buyer 10 · Terms 5 · Totals 7 · Line-item 8) —
-**OK 38 · no-UI 7 · hardcoded 1 · no-column 0 · orphan 0.**
+**Counts (Epic S refresh, 2026-07-05).** Scalar registry tokens = **49**
+(Document **9** · Seller **12** · Buyer **12** · **Issuer 3** · Terms 5 · Totals **8**), up from the 41
+scalars at G1 (+`spineCode`, +`customerOrderNo`, +`supplierOrderNo`, +Issuer×3, +`seller/buyer.signee*`×4,
++`totals.vatReference`; net +8). Line-item **columns = 8 fixed** (`LINE_ITEM_COLUMNS`) **+ a data-driven
+tail** of `attr.<field_key>` columns (one per custom catalog field — unbounded, incl. reserved
+`attr._packaging` / `attr._piecesPerPackage`). **Orphans: still 0** — G1's one "data with no token"
+(`totals.vatReference`) is now a real token, and every dynamic `attr.<key>` resolves through
+`readLineFieldValues`. All of G2–G5 have since landed; the routing notes below are retained for history.
+
+> The G1 baseline line (below, for reference): 46 tokens total (Document 6 · Seller 10 · Buyer 10 ·
+> Terms 5 · Totals 7 · Line-item 8) — OK 38 · no-UI 7 · hardcoded 1 · no-column 0 · orphan 0. Since then
+> the no-UI count shrank (G2 terms editor, N3 refs editor) and no-column closed (G3 signee).
 
 **G2 — deal-terms editor** (add a portal editor for the `orders` term columns; today MCP-write-only):
 - `incoterms` (+ `orders.incoterms_place`, which has no token but must be editable)
