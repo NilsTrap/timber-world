@@ -2,14 +2,28 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Check, Loader2, Plus, UserPen } from "lucide-react";
 import {
-  Input, Textarea,
+  Button, Input, Textarea, Label,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  Popover, PopoverTrigger, PopoverContent,
 } from "@timber/ui";
 import { updateDealTerms, type DealTermsInput } from "../actions/dealActions";
 import { getFieldOptions, type FieldOptionChoice } from "../actions/getFieldOptions";
 import { getDealPartyAddresses } from "../actions/getDealPartyAddresses";
+import { getDealSigneeContext } from "../actions/getDealSigneeContext";
 import { getCurrencies } from "@/features/catalog/actions/currencies";
+import { listOrgContacts, createOrgContact } from "@/features/counterparties/actions/orgContacts";
+import type { OrgContactRow } from "@/features/counterparties/contactTypes";
+
+/** R9 · one side's signee context (party org + its G3 default signee), fetched
+ *  from getDealSigneeContext. Mirrors that action's per-side return shape. */
+interface SigneeParty {
+  orgId: string | null;
+  orgName: string | null;
+  defaultSigneeName: string | null;
+  defaultSigneeRole: string | null;
+}
 
 /** R7 · fallback currency list when getCurrencies is unavailable (a deal_terms
  *  editor without catalogue.view) — the active set today; the CHECK allows USD too. */
@@ -130,6 +144,8 @@ export function DealTermsEditor({
   const [incotermsOptions, setIncotermsOptions] = useState<FieldOptionChoice[]>([]);
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<FieldOptionChoice[]>([]);
   const [currencyOptions, setCurrencyOptions] = useState<{ code: string; name: string }[]>(FALLBACK_CURRENCIES);
+  // R9 · seller/buyer party org + its default signee, driving the contact picker.
+  const [signeeCtx, setSigneeCtx] = useState<{ seller: SigneeParty; buyer: SigneeParty } | null>(null);
   const [deadlineTextMode, setDeadlineTextMode] = useState(() => {
     const dd = (values.deliveryDeadline ?? "").trim();
     return dd !== "" && !ISO_DATE_RE.test(dd);
@@ -150,6 +166,8 @@ export function DealTermsEditor({
     getFieldOptions("incoterms").then((res) => { if (alive && res.success) setIncotermsOptions(res.data); });
     getFieldOptions("payment_terms").then((res) => { if (alive && res.success) setPaymentTermsOptions(res.data); });
     getDealPartyAddresses(orderId).then((res) => { if (alive && res.success) setPartyAddresses(res.data); });
+    // R9 · party org ids + G3 default signees for the signee picker.
+    getDealSigneeContext(orderId).then((res) => { if (alive && res.success) setSigneeCtx(res.data); });
     // R7 · currency options from the catalog (active only). Falls back to the
     // hardcoded set when the viewer lacks catalogue.view (getCurrencies FORBIDDEN).
     getCurrencies().then((res) => {
@@ -214,6 +232,32 @@ export function DealTermsEditor({
       return;
     }
     savedRef.current = { ...savedRef.current, currency: code };
+  };
+
+  // R9 · write BOTH per-deal signee override columns for one side in a single
+  // updateDealTerms call (from a chosen CRM contact, or null to fall back to the
+  // org default). Same field-wall + optimistic-revert pattern as saveField. Passing
+  // null/"" clears the override so documents render the org default again.
+  const saveSignee = async (side: "seller" | "buyer", name: string | null, role: string | null): Promise<boolean> => {
+    const nameKey: keyof Draft = side === "seller" ? "sellerSigneeName" : "buyerSigneeName";
+    const roleKey: keyof Draft = side === "seller" ? "sellerSigneeRole" : "buyerSigneeRole";
+    const nameVal = (name ?? "").trim();
+    const roleVal = (role ?? "").trim();
+    const prevName = savedRef.current[nameKey];
+    const prevRole = savedRef.current[roleKey];
+    if (prevName === nameVal && prevRole === roleVal) return true;
+    setDraft((p) => ({ ...p, [nameKey]: nameVal, [roleKey]: roleVal }));
+    const terms: DealTermsInput = side === "seller"
+      ? { sellerSigneeName: nn(nameVal), sellerSigneeRole: nn(roleVal) }
+      : { buyerSigneeName: nn(nameVal), buyerSigneeRole: nn(roleVal) };
+    const res = await updateDealTerms({ orderId, terms });
+    if (!res.success) {
+      toast.error(res.error);
+      setDraft((p) => ({ ...p, [nameKey]: prevName, [roleKey]: prevRole }));
+      return false;
+    }
+    savedRef.current = { ...savedRef.current, [nameKey]: nameVal, [roleKey]: roleVal };
+    return true;
   };
 
   // Shared handler props for a debounced text Input / Textarea.
@@ -332,22 +376,251 @@ export function DealTermsEditor({
         />
       </Field>
 
+      {/* R9 · signee = a person from the party org's CRM contacts. Auto-shows the
+          org's default signee; "Change" picks another contact (or quick-adds one)
+          which writes the per-deal seller_/buyer_signee_* override columns — the same
+          storage documents resolve (deal override → org default). */}
       <div className="border-t pt-3">
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Signatories (documents)</p>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-          <Field label={`Seller signee — name${sellerName ? ` (${sellerName})` : ""}`}>
-            <Input className="h-8" {...inputAutosave("sellerSigneeName")} placeholder="Defaults from the org" />
-          </Field>
-          <Field label="Seller signee — role">
-            <Input className="h-8" {...inputAutosave("sellerSigneeRole")} placeholder="e.g. Director" />
-          </Field>
-          <Field label={`Buyer signee — name${buyerName ? ` (${buyerName})` : ""}`}>
-            <Input className="h-8" {...inputAutosave("buyerSigneeName")} placeholder="Defaults from the org" />
-          </Field>
-          <Field label="Buyer signee — role">
-            <Input className="h-8" {...inputAutosave("buyerSigneeRole")} placeholder="e.g. Purchasing manager" />
-          </Field>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <SigneeField
+            sideLabel="Seller"
+            partyName={signeeCtx?.seller.orgName ?? sellerName}
+            orgId={signeeCtx?.seller.orgId ?? null}
+            overrideName={draft.sellerSigneeName}
+            overrideRole={draft.sellerSigneeRole}
+            orgDefaultName={signeeCtx?.seller.defaultSigneeName ?? null}
+            orgDefaultRole={signeeCtx?.seller.defaultSigneeRole ?? null}
+            onSelect={(n, r) => saveSignee("seller", n, r)}
+          />
+          <SigneeField
+            sideLabel="Buyer"
+            partyName={signeeCtx?.buyer.orgName ?? buyerName}
+            orgId={signeeCtx?.buyer.orgId ?? null}
+            overrideName={draft.buyerSigneeName}
+            overrideRole={draft.buyerSigneeRole}
+            orgDefaultName={signeeCtx?.buyer.defaultSigneeName ?? null}
+            orgDefaultRole={signeeCtx?.buyer.defaultSigneeRole ?? null}
+            onSelect={(n, r) => saveSignee("buyer", n, r)}
+          />
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * R9 · one side's signee, driven by CRM contacts. Shows the effective signee
+ * (per-deal override → org default → none), a "Change" popover that lists the
+ * party org's contacts (listOrgContacts) and quick-adds one (createOrgContact),
+ * and a "use org default" clear. Selecting a contact / clearing writes the per-deal
+ * override columns via onSelect (name, role); passing null clears back to the org
+ * default. A K1 book-wall refusal (e.g. a non-admin on a trader/seller org) is shown
+ * cleanly — the list is hidden / quick-add disabled — never a crash.
+ */
+function SigneeField({
+  sideLabel, partyName, orgId,
+  overrideName, overrideRole, orgDefaultName, orgDefaultRole, onSelect,
+}: {
+  sideLabel: string;
+  partyName: string | null;
+  orgId: string | null;
+  overrideName: string;
+  overrideRole: string;
+  orgDefaultName: string | null;
+  orgDefaultRole: string | null;
+  onSelect: (name: string | null, role: string | null) => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [contacts, setContacts] = useState<OrgContactRow[]>([]);
+  const [loadingList, setLoadingList] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  // Quick-add form
+  const [adding, setAdding] = useState(false);
+  const [qa, setQa] = useState({ name: "", role: "", email: "", phone: "" });
+  const [addError, setAddError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const hasOverride = overrideName.trim() !== "";
+  const effName = hasOverride ? overrideName : (orgDefaultName ?? "");
+  const effRole = hasOverride ? overrideRole : (orgDefaultRole ?? "");
+  const source = hasOverride ? "chosen contact" : (orgDefaultName ? "org default" : null);
+
+  const loadContacts = async () => {
+    if (!orgId) return;
+    setLoadingList(true);
+    setListError(null);
+    const res = await listOrgContacts(orgId);
+    setLoadingList(false);
+    if (!res.success) {
+      // Graceful K1 book-wall refusal — list stays empty, message shown.
+      setContacts([]);
+      setListError(res.error || "You can't view this organisation's contacts.");
+      return;
+    }
+    setContacts(res.data);
+  };
+
+  const onOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) {
+      setAdding(false);
+      setAddError(null);
+      setQa({ name: "", role: "", email: "", phone: "" });
+      void loadContacts();
+    }
+  };
+
+  const pick = async (name: string, role: string | null) => {
+    setSaving(true);
+    const ok = await onSelect(name, role);
+    setSaving(false);
+    if (ok) setOpen(false);
+  };
+
+  const clearToDefault = async () => {
+    setSaving(true);
+    const ok = await onSelect(null, null);
+    setSaving(false);
+    if (ok) setOpen(false);
+  };
+
+  const submitQuickAdd = async () => {
+    if (!orgId) return;
+    const name = qa.name.trim();
+    if (!name) { setAddError("Name is required."); return; }
+    setCreating(true);
+    setAddError(null);
+    const res = await createOrgContact(orgId, {
+      name,
+      roleTitle: qa.role.trim() || null,
+      email: qa.email.trim() || null,
+      phone: qa.phone.trim() || null,
+    });
+    if (!res.success) {
+      setCreating(false);
+      // FORBIDDEN on a walled org (e.g. a non-admin adding to a trader/seller org).
+      setAddError(
+        res.code === "FORBIDDEN"
+          ? "You can't add contacts to this organisation — ask an admin."
+          : (res.error || "Couldn't add the contact."),
+      );
+      return;
+    }
+    setContacts((prev) => [res.data, ...prev]);
+    const ok = await onSelect(res.data.name, res.data.roleTitle);
+    setCreating(false);
+    if (ok) { setAdding(false); setOpen(false); }
+  };
+
+  return (
+    <div className="space-y-1">
+      <label className="text-xs text-muted-foreground">
+        {sideLabel} signee{partyName ? ` — ${partyName}` : ""}
+      </label>
+      <div className="flex items-start justify-between gap-2 rounded-md border bg-muted/20 px-2.5 py-1.5">
+        <div className="min-w-0">
+          {effName ? (
+            <>
+              <p className="truncate text-sm font-medium">{effName}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {effRole || "—"}
+                {source && <span className="ml-1 text-muted-foreground/70">· {source}</span>}
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">Not set — blank on documents unless a signee is chosen.</p>
+          )}
+        </div>
+        <Popover open={open} onOpenChange={onOpenChange}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button" variant="outline" size="sm" className="h-7 shrink-0"
+              disabled={!orgId}
+              title={orgId ? "Pick a signee from this organisation's contacts" : "Set the party first"}
+            >
+              <UserPen className="h-3.5 w-3.5" /> Change
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-80 p-0">
+            <div className="border-b px-3 py-2">
+              <p className="text-xs font-medium">{sideLabel} signee — {partyName ?? "organisation"}</p>
+            </div>
+
+            {/* Contact list */}
+            <div className="max-h-56 overflow-y-auto">
+              {loadingList ? (
+                <div className="flex items-center gap-2 px-3 py-4 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading contacts…
+                </div>
+              ) : listError ? (
+                <p className="px-3 py-3 text-xs text-amber-600 dark:text-amber-500">{listError}</p>
+              ) : contacts.length === 0 ? (
+                <p className="px-3 py-3 text-xs text-muted-foreground">No contacts yet for this organisation.</p>
+              ) : (
+                contacts.map((c) => {
+                  const selected = hasOverride && c.name === overrideName && (c.roleTitle ?? "") === overrideRole;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void pick(c.name, c.roleTitle)}
+                      className="flex w-full items-start justify-between gap-2 px-3 py-2 text-left hover:bg-muted/60 disabled:opacity-60"
+                    >
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-1.5 text-sm font-medium">
+                          <span className="truncate">{c.name}</span>
+                          {c.isPrimary && <span className="rounded bg-primary/10 px-1 text-[10px] text-primary">primary</span>}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {[c.roleTitle, c.email, c.phone].filter(Boolean).join(" · ") || "—"}
+                        </span>
+                      </span>
+                      {selected && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Quick-add + clear */}
+            <div className="border-t p-3">
+              {adding ? (
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Name *</Label>
+                    <Input className="h-8" value={qa.name} onChange={(e) => setQa((p) => ({ ...p, name: e.target.value }))} placeholder="Full name" autoFocus />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input className="h-8" value={qa.role} onChange={(e) => setQa((p) => ({ ...p, role: e.target.value }))} placeholder="Role" />
+                    <Input className="h-8" value={qa.phone} onChange={(e) => setQa((p) => ({ ...p, phone: e.target.value }))} placeholder="Phone" />
+                  </div>
+                  <Input className="h-8" type="email" value={qa.email} onChange={(e) => setQa((p) => ({ ...p, email: e.target.value }))} placeholder="Email" />
+                  {addError && <p className="text-xs text-amber-600 dark:text-amber-500">{addError}</p>}
+                  <div className="flex items-center justify-end gap-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => { setAdding(false); setAddError(null); }} disabled={creating}>Cancel</Button>
+                    <Button type="button" size="sm" onClick={() => void submitQuickAdd()} disabled={creating}>
+                      {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add & select
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => { setAdding(true); setAddError(null); }}>
+                    <Plus className="h-3.5 w-3.5" /> New contact
+                  </Button>
+                  {hasOverride && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => void clearToDefault()} disabled={saving}>
+                      Use org default
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </div>
   );
