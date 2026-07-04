@@ -1,15 +1,32 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Trash2, Search, ImageIcon, Plus } from "lucide-react";
-import { Button, Input } from "@timber/ui";
+import { Trash2, Search, ImageIcon, Plus, Power, PowerOff, Eye, FolderInput, X } from "lucide-react";
+import {
+  Button,
+  Input,
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogCancel,
+} from "@timber/ui";
 import { toast } from "sonner";
-import { deleteProduct } from "../actions/products";
+import {
+  bulkDeleteProducts,
+  bulkSetProductsActive,
+  bulkSetProductsVisibility,
+  bulkMoveProductsToCategory,
+} from "../actions/products";
 import { catalogImageUrl } from "./CatalogImages";
 import { NewProductDialog } from "./NewProductDialog";
 import type { CatalogCategory } from "../types";
+
+/** Tri-state per-surface visibility choice used by the "Set visibility" dialog. */
+type VisChoice = "keep" | "show" | "hide";
 
 interface ProductWithCategory {
   id: string;
@@ -53,10 +70,21 @@ export function AllProductsPage({ products: initialProducts, categories }: Props
   const router = useRouter();
   const [products, setProducts] = useState(initialProducts);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [deleting, setDeleting] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [showNewProduct, setShowNewProduct] = useState(false);
+
+  // Bulk-delete is a two-step confirm: 0 = closed, 1 = review, 2 = final "sure?".
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
+  // Set-visibility dialog (tri-state per surface).
+  const [visOpen, setVisOpen] = useState(false);
+  const [visAgents, setVisAgents] = useState<VisChoice>("keep");
+  const [visInternal, setVisInternal] = useState<VisChoice>("keep");
+  const [visMarketing, setVisMarketing] = useState<VisChoice>("keep");
+  // Move-to-category dialog.
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveCategoryId, setMoveCategoryId] = useState("");
 
   const countByCategory = useMemo(() => {
     const m: Record<string, number> = {};
@@ -88,19 +116,105 @@ export function AllProductsPage({ products: initialProducts, categories }: Props
     setSelected(next);
   };
 
+  // Selected products (in table order) + roll-up of variants they carry.
+  const selectedProducts = useMemo(() => products.filter((p) => selected.has(p.id)), [products, selected]);
+  const selectedVariantCount = useMemo(
+    () => selectedProducts.reduce((s, p) => s + (p.variantCount ?? 0), 0),
+    [selectedProducts]
+  );
+  const n = selected.size;
+  const s = (count: number) => (count === 1 ? "" : "s");
+
   const handleBulkDelete = async () => {
-    if (selected.size === 0) return;
-    if (!confirm(`Delete ${selected.size} product(s)? This cannot be undone.`)) return;
-    setDeleting(true);
-    let deleted = 0;
-    for (const id of selected) {
-      const result = await deleteProduct(id);
-      if (result.success) deleted++;
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setBusy(true);
+    const result = await bulkDeleteProducts(ids);
+    setBusy(false);
+    setDeleteStep(0);
+    if (!result.success) {
+      toast.error(result.error);
+      return;
     }
-    setDeleting(false);
     setProducts(products.filter((p) => !selected.has(p.id)));
     setSelected(new Set());
-    toast.success(`Deleted ${deleted} product(s)`);
+    toast.success(`Deleted ${result.data.deleted} product${s(result.data.deleted)}`);
+    router.refresh();
+  };
+
+  const handleSetActive = async (isActive: boolean) => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setBusy(true);
+    const result = await bulkSetProductsActive(ids, isActive);
+    setBusy(false);
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+    setProducts(products.map((p) => (selected.has(p.id) ? { ...p, isActive } : p)));
+    toast.success(`${isActive ? "Activated" : "Deactivated"} ${result.data.updated} product${s(result.data.updated)}`);
+    router.refresh();
+  };
+
+  const openVisibility = () => {
+    setVisAgents("keep");
+    setVisInternal("keep");
+    setVisMarketing("keep");
+    setVisOpen(true);
+  };
+
+  const handleVisibilityApply = async () => {
+    const patch: { visibleAgents?: boolean; visibleInternal?: boolean; visibleMarketing?: boolean } = {};
+    if (visAgents !== "keep") patch.visibleAgents = visAgents === "show";
+    if (visInternal !== "keep") patch.visibleInternal = visInternal === "show";
+    if (visMarketing !== "keep") patch.visibleMarketing = visMarketing === "show";
+    if (Object.keys(patch).length === 0) {
+      toast.error("Pick at least one surface to change");
+      return;
+    }
+    const ids = Array.from(selected);
+    setBusy(true);
+    const result = await bulkSetProductsVisibility(ids, patch);
+    setBusy(false);
+    setVisOpen(false);
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(`Updated visibility on ${result.data.updated} product${s(result.data.updated)}`);
+    router.refresh();
+  };
+
+  const openMove = () => {
+    setMoveCategoryId("");
+    setMoveOpen(true);
+  };
+
+  const handleMoveApply = async () => {
+    if (!moveCategoryId) {
+      toast.error("Pick a target category");
+      return;
+    }
+    const ids = Array.from(selected);
+    setBusy(true);
+    const result = await bulkMoveProductsToCategory(ids, moveCategoryId);
+    setBusy(false);
+    setMoveOpen(false);
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+    const cat = categories.find((c) => c.id === moveCategoryId);
+    setProducts(
+      products.map((p) =>
+        selected.has(p.id)
+          ? { ...p, categoryId: moveCategoryId, categoryName: cat?.name ?? p.categoryName, categorySlug: cat?.slug ?? p.categorySlug }
+          : p
+      )
+    );
+    setSelected(new Set());
+    toast.success(`Moved ${result.data.updated} product${s(result.data.updated)} to ${cat?.name ?? "category"}`);
     router.refresh();
   };
 
@@ -139,12 +253,166 @@ export function AllProductsPage({ products: initialProducts, categories }: Props
       </div>
 
       {selected.size > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border bg-muted/50 px-4 py-2">
-          <span className="text-sm font-medium">{selected.size} selected</span>
-          <Button size="sm" variant="outline" className="text-destructive" onClick={handleBulkDelete} disabled={deleting}>
-            <Trash2 className="h-3.5 w-3.5 mr-1" /> {deleting ? "Deleting..." : "Delete Selected"}
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/50 px-4 py-2">
+          <span className="text-sm font-medium mr-1">{n} selected</span>
+          <Button size="sm" variant="outline" onClick={() => handleSetActive(true)} disabled={busy}>
+            <Power className="h-3.5 w-3.5 mr-1" /> Activate
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
+          <Button size="sm" variant="outline" onClick={() => handleSetActive(false)} disabled={busy}>
+            <PowerOff className="h-3.5 w-3.5 mr-1" /> Deactivate
+          </Button>
+          <Button size="sm" variant="outline" onClick={openVisibility} disabled={busy}>
+            <Eye className="h-3.5 w-3.5 mr-1" /> Visibility
+          </Button>
+          <Button size="sm" variant="outline" onClick={openMove} disabled={busy}>
+            <FolderInput className="h-3.5 w-3.5 mr-1" /> Move to category
+          </Button>
+          <div className="mx-1 h-5 w-px bg-border" />
+          <Button size="sm" variant="outline" className="text-destructive" onClick={() => setDeleteStep(1)} disabled={busy}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} disabled={busy}>Clear</Button>
+        </div>
+      )}
+
+      {/* ── Bulk delete: two-step confirmation ── */}
+      <AlertDialog open={deleteStep > 0} onOpenChange={(o) => { if (!o && !busy) setDeleteStep(0); }}>
+        <AlertDialogContent>
+          {deleteStep === 1 ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {n} product{s(n)}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  You are about to delete the following product{s(n)}. Review the list before continuing.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="max-h-44 overflow-y-auto rounded border bg-muted/40 p-2 text-sm">
+                <ul className="space-y-0.5">
+                  {selectedProducts.slice(0, 10).map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{p.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{p.categoryName}</span>
+                    </li>
+                  ))}
+                  {n > 10 && <li className="text-xs text-muted-foreground">+{n - 10} more…</li>}
+                </ul>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+                <Button variant="destructive" onClick={() => setDeleteStep(2)}>
+                  Delete {n} product{s(n)}
+                </Button>
+              </AlertDialogFooter>
+            </>
+          ) : (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This permanently deletes {n} product{s(n)}
+                  {selectedVariantCount > 0
+                    ? ` and their ${selectedVariantCount} variant${s(selectedVariantCount)} (with all variant images, stock and packaging)`
+                    : ""}
+                  , plus product images and all field values. Any deals, inventory packages or agent orders that
+                  referenced them keep their rows but lose the catalog link. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+                <Button variant="destructive" onClick={handleBulkDelete} disabled={busy}>
+                  {busy ? "Deleting…" : `Yes, delete ${n} product${s(n)} permanently`}
+                </Button>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Set visibility ── */}
+      {visOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !busy && setVisOpen(false)}
+        >
+          <div className="bg-card rounded-lg shadow-xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-lg">Set visibility</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Applies to {n} selected product{s(n)}. Leave a surface “Unchanged” to keep its current value.
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 -mr-2 -mt-2" onClick={() => setVisOpen(false)} disabled={busy}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {([
+                ["Agents storefront", visAgents, setVisAgents],
+                ["Internal portal", visInternal, setVisInternal],
+                ["Marketing site", visMarketing, setVisMarketing],
+              ] as [string, VisChoice, (v: VisChoice) => void][]).map(([label, value, setter]) => (
+                <div key={label} className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium">{label}</span>
+                  <select
+                    className="flex h-9 w-40 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                    value={value}
+                    onChange={(e) => setter(e.target.value as VisChoice)}
+                  >
+                    <option value="keep">Unchanged</option>
+                    <option value="show">Show</option>
+                    <option value="hide">Hide</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setVisOpen(false)} disabled={busy}>Cancel</Button>
+              <Button onClick={handleVisibilityApply} disabled={busy}>{busy ? "Applying…" : "Apply"}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Move to category ── */}
+      {moveOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !busy && setMoveOpen(false)}
+        >
+          <div className="bg-card rounded-lg shadow-xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-lg">Move to category</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Moves {n} selected product{s(n)} to another category.
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 -mr-2 -mt-2" onClick={() => setMoveOpen(false)} disabled={busy}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Target category</label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={moveCategoryId}
+                onChange={(e) => setMoveCategoryId(e.target.value)}
+              >
+                <option value="">— pick a category —</option>
+                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <p className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-muted-foreground">
+              A category defines the product’s field set. Field values whose fields the target category does not use are
+              <strong> kept but hidden</strong> — they stay in the database and reappear if you move the product back, but
+              they are dropped the next time the product is saved. Nothing is deleted by the move itself.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setMoveOpen(false)} disabled={busy}>Cancel</Button>
+              <Button onClick={handleMoveApply} disabled={busy || !moveCategoryId}>{busy ? "Moving…" : "Move"}</Button>
+            </div>
+          </div>
         </div>
       )}
 

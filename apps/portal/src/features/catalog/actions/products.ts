@@ -375,3 +375,146 @@ export async function deleteProduct(id: string): Promise<ActionResult<null>> {
   revalidatePath("/admin/catalog");
   return { success: true, data: null };
 }
+
+// ─── Bulk product actions ───────────────────────────────────────────────
+// Batched mutations for the All Products table. Each takes a list of ids and
+// performs ONE round-trip (delete does two: variants then products). They share
+// the same permission gate as saveProduct / deleteProduct (platform admin, or a
+// user with the `catalogue.view` module).
+
+/** Shared write gate for catalog product mutations. Returns an error result the
+ *  caller should return as-is, or null when the caller may proceed. Mirrors the
+ *  inline gate used by saveProduct / deleteProduct. */
+async function assertProductWrite(): Promise<{ success: false; error: string; code?: string } | null> {
+  const session = await getSession();
+  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+  if (!isAdmin(session)) {
+    const orgId = session.currentOrganizationId || session.organisationId;
+    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
+  return null;
+}
+
+/**
+ * Delete N products in one batch.
+ *
+ * FK reality (supabase/migrations/20260527000003_catalog_global_fields.sql):
+ *   • catalog_variants.product_id            → ON DELETE RESTRICT
+ *     (so a product with variants cannot be deleted directly — we delete the
+ *      variants first to honour the "also deletes their variants" promise).
+ *   • catalog_variant_images / _field_values / _stock / _packaging_assignments /
+ *     _packages  (variant_id)                → ON DELETE CASCADE  (gone with the variant)
+ *   • catalog_product_images (product_id)    → ON DELETE CASCADE  (gone with the product)
+ *   • catalog_product_field_values (product_id) → ON DELETE CASCADE (gone with the product)
+ *   • inventory_packages.catalog_variant_id  → ON DELETE SET NULL (row kept, unlinked)
+ *   • order_line_items.catalog_variant_id / .catalog_product_id → ON DELETE SET NULL (kept, unlinked)
+ *   • agent_order_items.variant_id           → ON DELETE SET NULL (kept, unlinked)
+ * Net: products + every catalog child row are permanently deleted; deals,
+ * inventory and agent orders keep their rows but lose the catalog link.
+ */
+export async function bulkDeleteProducts(ids: string[]): Promise<ActionResult<{ deleted: number }>> {
+  const gate = await assertProductWrite();
+  if (gate) return gate;
+  if (ids.length === 0) return { success: true, data: { deleted: 0 } };
+
+  const supabase = await createClient();
+
+  // 1. Delete variants first (RESTRICT on product_id blocks the product delete
+  //    otherwise). Variant child rows cascade; external links are set null.
+  const { error: vErr } = await (supabase as any)
+    .from("catalog_variants")
+    .delete()
+    .in("product_id", ids);
+  if (vErr) return { success: false, error: vErr.message };
+
+  // 2. Delete the products. Product images + product field values cascade.
+  const { error, count } = await (supabase as any)
+    .from("catalog_products")
+    .delete({ count: "exact" })
+    .in("id", ids);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/admin/catalog");
+  return { success: true, data: { deleted: count ?? ids.length } };
+}
+
+/** Set is_active on N products in one batch. Reversible — no cascade. */
+export async function bulkSetProductsActive(ids: string[], isActive: boolean): Promise<ActionResult<{ updated: number }>> {
+  const gate = await assertProductWrite();
+  if (gate) return gate;
+  if (ids.length === 0) return { success: true, data: { updated: 0 } };
+
+  const supabase = await createClient();
+  const { error, count } = await (supabase as any)
+    .from("catalog_products")
+    .update({ is_active: isActive }, { count: "exact" })
+    .in("id", ids);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/admin/catalog");
+  return { success: true, data: { updated: count ?? ids.length } };
+}
+
+/** Set per-surface visibility on N products in one batch. Only the surfaces
+ *  present in `visibility` are written (the rest are left untouched). Columns:
+ *  visible_agents / visible_internal / visible_marketing (surface_visibility E5). */
+export async function bulkSetProductsVisibility(
+  ids: string[],
+  visibility: { visibleAgents?: boolean; visibleInternal?: boolean; visibleMarketing?: boolean }
+): Promise<ActionResult<{ updated: number }>> {
+  const gate = await assertProductWrite();
+  if (gate) return gate;
+  if (ids.length === 0) return { success: true, data: { updated: 0 } };
+
+  const payload: Record<string, boolean> = {};
+  if (visibility.visibleAgents !== undefined) payload.visible_agents = visibility.visibleAgents;
+  if (visibility.visibleInternal !== undefined) payload.visible_internal = visibility.visibleInternal;
+  if (visibility.visibleMarketing !== undefined) payload.visible_marketing = visibility.visibleMarketing;
+  if (Object.keys(payload).length === 0) return { success: false, error: "No visibility surfaces selected" };
+
+  const supabase = await createClient();
+  const { error, count } = await (supabase as any)
+    .from("catalog_products")
+    .update(payload, { count: "exact" })
+    .in("id", ids);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/admin/catalog");
+  return { success: true, data: { updated: count ?? ids.length } };
+}
+
+/**
+ * Move N products to a different category in one batch.
+ *
+ * Decision: WARN, do not BLOCK, when field sets differ.
+ * Fields are GLOBAL (catalog_fields) and assigned to categories via
+ * catalog_category_field_assignments; a product's field VALUES are keyed by
+ * (product_id, global field_id) and are NOT touched by the move. If the target
+ * category doesn't assign a field the product has a value for, that value stays
+ * in the DB but is hidden in the editor (and would be dropped on the product's
+ * next save, since saveProduct deletes+reinserts field values from the form).
+ * Because nothing is destroyed here and the move is fully reversible, a hard
+ * block would be user-hostile; the UI shows a clear keep-but-hidden warning
+ * instead. Slug uniqueness is per (category_id, slug) → a collision surfaces as
+ * a DUPLICATE error the caller can show.
+ */
+export async function bulkMoveProductsToCategory(ids: string[], categoryId: string): Promise<ActionResult<{ updated: number }>> {
+  const gate = await assertProductWrite();
+  if (gate) return gate;
+  if (ids.length === 0) return { success: true, data: { updated: 0 } };
+  if (!categoryId) return { success: false, error: "Target category is required" };
+
+  const supabase = await createClient();
+  const { error, count } = await (supabase as any)
+    .from("catalog_products")
+    .update({ category_id: categoryId }, { count: "exact" })
+    .in("id", ids);
+  if (error) {
+    if (error.code === "23505") return { success: false, error: "A product with the same slug already exists in the target category. Rename the conflicting slug first.", code: "DUPLICATE" };
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath("/admin/catalog");
+  return { success: true, data: { updated: count ?? ids.length } };
+}
