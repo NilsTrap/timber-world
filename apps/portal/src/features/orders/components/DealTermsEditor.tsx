@@ -9,6 +9,14 @@ import {
 import { updateDealTerms, type DealTermsInput } from "../actions/dealActions";
 import { getFieldOptions, type FieldOptionChoice } from "../actions/getFieldOptions";
 import { getDealPartyAddresses } from "../actions/getDealPartyAddresses";
+import { getCurrencies } from "@/features/catalog/actions/currencies";
+
+/** R7 · fallback currency list when getCurrencies is unavailable (a deal_terms
+ *  editor without catalogue.view) — the active set today; the CHECK allows USD too. */
+const FALLBACK_CURRENCIES = [
+  { code: "EUR", name: "Euro" },
+  { code: "GBP", name: "British Pound" },
+];
 
 /** Radix Select forbids an empty-string item value, so a sentinel represents
  *  "no incoterms" and is mapped back to "" on save. */
@@ -50,6 +58,8 @@ export interface DealTermsValues {
   deliveryTerms: string | null;
   deliveryDeadline: string | null;
   notes: string | null;
+  /** R7 · the deal currency (EUR/GBP/…). */
+  currency: string | null;
   sellerSigneeName: string | null;
   sellerSigneeRole: string | null;
   buyerSigneeName: string | null;
@@ -67,6 +77,7 @@ function toDraft(v: DealTermsValues): Draft {
     deliveryTerms: v.deliveryTerms ?? "",
     deliveryDeadline: v.deliveryDeadline ?? "",
     notes: v.notes ?? "",
+    currency: v.currency ?? "EUR",
     sellerSigneeName: v.sellerSigneeName ?? "",
     sellerSigneeRole: v.sellerSigneeRole ?? "",
     buyerSigneeName: v.buyerSigneeName ?? "",
@@ -100,11 +111,16 @@ export function DealTermsEditor({
   values,
   sellerName,
   buyerName,
+  currencyEditable = false,
 }: {
   orderId: string;
   values: DealTermsValues;
   sellerName: string | null;
   buyerName: string | null;
+  /** R7 · the currency Select is live only while the deal is Draft (changing it
+   *  after lines are priced would be inconsistent); past Draft it's a read-only chip.
+   *  The service re-checks server-side. */
+  currencyEditable?: boolean;
   /** Kept for API compatibility with DealPanel. R4 autosaves per field and does
    *  NOT reload the parent on every keystroke — a reload would clobber in-progress
    *  edits in other fields — so this is intentionally not invoked. */
@@ -113,6 +129,7 @@ export function DealTermsEditor({
   const [draft, setDraft] = useState<Draft>(() => toDraft(values));
   const [incotermsOptions, setIncotermsOptions] = useState<FieldOptionChoice[]>([]);
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<FieldOptionChoice[]>([]);
+  const [currencyOptions, setCurrencyOptions] = useState<{ code: string; name: string }[]>(FALLBACK_CURRENCIES);
   const [deadlineTextMode, setDeadlineTextMode] = useState(() => {
     const dd = (values.deliveryDeadline ?? "").trim();
     return dd !== "" && !ISO_DATE_RE.test(dd);
@@ -133,6 +150,13 @@ export function DealTermsEditor({
     getFieldOptions("incoterms").then((res) => { if (alive && res.success) setIncotermsOptions(res.data); });
     getFieldOptions("payment_terms").then((res) => { if (alive && res.success) setPaymentTermsOptions(res.data); });
     getDealPartyAddresses(orderId).then((res) => { if (alive && res.success) setPartyAddresses(res.data); });
+    // R7 · currency options from the catalog (active only). Falls back to the
+    // hardcoded set when the viewer lacks catalogue.view (getCurrencies FORBIDDEN).
+    getCurrencies().then((res) => {
+      if (!alive || !res.success) return;
+      const active = res.data.filter((c) => c.isActive).map((c) => ({ code: c.code, name: c.name }));
+      if (active.length > 0) setCurrencyOptions(active);
+    });
     return () => { alive = false; };
   }, [orderId]);
 
@@ -175,6 +199,21 @@ export function DealTermsEditor({
   const flushSave = (key: SavableKey, value: string) => {
     clearTimer(key);
     void saveField(key, value);
+  };
+
+  // R7 · currency is not a text field — save it immediately on select. Optimistic;
+  // the service enforces Draft-only + active-currency (a rejection reverts + toasts).
+  const saveCurrency = async (code: string) => {
+    if (savedRef.current.currency === code) return;
+    const prev = savedRef.current.currency;
+    set("currency", code);
+    const res = await updateDealTerms({ orderId, terms: { currency: code } });
+    if (!res.success) {
+      toast.error(res.error);
+      setDraft((p) => ({ ...p, currency: prev }));
+      return;
+    }
+    savedRef.current = { ...savedRef.current, currency: code };
   };
 
   // Shared handler props for a debounced text Input / Textarea.
@@ -265,6 +304,22 @@ export function DealTermsEditor({
               {paymentTermsChoices.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
           </Select>
+        </Field>
+        {/* R7 · deal currency. Editable only while Draft (past Draft it's a chip) —
+            changing currency after lines are priced would be inconsistent. */}
+        <Field label="Currency">
+          {currencyEditable ? (
+            <Select value={draft.currency || "EUR"} onValueChange={(v) => void saveCurrency(v)}>
+              <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {currencyOptions.map((o) => <SelectItem key={o.code} value={o.code}>{o.code} — {o.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="inline-flex h-8 items-center rounded-md border bg-muted/40 px-2 text-sm font-medium" title="Currency locks after Draft">
+              {draft.currency || "EUR"}
+            </span>
+          )}
         </Field>
       </div>
 

@@ -16,11 +16,10 @@ function fmtCents(cents: number, currency: string): string {
  * (the server sends an empty array to everyone else). Sell ↔ buy navigation.
  */
 export function ChainCard({
-  legs, currentOrderId, currency, spineCode,
+  legs, currentOrderId, spineCode,
 }: {
   legs: SpineLegRef[];
   currentOrderId: string;
-  currency: string;
   /** M1 · the spine's SP-NNN code, shown in the header (owner only). */
   spineCode?: string | null;
 }) {
@@ -56,7 +55,7 @@ export function ChainCard({
               </div>
               <div className="mt-1 flex items-center justify-between gap-2 text-muted-foreground">
                 <span className="truncate">{leg.sellerName ?? "—"} <ArrowRight className="inline h-3 w-3" /> {leg.buyerName ?? "—"}</span>
-                <span className="tabular-nums shrink-0">{fmtCents(leg.ownTotalCents, currency)}</span>
+                <span className="tabular-nums shrink-0">{fmtCents(leg.ownTotalCents, leg.currency)}</span>
               </div>
               {!isCurrent && (
                 <Link href={`/orders/${leg.orderId}`} className="mt-1 inline-flex items-center gap-1 text-primary hover:underline">
