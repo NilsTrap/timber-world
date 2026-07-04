@@ -409,6 +409,68 @@ export async function advanceDeal(db: DbClient, actor: ActorContext, orderId: st
   return { success: true, data: { stage: ev.nextStage } };
 }
 
+/**
+ * R8 · Free (manual) stage move — a HOUSE-user/admin OVERRIDE that sets the deal to
+ * ANY of the five milestones (forward, backward, or multi-step), unlike advanceDeal's
+ * +1-only gated step. Rejects an invalid/cancelled target, a no-op, and a cancelled
+ * deal (it is off the ladder). The optimistic guard mirrors advanceDeal so a
+ * concurrent move can't be clobbered; the spine rollup cache is maintained by the DB
+ * trigger. Authorization is the SAME as advanceDeal — enforced in the action layer via
+ * resolveDealActor (admins, or house users with orders.view); a pure counterparty
+ * login never reaches it. Gates STILL block the normal advance path — this is the
+ * explicit override, so a forward move across the current stage's unsatisfied,
+ * configured gate is reported as `gateBypassed` (with the unmet blocks) for the audit
+ * trail; the caller writes it to the activity log.
+ */
+export async function setDealStage(
+  db: DbClient,
+  actor: ActorContext,
+  orderId: string,
+  targetStage: string,
+): Promise<ActionResult<{ stage: string; previousStage: string; gateBypassed: boolean; bypassedRequirements: string[] }>> {
+  if (!isValidUUID(orderId)) return { success: false, error: "Invalid order id", code: "VALIDATION_ERROR" };
+  if (!LIFECYCLE_STAGES.includes(targetStage as LifecycleStage)) {
+    return { success: false, error: `Invalid target stage "${targetStage}"`, code: "VALIDATION_ERROR" };
+  }
+  const deal = await getDealLifecycle(db, orderId);
+  if (!deal) return { success: false, error: "Deal not found", code: "NOT_FOUND" };
+  if (deal.stage === CANCELLED_STAGE) {
+    return { success: false, error: "A cancelled deal is off the lifecycle ladder and can't be moved", code: "NOT_MOVABLE" };
+  }
+  if (deal.stage === targetStage) {
+    return { success: false, error: `The deal is already at ${targetStage}`, code: "NO_OP" };
+  }
+
+  // OVERRIDE audit: only a FORWARD move can bypass a gate (gates guard forward motion;
+  // a backward correction crosses none). Reuse the current stage's evaluation — if a
+  // configured, active gate is unsatisfied, advanceDeal would have refused, so this
+  // deliberate set-stage is the human bypass. Record the unmet blocks for the log.
+  let gateBypassed = false;
+  let bypassedRequirements: string[] = [];
+  const forward = (LIFECYCLE_RANK[targetStage] ?? 0) > (LIFECYCLE_RANK[deal.stage] ?? 0);
+  if (forward) {
+    const ev = await evaluateAdvance(db, orderId);
+    if (ev.success && !ev.data.willAutoAdvance && !ev.data.satisfied && ev.data.requirements.length > 0) {
+      gateBypassed = true;
+      bypassedRequirements = ev.data.unmet.map(describeBlock);
+    }
+  }
+
+  // Guard on the expected current stage (mirror advanceDeal): 0 rows updated = a
+  // concurrent cancel/advance/set moved it since we read it.
+  const { data: updated, error } = await db
+    .from("orders")
+    .update({ lifecycle_stage: targetStage })
+    .eq("id", orderId)
+    .eq("lifecycle_stage", deal.stage)
+    .select("id");
+  if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
+  if (!updated || updated.length === 0) {
+    return { success: false, error: "The deal changed since it was read — reload and try again", code: "STAGE_CONFLICT" };
+  }
+  return { success: true, data: { stage: targetStage, previousStage: deal.stage, gateBypassed, bypassedRequirements } };
+}
+
 /** Record a party sign-off / acceptance confirmation for a deal's current-stage gate. */
 export async function recordGateConfirmation(
   db: DbClient,
