@@ -274,6 +274,33 @@ export async function updateDealFields(db: DbClient, _actor: ActorContext, order
   return { success: true, data: true };
 }
 
+/**
+ * E5 · Owner margin approval (spec §5.3). Toggles orders.margin_approved_at/by.
+ * Owner/admin ONLY — the `isPlatformAdmin` check is the authoritative guard and
+ * MUST travel with the code (margin approval has no RLS-side owner restriction,
+ * unlike the row-scoped writes above). Extracted from the `setDealMarginApproval`
+ * server action so the portal UI and the MCP route are twin thin callers of ONE
+ * service (no logic duplication); the action keeps the session + revalidatePath.
+ */
+export async function setMarginApproval(
+  db: DbClient,
+  actor: ActorContext,
+  orderId: string,
+  approved: boolean,
+): Promise<ActionResult<{ marginApprovedAt: string | null }>> {
+  if (!isValidUUID(orderId)) return { success: false, error: "Invalid order id", code: "VALIDATION_ERROR" };
+  if (!actor.isPlatformAdmin) {
+    return { success: false, error: "Only the owner can approve the margin", code: "FORBIDDEN" };
+  }
+  const c = db as DbClient;
+  const patch = approved
+    ? { margin_approved_at: new Date().toISOString(), margin_approved_by: actor.portalUserId }
+    : { margin_approved_at: null, margin_approved_by: null };
+  const { error } = await c.from("orders").update(patch).eq("id", orderId);
+  if (error) return { success: false, error: "Failed to update margin approval", code: "UPDATE_FAILED" };
+  return { success: true, data: { marginApprovedAt: patch.margin_approved_at } };
+}
+
 /** Replace all line items for an order+side (predictable for editable tables). */
 export async function replaceLineItems(db: DbClient, _actor: ActorContext, orderId: string, side: DealSide, items: Partial<OrderLineItem>[]): Promise<ActionResult<OrderLineItem[]>> {
   if (!isValidUUID(orderId)) return { success: false, error: "Invalid order id", code: "VALIDATION_ERROR" };

@@ -12,7 +12,7 @@ import type { AccessProfile } from "@/lib/access/types";
 import type { ActionResult } from "../types";
 import type { DealSide, DocType, OrderLineItem } from "../services/dealModel";
 import { projectDealView, resolveFieldAccess } from "../services/dealFields";
-import { getOrderDeal, updateLineItemAmounts, updateDealFields, resolveViewerDirection, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
+import { getOrderDeal, updateLineItemAmounts, updateDealFields, setMarginApproval, resolveViewerDirection, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
 import { logOrderActivity } from "./logOrderActivity";
 import { generateDocument, regenerateDocument, getDocumentUrl, deleteDocument, type GeneratedDocument } from "../services/orderDocuments";
 import { getSpineBuyLegs, getSpineLegs, type SpineLegRef } from "../services/spineSiblings";
@@ -297,15 +297,9 @@ export async function setDealMarginApproval(input: {
 }): Promise<ActionResult<{ marginApprovedAt: string | null }>> {
   const a = await resolveDealActor();
   if (!a.ok) return { success: false, error: a.error, code: a.code };
-  if (!a.actor.isPlatformAdmin) {
-    return { success: false, error: "Only the owner can approve the margin", code: "FORBIDDEN" };
-  }
-  const patch = input.approved
-    ? { margin_approved_at: new Date().toISOString(), margin_approved_by: a.actor.portalUserId }
-    : { margin_approved_at: null, margin_approved_by: null };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (a.db as any).from("orders").update(patch).eq("id", input.orderId);
-  if (error) return { success: false, error: "Failed to update margin approval", code: "UPDATE_FAILED" };
-  revalidatePath(`/orders/${input.orderId}`);
-  return { success: true, data: { marginApprovedAt: patch.margin_approved_at } };
+  // Owner guard + the orders.update now live in the shared setMarginApproval
+  // service (twin caller = the MCP route); the action keeps session + cache.
+  const res = await setMarginApproval(a.db, a.actor, input.orderId, input.approved);
+  if (res.success) revalidatePath(`/orders/${input.orderId}`);
+  return res;
 }

@@ -16,8 +16,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActorContext, DealSide, DealKind, DocType, TransportBilling, OrderExternalRef } from "@/features/orders/services/dealModel";
-import { createDeal, getOrderDeal, listDeals, replaceLineItems, allocateDealCode, updateDealFields, setExternalRefs, setDealStatus, listDealsMissingDocs } from "@/features/orders/services/orderDeals";
-import { assembleDocumentData, generateDocument } from "@/features/orders/services/orderDocuments";
+import { createDeal, getOrderDeal, listDeals, replaceLineItems, allocateDealCode, updateDealFields, setExternalRefs, setDealStatus, listDealsMissingDocs, startSourcing, setMarginApproval } from "@/features/orders/services/orderDeals";
+import { assembleDocumentData, generateDocument, regenerateDocument } from "@/features/orders/services/orderDocuments";
 import { getSpine, listSpineDeals, getSpineLineage } from "@/features/orders/services/spines";
 import type { SpineProduct } from "@/features/orders/services/spines";
 import { evaluateAdvance, advanceDeal, recordGateConfirmation, cancelDeal, listGateConfigs } from "@/features/orders/services/lifecycle";
@@ -203,7 +203,22 @@ async function callTool(name: string, args: any, role: Role) {
         deliveryTerms: args?.delivery_terms,
         deliveryDeadline: args?.delivery_deadline,
         transportBilling: args?.transport_billing as TransportBilling | undefined,
+        // G3 · per-deal signee overrides (seller/buyer signature blocks on docs).
+        sellerSigneeName: args?.seller_signee_name,
+        sellerSigneeRole: args?.seller_signee_role,
+        buyerSigneeName: args?.buyer_signee_name,
+        buyerSigneeRole: args?.buyer_signee_role,
       });
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_start_sourcing": {
+      if (!args?.deal_id || !args?.supplier_organisation_id) return toolErr("deal_id and supplier_organisation_id are required");
+      const res = await startSourcing(db, SERVICE_ACTOR, args.deal_id, args.supplier_organisation_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_set_margin_approval": {
+      if (!args?.deal_id || typeof args?.approved !== "boolean") return toolErr("deal_id and approved (boolean) are required");
+      const res = await setMarginApproval(db, SERVICE_ACTOR, args.deal_id, args.approved);
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     case "timber_set_deal_refs": {
@@ -239,6 +254,28 @@ async function callTool(name: string, args: any, role: Role) {
         docType: args.doc_type as DocType,
         side: args?.side as DealSide | undefined,
       });
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_firm_order_specification": {
+      if (!args?.deal_id) return toolErr("deal_id is required");
+      // regenerateDocument targets a document row by id. When the caller gives only
+      // the deal, resolve its newest sales_spec (the doc that carries quotation/firm
+      // state) — same lookup the portal makes before the "make firm" click.
+      let documentId: string | undefined = args?.document_id;
+      if (!documentId) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: doc } = await (db as any)
+          .from("order_documents")
+          .select("id")
+          .eq("order_id", args.deal_id)
+          .eq("doc_type", "sales_spec")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!doc) return toolErr("No sales specification document found on this deal to firm — generate the quotation first.");
+        documentId = doc.id as string;
+      }
+      const res = await regenerateDocument(db, SERVICE_ACTOR, { documentId, docState: "firm" });
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     case "timber_set_deal_status": {

@@ -15,14 +15,17 @@ export const LIFECYCLE_STEPS = [
   "deal_create",  // create a deal from intake (+ auto-spawn the buy leg — E7)
   "deal_read",    // list/get deals
   "line_items",   // set the deal's line items
-  "deal_update",  // amend deal fields / external refs
+  "deal_update",  // amend deal fields / external refs (incl. G3 signee overrides)
+  "sourcing",     // start sourcing an existing sell deal → spawn its buy leg (J1/B1)
+  "margin",       // owner margin approval on a deal (J1/E5, §5.3)
   "numbering",    // allocate Timber deal/document numbers
   "documents",    // assemble + generate/store documents
+  "firming",      // quotation → firm order specification, in place (J1/D1, §8.2)
   "status",       // operational fulfilment status transitions
   "doc_chasing",  // find deals missing required documents
   "spine",        // query the spine: chain of deals + rolled-up status + lineage (E7)
   "gates",        // read + advance a deal's lifecycle stage through its gates (E7)
-  "access",       // read the access-group / user management surface (E7)
+  "access",       // read + write the access-group / user management surface (E7 read + J3 write)
 ] as const;
 
 export type LifecycleStep = (typeof LIFECYCLE_STEPS)[number];
@@ -217,7 +220,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "timber_update_deal",
-    description: "Update a deal's header fields (deal kind, product group, incoterms, advance %, payment/delivery terms + deadline, transport billing). Only the provided fields change. Idempotent.",
+    description: "Update a deal's header fields (deal kind, product group, incoterms, advance %, payment/delivery terms + deadline, transport billing, and the G3 per-deal signee overrides for the seller/buyer signature blocks). Only the provided fields change. Idempotent.",
     readOnly: false,
     lifecycle: "deal_update",
     inputSchema: {
@@ -233,6 +236,10 @@ export const TOOLS: ToolDef[] = [
         delivery_terms: { type: "string" },
         delivery_deadline: { type: "string" },
         transport_billing: { type: "string", enum: ["in_price", "separate_line", "separate_invoice"] },
+        seller_signee_name: { type: "string", description: "G3: per-deal override for the seller-side signatory's name on documents (defaults from the seller org's default signee at deal creation)." },
+        seller_signee_role: { type: "string", description: "G3: per-deal override for the seller-side signatory's role/title." },
+        buyer_signee_name: { type: "string", description: "G3: per-deal override for the buyer-side signatory's name on documents (defaults from the buyer org's default signee)." },
+        buyer_signee_role: { type: "string", description: "G3: per-deal override for the buyer-side signatory's role/title." },
       },
       required: ["deal_id"],
     },
@@ -253,6 +260,36 @@ export const TOOLS: ToolDef[] = [
         },
       },
       required: ["deal_id", "refs"],
+    },
+  },
+  {
+    name: "timber_start_sourcing",
+    description:
+      "Start sourcing an EXISTING sell deal (B1, spec §9.3/§10): spawn its BUY leg on the SAME spine with the chosen supplier as seller, copying the sell deal's line items (product definition + catalog links + quantities; PRICES BLANK for Purchasing to fill on the buy leg). Returns the new buy leg's deal view. Fails with CONFLICT if the deal already has an active buy leg — to change supplier, REPLACE it: timber_cancel_deal the current buy leg, then call this again with the new supplier (deal codes are directional identities and are never re-pointed). The sell-leg activity log stays generic ('Sourcing started'); the supplier identity is recorded on the buy leg only (the customer never sees it).",
+    readOnly: false,
+    lifecycle: "sourcing",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deal_id: { type: "string", description: "The SELL deal (order) UUID to source from." },
+        supplier_organisation_id: { type: "string", description: "Supplier organisation UUID that SELLS to the house on the spawned buy leg (from the suppliers book — is_supplier or is_producer)." },
+      },
+      required: ["deal_id", "supplier_organisation_id"],
+    },
+  },
+  {
+    name: "timber_set_margin_approval",
+    description:
+      "Approve or revoke the owner margin approval on a deal (E5, spec §5.3). Sets/clears orders.margin_approved_at/by. Owner/admin-only in the portal UI; over MCP the SERVICE_ACTOR is the owner's trusted agent (isPlatformAdmin), so the approval is recorded on the owner's behalf (margin_approved_by is null — the acting portal user is the oscar-agent). Idempotent.",
+    readOnly: false,
+    lifecycle: "margin",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deal_id: { type: "string", description: "Deal (order) UUID." },
+        approved: { type: "boolean", description: "true = approve the margin (stamp margin_approved_at now); false = revoke (clear it)." },
+      },
+      required: ["deal_id", "approved"],
     },
   },
   {
@@ -297,6 +334,21 @@ export const TOOLS: ToolDef[] = [
         side: { type: "string", enum: ["sell", "buy"], description: "Override side (defaults: purchase docs → buy, else sell)." },
       },
       required: ["deal_id", "doc_type"],
+    },
+  },
+  {
+    name: "timber_firm_order_specification",
+    description:
+      "Firm the deal's Quotation into the binding Order specification (D1, spec §8.2: one document in two states). Regenerates the sales_spec IN PLACE — SAME document number, re-rendered PDF (now titled ORDER SPECIFICATION), doc_state='firm', firmed_at stamped. Idempotent (re-firming re-renders + re-stamps). Pass the sales_spec document_id, or just deal_id and the newest sales_spec document on the deal is firmed. Only the sales specification has quotation/firm states (any other doc_type is rejected).",
+    readOnly: false,
+    lifecycle: "firming",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deal_id: { type: "string", description: "Deal (order) UUID. Used to resolve the sales_spec document when document_id is omitted." },
+        document_id: { type: "string", description: "The sales_spec order_documents row UUID to firm. Optional — if omitted, the deal's newest sales_spec document is used." },
+      },
+      required: ["deal_id"],
     },
   },
   {
