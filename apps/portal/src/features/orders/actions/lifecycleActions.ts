@@ -67,7 +67,7 @@ export async function evaluateAdvanceAction(orderId: string): Promise<ActionResu
   return evaluateAdvance(a.db, orderId);
 }
 
-/** Admin-only: list every configured gate (deal-kind × from-stage). */
+/** Admin-only: list every configured gate (one per from-stage). */
 export async function listGateConfigsAction(): Promise<ActionResult<GateConfigRow[]>> {
   const a = await resolveDealActor();
   if (!a.ok) return { success: false, error: a.error, code: a.code };
@@ -77,7 +77,6 @@ export async function listGateConfigsAction(): Promise<ActionResult<GateConfigRo
 
 /** Admin-only: create/update a gate's requirements + active flag. Service re-checks admin. */
 export async function upsertGateConfigAction(input: {
-  dealKind: string;
   fromStage: string;
   requirements: GateBlock[];
   isActive?: boolean;

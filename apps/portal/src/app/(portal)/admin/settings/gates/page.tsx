@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * Deal Gate configuration (Admin only) — edit the requirements that gate each
- * deal-lifecycle transition (deal-kind × from-stage). Gates are edited in-app,
- * never in code (Timber spec §6).
+ * deal-lifecycle transition (one gate per from-stage; gates are kind-agnostic
+ * since N1). Gates are edited in-app, never in code (Timber spec §6).
  */
 export default async function DealGatesPage() {
   const session = await getSession();

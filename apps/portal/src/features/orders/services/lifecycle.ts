@@ -116,9 +116,15 @@ export function rollupSpineStage(stages: string[]): string {
 }
 
 // ── gate config (DB) ─────────────────────────────────────────────────────────
+// N1 · Gates no longer vary by deal kind ("all deals are the same" — Nils). There
+// is ONE gate set per from_stage. The `deal_gates.deal_kind` column + its
+// (deal_kind, from_stage) unique constraint are kept intact (reversible), but every
+// gate is now stored/read under this single universal kind — the buy_sell rows are
+// the kept set; any other-kind rows are migrated away / ignored here.
+export const UNIVERSAL_DEAL_KIND = "buy_sell";
+
 export interface GateConfigRow {
   id: string;
-  dealKind: string;
   fromStage: string;
   requirements: GateBlock[];
   isActive: boolean;
@@ -127,7 +133,6 @@ export interface GateConfigRow {
 function mapGate(row: any): GateConfigRow {
   return {
     id: row.id,
-    dealKind: row.deal_kind,
     fromStage: row.from_stage,
     requirements: Array.isArray(row.requirements) ? (row.requirements as GateBlock[]) : [],
     isActive: row.is_active !== false,
@@ -135,20 +140,23 @@ function mapGate(row: any): GateConfigRow {
 }
 
 export async function listGateConfigs(db: DbClient): Promise<ActionResult<GateConfigRow[]>> {
-  const { data, error } = await db.from("deal_gates").select("*").order("deal_kind").order("from_stage");
+  const { data, error } = await db
+    .from("deal_gates")
+    .select("*")
+    .eq("deal_kind", UNIVERSAL_DEAL_KIND)
+    .order("from_stage");
   if (error) return { success: false, error: error.message, code: "LIST_FAILED" };
   return { success: true, data: (data ?? []).map(mapGate) };
 }
 
 export async function getGateConfig(
   db: DbClient,
-  dealKind: string,
   fromStage: string,
 ): Promise<ActionResult<GateConfigRow | null>> {
   const { data, error } = await db
     .from("deal_gates")
     .select("*")
-    .eq("deal_kind", dealKind)
+    .eq("deal_kind", UNIVERSAL_DEAL_KIND)
     .eq("from_stage", fromStage)
     .maybeSingle();
   if (error) return { success: false, error: error.message, code: "GET_FAILED" };
@@ -156,7 +164,6 @@ export async function getGateConfig(
 }
 
 export interface UpsertGateInput {
-  dealKind: string;
   fromStage: string;
   requirements: GateBlock[];
   isActive?: boolean;
@@ -185,7 +192,7 @@ export async function upsertGateConfig(
     .from("deal_gates")
     .upsert(
       {
-        deal_kind: input.dealKind,
+        deal_kind: UNIVERSAL_DEAL_KIND,
         from_stage: input.fromStage,
         requirements: input.requirements ?? [],
         is_active: input.isActive ?? true,
@@ -350,7 +357,7 @@ export async function evaluateAdvance(db: DbClient, orderId: string): Promise<Ac
     };
   }
 
-  const gateRes = await getGateConfig(db, deal.dealKind, deal.stage);
+  const gateRes = await getGateConfig(db, deal.stage);
   if (!gateRes.success) return gateRes as unknown as ActionResult<AdvanceEvaluation>;
   const gate = gateRes.data;
   const requirements = gate && gate.isActive ? gate.requirements : [];

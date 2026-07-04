@@ -19,21 +19,12 @@ import { DOC_TYPES, DOC_TYPE_LABELS } from "../services/documents/registry";
  *  gate can never reference a doc type the templates editor doesn't know). */
 const DOC_ANY = "__any";
 
-/** Deal kinds a gate can be configured for (mirrors dealModel.DealKind). */
-const DEAL_KINDS: { value: string; label: string }[] = [
-  { value: "buy_sell", label: "Buy / Sell" },
-  { value: "sale_only", label: "Sale only" },
-  { value: "purchase_only", label: "Purchase only" },
-];
 /** From-stages a gate can guard (every active stage except the terminal "delivered"). */
 const FROM_STAGES = LIFECYCLE_STAGES.filter((s) => s !== "delivered");
 
 const STAGE_LABELS: Record<string, string> = {
   draft: "Draft", confirmed: "Confirmed", produced: "Produced", loaded: "Loaded",
 };
-function dealKindLabel(k: string): string {
-  return DEAL_KINDS.find((d) => d.value === k)?.label ?? k;
-}
 function stageLabel(s: string): string {
   return STAGE_LABELS[s] ?? s;
 }
@@ -61,19 +52,18 @@ function templateToBlock(t: BlockTemplate): GateBlock {
 }
 
 interface EditorState {
-  dealKind: string;
   fromStage: string;
   requirements: GateBlock[];
   isActive: boolean;
-  /** True when editing an existing gate (deal-kind × from-stage locked). */
+  /** True when editing an existing gate (from-stage locked). */
   existing: boolean;
 }
 
 /**
- * Gate-config admin manager (E3): lists every configured gate (deal-kind ×
- * from-stage) and lets an admin edit its requirement building blocks and active
- * flag. Saves via upsertGateConfigAction (upsert on deal_kind+from_stage).
- * Mirrors ReferenceDataManager's add/edit/save UX.
+ * Gate-config admin manager (E3): lists every configured gate (one per from-stage)
+ * and lets an admin edit its requirement building blocks and active flag. Gates no
+ * longer vary by deal kind (N1) — there is a single universal gate set. Saves via
+ * upsertGateConfigAction. Mirrors ReferenceDataManager's add/edit/save UX.
  */
 export function GateConfigManager() {
   const [gates, setGates] = useState<GateConfigRow[]>([]);
@@ -92,8 +82,8 @@ export function GateConfigManager() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openNew = () => setEditor({ dealKind: "buy_sell", fromStage: "draft", requirements: [], isActive: true, existing: false });
-  const openEdit = (g: GateConfigRow) => setEditor({ dealKind: g.dealKind, fromStage: g.fromStage, requirements: g.requirements, isActive: g.isActive, existing: true });
+  const openNew = () => setEditor({ fromStage: "draft", requirements: [], isActive: true, existing: false });
+  const openEdit = (g: GateConfigRow) => setEditor({ fromStage: g.fromStage, requirements: g.requirements, isActive: g.isActive, existing: true });
 
   const addBlock = () => {
     if (!editor) return;
@@ -119,7 +109,6 @@ export function GateConfigManager() {
     if (!editor) return;
     setSaving(true);
     const res = await upsertGateConfigAction({
-      dealKind: editor.dealKind,
       fromStage: editor.fromStage,
       requirements: editor.requirements,
       isActive: editor.isActive,
@@ -132,15 +121,15 @@ export function GateConfigManager() {
   };
 
   const toggleActive = async (g: GateConfigRow) => {
-    const res = await upsertGateConfigAction({ dealKind: g.dealKind, fromStage: g.fromStage, requirements: g.requirements, isActive: !g.isActive });
+    const res = await upsertGateConfigAction({ fromStage: g.fromStage, requirements: g.requirements, isActive: !g.isActive });
     if (!res.success) { toast.error(res.error); return; }
     toast.success(g.isActive ? "Gate deactivated" : "Gate activated");
     await load();
   };
 
-  // Which (deal-kind × from-stage) combos already exist — used when adding a new gate.
-  const existingKeys = useMemo(() => new Set(gates.map((g) => `${g.dealKind}|${g.fromStage}`)), [gates]);
-  const editorCollides = editor != null && !editor.existing && existingKeys.has(`${editor.dealKind}|${editor.fromStage}`);
+  // Which from-stages already have a gate — used when adding a new gate.
+  const existingKeys = useMemo(() => new Set(gates.map((g) => g.fromStage)), [gates]);
+  const editorCollides = editor != null && !editor.existing && existingKeys.has(editor.fromStage);
 
   if (loading) {
     return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
@@ -161,7 +150,6 @@ export function GateConfigManager() {
           <Table dense>
             <TableHeader>
               <TableRow>
-                <TableHead>Deal kind</TableHead>
                 <TableHead>From stage</TableHead>
                 <TableHead>Requirements</TableHead>
                 <TableHead className="w-24">Status</TableHead>
@@ -171,8 +159,7 @@ export function GateConfigManager() {
             <TableBody>
               {gates.map((g) => (
                 <TableRow key={g.id} className={g.isActive ? "" : "opacity-50"}>
-                  <TableCell className="font-medium">{dealKindLabel(g.dealKind)}</TableCell>
-                  <TableCell>{stageLabel(g.fromStage)}</TableCell>
+                  <TableCell className="font-medium">{stageLabel(g.fromStage)}</TableCell>
                   <TableCell>
                     {g.requirements.length === 0
                       ? <span className="text-muted-foreground">— (auto-advance)</span>
@@ -204,29 +191,18 @@ export function GateConfigManager() {
 
           {editor && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Deal kind</label>
-                  <Select value={editor.dealKind} onValueChange={(v) => setEditor({ ...editor, dealKind: v })} disabled={editor.existing}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {DEAL_KINDS.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">From stage</label>
-                  <Select value={editor.fromStage} onValueChange={(v) => setEditor({ ...editor, fromStage: v })} disabled={editor.existing}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {FROM_STAGES.map((s) => <SelectItem key={s} value={s}>{stageLabel(s)}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">From stage</label>
+                <Select value={editor.fromStage} onValueChange={(v) => setEditor({ ...editor, fromStage: v })} disabled={editor.existing}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {FROM_STAGES.map((s) => <SelectItem key={s} value={s}>{stageLabel(s)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
 
               {editorCollides && (
-                <p className="text-xs text-amber-600">A gate for this deal kind and stage already exists — saving will overwrite it.</p>
+                <p className="text-xs text-amber-600">A gate for this stage already exists — saving will overwrite it.</p>
               )}
 
               {/* Requirement blocks */}
