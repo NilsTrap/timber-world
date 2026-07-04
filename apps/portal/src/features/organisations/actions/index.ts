@@ -69,6 +69,10 @@ export type { PersonMembership, AddableOrg } from "./getPersonMemberships";
 // Q4 · admin manual set-password
 export { setUserPasswordAdmin } from "./setUserPasswordAdmin";
 
+// Epic T / T1 · per-user MCP API keys (super-admin only)
+export { issueMcpApiKey, listMcpApiKeys, revokeMcpApiKey } from "./mcpApiKeys";
+export type { McpApiKeyRow, IssuedMcpApiKey } from "./mcpApiKeys.types";
+
 // Per-org reference data exclusions
 export { getOrgRefExclusions } from "./getOrgRefExclusions";
 export { updateOrgRefExclusions } from "./updateOrgRefExclusions";
