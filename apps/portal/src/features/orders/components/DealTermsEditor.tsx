@@ -208,12 +208,19 @@ export function DealTermsEditor({
         </div>
       </div>
 
+      {/* N4 · Save/Discard live in a card FOOTER pinned to the bottom (Nils: "save
+          pogu būtu jānolaiž"). Sticky so it stays reachable at the viewport bottom
+          while editing the long form; breaks out of the card's padding to sit flush
+          with the card's bottom edge. Only shown when there are unsaved changes. */}
       {dirty && (
-        <div className="flex items-center justify-end gap-2 border-t pt-3">
-          <Button variant="ghost" size="sm" onClick={() => setDraft(toDraft(values))} disabled={saving}>Discard</Button>
-          <Button size="sm" onClick={save} disabled={saving}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save terms"}
-          </Button>
+        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex items-center justify-between gap-2 rounded-b-lg border-t bg-card px-4 py-2.5">
+          <span className="text-xs text-muted-foreground">Unsaved changes</span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setDraft(toDraft(values))} disabled={saving}>Discard</Button>
+            <Button size="sm" onClick={save} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save terms"}
+            </Button>
+          </div>
         </div>
       )}
     </div>
