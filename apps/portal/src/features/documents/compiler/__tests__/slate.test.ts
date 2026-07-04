@@ -159,6 +159,52 @@ has("line-items money cell", li, "{{money lineTotalCents}}");
 const liDefault = body([{ type: "line_items", children: [{ text: "" }] }]);
 has("line-items default columns", liDefault, "Dimensions (mm)");
 
+// ── S3 · dynamic catalog-field columns (attr.<key>) ────────────────────────
+// A dynamic column carries its resolved header in columnDefs (so the compiler
+// stays DB-free) and derives its cell as {{lookup attr "<fieldKey>"}}.
+const liDyn = body([
+  {
+    type: "line_items",
+    columns: ["description", "attr.glulam_grade"],
+    columnDefs: { "attr.glulam_grade": { header: "Glulam grade", num: false } },
+    children: [{ text: "" }],
+  },
+]);
+has("dynamic col header from stored def", liDyn, "<th>Glulam grade</th>");
+has("dynamic col fixed header still present", liDyn, "<th>Description</th>");
+has("dynamic col cell = robust attr lookup", liDyn, '{{lookup attr "glulam_grade"}}');
+// Numeric dynamic column → class="num" on both th and td.
+const liDynNum = body([
+  {
+    type: "line_items",
+    columns: ["attr.char_strength"],
+    columnDefs: { "attr.char_strength": { header: "Char. strength", num: true } },
+    children: [{ text: "" }],
+  },
+]);
+has("dynamic numeric header class", liDynNum, '<th class="num">Char. strength</th>');
+has("dynamic numeric cell class", liDynNum, '<td class="num">{{lookup attr "char_strength"}}</td>');
+// Column order is preserved (fixed then dynamic, as authored).
+ok(
+  "dynamic col order preserved",
+  liDyn.indexOf("Description") < liDyn.indexOf("Glulam grade"),
+  `order: ${liDyn.slice(liDyn.indexOf("<thead"), liDyn.indexOf("</thead>"))}`,
+);
+// Deleted-field resilience: even with NO columnDef the attr column renders (header
+// falls back to the fieldKey, cell still resolves to empty via lookup) — no crash.
+const liOrphan = body([
+  { type: "line_items", columns: ["lineNo", "attr.gone_field"], children: [{ text: "" }] },
+]);
+has("orphan col renders empty column (header fallback)", liOrphan, "<th>gone_field</th>");
+has("orphan col cell still emits lookup", liOrphan, '{{lookup attr "gone_field"}}');
+has("orphan col keeps fixed sibling", liOrphan, '<th class="num">#</th>');
+// An unknown NON-attr key is still ignored (as before S3).
+const liUnknown = body([
+  { type: "line_items", columns: ["description", "bogusKey"], children: [{ text: "" }] },
+]);
+absent("unknown non-attr key dropped", liUnknown, "bogusKey");
+has("unknown-key sibling still rendered", liUnknown, "<th>Description</th>");
+
 // ── Shell + golden chain ───────────────────────────────────────────────────
 const doc = body([{ type: "h1", children: [{ text: "SALES SPEC" }] }, { type: "p", children: [{ text: "body" }] }]);
 has("shell doctype", doc, "<!DOCTYPE html>");
