@@ -214,14 +214,14 @@ export function NewDealDialog({
               )}
             </div>
 
-            {/* Leg parties — admin picks freely. Trader = seller; buyer = customer. */}
+            {/* Leg parties — admin picks freely (R1: Seller + Buyer). */}
             <div className="space-y-1.5">
-              <Label>Trader <span className="text-muted-foreground">(seller)</span></Label>
+              <Label>Seller</Label>
               <Select
                 value={legValue.sellerOrganisationId ?? ""}
                 onValueChange={(v) => setLegValue((s) => ({ ...s, sellerOrganisationId: v || null }))}
               >
-                <SelectTrigger><SelectValue placeholder="Pick the trader" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Pick the seller" /></SelectTrigger>
                 <SelectContent>
                   {traderOptions.map((o) => (
                     <SelectItem key={o.id} value={o.id}>{o.code ? `${o.code} — ${o.name}` : o.name}</SelectItem>

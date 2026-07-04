@@ -77,9 +77,11 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   }
 
   const isBuy = order.dealKind === "purchase_only";
+  // R1: the deal's two roles are BUYER + SELLER. A buy deal faces its Seller; a
+  // sell deal faces its Buyer.
   const facing = isBuy
-    ? { role: "supplier", name: order.sellerOrganisationName }
-    : { role: "customer", name: order.customerOrganisationName };
+    ? { role: "Seller", name: order.sellerOrganisationName }
+    : { role: "Buyer", name: order.customerOrganisationName };
   const title =
     order.name && order.name.trim() !== "-" ? order.name : (order.dealCode || order.code || "Deal");
 
@@ -133,10 +135,10 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
 
         <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-1 text-sm">
           {order.customerOrganisationName && (
-            <div className="flex gap-2"><dt className="text-muted-foreground">Customer</dt><dd className="font-medium">{order.customerOrganisationName}</dd></div>
+            <div className="flex gap-2"><dt className="text-muted-foreground">Buyer</dt><dd className="font-medium">{order.customerOrganisationName}</dd></div>
           )}
           {order.sellerOrganisationName && (
-            <div className="flex gap-2"><dt className="text-muted-foreground">Manufacturer</dt><dd className="font-medium">{order.sellerOrganisationName}</dd></div>
+            <div className="flex gap-2"><dt className="text-muted-foreground">Seller</dt><dd className="font-medium">{order.sellerOrganisationName}</dd></div>
           )}
           {order.producerOrganisationName && (
             <div className="flex gap-2"><dt className="text-muted-foreground">Producer</dt><dd className="font-medium">{order.producerOrganisationName}</dd></div>
