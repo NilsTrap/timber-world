@@ -39,9 +39,9 @@ eq("delivered NOT cancellable", isCancellableStage("delivered"), false);
 eq("cancelled NOT cancellable", isCancellableStage("cancelled"), false);
 
 // ── gate context helpers ──
-const emptyCtx: GateContext = { confirmations: new Set(), documents: new Set(), hasPayment: false };
+const emptyCtx: GateContext = { confirmations: new Set(), evidence: new Map(), documents: new Set(), hasPayment: false };
 function ctx(over: Partial<GateContext>): GateContext {
-  return { confirmations: new Set(), documents: new Set(), hasPayment: false, ...over };
+  return { confirmations: new Set(), evidence: new Map(), documents: new Set(), hasPayment: false, ...over };
 }
 
 // ── each building block ──

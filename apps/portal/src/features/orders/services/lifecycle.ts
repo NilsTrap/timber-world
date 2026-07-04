@@ -50,6 +50,8 @@ export type GateBlock =
 export interface GateContext {
   /** keys of recorded confirmations, e.g. "party_signoff:seller", "acceptance:acceptance" */
   confirmations: Set<string>;
+  /** E2 · audit evidence per counted confirmation key: who (user + org) recorded it, when. */
+  evidence: Map<string, { byOrg: string | null; byUser: string | null; at: string }>;
   /** external-ref types present on the deal (its "documents") */
   documents: Set<string>;
   /** whether a payment has been recorded on the deal */
@@ -224,6 +226,7 @@ export async function buildGateContext(
   fromStage: string,
 ): Promise<GateContext> {
   const confirmations = new Set<string>();
+  const evidence = new Map<string, { byOrg: string | null; byUser: string | null; at: string }>();
   const documents = new Set<string>();
 
   // The deal's parties, so a sign-off only counts if the RIGHT party recorded it.
@@ -237,7 +240,7 @@ export async function buildGateContext(
 
   const { data: confs } = await db
     .from("deal_gate_confirmations")
-    .select("block_type, block_key, confirmed_by_org")
+    .select("block_type, block_key, confirmed_by_org, confirmed_by_user, confirmed_at")
     .eq("order_id", orderId)
     .eq("from_stage", fromStage);
   for (const c of confs ?? []) {
@@ -248,7 +251,10 @@ export async function buildGateContext(
     const requiredOrg = blockType === "acceptance" ? buyerOrg : blockKey === "seller" ? sellerOrg : blockKey === "buyer" ? buyerOrg : null;
     // admin confirmations (null org) always count; a party confirmation must match its party
     if (by === null || requiredOrg === null || by === requiredOrg) {
-      confirmations.add(confirmationKey(blockType, blockKey));
+      const key = confirmationKey(blockType, blockKey);
+      confirmations.add(key);
+      // E2 · keep the audit evidence (who/when) so satisfied blocks are honest.
+      evidence.set(key, { byOrg: by, byUser: (c.confirmed_by_user as string | null) ?? null, at: (c.confirmed_at as string) ?? "" });
     }
   }
 
@@ -262,10 +268,22 @@ export async function buildGateContext(
 
   // payment_recorded has no wired source yet and is rejected at gate-config time, so no
   // gate can depend on it; hasPayment stays false.
-  return { confirmations, documents, hasPayment: false };
+  return { confirmations, evidence, documents, hasPayment: false };
 }
 
 // ── advance / cancel (DB) ────────────────────────────────────────────────────
+/** E2 · Honest evidence for a RECORDED confirmation block (party sign-off /
+ *  buyer acceptance): who recorded it and when. Not cryptographic proof — an
+ *  auditable manual confirmation, surfaced so nobody mistakes it for one. */
+export interface GateConfirmationEvidence {
+  blockType: "party_signoff" | "acceptance";
+  blockKey: string;
+  role: "seller" | "buyer";
+  byUserName: string | null;
+  byOrgName: string | null;
+  at: string; // ISO timestamp
+}
+
 export interface AdvanceEvaluation {
   currentStage: string;
   nextStage: string | null;
@@ -273,6 +291,49 @@ export interface AdvanceEvaluation {
   satisfied: boolean;
   unmet: GateBlock[];
   willAutoAdvance: boolean;
+  /** E2 · recorded confirmations for THIS gate's confirmation requirements. */
+  confirmations: GateConfirmationEvidence[];
+}
+
+/** E2 · Resolve the who/when evidence for the confirmation-type requirements of a
+ *  gate that have actually been recorded (in ctx). Names resolved in two batch
+ *  lookups; only recorded confirmations appear (unmet ones stay in `unmet`). */
+async function buildConfirmationEvidence(
+  db: DbClient,
+  requirements: GateBlock[],
+  ctx: GateContext,
+): Promise<GateConfirmationEvidence[]> {
+  const items: Array<{ blockType: "party_signoff" | "acceptance"; blockKey: string; role: "seller" | "buyer"; ev: { byOrg: string | null; byUser: string | null; at: string } }> = [];
+  const userIds = new Set<string>();
+  const orgIds = new Set<string>();
+  for (const b of requirements) {
+    let blockType: "party_signoff" | "acceptance";
+    let blockKey: string;
+    let role: "seller" | "buyer";
+    if (b.type === "party_signoff") { blockType = "party_signoff"; blockKey = b.party; role = b.party; }
+    else if (b.type === "acceptance") { blockType = "acceptance"; blockKey = "acceptance"; role = "buyer"; }
+    else continue;
+    const ev = ctx.evidence.get(confirmationKey(blockType, blockKey));
+    if (!ev) continue; // requirement not yet recorded → shows in `unmet`, no evidence
+    items.push({ blockType, blockKey, role, ev });
+    if (ev.byUser) userIds.add(ev.byUser);
+    if (ev.byOrg) orgIds.add(ev.byOrg);
+  }
+  if (items.length === 0) return [];
+  const [users, orgs] = await Promise.all([
+    userIds.size ? db.from("portal_users").select("id, name").in("id", [...userIds]) : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+    orgIds.size ? db.from("organisations").select("id, name").in("id", [...orgIds]) : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+  ]);
+  const uName = new Map<string, string>((users.data ?? []).map((u: { id: string; name: string }) => [u.id, u.name] as [string, string]));
+  const oName = new Map<string, string>((orgs.data ?? []).map((o: { id: string; name: string }) => [o.id, o.name] as [string, string]));
+  return items.map((it) => ({
+    blockType: it.blockType,
+    blockKey: it.blockKey,
+    role: it.role,
+    byUserName: it.ev.byUser ? (uName.get(it.ev.byUser) ?? null) : null,
+    byOrgName: it.ev.byOrg ? (oName.get(it.ev.byOrg) ?? null) : null,
+    at: it.ev.at,
+  }));
 }
 
 /** Read-only: can this deal advance, and if gated, what's still unmet? */
@@ -285,7 +346,7 @@ export async function evaluateAdvance(db: DbClient, orderId: string): Promise<Ac
   if (deal.stage === CANCELLED_STAGE || target === null) {
     return {
       success: true,
-      data: { currentStage: deal.stage, nextStage: null, requirements: [], satisfied: false, unmet: [], willAutoAdvance: false },
+      data: { currentStage: deal.stage, nextStage: null, requirements: [], satisfied: false, unmet: [], willAutoAdvance: false, confirmations: [] },
     };
   }
 
@@ -297,15 +358,16 @@ export async function evaluateAdvance(db: DbClient, orderId: string): Promise<Ac
   if (requirements.length === 0) {
     return {
       success: true,
-      data: { currentStage: deal.stage, nextStage: target, requirements: [], satisfied: true, unmet: [], willAutoAdvance: true },
+      data: { currentStage: deal.stage, nextStage: target, requirements: [], satisfied: true, unmet: [], willAutoAdvance: true, confirmations: [] },
     };
   }
 
   const ctx = await buildGateContext(db, orderId, deal.stage);
   const { satisfied, unmet } = evaluateGate(requirements, ctx);
+  const confirmations = await buildConfirmationEvidence(db, requirements, ctx);
   return {
     success: true,
-    data: { currentStage: deal.stage, nextStage: target, requirements, satisfied, unmet, willAutoAdvance: false },
+    data: { currentStage: deal.stage, nextStage: target, requirements, satisfied, unmet, willAutoAdvance: false, confirmations },
   };
 }
 

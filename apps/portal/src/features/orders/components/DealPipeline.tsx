@@ -243,6 +243,33 @@ export function DealAdvanceControl({
           })}
         </ul>
       )}
+
+      {/* E2 · honest sign-offs: show the who/when behind each RECORDED confirmation
+          so a satisfied block is evidence, not a bare green tick. These are
+          auditable manual confirmations, not cryptographic proof. */}
+      {!loadingEval && (evaluation?.confirmations.length ?? 0) > 0 && (
+        <ul className="space-y-1.5">
+          {evaluation!.confirmations.map((c, idx) => (
+            <li key={idx} className="rounded-md border border-green-200 bg-green-50/60 px-3 py-2 text-xs dark:border-green-900 dark:bg-green-950/20">
+              <span className="flex items-center gap-1.5 font-medium text-green-700 dark:text-green-500">
+                <Check className="h-3.5 w-3.5" /> Recorded confirmation by the {c.role}
+              </span>
+              <span className="mt-0.5 block text-muted-foreground">
+                {c.byUserName ?? "—"}{c.byOrgName ? ` · ${c.byOrgName}` : ""}{c.at ? ` · ${fmtConfirmDate(c.at)}` : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
+}
+
+/** E2 · format a confirmation timestamp for display (falls back to the raw value). */
+function fmtConfirmDate(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }

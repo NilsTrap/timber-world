@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus, Pencil, X } from "lucide-react";
 import {
-  Button, Input, Switch,
+  Button, Switch,
   Table, TableHeader, TableBody, TableHead, TableRow, TableCell,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -12,6 +12,12 @@ import {
 } from "@timber/ui";
 import { LIFECYCLE_STAGES, describeBlock, type GateBlock, type GateConfigRow } from "../services/lifecycle";
 import { listGateConfigsAction, upsertGateConfigAction } from "../actions/lifecycleActions";
+import { DOC_TYPES, DOC_TYPE_LABELS } from "../services/documents/registry";
+
+/** E1 · sentinel for the document-present condition's "any document" option (the
+ *  docType stays optional; the picker feeds exclusively from the D2 registry so a
+ *  gate can never reference a doc type the templates editor doesn't know). */
+const DOC_ANY = "__any";
 
 /** Deal kinds a gate can be configured for (mirrors dealModel.DealKind). */
 const DEAL_KINDS: { value: string; label: string }[] = [
@@ -34,13 +40,15 @@ function stageLabel(s: string): string {
 
 /** The building-block templates the admin can add to a gate. */
 type BlockTemplate = "party_signoff:seller" | "party_signoff:buyer" | "acceptance" | "condition:payment_recorded" | "condition:document_present";
+// E2 · labels make explicit that sign-off/acceptance blocks are RECORDED manual
+// confirmations (user + org + timestamp), not cryptographic proof.
 const BLOCK_TEMPLATES: { value: BlockTemplate; label: string }[] = [
-  { value: "party_signoff:seller", label: "Seller sign-off" },
-  { value: "party_signoff:buyer", label: "Buyer sign-off" },
-  { value: "acceptance", label: "Buyer acceptance" },
+  { value: "party_signoff:seller", label: "Recorded confirmation — seller sign-off" },
+  { value: "party_signoff:buyer", label: "Recorded confirmation — buyer sign-off" },
+  { value: "acceptance", label: "Recorded confirmation — buyer acceptance" },
   // 'Condition: payment recorded' is intentionally NOT offered — no payment source is
   // wired yet, and upsertGateConfig rejects it so a gate can't become unsatisfiable.
-  { value: "condition:document_present", label: "Condition: document present (e.g. invoice, cmr)" },
+  { value: "condition:document_present", label: "Condition — a document is present" },
 ];
 function templateToBlock(t: BlockTemplate): GateBlock {
   switch (t) {
@@ -232,12 +240,21 @@ export function GateConfigManager() {
                       <li key={idx} className="flex items-center gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5">
                         <span className="text-sm flex-1">{describeBlock(b)}</span>
                         {b.type === "condition" && b.condition === "document_present" && (
-                          <Input
-                            value={b.docType ?? ""}
-                            onChange={(e) => setDocType(idx, e.target.value)}
-                            placeholder="docType (optional)"
-                            className="h-7 w-40 text-xs"
-                          />
+                          <Select
+                            value={b.docType ?? DOC_ANY}
+                            onValueChange={(v) => setDocType(idx, v === DOC_ANY ? "" : v)}
+                          >
+                            <SelectTrigger className="h-7 w-48 text-xs"><SelectValue placeholder="Any document" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={DOC_ANY}>Any document</SelectItem>
+                              {DOC_TYPES.map((t) => <SelectItem key={t} value={t}>{DOC_TYPE_LABELS[t]}</SelectItem>)}
+                              {/* Keep a legacy/off-registry stored value selectable so it never
+                                  vanishes or shows blank (E1 review note). */}
+                              {b.docType && !DOC_TYPES.includes(b.docType as (typeof DOC_TYPES)[number]) && (
+                                <SelectItem value={b.docType}>{b.docType} (legacy)</SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
                         )}
                         <Button variant="ghost" size="icon-sm" onClick={() => removeBlock(idx)} aria-label="Remove requirement">
                           <X className="h-4 w-4" />
