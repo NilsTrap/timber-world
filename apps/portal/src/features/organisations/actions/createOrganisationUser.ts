@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { OrganisationUser, ActionResult } from "../types";
 import { isValidUUID } from "../types";
 import { resolveAddPersonScope, applyAddPersonGroups } from "./_addPersonScope";
+import { logAudit } from "@/features/audit/logAudit";
 
 /**
  * Create Organisation User Schema
@@ -152,6 +153,14 @@ export async function createOrganisationUser(
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
   };
+
+  await logAudit({
+    action: "portal_user.create",
+    resourceType: "portal_user",
+    resourceId: user.id,
+    organisationId,
+    metadata: { email: user.email, name: user.name },
+  });
 
   return { success: true, data: user };
 }

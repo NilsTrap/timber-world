@@ -6,6 +6,7 @@ import { updateOrgSchema } from "../schemas";
 import { isValidUUID } from "../types";
 import type { Organisation, ActionResult } from "../types";
 import { crmSyncOrg } from "../services/oscarCrm";
+import { logAudit } from "@/features/audit/logAudit";
 
 /** Trim a value; empty → null (blank company-card fields store as NULL). */
 function nn(v: string | null | undefined): string | null {
@@ -187,6 +188,14 @@ export async function updateOrganisation(
     isManufacturer: organisation.isManufacturer,
     isProducer: organisation.isProducer,
     crmOrgId: (data.crm_org_id as string | null) ?? null,
+  });
+
+  await logAudit({
+    action: "organisation.update",
+    resourceType: "organisation",
+    resourceId: organisation.id,
+    organisationId: organisation.id,
+    metadata: { code: organisation.code, name: organisation.name, fields: Object.keys(updatePayload) },
   });
 
   return {

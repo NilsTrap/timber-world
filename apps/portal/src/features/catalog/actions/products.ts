@@ -11,6 +11,7 @@ import type {
   ProductImage,
   SaveProductInput,
 } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 function toProduct(row: any): CatalogProduct {
   return {
@@ -238,6 +239,12 @@ export async function saveProduct(
 
   await recomputeEntityCurrencies("product", productId, payload.base_price_eur_cents);
   revalidatePath("/admin/catalog");
+  await logAudit({
+    action: input.id ? "catalog_product.update" : "catalog_product.create",
+    resourceType: "catalog_product",
+    resourceId: productId,
+    metadata: { slug: input.slug, name: input.name, categoryId: input.categoryId },
+  });
   return getProduct(productId);
 }
 
@@ -373,6 +380,11 @@ export async function deleteProduct(id: string): Promise<ActionResult<null>> {
   }
 
   revalidatePath("/admin/catalog");
+  await logAudit({
+    action: "catalog_product.delete",
+    resourceType: "catalog_product",
+    resourceId: id,
+  });
   return { success: true, data: null };
 }
 
@@ -436,6 +448,11 @@ export async function bulkDeleteProducts(ids: string[]): Promise<ActionResult<{ 
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/admin/catalog");
+  await logAudit({
+    action: "catalog_product.bulk_delete",
+    resourceType: "catalog_product",
+    metadata: { count: count ?? ids.length, ids: ids.slice(0, 50) },
+  });
   return { success: true, data: { deleted: count ?? ids.length } };
 }
 
@@ -453,6 +470,11 @@ export async function bulkSetProductsActive(ids: string[], isActive: boolean): P
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/admin/catalog");
+  await logAudit({
+    action: "catalog_product.bulk_set_active",
+    resourceType: "catalog_product",
+    metadata: { count: count ?? ids.length, isActive, ids: ids.slice(0, 50) },
+  });
   return { success: true, data: { updated: count ?? ids.length } };
 }
 
@@ -481,6 +503,11 @@ export async function bulkSetProductsVisibility(
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/admin/catalog");
+  await logAudit({
+    action: "catalog_product.bulk_set_visibility",
+    resourceType: "catalog_product",
+    metadata: { count: count ?? ids.length, visibility, ids: ids.slice(0, 50) },
+  });
   return { success: true, data: { updated: count ?? ids.length } };
 }
 
@@ -516,5 +543,11 @@ export async function bulkMoveProductsToCategory(ids: string[], categoryId: stri
   }
 
   revalidatePath("/admin/catalog");
+  await logAudit({
+    action: "catalog_product.bulk_move_category",
+    resourceType: "catalog_product",
+    resourceId: categoryId,
+    metadata: { count: count ?? ids.length, categoryId, ids: ids.slice(0, 50) },
+  });
   return { success: true, data: { updated: count ?? ids.length } };
 }

@@ -10,6 +10,7 @@ import type {
   VariantFieldValue,
   SaveVariantInput,
 } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 function toVariant(row: any): CatalogVariant {
   return {
@@ -229,6 +230,12 @@ export async function saveVariant(
     .single();
 
   if (fetchError) return { success: false, error: fetchError.message };
+  await logAudit({
+    action: input.id ? "catalog_variant.update" : "catalog_variant.create",
+    resourceType: "catalog_variant",
+    resourceId: variantId,
+    metadata: { productId: input.productId, sku: input.sku ?? null },
+  });
   return { success: true, data: toVariant(fullVariant) };
 }
 
@@ -250,5 +257,10 @@ export async function deleteVariant(id: string): Promise<ActionResult<null>> {
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/admin/catalog");
+  await logAudit({
+    action: "catalog_variant.delete",
+    resourceType: "catalog_variant",
+    resourceId: id,
+  });
   return { success: true, data: null };
 }

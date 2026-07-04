@@ -5,6 +5,7 @@ import { getSession, isSuperAdmin } from "@/lib/auth";
 import { z } from "zod";
 import type { OrganisationUser, ActionResult } from "../types";
 import { isValidUUID } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 /**
  * Update Organisation User Schema (Q4 · name / email / phone).
@@ -178,6 +179,14 @@ export async function updateOrganisationUser(
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
   };
+
+  await logAudit({
+    action: "portal_user.update",
+    resourceType: "portal_user",
+    resourceId: userId,
+    organisationId: organisationId || null,
+    metadata: { fields: Object.keys(updatePayload), email: user.email },
+  });
 
   return {
     success: true,

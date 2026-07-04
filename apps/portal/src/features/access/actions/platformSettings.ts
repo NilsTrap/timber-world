@@ -9,6 +9,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 export async function getPlatformSetting(
   key: string,
@@ -39,5 +40,13 @@ export async function setPlatformSetting(
     .from("platform_settings")
     .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
   if (error) return { success: false, error: "Failed to save setting", code: "UPDATE_FAILED" };
+
+  await logAudit({
+    action: "platform_setting.set",
+    resourceType: "platform_setting",
+    resourceId: key,
+    metadata: { key, value },
+  });
+
   return { success: true, data: { key } };
 }

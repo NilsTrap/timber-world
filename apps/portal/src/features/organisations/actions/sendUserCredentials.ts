@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 /**
  * Send User Credentials (Invite Flow)
@@ -169,6 +170,15 @@ export async function sendUserCredentials(
       code: "LINK_FAILED",
     };
   }
+
+  // Audit the invite EVENT only — the magic-link/credentials are never logged.
+  await logAudit({
+    action: "portal_user.credentials_sent",
+    resourceType: "portal_user",
+    resourceId: userId,
+    organisationId,
+    metadata: { email: portalUser.email, method: "invite_email" },
+  });
 
   return {
     success: true,

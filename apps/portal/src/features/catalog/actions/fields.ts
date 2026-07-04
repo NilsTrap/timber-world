@@ -13,6 +13,7 @@ import type {
   SaveFieldAssignmentInput,
   SaveFieldOptionInput,
 } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 function toOption(row: any): FieldOption {
   return {
@@ -124,6 +125,12 @@ export async function saveField(input: SaveFieldInput): Promise<ActionResult<Cat
       if (error) return { success: false, error: error.message };
       revalidatePath("/admin/catalog");
       revalidatePath("/admin/settings/fields");
+      await logAudit({
+        action: "catalog_field.update",
+        resourceType: "catalog_field",
+        resourceId: input.id,
+        metadata: { fieldKey: input.fieldKey, system: true },
+      });
       return { success: true, data: toGlobalField(data) };
     }
   }
@@ -150,6 +157,12 @@ export async function saveField(input: SaveFieldInput): Promise<ActionResult<Cat
 
   revalidatePath("/admin/catalog");
   revalidatePath("/admin/settings/fields");
+  await logAudit({
+    action: input.id ? "catalog_field.update" : "catalog_field.create",
+    resourceType: "catalog_field",
+    resourceId: result.data.id as string,
+    metadata: { fieldKey: input.fieldKey, fieldType: input.fieldType },
+  });
   return { success: true, data: toGlobalField(result.data) };
 }
 
@@ -177,6 +190,11 @@ export async function deleteField(id: string): Promise<ActionResult<null>> {
   if (error) return { success: false, error: error.message };
   revalidatePath("/admin/catalog");
   revalidatePath("/admin/settings/fields");
+  await logAudit({
+    action: "catalog_field.delete",
+    resourceType: "catalog_field",
+    resourceId: id,
+  });
   return { success: true, data: null };
 }
 
@@ -237,6 +255,12 @@ export async function saveFieldAssignment(input: SaveFieldAssignmentInput): Prom
 
   revalidatePath("/admin/catalog");
   revalidatePath("/admin/settings/fields");
+  await logAudit({
+    action: input.id ? "catalog_field_assignment.update" : "catalog_field_assignment.create",
+    resourceType: "catalog_field_assignment",
+    resourceId: result.data.id as string,
+    metadata: { categoryId: input.categoryId, fieldId: input.fieldId },
+  });
   return { success: true, data: {
     id: result.data.id,
     categoryId: result.data.category_id,
@@ -264,6 +288,11 @@ export async function removeFieldAssignment(id: string): Promise<ActionResult<nu
   if (error) return { success: false, error: error.message };
   revalidatePath("/admin/catalog");
   revalidatePath("/admin/settings/fields");
+  await logAudit({
+    action: "catalog_field_assignment.delete",
+    resourceType: "catalog_field_assignment",
+    resourceId: id,
+  });
   return { success: true, data: null };
 }
 
@@ -303,6 +332,12 @@ export async function saveFieldOption(input: SaveFieldOptionInput): Promise<Acti
 
   revalidatePath("/admin/catalog");
   revalidatePath("/admin/settings/fields");
+  await logAudit({
+    action: input.id ? "catalog_field_option.update" : "catalog_field_option.create",
+    resourceType: "catalog_field_option",
+    resourceId: result.data.id as string,
+    metadata: { fieldId: input.fieldId, value: input.value },
+  });
   return { success: true, data: toOption(result.data) };
 }
 
@@ -320,5 +355,10 @@ export async function deleteFieldOption(id: string): Promise<ActionResult<null>>
   if (error) return { success: false, error: error.message };
   revalidatePath("/admin/catalog");
   revalidatePath("/admin/settings/fields");
+  await logAudit({
+    action: "catalog_field_option.delete",
+    resourceType: "catalog_field_option",
+    resourceId: id,
+  });
   return { success: true, data: null };
 }

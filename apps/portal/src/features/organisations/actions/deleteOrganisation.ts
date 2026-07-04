@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin } from "@/lib/auth";
 import { isValidUUID } from "../types";
 import type { ActionResult } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 /**
  * Delete Organisation
@@ -83,6 +84,13 @@ export async function deleteOrganisation(
       code: "DELETE_FAILED",
     };
   }
+
+  await logAudit({
+    action: "organisation.delete",
+    resourceType: "organisation",
+    resourceId: id,
+    organisationId: id,
+  });
 
   return {
     success: true,
