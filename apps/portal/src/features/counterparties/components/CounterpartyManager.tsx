@@ -11,6 +11,7 @@ import {
 } from "@timber/ui";
 import { listCounterparties, createCounterparty, updateCounterparty } from "../actions";
 import type { CounterpartyBook, CounterpartyRow } from "../types";
+import { OrgContactsSection } from "./OrgContactsSection";
 
 const BOOK_LABELS: Record<CounterpartyBook, { title: string; record: string }> = {
   clients: { title: "Clients", record: "client" },
@@ -316,6 +317,18 @@ export function CounterpartyManager({ book, isAdmin = false }: { book: Counterpa
                   <Switch checked={editor.isActive} onCheckedChange={(c) => set({ isActive: c })} id="cp-active" />
                   <label htmlFor="cp-active" className="text-sm">Active</label>
                 </div>
+              )}
+
+              {/* K1 · CRM contacts — only for an existing record (needs the org
+                  id). "Use as signee" writes the org default signee; sync the
+                  open editor fields so a follow-up save keeps them consistent. */}
+              {editor.id != null && (
+                <OrgContactsSection
+                  organisationId={editor.id}
+                  onSigneeUpdated={(name, role) =>
+                    set({ defaultSigneeName: name, defaultSigneeRole: role ?? "" })
+                  }
+                />
               )}
             </div>
           )}

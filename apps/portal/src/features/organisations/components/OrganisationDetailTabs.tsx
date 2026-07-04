@@ -38,6 +38,7 @@ import { OrganisationUsersTable } from "./OrganisationUsersTable";
 import { OrganisationModulesTab } from "./OrganisationModulesTab";
 import { TradingPartnersTab } from "./TradingPartnersTab";
 import { ReferenceDataManager } from "@/features/reference-data";
+import { OrgContactsSection } from "@/features/counterparties/components";
 import {
   toggleOrganisationExternal,
   setOrganisationRole,
@@ -731,6 +732,16 @@ export function OrganisationDetailTabs({
                   {isSavingDetails ? "Saving..." : "Save Details"}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Contacts (K1) — read-only here; managed from the CRM card. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Contacts</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <OrgContactsSection organisationId={organisation.id} readOnly />
             </CardContent>
           </Card>
 
