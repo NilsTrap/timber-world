@@ -75,6 +75,9 @@ export const LEGACY_ADMIN_CHILDREN: ModuleNavChild[] = [
   { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp" },
   { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText" },
   { href: "/admin/uk-staircase-pricing", label: "UK Staircase Pricing", iconName: "PoundSterling" },
+  // Moved out of the org detail view (Orgs & People) — org-scoped legacy managers.
+  { href: "/admin/reference", label: "Reference Data", iconName: "FileText" },
+  { href: "/admin/trading-partners", label: "Trading Partners", iconName: "Handshake" },
 ];
 
 /** Children of the "Legacy" collapsible section — ORG-USER hrefs + per-child module gates. */

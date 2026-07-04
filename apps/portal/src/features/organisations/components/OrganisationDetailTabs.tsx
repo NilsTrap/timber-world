@@ -22,8 +22,6 @@ import {
   Building2,
   Users,
   Settings2,
-  Handshake,
-  Database,
   Pencil,
   Check,
   X,
@@ -36,8 +34,6 @@ import { usePersistedTab } from "@/hooks/usePersistedTab";
 import type { Organisation, DeliveryAddress } from "../types";
 import { OrganisationUsersTable } from "./OrganisationUsersTable";
 import { OrganisationModulesTab } from "./OrganisationModulesTab";
-import { TradingPartnersTab } from "./TradingPartnersTab";
-import { ReferenceDataManager } from "@/features/reference-data";
 import { OrgContactsSection } from "@/features/counterparties/components";
 import {
   toggleOrganisationExternal,
@@ -362,14 +358,6 @@ export function OrganisationDetailTabs({
         <TabsTrigger value="features">
           <Settings2 className="h-4 w-4" />
           Modules
-        </TabsTrigger>
-        <TabsTrigger value="reference">
-          <Database className="h-4 w-4" />
-          Reference Data
-        </TabsTrigger>
-        <TabsTrigger value="partners">
-          <Handshake className="h-4 w-4" />
-          Trading Partners
         </TabsTrigger>
       </TabsList>
 
@@ -904,27 +892,6 @@ export function OrganisationDetailTabs({
         </Card>
       </TabsContent>
 
-      <TabsContent value="reference">
-        <Card>
-          <CardHeader>
-            <CardTitle>Reference Data</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ReferenceDataManager canDelete organisationId={organisation.id} />
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      <TabsContent value="partners">
-        <Card>
-          <CardHeader>
-            <CardTitle>Trading Partners</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TradingPartnersTab organisationId={organisation.id} />
-          </CardContent>
-        </Card>
-      </TabsContent>
     </Tabs>
   );
 }

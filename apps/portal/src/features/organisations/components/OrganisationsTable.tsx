@@ -337,7 +337,7 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
                   </button>
                 </TableHead>
                 <TableHead className="w-28">Type</TableHead>
-                <TableHead className="w-44">Appears in</TableHead>
+                <TableHead className="w-44">Role</TableHead>
                 <TableHead className="w-40 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -374,17 +374,19 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
                       </Badge>
                     </button>
                   </TableCell>
-                  {/* I1 · which CRM book(s) this org falls into — the books are
-                      filtered views of this list (Clients = customer; Suppliers =
-                      supplier OR producer). "Internal" = in no book. */}
+                  {/* The org's role flags (multi-role; set in the org detail "Roles"
+                      toggle). "—" = no role assigned. */}
                   <TableCell>
-                    {org.isCustomer || org.isSupplier || org.isProducer ? (
+                    {org.isTrader || org.isCustomer || org.isSupplier || org.isProducer || org.isManufacturer ? (
                       <span className="flex flex-wrap gap-1">
-                        {org.isCustomer && <Badge variant="secondary" className="text-[10px]">Clients</Badge>}
-                        {(org.isSupplier || org.isProducer) && <Badge variant="secondary" className="text-[10px]">Suppliers</Badge>}
+                        {org.isTrader && <Badge variant="secondary" className="text-[10px]">Trader</Badge>}
+                        {org.isCustomer && <Badge variant="secondary" className="text-[10px]">Customer</Badge>}
+                        {org.isSupplier && <Badge variant="secondary" className="text-[10px]">Supplier</Badge>}
+                        {org.isProducer && <Badge variant="secondary" className="text-[10px]">Producer</Badge>}
+                        {org.isManufacturer && <Badge variant="secondary" className="text-[10px]">Manufacturer</Badge>}
                       </span>
                     ) : (
-                      <span className="text-xs text-muted-foreground">Internal</span>
+                      <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
