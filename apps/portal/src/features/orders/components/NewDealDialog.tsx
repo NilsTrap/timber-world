@@ -12,7 +12,15 @@ import {
 import { getOrderPartyOptions, type OrderPartyOptions } from "../actions/getOrderPartyOptions";
 import { createOrder } from "../actions/createOrder";
 import { getOriginDealOptions, createDealLegAction, type OriginDealOption } from "../actions/legActions";
+import { getCurrencies } from "@/features/catalog/actions/currencies";
 import { PartyFields, partyPickComplete, type PartyValue } from "./PartyFields";
+
+/** R7 · fallback currency list when getCurrencies is unavailable (a creator without
+ *  catalogue.view) — the active set today; the CHECK also allows USD. */
+const FALLBACK_CURRENCIES = [
+  { code: "EUR", name: "Euro" },
+  { code: "GBP", name: "British Pound" },
+];
 
 /**
  * H1/L1 · New-deal dialog. "Add order" opens this so the deal is born with its
@@ -44,12 +52,28 @@ export function NewDealDialog({
   const [value, setValue] = useState<PartyValue>({ customerOrganisationId: null, sellerOrganisationId: null });
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // R7 · currency for a blank deal (defaults EUR). Options come from the catalog;
+  // falls back to the active set when the creator lacks catalogue.view.
+  const [currency, setCurrency] = useState("EUR");
+  const [currencyOptions, setCurrencyOptions] = useState<{ code: string; name: string }[]>(FALLBACK_CURRENCIES);
 
   // L1 · mode + origin (admin only). A preset origin forces leg mode.
   const [mode, setMode] = useState<"blank" | "leg">(presetOriginDealId ? "leg" : "blank");
   const [originOptions, setOriginOptions] = useState<OriginDealOption[] | null>(null);
   const [originId, setOriginId] = useState<string>(presetOriginDealId ?? "");
   const [legValue, setLegValue] = useState<PartyValue>({ customerOrganisationId: null, sellerOrganisationId: null });
+
+  // R7 · load currency options once when the dialog opens (active only, fallback set).
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    getCurrencies().then((res) => {
+      if (!alive || !res.success) return;
+      const active = res.data.filter((c) => c.isActive).map((c) => ({ code: c.code, name: c.name }));
+      if (active.length > 0) setCurrencyOptions(active);
+    });
+    return () => { alive = false; };
+  }, [open]);
 
   // Load the pick lists when the dialog first opens.
   useEffect(() => {
@@ -106,13 +130,14 @@ export function NewDealDialog({
       name: name.trim() || "-",
       customerOrganisationId: value.customerOrganisationId,
       sellerOrganisationId: value.sellerOrganisationId,
+      currency: currency as "EUR" | "GBP" | "USD",
       dateReceived: new Date().toISOString().slice(0, 10),
     });
     setSubmitting(false);
     if (!res.success) { toast.error(res.error); return; }
     toast.success(res.data.dealCode ? `Deal ${res.data.dealCode} created` : "Deal created");
     router.push(`/orders/${res.data.id}`);
-  }, [name, value, router]);
+  }, [name, value, currency, router]);
 
   const createLeg = useCallback(async () => {
     if (!originId) { toast.error("Pick the original order to fork from."); return; }
@@ -184,9 +209,21 @@ export function NewDealDialog({
         ) : partyOptions && mode === "blank" ? (
           <div className="space-y-4">
             <PartyFields partyOptions={partyOptions} value={value} onChange={(patch) => setValue((v) => ({ ...v, ...patch }))} />
-            <div className="space-y-1.5">
-              <Label htmlFor="nd-name">Reference <span className="text-muted-foreground">(optional)</span></Label>
-              <Input id="nd-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Firewood truckload" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="nd-name">Reference <span className="text-muted-foreground">(optional)</span></Label>
+                <Input id="nd-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Firewood truckload" />
+              </div>
+              {/* R7 · deal currency (can still be changed later while Draft). */}
+              <div className="space-y-1.5">
+                <Label>Currency</Label>
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {currencyOptions.map((o) => <SelectItem key={o.code} value={o.code}>{o.code} — {o.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         ) : partyOptions && mode === "leg" ? (

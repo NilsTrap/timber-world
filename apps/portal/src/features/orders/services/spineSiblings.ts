@@ -21,6 +21,10 @@ export interface SpineBuyLegRef {
   supplierName: string | null;
   totalCents: number;
   priced: boolean;
+  /** R7 · the buy leg's own currency — a buy leg may be priced in a DIFFERENT
+   *  currency from the sell deal, so its total must be labelled with this, never
+   *  with the sell deal's currency. */
+  currency: string;
 }
 
 export interface SpineBuyLegs {
@@ -29,6 +33,9 @@ export interface SpineBuyLegs {
   totalCents: number;
   /** True when any sibling buy line carries a price (else margin stays provisional). */
   priced: boolean;
+  /** R7 · the shared currency of the buy leg(s) when they all agree, else null
+   *  (mixed) — the margin block only subtracts when this equals the sell currency. */
+  currency: string | null;
 }
 
 interface SellLegLike {
@@ -72,7 +79,7 @@ export async function getSpineBuyLegs(deal: SellLegLike): Promise<SpineBuyLegs |
   const admin = createAdminClient() as any;
   const { data: legRows } = await admin
     .from("orders")
-    .select("id, deal_code, lifecycle_stage, seller:organisations!orders_seller_organisation_id_fkey(name)")
+    .select("id, deal_code, lifecycle_stage, currency, seller:organisations!orders_seller_organisation_id_fkey(name)")
     .eq("spine_id", deal.spineId)
     .eq("deal_kind", "purchase_only")
     .eq("buyer_organisation_id", houseOrgId)
@@ -83,7 +90,7 @@ export async function getSpineBuyLegs(deal: SellLegLike): Promise<SpineBuyLegs |
     // Deterministic order so callers that use legs[0] (B2 replace) act on a stable
     // leg. There should be ONE active buy leg per spine (startSourcing enforces it).
     .order("created_at", { ascending: true });
-  const legOrders = (legRows ?? []) as Array<{ id: string; deal_code: string | null; lifecycle_stage: string | null; seller: { name: string | null } | null }>;
+  const legOrders = (legRows ?? []) as Array<{ id: string; deal_code: string | null; lifecycle_stage: string | null; currency: string | null; seller: { name: string | null } | null }>;
   if (legOrders.length === 0) return null;
 
   const { data: lineRows } = await admin
@@ -101,12 +108,17 @@ export async function getSpineBuyLegs(deal: SellLegLike): Promise<SpineBuyLegs |
       supplierName: o.seller?.name ?? null,
       totalCents: agg.total,
       priced: agg.priced,
+      currency: o.currency ?? "EUR",
     };
   });
+  // Common currency across the buy leg(s) — null when they disagree (mixed), so the
+  // owner margin block knows not to subtract a foreign total from the sell total.
+  const currencies = new Set(legs.map((l) => l.currency));
   return {
     legs,
     totalCents: legs.reduce((s, l) => s + l.totalCents, 0),
     priced: legs.some((l) => l.priced),
+    currency: currencies.size === 1 ? (legs[0]?.currency ?? null) : null,
   };
 }
 
@@ -122,6 +134,9 @@ export interface SpineLegRef {
   status: string | null;
   ownTotalCents: number;
   priced: boolean;
+  /** R7 · the leg's own currency — each leg's total is labelled with THIS, not the
+   *  current deal's currency (a GBP leg on a EUR deal's spine was mislabelled). */
+  currency: string;
 }
 
 /**
@@ -136,12 +151,12 @@ export async function getSpineLegs(spineId: string | null): Promise<SpineLegRef[
   const admin = createAdminClient() as any;
   const { data: legRows } = await admin
     .from("orders")
-    .select("id, code, deal_code, deal_kind, lifecycle_stage, status, seller:organisations!orders_seller_organisation_id_fkey(name), buyer:organisations!orders_buyer_organisation_id_fkey(name), customer:organisations!orders_customer_organisation_id_fkey(name)")
+    .select("id, code, deal_code, deal_kind, lifecycle_stage, status, currency, seller:organisations!orders_seller_organisation_id_fkey(name), buyer:organisations!orders_buyer_organisation_id_fkey(name), customer:organisations!orders_customer_organisation_id_fkey(name)")
     .eq("spine_id", spineId)
     .order("created_at", { ascending: true });
   const legOrders = (legRows ?? []) as Array<{
     id: string; code: string; deal_code: string | null; deal_kind: string | null;
-    lifecycle_stage: string | null; status: string | null;
+    lifecycle_stage: string | null; status: string | null; currency: string | null;
     seller: { name: string | null } | null; buyer: { name: string | null } | null; customer: { name: string | null } | null;
   }>;
   if (legOrders.length === 0) return [];
@@ -166,6 +181,7 @@ export async function getSpineLegs(spineId: string | null): Promise<SpineLegRef[
       status: o.status ?? null,
       ownTotalCents: agg.total,
       priced: agg.priced,
+      currency: o.currency ?? "EUR",
     };
   });
 }

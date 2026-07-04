@@ -51,6 +51,10 @@ export type OrderDealViewResult = OrderDealView & {
   /** Summed line total (cents) of this deal's spine-sibling buy leg(s), for the
    *  owner margin block. null for non-admins OR when no buy leg exists on the spine. */
   siblingBuyLegTotalCents: number | null;
+  /** R7 · the buy leg's currency (null = non-admin / no buy leg / mixed). When it
+   *  differs from the deal's currency the margin block shows both totals labelled,
+   *  never a bogus cross-currency subtraction. */
+  siblingBuyLegCurrency: string | null;
   /** Whether a spine-sibling buy leg exists at all (drives the provisional flag). */
   hasSiblingBuyLeg: boolean;
   /** Whether the sibling buy leg carries any price (else margin stays provisional). */
@@ -130,6 +134,7 @@ export async function getOrderDealView(orderId: string): Promise<ActionResult<Or
   // margin needs the buy-leg total (admin), sourcing needs the buy-leg ref
   // (canStartSourcing), the chain card needs all legs (admin). Never client-derived.
   let siblingBuyLegTotalCents: number | null = null;
+  let siblingBuyLegCurrency: string | null = null;
   let hasSiblingBuyLeg = false;
   let siblingBuyLegPriced = false;
   let sourcing: DealSourcingState | null = null;
@@ -139,6 +144,7 @@ export async function getOrderDealView(orderId: string): Promise<ActionResult<Or
     const buyLegs = await getSpineBuyLegs({ id: orderId, spineId: rawSpineId, dealKind: rawDealKind, seller: rawSeller });
     if (isAdmin && buyLegs) {
       siblingBuyLegTotalCents = buyLegs.totalCents;
+      siblingBuyLegCurrency = buyLegs.currency;
       hasSiblingBuyLeg = true;
       siblingBuyLegPriced = buyLegs.priced;
     }
@@ -171,6 +177,7 @@ export async function getOrderDealView(orderId: string): Promise<ActionResult<Or
       ...view,
       viewerIsAdmin: isAdmin,
       siblingBuyLegTotalCents,
+      siblingBuyLegCurrency,
       hasSiblingBuyLeg,
       siblingBuyLegPriced,
       canEditDealTerms,
@@ -198,6 +205,9 @@ export interface DealTermsInput {
   deliveryTerms?: string | null;
   deliveryDeadline?: string | null;
   notes?: string | null;
+  /** R7 · deal currency. The service (updateDealFields) enforces Draft-only +
+   *  active-currency; this action just forwards it under the same field-wall gate. */
+  currency?: string | null;
   /** G3 per-deal signee overrides. */
   sellerSigneeName?: string | null;
   sellerSigneeRole?: string | null;
@@ -227,6 +237,7 @@ export async function updateDealTerms(input: { orderId: string; terms: DealTerms
     deliveryTerms: t.deliveryTerms,
     deliveryDeadline: t.deliveryDeadline,
     notes: t.notes,
+    currency: t.currency,
     sellerSigneeName: t.sellerSigneeName,
     sellerSigneeRole: t.sellerSigneeRole,
     buyerSigneeName: t.buyerSigneeName,

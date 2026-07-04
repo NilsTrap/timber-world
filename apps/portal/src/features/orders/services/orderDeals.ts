@@ -259,6 +259,27 @@ export async function updateDealFields(db: DbClient, _actor: ActorContext, order
   const u: Record<string, unknown> = {};
   if (patch.dealKind !== undefined) u.deal_kind = patch.dealKind;
   if (patch.productGroup !== undefined) u.product_group = patch.productGroup;
+  // R7 · currency is writable ONLY while the deal is Draft (changing it after the
+  // lines are priced would leave the amounts denominated in the wrong currency),
+  // and only to an ACTIVE catalog currency. A null/blank is ignored (currency is
+  // NOT NULL with a DB default of 'EUR'). The gate lives here so it protects every
+  // caller (portal terms editor + MCP timber_update_deal) identically.
+  if (patch.currency != null && String(patch.currency).trim() !== "") {
+    const code = String(patch.currency).trim().toUpperCase();
+    const { data: cur } = await c
+      .from("catalog_currencies")
+      .select("code")
+      .eq("code", code)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!cur) return { success: false, error: `Unknown or inactive currency "${code}".`, code: "VALIDATION_ERROR" };
+    const { data: ord } = await c.from("orders").select("lifecycle_stage").eq("id", orderId).maybeSingle();
+    const stage = (ord?.lifecycle_stage as string | null) ?? "draft";
+    if (stage !== "draft") {
+      return { success: false, error: "Currency can only be changed while the deal is a Draft.", code: "CONFLICT" };
+    }
+    u.currency = code;
+  }
   if (patch.incoterms !== undefined) u.incoterms = patch.incoterms;
   if (patch.incotermsPlace !== undefined) u.incoterms_place = patch.incotermsPlace;
   if (patch.advancePct !== undefined) u.advance_pct = patch.advancePct;

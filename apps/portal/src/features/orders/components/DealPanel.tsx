@@ -93,6 +93,7 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
       // sourcing, B5 capability) are unaffected by editing THIS deal's own lines —
       // preserve them across the optimistic view swap (a full load() refreshes them).
       siblingBuyLegTotalCents: prev?.siblingBuyLegTotalCents ?? null,
+      siblingBuyLegCurrency: prev?.siblingBuyLegCurrency ?? null,
       hasSiblingBuyLeg: prev?.hasSiblingBuyLeg ?? false,
       siblingBuyLegPriced: prev?.siblingBuyLegPriced ?? false,
       canEditDealTerms: prev?.canEditDealTerms ?? false,
@@ -245,6 +246,11 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
   const showMargin = isAdmin && !isBuyLeg;
   const sellTotalCents = deal.lineItems.reduce((s, li) => s + lineTotalCents(li), 0);
   const buyTotalCents = deal.siblingBuyLegTotalCents ?? 0;
+  // R7 · a buy leg may be priced in a DIFFERENT currency from the sell deal. Only
+  // subtract when they share a currency; otherwise the margin is meaningless — show
+  // both legs' totals each labelled with their own currency, no bogus subtraction.
+  const buyCurrency = deal.siblingBuyLegCurrency;
+  const mixedCurrency = deal.hasSiblingBuyLeg && buyCurrency != null && buyCurrency !== deal.currency;
   const marginCents = sellTotalCents - buyTotalCents;
   const marginPct = sellTotalCents > 0 ? (marginCents / sellTotalCents) * 100 : null;
   // Provisional until a sibling buy leg exists AND carries prices.
@@ -302,6 +308,7 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
               deliveryTerms: deal.deliveryTerms,
               deliveryDeadline: deal.deliveryDeadline,
               notes: deal.notes,
+              currency: deal.currency,
               sellerSigneeName: deal.sellerSigneeName,
               sellerSigneeRole: deal.sellerSigneeRole,
               buyerSigneeName: deal.buyerSigneeName,
@@ -309,6 +316,7 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
             }}
             sellerName={deal.seller.name}
             buyerName={deal.buyer.name}
+            currencyEditable={deal.lifecycleStage === "draft"}
             onSaved={load}
           />
         ) : (
@@ -599,23 +607,33 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Buy subtotal <span className="text-muted-foreground/70">(sourcing)</span></dt>
-              <dd className="font-medium tabular-nums">{deal.hasSiblingBuyLeg ? fmtCents(buyTotalCents, deal.currency) : "—"}</dd>
+              {/* R7 · label the buy total with the BUY leg's own currency (it can
+                  differ from the sell deal's), never the sell deal's currency. */}
+              <dd className="font-medium tabular-nums">{deal.hasSiblingBuyLeg ? fmtCents(buyTotalCents, buyCurrency ?? deal.currency) : "—"}</dd>
             </div>
-            <div className="flex justify-between border-t pt-1">
-              <dt className="font-medium">Margin</dt>
-              <dd className={`font-semibold tabular-nums ${marginCents >= 0 ? "text-green-600" : "text-destructive"}`}>
-                {fmtCents(marginCents, deal.currency)}
-                {marginPct != null && <span className="ml-1 text-xs font-normal text-muted-foreground">({marginPct.toFixed(1)}%)</span>}
-              </dd>
-            </div>
+            {!mixedCurrency && (
+              <div className="flex justify-between border-t pt-1">
+                <dt className="font-medium">Margin</dt>
+                <dd className={`font-semibold tabular-nums ${marginCents >= 0 ? "text-green-600" : "text-destructive"}`}>
+                  {fmtCents(marginCents, deal.currency)}
+                  {marginPct != null && <span className="ml-1 text-xs font-normal text-muted-foreground">({marginPct.toFixed(1)}%)</span>}
+                </dd>
+              </div>
+            )}
           </dl>
-          {marginProvisional && (
+          {/* R7 · cross-currency: no honest single margin figure — both totals are
+              shown above in their own currency; the owner converts manually. */}
+          {mixedCurrency ? (
+            <p className="text-xs text-amber-600">
+              Sell ({deal.currency}) and buy ({buyCurrency}) legs are in different currencies — margin isn&apos;t computed. Compare the two totals above (convert manually).
+            </p>
+          ) : marginProvisional ? (
             <p className="text-xs text-amber-600">
               {deal.hasSiblingBuyLeg
                 ? "The sourced buy leg has no prices yet — margin is provisional."
                 : "No sourced buy leg yet — margin is provisional."}
             </p>
-          )}
+          ) : null}
           {marginApproved ? (
             <Button variant="outline" size="sm" className="w-full" onClick={() => onToggleMargin(false)} disabled={savingMargin}>
               {savingMargin ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Revoke approval
@@ -630,7 +648,7 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
 
         {/* B3 · Chain card — every leg on the spine. Owner/admin only (§6.2); the
             server sends an empty array to everyone else (ChainCard renders nothing). */}
-        <ChainCard legs={deal.spineLegs} currentOrderId={orderId} currency={deal.currency} spineCode={deal.spineCode} />
+        <ChainCard legs={deal.spineLegs} currentOrderId={orderId} spineCode={deal.spineCode} />
 
         {/* Activity log — status changes, edits, etc. (self-contained card) */}
         <OrderActivityLog orderId={orderId} />
