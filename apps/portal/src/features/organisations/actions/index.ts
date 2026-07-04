@@ -19,6 +19,10 @@ export { deleteOrganisationUser } from "./deleteOrganisationUser";
 export { searchUserByEmail, addExistingUserToOrganisation } from "./addExistingUserToOrganisation";
 export type { ExistingUserInfo } from "./addExistingUserToOrganisation";
 
+// K3/Q2 · Add-person flow (typeahead + create + inline groups) & membership removal
+export { getAddPersonContext, searchAddablePeople } from "./addPersonSupport";
+export { removeUserFromOrganisation } from "./removeUserFromOrganisation";
+
 // User credential actions (Story 7.3)
 export { sendUserCredentials } from "./sendUserCredentials";
 
