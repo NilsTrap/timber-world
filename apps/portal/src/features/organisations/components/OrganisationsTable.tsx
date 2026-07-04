@@ -7,7 +7,6 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
-  Pencil,
   Power,
   PowerOff,
   Plus,
@@ -245,11 +244,6 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
     setTogglingExternalId(null);
   };
 
-  const handleEdit = (org: Organisation) => {
-    setEditingOrg(org);
-    setIsFormOpen(true);
-  };
-
   const handleAdd = () => {
     setEditingOrg(null);
     setIsFormOpen(true);
@@ -385,14 +379,8 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => handleEdit(org)}
-                        aria-label={`Edit ${org.name}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      {/* Edit removed — clicking the row opens the full org detail
+                          page (the modal editor was redundant). */}
                       <Button
                         variant="ghost"
                         size="icon-sm"
