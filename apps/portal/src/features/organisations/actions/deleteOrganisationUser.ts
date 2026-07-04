@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 /**
  * Delete Organisation User
@@ -108,6 +109,14 @@ export async function deleteOrganisationUser(
       code: "DELETE_FAILED",
     };
   }
+
+  await logAudit({
+    action: "portal_user.delete",
+    resourceType: "portal_user",
+    resourceId: userId,
+    organisationId,
+    metadata: { hadAuthUser: !!user.auth_user_id },
+  });
 
   return {
     success: true,

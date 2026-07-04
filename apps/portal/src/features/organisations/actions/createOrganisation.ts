@@ -5,6 +5,7 @@ import { getSession, isAdmin } from "@/lib/auth";
 import { createOrgSchema, type CreateOrgInput } from "../schemas";
 import type { Organisation, ActionResult } from "../types";
 import { crmSyncOrg } from "../services/oscarCrm";
+import { logAudit } from "@/features/audit/logAudit";
 
 /** Trim a value; empty → null (so blank company-card fields store as NULL). */
 function nn(v: string | null | undefined): string | null {
@@ -149,6 +150,14 @@ export async function createOrganisation(
     isManufacturer: organisation.isManufacturer,
     isProducer: organisation.isProducer,
     crmOrgId: null,
+  });
+
+  await logAudit({
+    action: "organisation.create",
+    resourceType: "organisation",
+    resourceId: organisation.id,
+    organisationId: organisation.id,
+    metadata: { code: organisation.code, name: organisation.name },
   });
 
   return {

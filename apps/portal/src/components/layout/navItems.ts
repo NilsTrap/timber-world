@@ -119,6 +119,8 @@ export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
     { href: "/admin/settings/packaging", label: "Packaging" },
     { href: "/admin/settings/pricing-units", label: "Pricing Units" },
     { href: "/admin/settings/currencies", label: "Currencies" },
+    // Q5.2 · admin-only platform action audit log.
+    { href: "/admin/settings/audit", label: "Audit" },
   ]},
   { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2", group: "orgs" },
   { href: "legacy", label: "Legacy", iconName: "History", collapsible: true, children: LEGACY_ADMIN_CHILDREN },

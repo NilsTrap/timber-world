@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession, isAdmin, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 /**
  * Q4 · Admin manual set-password.
@@ -82,6 +83,14 @@ export async function setUserPasswordAdmin(
     console.error("Failed to set user password:", updateError.message);
     return { success: false, error: updateError.message || "Failed to set password", code: "SET_PASSWORD_FAILED" };
   }
+
+  // Audit the EVENT only — the password is NEVER included in the metadata.
+  await logAudit({
+    action: "portal_user.password_set",
+    resourceType: "portal_user",
+    resourceId: portalUserId,
+    metadata: { email: portalUser.email, method: "admin_set" },
+  });
 
   return { success: true, data: { email: portalUser.email as string } };
 }

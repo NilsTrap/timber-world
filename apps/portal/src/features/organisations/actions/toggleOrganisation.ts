@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin } from "@/lib/auth";
 import { isValidUUID } from "../types";
 import type { ActionResult } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 /**
  * Toggle Organisation Active Status
@@ -70,6 +71,14 @@ export async function toggleOrganisation(
       code: "NOT_FOUND",
     };
   }
+
+  await logAudit({
+    action: isActive ? "organisation.activate" : "organisation.deactivate",
+    resourceType: "organisation",
+    resourceId: data.id as string,
+    organisationId: data.id as string,
+    metadata: { isActive: data.is_active },
+  });
 
   return {
     success: true,

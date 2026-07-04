@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 /**
  * Set Organisation Role Flag
@@ -86,6 +87,14 @@ export async function setOrganisationRole(
       code: "UPDATE_FAILED",
     };
   }
+
+  await logAudit({
+    action: "organisation.set_role",
+    resourceType: "organisation",
+    resourceId: id,
+    organisationId: id,
+    metadata: { role, enabled },
+  });
 
   return {
     success: true,

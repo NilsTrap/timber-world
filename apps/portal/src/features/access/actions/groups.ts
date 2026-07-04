@@ -36,6 +36,7 @@ import {
   saveGroupRights as saveGroupRightsSvc,
   updateUserAccessGroups as updateUserAccessGroupsSvc,
 } from "../services/groupsWrite";
+import { logAudit } from "@/features/audit/logAudit";
 
 async function requireSuperAdmin(): Promise<
   { ok: true; client: any } | { ok: false; error: string; code: string }
@@ -105,7 +106,16 @@ export async function createAccessGroup(input: {
   const g = await requireSuperAdmin();
   if (!g.ok) return { success: false, error: g.error, code: g.code };
   // Delegate to the shared write service (same source the MCP surface calls).
-  return createAccessGroupSvc(g.client, input);
+  const res = await createAccessGroupSvc(g.client, input);
+  if (res.success) {
+    await logAudit({
+      action: "access_group.create",
+      resourceType: "access_group",
+      resourceId: res.data.id,
+      metadata: { name: input.name },
+    });
+  }
+  return res;
 }
 
 export async function updateAccessGroup(
@@ -114,7 +124,16 @@ export async function updateAccessGroup(
 ): Promise<ActionResult<{ id: string }>> {
   const g = await requireSuperAdmin();
   if (!g.ok) return { success: false, error: g.error, code: g.code };
-  return updateAccessGroupSvc(g.client, groupId, input);
+  const res = await updateAccessGroupSvc(g.client, groupId, input);
+  if (res.success) {
+    await logAudit({
+      action: "access_group.update",
+      resourceType: "access_group",
+      resourceId: groupId,
+      metadata: { fields: Object.keys(input) },
+    });
+  }
+  return res;
 }
 
 export async function deleteAccessGroup(groupId: string): Promise<ActionResult<{ id: string }>> {
@@ -123,7 +142,15 @@ export async function deleteAccessGroup(groupId: string): Promise<ActionResult<{
   // Bust members' caches BEFORE the cascade removes them (harmless if the delete
   // is then refused for a system group — that just recomputes to identical values).
   await bustGroupMembers(g.client, groupId);
-  return deleteAccessGroupSvc(g.client, groupId);
+  const res = await deleteAccessGroupSvc(g.client, groupId);
+  if (res.success) {
+    await logAudit({
+      action: "access_group.delete",
+      resourceType: "access_group",
+      resourceId: groupId,
+    });
+  }
+  return res;
 }
 
 /** Full-replace of a group's rights (the editor saves the whole matrix). */
@@ -135,7 +162,19 @@ export async function saveGroupRights(
   if (!g.ok) return { success: false, error: g.error, code: g.code };
   const res = await saveGroupRightsSvc(g.client, groupId, input);
   // Bust member caches on success (rights changed → effective permissions changed).
-  if (res.success) await bustGroupMembers(g.client, groupId);
+  if (res.success) {
+    await bustGroupMembers(g.client, groupId);
+    await logAudit({
+      action: "access_group.save_rights",
+      resourceType: "access_group",
+      resourceId: groupId,
+      metadata: {
+        modules: input.modules?.length ?? 0,
+        actions: input.actions?.length ?? 0,
+        scope: input.scope,
+      },
+    });
+  }
   return res;
 }
 
@@ -161,6 +200,13 @@ export async function updateUserAccessGroups(
   if (res.success) {
     updateTag(`user-modules:${userId}:${organisationId}`);
     updateTag(`access-profile:${userId}:${organisationId}`);
+    await logAudit({
+      action: "user.set_access_groups",
+      resourceType: "portal_user",
+      resourceId: userId,
+      organisationId,
+      metadata: { groupCount: groupIds.length },
+    });
   }
   return res;
 }

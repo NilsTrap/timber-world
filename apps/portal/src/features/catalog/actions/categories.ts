@@ -9,6 +9,7 @@ import type {
   CatalogCategory,
   SaveCategoryInput,
 } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 function toCategory(row: any): CatalogCategory {
   return {
@@ -149,6 +150,12 @@ export async function saveCategory(input: SaveCategoryInput): Promise<ActionResu
 
   await recomputeEntityCurrencies("category", result.data.id, payload.default_price_eur_cents);
   revalidatePath("/admin/catalog");
+  await logAudit({
+    action: input.id ? "catalog_category.update" : "catalog_category.create",
+    resourceType: "catalog_category",
+    resourceId: result.data.id as string,
+    metadata: { slug: input.slug, name: input.name },
+  });
   return { success: true, data: toCategory(result.data) };
 }
 
@@ -297,5 +304,11 @@ export async function deleteCategory(id: string): Promise<ActionResult<null>> {
   }
 
   revalidatePath("/admin/catalog");
+  await logAudit({
+    action: "catalog_category.delete",
+    resourceType: "catalog_category",
+    resourceId: id,
+    metadata: { deletedProducts: productIds.length },
+  });
   return { success: true, data: null };
 }

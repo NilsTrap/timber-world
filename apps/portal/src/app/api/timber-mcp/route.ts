@@ -28,6 +28,7 @@ import { listOrgs, getOrg, createOrg, updateOrg } from "@/features/organisations
 import { listAccessGroups, getAccessGroupDetail, getUserAccessGroups, listPortalUsers } from "@/features/access/services/groupsRead";
 import { createAccessGroup, updateAccessGroup, deleteAccessGroup, saveGroupRights, updateUserAccessGroups } from "@/features/access/services/groupsWrite";
 import type { GroupRightsInput } from "@/features/access/types";
+import { logAudit } from "@/features/audit/logAudit";
 import { TOOLS } from "./tools";
 
 export const dynamic = "force-dynamic";
@@ -82,7 +83,28 @@ async function callTool(name: string, args: any, role: Role) {
   }
 
   const db = createAdminClient();
+  const result = await dispatchTool(name, args, db);
 
+  // Q5.2 · fire-and-forget SERVICE-tagged audit for every successful mutation
+  // tool (reads are not audited). The tool name is the action; args are recorded
+  // compacted (arrays/objects summarized). MCP args never carry secrets. This
+  // never blocks or fails the tool call.
+  if (!def.readOnly && !result.isError) {
+    void logAudit(
+      {
+        action: `mcp.${name}`,
+        resourceType: "mcp_tool",
+        resourceId: mcpResourceId(args),
+        metadata: mcpAuditMeta(args),
+      },
+      SERVICE_ACTOR,
+    );
+  }
+  return result;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function dispatchTool(name: string, args: any, db: any) {
   switch (name) {
     case "timber_get_attribute_definitions": {
       const res = await listDefinitions(db);
@@ -470,6 +492,36 @@ async function callTool(name: string, args: any, role: Role) {
     default:
       return toolErr(`Unhandled tool: ${name}`);
   }
+}
+
+/** Q5.2 · best-effort resource id for an audited MCP mutation (the primary
+ *  entity the tool acted on). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mcpResourceId(args: any): string | null {
+  return (
+    args?.deal_id ??
+    args?.org_id ??
+    args?.group_id ??
+    args?.variant_id ??
+    args?.user_id ??
+    args?.spine_id ??
+    null
+  );
+}
+
+/** Q5.2 · compact, scalar-only snapshot of the MCP args for the audit metadata —
+ *  arrays/objects are summarized so the row stays small (MCP args never carry
+ *  secrets). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mcpAuditMeta(args: any): Record<string, unknown> | null {
+  if (!args || typeof args !== "object") return null;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(args)) {
+    if (Array.isArray(v)) out[k] = `[${v.length} item(s)]`;
+    else if (v && typeof v === "object") out[k] = "{…}";
+    else out[k] = v as unknown;
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 /**

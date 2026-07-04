@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 /**
  * Reset User Password
@@ -120,6 +121,15 @@ export async function resetUserPassword(
       updated_at: new Date().toISOString(),
     })
     .eq("id", userId);
+
+  // Audit the EVENT only — no password/secret is involved (this sends a reset link).
+  await logAudit({
+    action: "portal_user.password_reset_sent",
+    resourceType: "portal_user",
+    resourceId: userId,
+    organisationId,
+    metadata: { email: portalUser.email, method: "reset_email" },
+  });
 
   return {
     success: true,

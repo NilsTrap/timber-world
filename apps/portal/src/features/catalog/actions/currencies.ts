@@ -5,6 +5,7 @@ import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { applyCharmRounding } from "../charmRounding";
 import type { ActionResult, CatalogCurrency, RoundingRule } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 const ECB_DAILY_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
 
@@ -79,6 +80,12 @@ export async function saveCurrency(input: SaveCurrencyInput): Promise<ActionResu
 
   if (error) return { success: false, error: error.message };
   revalidatePath("/admin/settings/currencies");
+  await logAudit({
+    action: "catalog_currency.save",
+    resourceType: "catalog_currency",
+    resourceId: code,
+    metadata: { name: input.name, isActive: input.isActive ?? true },
+  });
   return { success: true, data: toCurrency(data) };
 }
 
@@ -98,6 +105,11 @@ export async function deleteCurrency(code: string): Promise<ActionResult<null>> 
   const { error } = await (supabase as any).from("catalog_currencies").delete().eq("code", code);
   if (error) return { success: false, error: error.message };
   revalidatePath("/admin/settings/currencies");
+  await logAudit({
+    action: "catalog_currency.delete",
+    resourceType: "catalog_currency",
+    resourceId: code,
+  });
   return { success: true, data: null };
 }
 
@@ -182,6 +194,12 @@ export async function updateCurrencyPrices(
   }
 
   revalidatePath("/admin/catalog");
+  await logAudit({
+    action: "catalog_currency.update_prices",
+    resourceType: "catalog_currency",
+    resourceId: code,
+    metadata: { rate, updated: rows.length, source: "ecb" },
+  });
   return { success: true, data: { rate, updated: rows.length, fetchedAt } };
 }
 

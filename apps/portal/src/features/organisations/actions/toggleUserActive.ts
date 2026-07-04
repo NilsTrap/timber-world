@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { OrganisationUser, ActionResult } from "../types";
 import { isValidUUID } from "../types";
+import { logAudit } from "@/features/audit/logAudit";
 
 /**
  * Toggle User Active Status
@@ -110,6 +111,14 @@ export async function toggleUserActive(
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
   };
+
+  await logAudit({
+    action: isActive ? "portal_user.activate" : "portal_user.deactivate",
+    resourceType: "portal_user",
+    resourceId: userId,
+    organisationId: organisationId || null,
+    metadata: { isActive: user.isActive, email: user.email },
+  });
 
   return {
     success: true,
