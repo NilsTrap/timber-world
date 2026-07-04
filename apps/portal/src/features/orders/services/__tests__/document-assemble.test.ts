@@ -45,8 +45,12 @@ eq("lineTotal nothing", lineTotalCents({ lineTotalCents: null, unitPriceCents: n
 
 // toDocLine
 eq("toDocLine desc + dims", toDocLine(li({ productName: "Board", woodSpecies: "Oak", processing: "Planed", thickness: "20", width: "100", length: "2000" })),
-  { lineNo: 1, description: "Board, Oak, Planed", dimensions: "20 × 100 × 2000", pieces: null, volumeM3: null, unit: "m3", unitPriceCents: null, lineTotalCents: 0 });
+  { lineNo: 1, description: "Board, Oak, Planed", dimensions: "20 × 100 × 2000", pieces: null, volumeM3: null, unit: "m3", unitPriceCents: null, lineTotalCents: 0, attr: {} });
 eq("toDocLine empty desc → em dash", toDocLine(li({})).description, "—");
+// S2 · toDocLine copies pre-fetched custom catalog attributes through (pure passthrough).
+eq("toDocLine copies attr", toDocLine({ ...li({ productName: "Beam" }), attr: { glulam_grade: "GL24h", _packaging: "Bundle" } }).attr,
+  { glulam_grade: "GL24h", _packaging: "Bundle" });
+eq("toDocLine defaults attr to {}", toDocLine(li({})).attr, {});
 
 // defaultSideFor / refLabel
 eq("defaultSide purchase", defaultSideFor("purchase_spec"), "buy");
@@ -117,6 +121,23 @@ const withRefs = buildDocumentData({
 });
 eq("customerOrderNo scalar populated", withRefs.customerOrderNo, "CUST-777");
 eq("supplierOrderNo scalar populated", withRefs.supplierOrderNo, "SUP-999");
+
+// ── S2 · issuer + spineCode threading (default null; pass-through when supplied) ──
+eq("issuer defaults null (no input)", data.issuer, null);
+eq("spineCode defaults null (no input)", data.spineCode, null);
+const enriched = buildDocumentData({
+  docType: "sales_spec", side: "sell", docNumber: "Spec No 3", docDate: "2026-07-05T00:00:00Z",
+  dealCode: "TIMSOM003", currency: "EUR",
+  seller: { name: "Timber Intl", country: "LV" }, buyer: { name: "DDC", country: "GB" },
+  incoterms: null, incotermsPlace: null, advancePct: null, paymentTerms: null,
+  deliveryTerms: null, deliveryDeadline: null, notes: null, externalRefs: [],
+  issuer: { name: "Anna House", email: "anna@timber.example", phone: "+371 2000" },
+  spineCode: "SP-042",
+  lineItems: [{ ...li({ unit: "m3", volumeM3: 1, unitPriceCents: 10000 }), attr: { glulam_grade: "GL28c" } }],
+});
+eq("issuer passes through", enriched.issuer, { name: "Anna House", email: "anna@timber.example", phone: "+371 2000" });
+eq("spineCode passes through", enriched.spineCode, "SP-042");
+eq("line attr reaches DocLineItem", enriched.lineItems[0]!.attr, { glulam_grade: "GL28c" });
 ok("party refs + custom render, 'other' dropped", withRefs.externalRefs.length === 3
   && withRefs.externalRefs.some((r) => r.label === CUSTOMER_ORDER_NO_LABEL && r.value === "CUST-777")
   && withRefs.externalRefs.some((r) => r.label === SUPPLIER_ORDER_NO_LABEL && r.value === "SUP-999")

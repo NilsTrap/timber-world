@@ -95,6 +95,9 @@ const sample: DocumentData = {
   ],
   customerOrderNo: "CUST-777",
   supplierOrderNo: "SUP-999",
+  // S2 · house-only issuer + spine code (render through as {{issuer.name}} / {{spineCode}}).
+  issuer: { name: "Anna House", email: "anna@timber.example", phone: "+371 2000 0000" },
+  spineCode: "SP-042",
   incoterms: "FCA Riga",
   paymentTerms: "30 days",
   deliveryTerms: "By truck",
@@ -110,6 +113,8 @@ const sample: DocumentData = {
       unit: "m3",
       unitPriceCents: 65000,
       lineTotalCents: 52650,
+      // S2 · custom catalog attribute reachable via a dynamic {{lookup attr "..."}} column.
+      attr: { glulam_grade: "GL24h" },
     },
     {
       lineNo: 2,
@@ -120,6 +125,7 @@ const sample: DocumentData = {
       unit: "m3",
       unitPriceCents: 30000,
       lineTotalCents: 45000,
+      attr: {},
     },
   ],
   totals: {
@@ -138,7 +144,9 @@ const tpl = `<h1>{{docTitle}} — {{docNumber}}</h1>
 <p>Date: {{fmtDate docDate}}</p>
 <p>Seller: {{seller.name}} (VAT {{seller.vatNo}})</p>
 <p>Buyer: {{buyer.name}} (VAT {{buyer.vatNo}})</p>
-<table>{{#each lineItems}}<tr><td>{{lineNo}}</td><td>{{description}}</td><td>{{dimensions}}</td><td>{{pieces}}</td><td>{{fmtM3 volumeM3}}</td><td>{{money unitPriceCents}}</td><td>{{money lineTotalCents}}</td></tr>{{/each}}</table>
+<table>{{#each lineItems}}<tr><td>{{lineNo}}</td><td>{{description}}</td><td>{{dimensions}}</td><td>{{lookup attr "glulam_grade"}}</td><td>{{pieces}}</td><td>{{fmtM3 volumeM3}}</td><td>{{money unitPriceCents}}</td><td>{{money lineTotalCents}}</td></tr>{{/each}}</table>
+<p>Issuer: {{issuer.name}} ({{issuer.email}})</p>
+<p>Spine: {{spineCode}}</p>
 <p>Subtotal: {{money totals.subtotalCents}} {{currency}}</p>
 <p>VAT {{totals.vatRate}}%: {{money totals.vatCents}}</p>
 <p>Total: {{moneyCur totals.totalCents}}</p>
@@ -162,6 +170,11 @@ truthy("pct helper renders advance", out.includes("Advance: 30%"));
 // N3 · party order numbers as dedicated merge fields.
 truthy("customer order no merge field", out.includes("Customer order no: CUST-777"));
 truthy("supplier order no merge field", out.includes("Supplier order no: SUP-999"));
+// S2 · the twin-track payoff — new scalar tokens + a dynamic custom-attr column render through.
+truthy("issuer.name merge field", out.includes("Issuer: Anna House (anna@timber.example)"));
+truthy("spineCode merge field", out.includes("Spine: SP-042"));
+truthy("dynamic attr column renders custom catalog value", out.includes("<td>GL24h</td>"));
+truthy("empty attr column renders empty (no 'undefined')", out.includes("<td></td>"));
 // null fields render empty, never the literal "undefined"
 truthy("null buyer VAT renders empty", out.includes("Buyer: DDC Ltd (VAT )"));
 truthy("null notes renders empty", out.includes("Notes: </p>"));

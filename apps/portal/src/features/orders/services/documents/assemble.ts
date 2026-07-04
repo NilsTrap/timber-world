@@ -16,6 +16,15 @@ import {
 import type { DocumentData, DocLineItem, PartyCard } from "./types";
 
 /**
+ * S2 · An order line carrying its PRE-FETCHED custom catalog attributes. The DB
+ * assembler (orderDocuments) reads the catalog field values and attaches `attr`
+ * before calling this pure module — the assembler here only copies it through, so
+ * assemble.ts stays PURE (no db/admin/supabase imports). `attr` never pollutes the
+ * base OrderLineItem (used for writes).
+ */
+export type AssemblyLine = OrderLineItem & { attr?: Record<string, string> };
+
+/**
  * Compute a line's total in cents: prefer an explicit total; else unit price ×
  * the unit's quantity. If the expected quantity is missing/unparseable, the line
  * contributes 0 — never a phantom quantity-of-1, which would silently understate
@@ -35,7 +44,7 @@ export function lineTotalCents(li: Pick<OrderLineItem, "lineTotalCents" | "unitP
 }
 
 /** Assemble a line item's human description + dimensions string. */
-export function toDocLine(li: OrderLineItem): DocLineItem {
+export function toDocLine(li: AssemblyLine): DocLineItem {
   const descParts = [li.productName, li.woodSpecies, li.processing, li.quality, li.gradeNote].filter(Boolean);
   const dims = [li.thickness, li.width, li.length].filter(Boolean).join(" × ");
   return {
@@ -47,6 +56,8 @@ export function toDocLine(li: OrderLineItem): DocLineItem {
     unit: li.unit,
     unitPriceCents: li.unitPriceCents,
     lineTotalCents: lineTotalCents(li),
+    // S2 · copy the pre-fetched custom catalog attributes through (assembler stays pure).
+    attr: li.attr ?? {},
   };
 }
 
@@ -81,9 +92,15 @@ export interface BuildDocumentDataInput {
   deliveryDeadline: string | null;
   notes: string | null;
   externalRefs: OrderExternalRef[];
+  /** S2 · the house user who generated the document (house-only; null otherwise).
+   *  Resolved by the DB assembler; optional here so pure fixtures/tests omit it. */
+  issuer?: { name: string; email: string | null; phone: string | null } | null;
+  /** S2 · the deal's spine chain code (SP-###); optional here (resolved by the caller). */
+  spineCode?: string | null;
   /** The deal's OWN line items (A4 §2.1/§8.2 — a document assembles from the deal
-   *  that owns the lines; `side` no longer subsets them). */
-  lineItems: OrderLineItem[];
+   *  that owns the lines; `side` no longer subsets them). Each line may carry a
+   *  pre-fetched `attr` map (custom catalog field values) — copied straight through. */
+  lineItems: AssemblyLine[];
 }
 
 /** Pure: build the render-ready DocumentData (VAT from the parties' countries). */
@@ -122,6 +139,9 @@ export function buildDocumentData(input: BuildDocumentDataInput): DocumentData {
       .map((r) => ({ label: r.label || refLabel(r.refType), value: r.refValue })),
     customerOrderNo: refValueOf(CUSTOMER_ORDER_NO_REF_TYPE),
     supplierOrderNo: refValueOf(SUPPLIER_ORDER_NO_REF_TYPE),
+    // S2 · house-only issuer + spine code (resolved by the DB assembler; default null).
+    issuer: input.issuer ?? null,
+    spineCode: input.spineCode ?? null,
     incoterms: input.incoterms ? `${input.incoterms}${input.incotermsPlace ? ` ${input.incotermsPlace}` : ""}` : null,
     paymentTerms: input.paymentTerms,
     deliveryTerms: input.deliveryTerms,

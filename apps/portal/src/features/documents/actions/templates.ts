@@ -396,6 +396,9 @@ function buildSampleDocumentData(docType: DocType): DocumentData {
     ],
     customerOrderNo: "PO-2026-0042",
     supplierOrderNo: "SO-88120",
+    // S2 · sample house issuer + spine code so the editor preview shows these merge fields.
+    issuer: { name: "A. Berzina", email: "sales@timberworld.lv", phone: "+371 2000 0000" },
+    spineCode: "SP-001",
     incoterms: "FCA Riga (Incoterms 2020)",
     paymentTerms: "30% advance, balance before loading",
     deliveryTerms: "By truck, full load",
@@ -411,6 +414,7 @@ function buildSampleDocumentData(docType: DocType): DocumentData {
         unit: "m3",
         unitPriceCents: 68000,
         lineTotalCents: 66096,
+        attr: { grade: "AB", coating: "UV-oiled" },
       },
       {
         lineNo: 2,
@@ -421,6 +425,7 @@ function buildSampleDocumentData(docType: DocType): DocumentData {
         unit: "m3",
         unitPriceCents: 32000,
         lineTotalCents: 38400,
+        attr: { grade: "C" },
       },
       {
         lineNo: 3,
@@ -431,6 +436,7 @@ function buildSampleDocumentData(docType: DocType): DocumentData {
         unit: "m3",
         unitPriceCents: 45000,
         lineTotalCents: 63270,
+        attr: {},
       },
     ],
     totals: {
