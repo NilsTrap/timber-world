@@ -362,9 +362,20 @@ export async function addUserToGroup(
       .eq("user_id", userId)
       .eq("is_active", true);
     const list = (mems ?? []) as Array<{ organization_id: string; is_primary: boolean }>;
-    if (list.length === 0) return { success: false, error: "User has no active organisation membership", code: "NO_ORG" };
     if (list.length > 1) return { success: false, error: "User belongs to several organisations — assign the group from that user's People row instead", code: "MULTI_ORG" };
-    orgId = (list.find((m) => m.is_primary) ?? list[0])!.organization_id;
+    if (list.length === 1) {
+      orgId = list[0]!.organization_id;
+    } else {
+      // No membership row — fall back to the user's home org (portal_users.organisation_id).
+      // Some users are linked to their org this way rather than via organization_memberships.
+      const { data: pu } = await g.client
+        .from("portal_users")
+        .select("organisation_id")
+        .eq("id", userId)
+        .maybeSingle();
+      orgId = (pu?.organisation_id as string | null) ?? null;
+      if (!orgId) return { success: false, error: "User has no organisation — cannot assign a group", code: "NO_ORG" };
+    }
   }
   return setUserGroupMembership(userId, orgId, groupId, true);
 }
