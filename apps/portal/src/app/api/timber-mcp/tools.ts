@@ -26,6 +26,7 @@ export const LIFECYCLE_STEPS = [
   "spine",        // query the spine: chain of deals + rolled-up status + lineage (E7)
   "gates",        // read + advance a deal's lifecycle stage through its gates (E7)
   "access",       // read + write the access-group / user management surface (E7 read + J3 write)
+  "catalog",      // read catalog products/variants + read/write variant stock (J4)
 ] as const;
 
 export type LifecycleStep = (typeof LIFECYCLE_STEPS)[number];
@@ -77,6 +78,59 @@ export const TOOLS: ToolDef[] = [
         attribute_key: { type: "string", description: "Attribute key, e.g. 'wood_species' or 'quality' (from timber_get_attribute_definitions)." },
       },
       required: ["attribute_key"],
+    },
+  },
+  {
+    name: "timber_list_catalog_products",
+    description:
+      "List a product category's products, each with its variants and per-variant prices (EUR cents) + dimensions + stock unit. Identify the category by category_id (UUID) or category_slug (e.g. 'firewood', 'boards', 'stairs', 'solid-wood-panels'). Read-only. Use timber_get_catalog_variant for one variant's packaging + stock detail.",
+    readOnly: true,
+    lifecycle: "catalog",
+    inputSchema: {
+      type: "object",
+      properties: {
+        category_id: { type: "string", description: "Category UUID. Provide this OR category_slug." },
+        category_slug: { type: "string", description: "Category slug, e.g. 'firewood', 'boards'. Resolved to the category id." },
+      },
+    },
+  },
+  {
+    name: "timber_get_catalog_variant",
+    description:
+      "Get one catalog variant's full detail: dimensions, price (EUR cents), its owning product, the packaging forms assigned to it (the ONLY forms stock may be held in), and its current stock (per-form quantities + total pieces). Read-only.",
+    readOnly: true,
+    lifecycle: "catalog",
+    inputSchema: {
+      type: "object",
+      properties: { variant_id: { type: "string", description: "Catalog variant UUID." } },
+      required: ["variant_id"],
+    },
+  },
+  {
+    name: "timber_get_variant_stock",
+    description: "Get a catalog variant's stock: the quantity held in each packaging form + the computed total pieces. Read-only.",
+    readOnly: true,
+    lifecycle: "catalog",
+    inputSchema: {
+      type: "object",
+      properties: { variant_id: { type: "string", description: "Catalog variant UUID." } },
+      required: ["variant_id"],
+    },
+  },
+  {
+    name: "timber_set_variant_stock",
+    description:
+      "Set a catalog variant's stock quantity for ONE packaging form (create or update that line). ENFORCES the packaging-form guard: the form must already be assigned to the variant (see timber_get_catalog_variant.packaging) — an undefined form is rejected with the same error the UI shows. Quantity is the number of packages of that form and must be ≥ 0. FULL-token only.",
+    readOnly: false,
+    lifecycle: "catalog",
+    inputSchema: {
+      type: "object",
+      properties: {
+        variant_id: { type: "string", description: "Catalog variant UUID." },
+        packaging_type_id: { type: "string", description: "Packaging form (catalog_packaging_types) UUID — must be a form assigned to this variant." },
+        quantity: { type: "number", description: "Number of packages of that form to record (≥ 0). Replaces the current quantity for that (variant, form)." },
+      },
+      required: ["variant_id", "packaging_type_id", "quantity"],
     },
   },
   {

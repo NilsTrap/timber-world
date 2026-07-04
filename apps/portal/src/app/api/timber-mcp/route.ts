@@ -22,6 +22,8 @@ import { getSpine, listSpineDeals, getSpineLineage } from "@/features/orders/ser
 import type { SpineProduct } from "@/features/orders/services/spines";
 import { evaluateAdvance, advanceDeal, recordGateConfirmation, cancelDeal, listGateConfigs } from "@/features/orders/services/lifecycle";
 import { listDefinitions, getOptions, listCategoryDefinitions } from "@/features/catalog/services/attributes";
+import { getVariantStock, saveVariantStockEntry } from "@/features/catalog/services/stock";
+import { listCatalogProducts, getCatalogVariant } from "@/features/catalog/services/products";
 import { listOrgs, getOrg, createOrg, updateOrg } from "@/features/organisations/services/orgService";
 import { listAccessGroups, getAccessGroupDetail, getUserAccessGroups, listPortalUsers } from "@/features/access/services/groupsRead";
 import { TOOLS } from "./tools";
@@ -85,28 +87,40 @@ async function callTool(name: string, args: any, role: Role) {
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     case "timber_get_category_fields": {
-      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      // Resolve the category by explicit slug, or by category_id when it isn't a UUID.
-      const slug: string | null =
-        args?.category_slug ?? (args?.category_id && !UUID_RE.test(args.category_id) ? args.category_id : null);
-      let categoryId: string | null = args?.category_id && UUID_RE.test(args.category_id) ? args.category_id : null;
-      if (!categoryId && slug) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: cat } = await (db as any)
-          .from("catalog_categories")
-          .select("id")
-          .eq("slug", slug)
-          .maybeSingle();
-        if (!cat) return toolErr(`No category found for slug "${slug}"`);
-        categoryId = cat.id as string;
-      }
-      if (!categoryId) return toolErr("category_id (UUID) or category_slug is required");
-      const res = await listCategoryDefinitions(db, categoryId);
+      const categoryId = await resolveCategoryId(db, args);
+      if (!categoryId.ok) return toolErr(categoryId.error);
+      const res = await listCategoryDefinitions(db, categoryId.id);
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     case "timber_list_attribute_options": {
       if (!args?.attribute_key) return toolErr("attribute_key is required");
       const res = await getOptions(db, args.attribute_key);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_list_catalog_products": {
+      const categoryId = await resolveCategoryId(db, args);
+      if (!categoryId.ok) return toolErr(categoryId.error);
+      const res = await listCatalogProducts(db, categoryId.id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_get_catalog_variant": {
+      if (!args?.variant_id) return toolErr("variant_id is required");
+      const res = await getCatalogVariant(db, args.variant_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_get_variant_stock": {
+      if (!args?.variant_id) return toolErr("variant_id is required");
+      const res = await getVariantStock(db, args.variant_id);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_set_variant_stock": {
+      if (!args?.variant_id || !args?.packaging_type_id) return toolErr("variant_id and packaging_type_id are required");
+      if (typeof args?.quantity !== "number") return toolErr("quantity (number) is required");
+      const res = await saveVariantStockEntry(db, {
+        variantId: args.variant_id,
+        packagingTypeId: args.packaging_type_id,
+        quantity: args.quantity,
+      });
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     case "timber_list_orgs": {
@@ -386,6 +400,25 @@ async function callTool(name: string, args: any, role: Role) {
     default:
       return toolErr(`Unhandled tool: ${name}`);
   }
+}
+
+/**
+ * Resolve a catalog category id from either a category_id (UUID) or a
+ * category_slug arg (shared by timber_get_category_fields + list_catalog_products).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveCategoryId(db: any, args: any): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const slug: string | null =
+    args?.category_slug ?? (args?.category_id && !UUID_RE.test(args.category_id) ? args.category_id : null);
+  let categoryId: string | null = args?.category_id && UUID_RE.test(args.category_id) ? args.category_id : null;
+  if (!categoryId && slug) {
+    const { data: cat } = await db.from("catalog_categories").select("id").eq("slug", slug).maybeSingle();
+    if (!cat) return { ok: false, error: `No category found for slug "${slug}"` };
+    categoryId = cat.id as string;
+  }
+  if (!categoryId) return { ok: false, error: "category_id (UUID) or category_slug is required" };
+  return { ok: true, id: categoryId };
 }
 
 /**
