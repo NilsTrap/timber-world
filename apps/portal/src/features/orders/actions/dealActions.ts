@@ -10,8 +10,9 @@ import { getSession } from "@/lib/auth";
 import { getAccessProfile } from "@/lib/access";
 import type { AccessProfile } from "@/lib/access/types";
 import type { ActionResult } from "../types";
-import type { DealSide, DocType, OrderLineItem, OrderExternalRef } from "../services/dealModel";
+import type { DealSide, DocType, OrderLineItem, OrderExternalRef, DealFieldsPatch } from "../services/dealModel";
 import { projectDealView, resolveFieldAccess } from "../services/dealFields";
+import { parseAdvanceFromPaymentTerm } from "../services/paymentTerms";
 import { getOrderDeal, updateLineItemAmounts, updateDealFields, setMarginApproval, setExternalRefs, resolveViewerDirection, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
 import { logOrderActivity } from "./logOrderActivity";
 import { generateDocument, regenerateDocument, getDocumentUrl, deleteDocument, uploadSignedDocument, getSignedDocumentUrl, deleteSignedDocument, type GeneratedDocument } from "../services/orderDocuments";
@@ -219,10 +220,9 @@ export async function updateDealTerms(input: { orderId: string; terms: DealTerms
   }
   const t = input.terms;
   // Whitelist explicitly (never forward dealKind/etc. from the client).
-  const patch = {
+  const patch: DealFieldsPatch = {
     incoterms: t.incoterms,
     incotermsPlace: t.incotermsPlace,
-    advancePct: t.advancePct,
     paymentTerms: t.paymentTerms,
     deliveryTerms: t.deliveryTerms,
     deliveryDeadline: t.deliveryDeadline,
@@ -232,6 +232,15 @@ export async function updateDealTerms(input: { orderId: string; terms: DealTerms
     buyerSigneeName: t.buyerSigneeName,
     buyerSigneeRole: t.buyerSigneeRole,
   };
+  // R3: advance_pct is DERIVED authoritatively from the chosen payment term
+  // whenever payment_terms is part of THIS write. Per-field autosave (R4) sends one
+  // field at a time, so an incoterms-only save must leave advance_pct untouched. A
+  // direct advancePct write is still honoured for back-compat / MCP-style callers.
+  if (t.paymentTerms !== undefined) {
+    patch.advancePct = t.paymentTerms ? parseAdvanceFromPaymentTerm(t.paymentTerms) : null;
+  } else if (t.advancePct !== undefined) {
+    patch.advancePct = t.advancePct;
+  }
   const res = await updateDealFields(a.db, a.actor, input.orderId, patch);
   if (res.success) {
     await logOrderActivity(input.orderId, a.actor.portalUserId, "Deal terms updated", undefined, "list");

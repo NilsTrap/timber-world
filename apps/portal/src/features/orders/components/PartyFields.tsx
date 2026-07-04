@@ -12,19 +12,20 @@ export interface PartyValue {
 }
 
 /**
- * L2 · Shared Customer (buyer) + Trader (seller) picker, used by the new-deal
- * dialog and the draft Parties card. It mirrors the SERVER slot logic exactly
- * (resolvePartySlots / createOrder):
- *   - an admin picks both slots freely (Trader = any is_trader org);
- *   - a salesperson (bound to trader org[s]) picks the Customer, and the Trader
+ * L2 · Shared Buyer + Seller picker, used by the new-deal dialog and the draft
+ * Parties card. It mirrors the SERVER slot logic exactly (resolvePartySlots /
+ * createOrder):
+ *   - an admin picks both slots freely (Seller = any is_trader org);
+ *   - a salesperson (bound to trader org[s]) picks the Buyer, and the Seller
  *     is their own trader org — locked when they have exactly one, a dropdown of
  *     their traders when they have several;
- *   - a customer-side user picks the Trader (their own org is the forced buyer).
+ *   - a buyer-side user picks the Seller (their own org is the forced buyer).
  * The forced/locked slot is shown read-only — the server, not this component,
  * enforces it.
  *
- * The seller slot's user label is "Trader" (the house's own trading company);
- * the DB column stays seller_organisation_id (CLAUDE.md party naming).
+ * R1: the deal roles are ONE pair — BUYER (customer_organisation_id slot) and
+ * SELLER (seller_organisation_id slot, the house's own trading company). The DB
+ * columns stay customer_/seller_organisation_id (CLAUDE.md party naming).
  */
 export function PartyFields({
   partyOptions,
@@ -57,22 +58,22 @@ export function PartyFields({
 
   return (
     <div className="space-y-3">
-      {/* Customer (buyer) */}
+      {/* Buyer */}
       <div className="space-y-1.5">
-        <Label>Customer</Label>
+        <Label>Buyer</Label>
         {lockedCustomerName != null ? (
           <p className="text-sm rounded-md border bg-muted/40 px-3 py-2">{lockedCustomerName} <span className="text-muted-foreground">(set)</span></p>
         ) : pickCustomer ? (
           partyOptions.customerOptions.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No customers in your book yet — add one in CRM / Clients.
+              No buyers in your book yet — add one in CRM / Clients.
             </p>
           ) : (
             <Select
               value={value.customerOrganisationId ?? ""}
               onValueChange={(v) => onChange({ customerOrganisationId: v || null })}
             >
-              <SelectTrigger><SelectValue placeholder="Pick the customer" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Pick the buyer" /></SelectTrigger>
               <SelectContent>
                 {partyOptions.customerOptions.map((o) => (
                   <SelectItem key={o.id} value={o.id}>{o.code ? `${o.code} — ${o.name}` : o.name}</SelectItem>
@@ -85,22 +86,22 @@ export function PartyFields({
         )}
       </div>
 
-      {/* Trader (seller) */}
+      {/* Seller */}
       <div className="space-y-1.5">
-        <Label>Trader</Label>
+        <Label>Seller</Label>
         {lockedSellerName != null ? (
           <p className="text-sm rounded-md border bg-muted/40 px-3 py-2">{lockedSellerName} <span className="text-muted-foreground">(set)</span></p>
         ) : pickTrader ? (
           partyOptions.traderOptions.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No traders available yet.
+              No sellers available yet.
             </p>
           ) : (
             <Select
               value={value.sellerOrganisationId ?? ""}
               onValueChange={(v) => onChange({ sellerOrganisationId: v || null })}
             >
-              <SelectTrigger><SelectValue placeholder="Pick the trader" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Pick the seller" /></SelectTrigger>
               <SelectContent>
                 {partyOptions.traderOptions.map((o) => (
                   <SelectItem key={o.id} value={o.id}>{o.code ? `${o.code} — ${o.name}` : o.name}</SelectItem>

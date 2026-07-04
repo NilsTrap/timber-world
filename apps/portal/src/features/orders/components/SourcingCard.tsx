@@ -59,7 +59,7 @@ export function SourcingCard({
             )}
             {sourcing.supplierName && (
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">Supplier</dt>
+                <dt className="text-muted-foreground">Seller</dt>
                 <dd className="font-medium">{sourcing.supplierName}</dd>
               </div>
             )}
@@ -72,7 +72,7 @@ export function SourcingCard({
             </Button>
           )}
           <Button variant="ghost" size="sm" className="w-full" onClick={() => setMode("replace")}>
-            <RefreshCw className="h-3.5 w-3.5" /> Replace supplier
+            <RefreshCw className="h-3.5 w-3.5" /> Replace seller
           </Button>
         </>
       ) : (
@@ -142,7 +142,7 @@ function SupplierDialog({
   }, [defaultBuyerId, defaultBuyerName]);
 
   const confirm = useCallback(async () => {
-    if (!supplierId) { setErr("Pick a supplier."); return; }
+    if (!supplierId) { setErr("Pick a seller."); return; }
     setSubmitting(true);
     setErr(null);
     const buyer = buyerId || null;
@@ -151,7 +151,7 @@ function SupplierDialog({
       : await replaceSupplierAction({ orderId, newSupplierOrgId: supplierId, buyerOrgId: buyer });
     setSubmitting(false);
     if (!res.success) { setErr(res.error); toast.error(res.error); return; }
-    toast.success(mode === "start" ? "Next leg created" : "Supplier replaced");
+    toast.success(mode === "start" ? "Next leg created" : "Seller replaced");
     onClose();
     await onDone();
   }, [mode, orderId, supplierId, buyerId, onClose, onDone]);
@@ -160,18 +160,18 @@ function SupplierDialog({
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{mode === "start" ? "Create next leg" : "Replace supplier"}</DialogTitle>
+          <DialogTitle>{mode === "start" ? "Create next leg" : "Replace seller"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {mode === "replace" && (
             <p className="text-xs text-amber-600 dark:text-amber-500">
               The current sourcing deal will be <strong>cancelled</strong> and the spine flagged as
-              re-sourced (expected). A fresh buy deal is created for the new supplier with the sell
+              re-sourced (expected). A fresh buy deal is created for the new seller with the sell
               lines copied over. Only allowed before production.
             </p>
           )}
           <div className="space-y-1.5">
-            <Label>Supplier <span className="text-muted-foreground">(seller)</span></Label>
+            <Label>Seller</Label>
             {loading ? (
               <span className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading suppliers…
@@ -180,7 +180,7 @@ function SupplierDialog({
               <p className="text-sm text-muted-foreground">No suppliers in the book yet — add one in CRM → Suppliers.</p>
             ) : (
               <Select value={supplierId} onValueChange={setSupplierId}>
-                <SelectTrigger><SelectValue placeholder="Pick a supplier" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Pick a seller" /></SelectTrigger>
                 <SelectContent>
                   {options.map((o) => (
                     <SelectItem key={o.id} value={o.id}>{o.name}{o.code ? ` (${o.code})` : ""}</SelectItem>
@@ -192,7 +192,7 @@ function SupplierDialog({
           {/* L1 · buyer — defaults to this deal's seller (the trader) but editable. */}
           {!loading && buyerOptions.length > 0 && (
             <div className="space-y-1.5">
-              <Label>Buyer <span className="text-muted-foreground">(who buys from the supplier)</span></Label>
+              <Label>Buyer <span className="text-muted-foreground">(who buys from the seller)</span></Label>
               <Select value={buyerId} onValueChange={setBuyerId}>
                 <SelectTrigger><SelectValue placeholder="Pick the buyer" /></SelectTrigger>
                 <SelectContent>
@@ -209,7 +209,7 @@ function SupplierDialog({
           <Button variant="ghost" onClick={onClose} disabled={submitting}>Cancel</Button>
           <Button onClick={confirm} disabled={submitting || !supplierId}>
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {mode === "start" ? "Create next leg" : "Replace supplier"}
+            {mode === "start" ? "Create next leg" : "Replace seller"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -85,7 +85,7 @@ export function DealPartiesCard({
         <span className="font-medium">Parties not set</span>
       </div>
       <p className="text-xs text-muted-foreground">
-        This deal has no {customer.id ? "trader" : seller.id ? "customer" : "customer or trader"} yet.
+        This deal has no {customer.id ? "seller" : seller.id ? "buyer" : "buyer or seller"} yet.
         Set the parties to assign the deal its <span className="font-medium">SELLER-BUYER</span> code. Parties lock once the deal leaves Draft.
       </p>
       <Button size="sm" onClick={() => setOpen(true)}>
@@ -110,8 +110,8 @@ export function DealPartiesCard({
               partyOptions={partyOptions}
               value={value}
               onChange={(patch) => setValue((v) => ({ ...v, ...patch }))}
-              lockedCustomerName={customer.id ? customer.name ?? "Customer" : undefined}
-              lockedSellerName={seller.id ? seller.name ?? "Trader" : undefined}
+              lockedCustomerName={customer.id ? customer.name ?? "Buyer" : undefined}
+              lockedSellerName={seller.id ? seller.name ?? "Seller" : undefined}
             />
           ) : null}
 
