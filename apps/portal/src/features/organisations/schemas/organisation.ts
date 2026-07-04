@@ -68,3 +68,24 @@ export const updateOrgSchema = z.object({
 });
 
 export type UpdateOrgInput = z.infer<typeof updateOrgSchema>;
+
+/**
+ * Partial-update schema for the agent/MCP `updateOrg` service — every card field
+ * is optional (only provided fields change), plus the G3 signee defaults. `code`
+ * is intentionally ABSENT: the 3-char code is immutable (deal codes embed it), so
+ * the service never accepts a code change. Role flags + is_active are booleans
+ * validated at the call site (not string fields), so they are not modelled here.
+ */
+export const updateOrgCardSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Name is required")
+    .max(100, "Name must be 100 characters or less")
+    .trim()
+    .optional(),
+  ...companyCardFields,
+  defaultSigneeName: z.string().max(150).optional(),
+  defaultSigneeRole: z.string().max(100).optional(),
+});
+
+export type UpdateOrgCardInput = z.infer<typeof updateOrgCardSchema>;

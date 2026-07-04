@@ -6,14 +6,14 @@
  */
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
-import { createOrgSchema, type CreateOrgInput } from "../schemas";
+import { createOrgSchema, updateOrgCardSchema, type CreateOrgInput, type UpdateOrgCardInput } from "../schemas";
 import { crmSyncOrg } from "./oscarCrm";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DbClient = any;
 
 const ORG_SELECT =
-  "id, code, name, is_active, is_external, is_customer, is_manufacturer, is_producer, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, crm_org_id, crm_synced_at, created_at, updated_at";
+  "id, code, name, is_active, is_external, is_customer, is_manufacturer, is_producer, is_supplier, default_signee_name, default_signee_role, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, crm_org_id, crm_synced_at, created_at, updated_at";
 
 export interface OrgView {
   id: string;
@@ -24,6 +24,9 @@ export interface OrgView {
   isCustomer: boolean;
   isManufacturer: boolean;
   isProducer: boolean;
+  isSupplier: boolean;
+  defaultSigneeName: string | null;
+  defaultSigneeRole: string | null;
   legalAddress: string | null;
   vatNumber: string | null;
   registrationNumber: string | null;
@@ -56,6 +59,9 @@ function mapOrg(row: any): OrgView {
     isCustomer: row.is_customer ?? false,
     isManufacturer: row.is_manufacturer ?? false,
     isProducer: row.is_producer ?? false,
+    isSupplier: row.is_supplier ?? false,
+    defaultSigneeName: row.default_signee_name ?? null,
+    defaultSigneeRole: row.default_signee_role ?? null,
     legalAddress: row.legal_address ?? null,
     vatNumber: row.vat_number ?? null,
     registrationNumber: row.registration_number ?? null,
@@ -139,6 +145,80 @@ export async function createOrg(db: DbClient, input: CreateOrgInput): Promise<Ac
   const org = mapOrg(data);
   // Write-through to the Oscar CRM (best-effort); reflect the stored id in the return.
   const crmId = await crmSyncOrg(db, { ...cardFromOrg(org), crmOrgId: null });
+  if (crmId) org.crmOrgId = crmId;
+  return { success: true, data: org };
+}
+
+/** Role/status booleans settable on an org (the org-detail "Roles" toggle set). */
+export interface UpdateOrgFlags {
+  isCustomer?: boolean;
+  isManufacturer?: boolean;
+  isProducer?: boolean;
+  isSupplier?: boolean;
+  isActive?: boolean;
+}
+
+/**
+ * Partial-update an org (admin/service path) + best-effort CRM write-through —
+ * the `(db, …)` twin of the session-bound `updateOrganisation`/`setOrganisationRole`
+ * UI actions (one service, no logic duplication). Only PROVIDED fields change.
+ *
+ * - `code` is IMMUTABLE (deal codes embed it) → a code change is rejected.
+ * - Role flags reuse the same columns the Roles toggle writes (is_customer/
+ *   is_manufacturer/is_producer/is_supplier) + is_active — booleans, never
+ *   interpolated. `is_supplier` drives the Suppliers book.
+ * - Signee defaults (default_signee_name/role, G3) feed document signature blocks.
+ * - CRM mirror routes to crm_update_organization (the org's existing crm_org_id is
+ *   passed through) — consistent with createOrg's create mirror. is_supplier + the
+ *   signee fields stay Timber-local (not in the CRM card contract).
+ */
+export async function updateOrg(
+  db: DbClient,
+  id: string,
+  input: UpdateOrgCardInput & UpdateOrgFlags & { code?: string },
+): Promise<ActionResult<OrgView>> {
+  if (!isValidUUID(id)) return { success: false, error: "Invalid organisation id", code: "VALIDATION_ERROR" };
+  if (input.code !== undefined) {
+    return { success: false, error: "Organisation code is immutable (deal codes embed it) and cannot be changed", code: "VALIDATION_ERROR" };
+  }
+  // Validate the card/string fields; unknown keys (the flags) are stripped by Zod.
+  const parsed = updateOrgCardSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid input", code: "VALIDATION_ERROR" };
+  const card = parsed.data;
+
+  // Confirm the org exists (and grab its CRM id for the mirror routing).
+  const { data: existing, error: exErr } = await db.from("organisations").select("id, crm_org_id").eq("id", id).maybeSingle();
+  if (exErr) return { success: false, error: exErr.message, code: "FETCH_FAILED" };
+  if (!existing) return { success: false, error: "Organisation not found", code: "NOT_FOUND" };
+
+  const u: Record<string, unknown> = {};
+  if (card.name !== undefined) u.name = card.name;
+  if (card.legalAddress !== undefined) u.legal_address = nn(card.legalAddress);
+  if (card.vatNumber !== undefined) u.vat_number = nn(card.vatNumber);
+  if (card.registrationNumber !== undefined) u.registration_number = nn(card.registrationNumber);
+  if (card.country !== undefined) u.country = nn(card.country)?.toUpperCase() ?? null;
+  if (card.phone !== undefined) u.phone = nn(card.phone);
+  if (card.email !== undefined) u.email = nn(card.email);
+  if (card.website !== undefined) u.website = nn(card.website);
+  if (card.bankName !== undefined) u.bank_name = nn(card.bankName);
+  if (card.bankAccountNumber !== undefined) u.bank_account_number = nn(card.bankAccountNumber);
+  if (card.bankSwiftCode !== undefined) u.bank_swift_code = nn(card.bankSwiftCode);
+  if (card.defaultSigneeName !== undefined) u.default_signee_name = nn(card.defaultSigneeName);
+  if (card.defaultSigneeRole !== undefined) u.default_signee_role = nn(card.defaultSigneeRole);
+  if (typeof input.isCustomer === "boolean") u.is_customer = input.isCustomer;
+  if (typeof input.isManufacturer === "boolean") u.is_manufacturer = input.isManufacturer;
+  if (typeof input.isProducer === "boolean") u.is_producer = input.isProducer;
+  if (typeof input.isSupplier === "boolean") u.is_supplier = input.isSupplier;
+  if (typeof input.isActive === "boolean") u.is_active = input.isActive;
+
+  // Nothing to change → idempotent no-op, return the org as-is.
+  if (Object.keys(u).length === 0) return getOrg(db, id);
+
+  const { data, error } = await db.from("organisations").update(u).eq("id", id).select(ORG_SELECT).single();
+  if (error || !data) return { success: false, error: error?.message ?? "Failed to update organisation", code: "UPDATE_FAILED" };
+
+  const org = mapOrg(data);
+  const crmId = await crmSyncOrg(db, { ...cardFromOrg(org), crmOrgId: (existing.crm_org_id as string | null) ?? null });
   if (crmId) org.crmOrgId = crmId;
   return { success: true, data: org };
 }

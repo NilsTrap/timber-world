@@ -22,7 +22,7 @@ import { getSpine, listSpineDeals, getSpineLineage } from "@/features/orders/ser
 import type { SpineProduct } from "@/features/orders/services/spines";
 import { evaluateAdvance, advanceDeal, recordGateConfirmation, cancelDeal, listGateConfigs } from "@/features/orders/services/lifecycle";
 import { listDefinitions, getOptions, listCategoryDefinitions } from "@/features/catalog/services/attributes";
-import { listOrgs, getOrg, createOrg } from "@/features/organisations/services/orgService";
+import { listOrgs, getOrg, createOrg, updateOrg } from "@/features/organisations/services/orgService";
 import { listAccessGroups, getAccessGroupDetail, getUserAccessGroups, listPortalUsers } from "@/features/access/services/groupsRead";
 import { TOOLS } from "./tools";
 
@@ -133,6 +133,30 @@ async function callTool(name: string, args: any, role: Role) {
         bankName: args?.bank_name,
         bankAccountNumber: args?.bank_account_number,
         bankSwiftCode: args?.bank_swift_code,
+      });
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_update_org": {
+      if (!args?.org_id) return toolErr("org_id is required");
+      const res = await updateOrg(db, args.org_id, {
+        name: args?.name,
+        legalAddress: args?.legal_address,
+        vatNumber: args?.vat_number,
+        registrationNumber: args?.registration_number,
+        country: args?.country,
+        phone: args?.phone,
+        email: args?.email,
+        website: args?.website,
+        bankName: args?.bank_name,
+        bankAccountNumber: args?.bank_account_number,
+        bankSwiftCode: args?.bank_swift_code,
+        defaultSigneeName: args?.default_signee_name,
+        defaultSigneeRole: args?.default_signee_role,
+        isCustomer: args?.is_customer,
+        isManufacturer: args?.is_manufacturer,
+        isProducer: args?.is_producer,
+        isSupplier: args?.is_supplier,
+        isActive: args?.is_active,
       });
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
