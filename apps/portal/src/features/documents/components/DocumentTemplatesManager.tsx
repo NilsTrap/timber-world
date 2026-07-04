@@ -46,11 +46,15 @@ import {
   EmptyState,
   cn,
 } from "@timber/ui";
+import { AlertTriangle } from "lucide-react";
 import type { DocType } from "@/features/orders/services/dealModel";
 import { DOC_TYPES, DOC_TYPE_LABELS } from "@/features/orders/services/documents/registry";
 import type { ContentFormat, DocumentTemplateSummary, PageSettings, SlateValue } from "../types";
 import { compileSlateTemplate } from "../compiler/slate";
+import { validateTemplate } from "../compiler/validate";
+import { MERGE_FIELD_LABELS } from "../compiler/registry";
 import { slateStarterFor } from "../compiler/slate-starters";
+import { useCatalogTemplateFields } from "../plate/hooks/use-catalog-template-fields";
 import {
   listTemplates,
   getTemplate,
@@ -168,6 +172,9 @@ const PALETTE: PaletteGroup[] = [
   },
 ];
 
+/** Every valid scalar merge-field token — the S4 validator's known set (registry-derived). */
+const KNOWN_SCALAR_TOKENS = Object.keys(MERGE_FIELD_LABELS);
+
 /** Working copy of a template being edited (create when id is absent). */
 interface EditingTemplate {
   id?: string;
@@ -234,6 +241,24 @@ export function DocumentTemplatesManager() {
   const htmlRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const previewSeq = useRef(0);
+
+  // S4 · live token-validation. Catalog fields (for the attr-drift check) come from
+  // the shared cached loader; while loading we pass `null` so attr columns are not
+  // falsely flagged as deleted. The validator is PURE, so this doubles as both the
+  // on-load and on-edit pass — it re-runs whenever the doc or catalog set changes.
+  const { fields: catalogFields, loading: catalogLoading } = useCatalogTemplateFields();
+  const catalogFieldKeys = useMemo(
+    () => (catalogLoading ? null : catalogFields.map((f) => f.fieldKey)),
+    [catalogLoading, catalogFields]
+  );
+  const warnings = useMemo(() => {
+    if (!editing?.docJson) return [];
+    return validateTemplate({
+      docJson: editing.docJson,
+      knownScalarTokens: KNOWN_SCALAR_TOKENS,
+      catalogFieldKeys,
+    }).warnings;
+  }, [editing?.docJson, catalogFieldKeys]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -410,17 +435,24 @@ export function DocumentTemplatesManager() {
       toast.error(res.error);
       return;
     }
+    const saved = res.data.template;
     toast.success(editing.id ? "Template saved" : "Template created");
+    // Save always succeeds; unresolved placeholders are surfaced (never blocking).
+    if (res.data.warnings.length > 0) {
+      toast.warning(
+        `Saved with ${res.data.warnings.length} placeholder warning(s) — some fields won't resolve. See the banner.`
+      );
+    }
     setEditing({
-      id: res.data.id,
-      docType: res.data.docType,
-      name: res.data.name,
-      html: res.data.html,
-      isDefault: res.data.isDefault,
-      isActive: res.data.isActive,
-      contentFormat: res.data.contentFormat,
-      docJson: res.data.docJson,
-      pageSettings: res.data.pageSettings,
+      id: saved.id,
+      docType: saved.docType,
+      name: saved.name,
+      html: saved.html,
+      isDefault: saved.isDefault,
+      isActive: saved.isActive,
+      contentFormat: saved.contentFormat,
+      docJson: saved.docJson,
+      pageSettings: saved.pageSettings,
     });
     setDirty(false);
     await load();
@@ -557,6 +589,26 @@ export function DocumentTemplatesManager() {
               )}
             </div>
           </div>
+
+          {/* S4 · non-blocking placeholder-validation banner (never gates Save) */}
+          {warnings.length > 0 && (
+            <div className="rounded-md border border-amber-400/60 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200">
+              <p className="flex items-center gap-2 font-medium">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {warnings.length === 1
+                  ? "1 placeholder won't resolve"
+                  : `${warnings.length} placeholders won't resolve`}
+              </p>
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-6 text-xs">
+                {warnings.map((w) => (
+                  <li key={`${w.kind}:${w.token ?? w.field ?? ""}`}>{w.message}</li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-xs opacity-75">
+                You can still save — these fields will simply render empty until fixed.
+              </p>
+            </div>
+          )}
 
           {/* Editor (2/3) + live preview (1/3) */}
           {editing.docJson && (

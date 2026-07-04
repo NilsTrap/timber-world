@@ -14,8 +14,10 @@
 import type { DocType } from "@/features/orders/services/dealModel";
 import type { PageSettings, TipTapDoc } from "@/features/documents/compiler";
 import type { SlateNode } from "@/features/documents/compiler/slate";
+import type { TemplateWarning } from "@/features/documents/compiler/validate";
 
 export type { PageSettings, TipTapDoc };
+export type { TemplateWarning, TemplateWarningKind, TemplateValidation } from "@/features/documents/compiler/validate";
 
 /** A Plate (Slate) document value — the wysiwyg editable source of truth. */
 export type SlateValue = SlateNode[];
@@ -79,6 +81,17 @@ export interface SaveTemplateInput {
   contentFormat?: ContentFormat;
   docJson?: SlateValue | null;
   pageSettings?: PageSettings | null;
+}
+
+/**
+ * Result of a successful saveTemplate: the persisted row PLUS the S4 token-
+ * validation warnings from the server-side pass (run AFTER a successful compile).
+ * `warnings` is advisory only — the save always succeeds; an empty array means no
+ * unresolved placeholders were found.
+ */
+export interface SaveTemplateResult {
+  template: DocumentTemplate;
+  warnings: TemplateWarning[];
 }
 
 export interface ImportDocxResult {

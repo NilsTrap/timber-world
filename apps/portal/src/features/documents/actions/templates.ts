@@ -17,6 +17,8 @@ import type { DocumentData } from "@/features/orders/services/documents/types";
 import { DOC_TYPES, titleFor } from "@/features/orders/services/documents/registry";
 import type { DocType } from "@/features/orders/services/dealModel";
 import { compileSlateTemplate } from "@/features/documents/compiler/slate";
+import { validateTemplate } from "@/features/documents/compiler/validate";
+import { MERGE_FIELD_LABELS } from "@/features/documents/compiler/registry";
 import type {
   ActionResult,
   ContentFormat,
@@ -26,8 +28,31 @@ import type {
   PreviewTemplateInput,
   PreviewTemplateJsonInput,
   SaveTemplateInput,
+  SaveTemplateResult,
   SlateValue,
+  TemplateWarning,
 } from "../types";
+
+/** Every VALID scalar merge-field token (helpers included) — the validator's known set. */
+const KNOWN_SCALAR_TOKENS = Object.keys(MERGE_FIELD_LABELS);
+
+/**
+ * Read the current catalog field keys (for the S4 attr-drift check) via the
+ * service-role client already in hand. Returns `null` on any read failure so the
+ * validator SKIPS attr checks rather than flagging every attr column as deleted.
+ */
+async function readCatalogFieldKeys(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+): Promise<string[] | null> {
+  try {
+    const { data, error } = await admin.from("catalog_fields").select("field_key");
+    if (error || !Array.isArray(data)) return null;
+    return (data as Row[]).map((r) => r.field_key).filter((k): k is string => typeof k === "string");
+  } catch {
+    return null;
+  }
+}
 
 // DOC_TYPES is the D2 single-source registry list (imported above).
 
@@ -145,7 +170,7 @@ export async function getTemplate(id: string): Promise<ActionResult<DocumentTemp
  * templates of the same doc_type are unset first (the partial unique index
  * allows at most one default per type), then this row is written as default.
  */
-export async function saveTemplate(input: SaveTemplateInput): Promise<ActionResult<DocumentTemplate>> {
+export async function saveTemplate(input: SaveTemplateInput): Promise<ActionResult<SaveTemplateResult>> {
   const gate = await requireDocumentsAdmin();
   if (!gate.ok) return gate.result;
 
@@ -192,6 +217,20 @@ export async function saveTemplate(input: SaveTemplateInput): Promise<ActionResu
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
+  // S4 · token-validation pass — run AFTER a successful compile, WARN-only. This
+  // is the server-side trust boundary: the DB read for catalog keys happens here,
+  // the validator itself is pure. The save NEVER blocks on warnings — an author
+  // may legitimately save a work-in-progress with an unresolved placeholder. Only
+  // the visual (docJson) path is validated: raw-HTML "Advanced" templates carry
+  // loop-scope item tokens the scalar check can't reason about, so they're left
+  // to the author (docJson null → the validator returns no warnings).
+  const catalogFieldKeys = docJson ? await readCatalogFieldKeys(admin) : null;
+  const warnings: TemplateWarning[] = validateTemplate({
+    docJson: docJson ?? undefined,
+    knownScalarTokens: KNOWN_SCALAR_TOKENS,
+    catalogFieldKeys,
+  }).warnings;
+
   // Unset other defaults for this type BEFORE writing this one as default so the
   // partial unique index (one default per doc_type) never collides.
   if (input.isDefault) {
@@ -223,7 +262,7 @@ export async function saveTemplate(input: SaveTemplateInput): Promise<ActionResu
 
     if (error) return { success: false, error: "Failed to update template", code: "QUERY_FAILED" };
     if (!data) return { success: false, error: "Template not found", code: "NOT_FOUND" };
-    return { success: true, data: mapRow(data as Row) };
+    return { success: true, data: { template: mapRow(data as Row), warnings } };
   }
 
   const { data, error } = await admin
@@ -233,7 +272,7 @@ export async function saveTemplate(input: SaveTemplateInput): Promise<ActionResu
     .maybeSingle();
 
   if (error) return { success: false, error: "Failed to create template", code: "QUERY_FAILED" };
-  return { success: true, data: mapRow(data as Row) };
+  return { success: true, data: { template: mapRow(data as Row), warnings } };
 }
 
 /** Delete a template. */
