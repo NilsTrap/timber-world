@@ -44,6 +44,7 @@ import {
   deleteOrganisationUser,
 } from "../actions";
 import dynamic from "next/dynamic";
+import { getOrgUsersGroups } from "@/features/access/actions/groups";
 import type { OrganisationUser } from "../types";
 
 // AddUserDialog (369 LOC) and UserGroupsDialog only mount when
@@ -152,6 +153,8 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
 
   // User groups dialog state (E4 — group assignments replaced per-user modules)
   const [groupsUser, setGroupsUser] = useState<OrganisationUser | null>(null);
+  // I2 · current access groups per user (chips column) — batch-loaded with users.
+  const [userGroups, setUserGroups] = useState<Record<string, { groupId: string; groupName: string }[]>>({});
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -161,6 +164,9 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
     } else {
       toast.error(result.error);
     }
+    // I2 · load the group chips in the background (admin-only; ignore failure —
+    // a non-super-admin viewer just sees no chips).
+    getOrgUsersGroups(organisationId).then((r) => { if (r.success) setUserGroups(r.data); });
     setIsLoading(false);
   }, [organisationId]);
 
@@ -386,6 +392,7 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                     <SortIndicator column="lastLoginAt" sortColumn={sortColumn} sortDirection={sortDirection} />
                   </button>
                 </TableHead>
+                <TableHead>Access groups</TableHead>
                 <TableHead className="w-40 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -407,17 +414,31 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                     <TableCell className="text-muted-foreground text-sm">
                       {formatDate(user.lastLoginAt)}
                     </TableCell>
+                    {/* I2 · current access groups as chips (empty = no rights beyond
+                        the org module ceiling). Manage via the button in Actions. */}
+                    <TableCell>
+                      {(userGroups[user.id]?.length ?? 0) > 0 ? (
+                        <span className="flex flex-wrap gap-1">
+                          {userGroups[user.id]!.map((gr) => (
+                            <Badge key={gr.groupId} variant="secondary" className="text-[10px]">{gr.groupName}</Badge>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">None</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {/* Groups button - manage user access groups */}
+                        {/* I2 · make group management discoverable — a labelled action,
+                            not a bare icon (Edgars "couldn't find it"). */}
                         <Button
                           variant="ghost"
-                          size="icon-sm"
+                          size="sm"
                           onClick={() => setGroupsUser(user)}
                           aria-label={`Manage groups for ${user.name}`}
-                          title="Manage groups"
+                          title="Manage access groups"
                         >
-                          <Settings2 className="h-4 w-4" />
+                          <Settings2 className="h-4 w-4" /> Groups
                         </Button>
                         {/* Send Credentials button - for created users (no auth_user_id yet) */}
                         {user.status === "created" && !user.authUserId && user.isActive && (

@@ -91,7 +91,7 @@ export async function createOrganisation(
       bank_account_number: nn(card.bankAccountNumber),
       bank_swift_code: nn(card.bankSwiftCode),
     })
-    .select("id, code, name, is_active, is_external, is_customer, is_manufacturer, is_producer, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, logo_url, created_at, updated_at")
+    .select("id, code, name, is_active, is_external, is_customer, is_manufacturer, is_producer, is_supplier, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, logo_url, created_at, updated_at")
     .single();
 
   if (error) {
@@ -113,6 +113,7 @@ export async function createOrganisation(
     isCustomer: (data.is_customer as boolean) ?? false,
     isManufacturer: (data.is_manufacturer as boolean) ?? false,
     isProducer: (data.is_producer as boolean) ?? false,
+    isSupplier: (data.is_supplier as boolean) ?? false,
     legalAddress: (data.legal_address as string | null) ?? null,
     vatNumber: (data.vat_number as string | null) ?? null,
     registrationNumber: (data.registration_number as string | null) ?? null,

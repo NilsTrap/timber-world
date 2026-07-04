@@ -15,17 +15,18 @@ import { isValidUUID } from "../types";
 
 /** Whitelist mapping role keys to DB columns — never interpolate from input. */
 const ROLE_COLUMN_MAP: Record<
-  "customer" | "manufacturer" | "producer",
-  "is_customer" | "is_manufacturer" | "is_producer"
+  "customer" | "manufacturer" | "producer" | "supplier",
+  "is_customer" | "is_manufacturer" | "is_producer" | "is_supplier"
 > = {
   customer: "is_customer",
   manufacturer: "is_manufacturer",
   producer: "is_producer",
+  supplier: "is_supplier",
 };
 
 export async function setOrganisationRole(
   id: string,
-  role: "customer" | "manufacturer" | "producer",
+  role: "customer" | "manufacturer" | "producer" | "supplier",
   enabled: boolean
 ): Promise<ActionResult<{ role: string; enabled: boolean }>> {
   // 1. Validate input

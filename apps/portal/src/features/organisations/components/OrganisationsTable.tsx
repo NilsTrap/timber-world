@@ -333,6 +333,7 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
                   </button>
                 </TableHead>
                 <TableHead className="w-28">Type</TableHead>
+                <TableHead className="w-44">Appears in</TableHead>
                 <TableHead className="w-40 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -368,6 +369,19 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
                         {togglingExternalId === org.id ? "..." : org.isExternal ? "External" : "Internal"}
                       </Badge>
                     </button>
+                  </TableCell>
+                  {/* I1 · which CRM book(s) this org falls into — the books are
+                      filtered views of this list (Clients = customer; Suppliers =
+                      supplier OR producer). "Internal" = in no book. */}
+                  <TableCell>
+                    {org.isCustomer || org.isSupplier || org.isProducer ? (
+                      <span className="flex flex-wrap gap-1">
+                        {org.isCustomer && <Badge variant="secondary" className="text-[10px]">Clients</Badge>}
+                        {(org.isSupplier || org.isProducer) && <Badge variant="secondary" className="text-[10px]">Suppliers</Badge>}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Internal</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>

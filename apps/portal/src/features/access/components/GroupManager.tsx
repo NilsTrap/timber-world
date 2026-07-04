@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, ShieldCheck, Trash2 } from "lucide-react";
+import { Loader2, Plus, Pencil, ShieldCheck, Trash2, Users } from "lucide-react";
 import {
   Button,
   Input,
@@ -44,6 +44,7 @@ import {
   setPlatformSetting,
 } from "../actions";
 import { GroupRightsEditor } from "./GroupRightsEditor";
+import { GroupMembersDialog } from "./GroupMembersDialog";
 
 interface NameEditorState {
   /** null = create, else the group being renamed. */
@@ -63,6 +64,7 @@ export function GroupManager() {
   const [nameEditor, setNameEditor] = useState<NameEditorState | null>(null);
   const [savingName, setSavingName] = useState(false);
   const [rightsGroup, setRightsGroup] = useState<AccessGroupSummary | null>(null);
+  const [membersGroup, setMembersGroup] = useState<AccessGroupSummary | null>(null);
   const [deleteGroup, setDeleteGroup] = useState<AccessGroupSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -179,6 +181,9 @@ export function GroupManager() {
                       <Button variant="ghost" size="sm" onClick={() => setRightsGroup(g)}>
                         <ShieldCheck className="h-3.5 w-3.5" /> Edit rights
                       </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setMembersGroup(g)}>
+                        <Users className="h-3.5 w-3.5" /> Members
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => openRename(g)}>
                         <Pencil className="h-3.5 w-3.5" /> Rename
                       </Button>
@@ -270,6 +275,15 @@ export function GroupManager() {
         open={rightsGroup != null}
         onOpenChange={(o) => { if (!o) setRightsGroup(null); }}
         onSaved={load}
+      />
+
+      {/* I2 · Members management from the group side */}
+      <GroupMembersDialog
+        groupId={membersGroup?.id ?? null}
+        groupName={membersGroup?.name ?? null}
+        open={membersGroup != null}
+        onOpenChange={(o) => { if (!o) setMembersGroup(null); }}
+        onChanged={load}
       />
 
       {/* Delete confirmation */}

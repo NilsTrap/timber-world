@@ -34,7 +34,7 @@ export default async function CounterpartyClientsPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <CounterpartyManager book="clients" />
+          <CounterpartyManager book="clients" isAdmin={isAdmin(session)} />
         </CardContent>
       </Card>
     </div>

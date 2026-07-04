@@ -86,6 +86,7 @@ export async function SidebarWrapper() {
       currentOrganization={currentOrganization}
       userMemberships={userMemberships}
       hasMultipleOrgs={hasMultipleOrganizations(session)}
+      isAdmin={session?.role === "admin"}
       loadShipmentBadge={session?.role === "user"}
     />
   );

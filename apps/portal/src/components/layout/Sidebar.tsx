@@ -69,6 +69,10 @@ interface SidebarProps {
   userMemberships?: OrganizationSwitcherOption[];
   /** Whether user has multiple organization memberships */
   hasMultipleOrgs?: boolean;
+  /** I3 · platform admin — the org dropdowns above the nav are retired for admins
+   *  (they see across all orgs; the control lost its meaning). The org-resolution
+   *  mechanism (getSession + cookie) is untouched — only the UI control is hidden. */
+  isAdmin?: boolean;
   /** Whether to load pending shipment badge count client-side */
   loadShipmentBadge?: boolean;
 }
@@ -88,6 +92,7 @@ export function Sidebar({
   currentOrganization,
   userMemberships = [],
   hasMultipleOrgs = false,
+  isAdmin = false,
   loadShipmentBadge = false,
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -178,8 +183,11 @@ export function Sidebar({
         </Link>
       </div>
 
-      {/* Organization Switcher for multi-org users (Story 10.7) */}
-      {userMemberships.length > 1 && (
+      {/* Organization Switcher for multi-org users (Story 10.7).
+          I3 · retired for admins — they operate across all orgs, so switching a
+          single "current org" is meaningless for them. Genuine multi-org
+          NON-admin users keep it. The session org mechanism is unchanged. */}
+      {userMemberships.length > 1 && !isAdmin && (
         <div className="border-b">
           <OrganizationSwitcher
             currentOrganization={currentOrganization ?? null}
@@ -189,8 +197,12 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Organization Selector (Super Admin only) */}
-      {organizations && organizations.length > 0 && !hasMultipleOrgs && (
+      {/* Organization Selector (Super Admin "All Orgs" URL filter).
+          I3 · retired for admins per Edgars ("the org dropdown has lost its
+          meaning"). It only ever set a `?org=` query filter that defaults to all
+          orgs, so hiding it just leaves admins on the all-orgs default — no data
+          is scoped away, and a bookmarked `?org=` URL still filters. */}
+      {organizations && organizations.length > 0 && !hasMultipleOrgs && !isAdmin && (
         <div className="border-b relative">
           <OrganizationSelector
             organizations={organizations}

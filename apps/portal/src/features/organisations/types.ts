@@ -18,6 +18,9 @@ export interface Organisation {
   isCustomer: boolean;
   isManufacturer: boolean;
   isProducer: boolean;
+  /** I1 (E4 column): a supplier sells goods to the house on buy legs. Drives the
+   *  CRM Suppliers book (is_supplier OR is_producer). */
+  isSupplier: boolean;
   legalAddress: string | null;
   vatNumber: string | null;
   registrationNumber: string | null;

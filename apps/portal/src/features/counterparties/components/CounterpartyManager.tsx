@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil } from "lucide-react";
+import { Loader2, Plus, Pencil, Building2 } from "lucide-react";
 import {
   Button, Input, Switch,
   Table, TableHeader, TableBody, TableHead, TableRow, TableCell,
@@ -62,7 +62,7 @@ const EMPTY_EDITOR: EditorState = {
  * Codes are 3-letter, uppercase, immutable after creation. Mirrors the
  * GateConfigManager pattern.
  */
-export function CounterpartyManager({ book }: { book: CounterpartyBook }) {
+export function CounterpartyManager({ book, isAdmin = false }: { book: CounterpartyBook; isAdmin?: boolean }) {
   const [rows, setRows] = useState<CounterpartyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [editor, setEditor] = useState<EditorState | null>(null);
@@ -187,9 +187,22 @@ export function CounterpartyManager({ book }: { book: CounterpartyBook }) {
                     </StatusBadge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
-                      <Pencil className="h-3.5 w-3.5" /> Edit
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </Button>
+                      {/* I1 · a CRM record IS an organisations row (r.id === org id),
+                          so admins can jump straight to the full org record. Hidden
+                          for non-admin CRM users (they lack organizations.view; the
+                          target page also server-guards). */}
+                      {isAdmin && (
+                        <Button asChild variant="ghost" size="sm" title="Open in Orgs & People">
+                          <a href={`/admin/organisations/${r.id}`}>
+                            <Building2 className="h-3.5 w-3.5" /> Org record
+                          </a>
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

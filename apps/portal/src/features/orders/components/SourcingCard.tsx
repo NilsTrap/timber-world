@@ -152,7 +152,7 @@ function SupplierDialog({
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading suppliers…
               </span>
             ) : options.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No suppliers in the book yet — add one in Counterparties → Suppliers.</p>
+              <p className="text-sm text-muted-foreground">No suppliers in the book yet — add one in CRM → Suppliers.</p>
             ) : (
               <Select value={supplierId} onValueChange={setSupplierId}>
                 <SelectTrigger><SelectValue placeholder="Pick a supplier" /></SelectTrigger>

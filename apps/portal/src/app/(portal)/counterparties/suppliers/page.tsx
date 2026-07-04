@@ -34,7 +34,7 @@ export default async function CounterpartySuppliersPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <CounterpartyManager book="suppliers" />
+          <CounterpartyManager book="suppliers" isAdmin={isAdmin(session)} />
         </CardContent>
       </Card>
     </div>

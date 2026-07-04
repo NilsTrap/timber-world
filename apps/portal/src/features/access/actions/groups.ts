@@ -27,6 +27,8 @@ import {
   getAccessGroupDetail as getAccessGroupDetailSvc,
   getUserAccessGroups as getUserAccessGroupsSvc,
   listAccessGroups as listAccessGroupsSvc,
+  listPortalUsers as listPortalUsersSvc,
+  type PortalUserRow,
 } from "../services/groupsRead";
 
 async function requireSuperAdmin(): Promise<
@@ -266,4 +268,110 @@ export async function updateUserAccessGroups(
   updateTag(`user-modules:${userId}:${organisationId}`);
   updateTag(`access-profile:${userId}:${organisationId}`);
   return { success: true, data: { count: unique.length } };
+}
+
+// ── I2 · discoverable group assignment (People chips + group Members tab) ──────
+
+/** I2 · Assigned group names for EVERY user in one org — drives the People tab's
+ *  "Access groups" chips column in one batch (not N per-user calls). */
+export async function getOrgUsersGroups(
+  organisationId: string,
+): Promise<ActionResult<Record<string, { groupId: string; groupName: string }[]>>> {
+  const g = await requireSuperAdmin();
+  if (!g.ok) return { success: false, error: g.error, code: g.code };
+  const { data: rows, error } = await g.client
+    .from("user_access_groups")
+    .select("user_id, group_id")
+    .eq("organization_id", organisationId);
+  if (error) return { success: false, error: "Failed to load group assignments", code: "FETCH_FAILED" };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const list = (rows ?? []) as Array<{ user_id: string; group_id: string }>;
+  const groupIds = Array.from(new Set(list.map((r) => r.group_id)));
+  const names = new Map<string, string>();
+  if (groupIds.length) {
+    const { data: groups } = await g.client.from("access_groups").select("id, name").in("id", groupIds);
+    for (const gr of (groups ?? []) as Array<{ id: string; name: string }>) names.set(gr.id, gr.name);
+  }
+  const out: Record<string, { groupId: string; groupName: string }[]> = {};
+  for (const r of list) (out[r.user_id] ??= []).push({ groupId: r.group_id, groupName: names.get(r.group_id) ?? "?" });
+  return { success: true, data: out };
+}
+
+export interface GroupMember { userId: string; organisationId: string; userName: string; orgName: string }
+
+/** I2 · Members (user + org) of one access group — for the group-detail Members tab. */
+export async function getGroupMembers(groupId: string): Promise<ActionResult<GroupMember[]>> {
+  const g = await requireSuperAdmin();
+  if (!g.ok) return { success: false, error: g.error, code: g.code };
+  const { data: rows, error } = await g.client
+    .from("user_access_groups")
+    .select("user_id, organization_id")
+    .eq("group_id", groupId);
+  if (error) return { success: false, error: "Failed to load members", code: "FETCH_FAILED" };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const list = (rows ?? []) as Array<{ user_id: string; organization_id: string }>;
+  const userIds = Array.from(new Set(list.map((r) => r.user_id)));
+  const orgIds = Array.from(new Set(list.map((r) => r.organization_id)));
+  const uName = new Map<string, string>();
+  const oName = new Map<string, string>();
+  if (userIds.length) {
+    const { data } = await g.client.from("portal_users").select("id, name").in("id", userIds);
+    for (const u of (data ?? []) as Array<{ id: string; name: string }>) uName.set(u.id, u.name);
+  }
+  if (orgIds.length) {
+    const { data } = await g.client.from("organisations").select("id, name").in("id", orgIds);
+    for (const o of (data ?? []) as Array<{ id: string; name: string }>) oName.set(o.id, o.name);
+  }
+  return {
+    success: true,
+    data: list.map((r) => ({ userId: r.user_id, organisationId: r.organization_id, userName: uName.get(r.user_id) ?? "?", orgName: oName.get(r.organization_id) ?? "?" })),
+  };
+}
+
+/** I2 · Add/remove ONE user↔group membership in an org. updateUserAccessGroups is
+ *  a full-replace, so a single-row edit round-trips the user's whole set. Both the
+ *  People row and the group Members tab write through here → the two views agree. */
+export async function setUserGroupMembership(
+  userId: string,
+  organisationId: string,
+  groupId: string,
+  member: boolean,
+): Promise<ActionResult<{ count: number }>> {
+  const current = await getUserAccessGroups(userId, organisationId);
+  if (!current.success) return current as unknown as ActionResult<{ count: number }>;
+  const assigned = new Set(current.data.filter((a) => a.assigned).map((a) => a.groupId));
+  if (member) assigned.add(groupId); else assigned.delete(groupId);
+  return updateUserAccessGroups(userId, organisationId, Array.from(assigned));
+}
+
+/** I2 · Add a user to a group from the GROUP side. A group membership is per-org;
+ *  the picker only knows the user, so we resolve their (single active) org. If the
+ *  user belongs to several orgs, the caller must pass which one (organisationId). */
+export async function addUserToGroup(
+  userId: string,
+  groupId: string,
+  organisationId?: string | null,
+): Promise<ActionResult<{ count: number }>> {
+  const g = await requireSuperAdmin();
+  if (!g.ok) return { success: false, error: g.error, code: g.code };
+  let orgId = organisationId ?? null;
+  if (!orgId) {
+    const { data: mems } = await g.client
+      .from("organization_memberships")
+      .select("organization_id, is_primary")
+      .eq("user_id", userId)
+      .eq("is_active", true);
+    const list = (mems ?? []) as Array<{ organization_id: string; is_primary: boolean }>;
+    if (list.length === 0) return { success: false, error: "User has no active organisation membership", code: "NO_ORG" };
+    if (list.length > 1) return { success: false, error: "User belongs to several organisations — assign the group from that user's People row instead", code: "MULTI_ORG" };
+    orgId = (list.find((m) => m.is_primary) ?? list[0])!.organization_id;
+  }
+  return setUserGroupMembership(userId, orgId, groupId, true);
+}
+
+/** I2 · Users assignable as group members (super-admin picker). */
+export async function listAssignableUsers(query?: string | null): Promise<ActionResult<PortalUserRow[]>> {
+  const g = await requireSuperAdmin();
+  if (!g.ok) return { success: false, error: g.error, code: g.code };
+  return listPortalUsersSvc(g.client, { query, limit: 50 });
 }
