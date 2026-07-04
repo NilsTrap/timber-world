@@ -92,6 +92,51 @@ async function ensureTradingPartnerLinks(
   }
 }
 
+/**
+ * Q3 · Batched active-user count per org — mutates each row's `userCount`.
+ * Mirrors getOrganisations' union logic so a CRM book shows the SAME number as
+ * the admin Orgs table: legacy `portal_users.organisation_id` ∪ active
+ * `organization_memberships` (deduped). One query per source — no N+1.
+ */
+async function attachUserCounts(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  rows: CounterpartyRow[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  const orgIds = rows.map((r) => r.id);
+
+  const { data: legacyUsers } = await admin
+    .from("portal_users")
+    .select("id, organisation_id")
+    .in("organisation_id", orgIds);
+
+  // org_id -> set of legacy user ids (matches getOrganisations: unfiltered by is_active).
+  const legacyByOrg = new Map<string, Set<string>>();
+  for (const u of (legacyUsers ?? []) as Array<{ id: string; organisation_id: string | null }>) {
+    if (!u.organisation_id) continue;
+    if (!legacyByOrg.has(u.organisation_id)) legacyByOrg.set(u.organisation_id, new Set());
+    legacyByOrg.get(u.organisation_id)!.add(u.id);
+  }
+
+  const { data: memberships } = await admin
+    .from("organization_memberships")
+    .select("organization_id, user_id")
+    .eq("is_active", true)
+    .in("organization_id", orgIds);
+
+  // org_id -> count of active members NOT already counted via legacy.
+  const extraByOrg = new Map<string, number>();
+  for (const m of (memberships ?? []) as Array<{ organization_id: string; user_id: string }>) {
+    if (legacyByOrg.get(m.organization_id)?.has(m.user_id)) continue;
+    extraByOrg.set(m.organization_id, (extraByOrg.get(m.organization_id) ?? 0) + 1);
+  }
+
+  for (const r of rows) {
+    r.userCount = (legacyByOrg.get(r.id)?.size ?? 0) + (extraByOrg.get(r.id) ?? 0);
+  }
+}
+
 /** All records of one book, ordered by code. */
 export async function listCounterparties(
   book: CounterpartyBook,
@@ -119,7 +164,9 @@ export async function listCounterparties(
     return { success: false, error: "Failed to load records", code: "FETCH_FAILED" };
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { success: true, data: ((data || []) as any[]).map(mapRow) };
+  const rows = ((data || []) as any[]).map(mapRow);
+  await attachUserCounts(admin, rows);
+  return { success: true, data: rows };
 }
 
 /**

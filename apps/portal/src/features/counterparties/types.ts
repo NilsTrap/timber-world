@@ -39,6 +39,10 @@ export interface CounterpartyRow {
   defaultSigneeName: string | null;
   defaultSigneeRole: string | null;
   isActive: boolean;
+  /** Q3: active portal-user count for this org (list view only — batched into
+   *  listCounterparties, mirrors the admin OrganisationsTable "Users" column).
+   *  Undefined on create/update returns, which never render the count. */
+  userCount?: number;
 }
 
 export interface CounterpartyInput {

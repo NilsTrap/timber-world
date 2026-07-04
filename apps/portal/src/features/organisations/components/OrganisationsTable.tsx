@@ -74,6 +74,16 @@ function SortIndicator({
  * Organisations Table
  *
  * Displays all organisations with sortable columns, CRUD actions, and delete.
+ *
+ * TWO-VIEW SPLIT (Q1): this admin table and the CRM `CounterpartyManager`
+ * address books both render rows from the SAME `organisations` table, but they
+ * are deliberately NOT one component:
+ *  - THIS one is the cross-org ADMIN management view (every org, incl. inactive;
+ *    Users/Status/Type/"Appears in"/activate/delete) at /admin/organisations.
+ *  - `CounterpartyManager` is the walled per-book CRM address view (one book —
+ *    clients / suppliers / traders — with card fields, rights-gated per book).
+ * They share the dense `<Table>` primitive (`<Table dense>`, per the CLAUDE.md
+ * dense-table standard) so they read consistently; do not merge them.
  */
 export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean } = {}) {
   const router = useRouter();
