@@ -81,12 +81,19 @@ async function requireContactAccessForOrg(organisationId: string): Promise<BookA
     };
   }
 
+  // Trader orgs are admin-only for contacts too — parity with add-person's
+  // absolute is_trader block (a non-admin must not reach a trader org's contacts
+  // even if it also carries a customer/supplier flag). requireBookAccess("traders")
+  // is admin-only, so this returns FORBIDDEN for non-admins.
+  if (org.is_trader === true) {
+    return await requireBookAccess("traders");
+  }
+
   // Derive the books this org belongs to (same predicate as counterparties'
   // isInBook) and require access to at least one.
   const books: CounterpartyBook[] = [];
   if (org.is_customer === true) books.push("clients");
   if (org.is_supplier === true || org.is_producer === true) books.push("suppliers");
-  if (org.is_trader === true) books.push("traders");
 
   for (const book of books) {
     const g = await requireBookAccess(book);

@@ -198,7 +198,11 @@ export function DealTermsEditor({
     if (!res.success) {
       toast.error(res.error);
       const prev = savedRef.current[key];
-      setDraft((p) => ({ ...p, [key]: prev }));
+      // R4-1: only revert if the user hasn't typed further since this attempt —
+      // otherwise reverting to the last-saved value silently wipes in-progress
+      // edits (e.g. a debounced write for "Riga" fails while the user is still
+      // typing "Riga plant").
+      setDraft((p) => (p[key] === rawValue ? { ...p, [key]: prev } : p));
       return;
     }
     savedRef.current = { ...savedRef.current, [key]: rawValue };

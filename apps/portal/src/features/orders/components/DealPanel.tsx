@@ -251,7 +251,9 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
   // subtract when they share a currency; otherwise the margin is meaningless — show
   // both legs' totals each labelled with their own currency, no bogus subtraction.
   const buyCurrency = deal.siblingBuyLegCurrency;
-  const mixedCurrency = deal.hasSiblingBuyLeg && buyCurrency != null && buyCurrency !== deal.currency;
+  // R7-1: treat a null buy currency (mixed-currency buy legs on the spine) as
+  // mixed too — otherwise it falls through to a bogus cross-currency subtraction.
+  const mixedCurrency = deal.hasSiblingBuyLeg && (buyCurrency == null || buyCurrency !== deal.currency);
   const marginCents = sellTotalCents - buyTotalCents;
   const marginPct = sellTotalCents > 0 ? (marginCents / sellTotalCents) * 100 : null;
   // Provisional until a sibling buy leg exists AND carries prices.
@@ -630,7 +632,7 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
               shown above in their own currency; the owner converts manually. */}
           {mixedCurrency ? (
             <p className="text-xs text-amber-600">
-              Sell ({deal.currency}) and buy ({buyCurrency}) legs are in different currencies — margin isn&apos;t computed. Compare the two totals above (convert manually).
+              Sell ({deal.currency}) and buy ({buyCurrency ?? "mixed"}) legs are in different currencies — margin isn&apos;t computed. Compare the two totals above (convert manually).
             </p>
           ) : marginProvisional ? (
             <p className="text-xs text-amber-600">

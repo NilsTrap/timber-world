@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@timber/database/server";
+import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 
 /**
@@ -24,6 +25,12 @@ export interface Person {
  * Get all people (portal users) across all organisations
  */
 export async function getAllPeople(): Promise<ActionResult<Person[]>> {
+  // Cross-org reader — admin-only (defence in depth; RLS also scopes rows).
+  const session = await getSession();
+  if (!session || !isSuperAdmin(session)) {
+    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
+
   const supabase = await createClient();
 
   // Fetch users
