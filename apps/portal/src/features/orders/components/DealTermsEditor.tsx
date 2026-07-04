@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import {
@@ -9,12 +9,26 @@ import {
 } from "@timber/ui";
 import { updateDealTerms, type DealTermsInput } from "../actions/dealActions";
 import { getFieldOptions, type FieldOptionChoice } from "../actions/getFieldOptions";
+import { getDealPartyAddresses } from "../actions/getDealPartyAddresses";
 
 /** Radix Select forbids an empty-string item value, so a sentinel represents
  *  "no incoterms" and is mapped back to "" on save. */
 const INCOTERMS_NONE = "__none";
 /** Same sentinel trick for the R3 Payment terms dropdown (admin-managed field). */
 const PAYMENT_TERMS_NONE = "__none";
+
+/**
+ * R2 · Which party's address pre-fills the incoterms place for a given incoterm:
+ * seller-side terms (EXW/FCA/FAS/FOB) → the seller's address; destination terms
+ * (CPT/CIP/CFR/CIF + DAP/DPU/DDP) → the buyer's address (named destination default
+ * = buyer). Unknown code → no auto-fill.
+ */
+function placePartyForIncoterm(incoterm: string): "seller" | "buyer" | null {
+  const c = incoterm.trim().toUpperCase();
+  if (["EXW", "FCA", "FAS", "FOB"].includes(c)) return "seller";
+  if (["CPT", "CIP", "CFR", "CIF", "DAP", "DPU", "DDP"].includes(c)) return "buyer";
+  return null;
+}
 /** A stored delivery deadline in ISO yyyy-mm-dd drives the calendar input; any
  *  other (legacy free-text) value falls back to a plain text input. */
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -93,6 +107,10 @@ export function DealTermsEditor({
   const [incotermsOptions, setIncotermsOptions] = useState<FieldOptionChoice[]>([]);
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<FieldOptionChoice[]>([]);
   const [deadlineTextMode, setDeadlineTextMode] = useState(false);
+  // R2 · seller/buyer addresses for the incoterms-place auto-fill, plus a ref
+  // recording the LAST value we auto-filled so a manual edit is never clobbered.
+  const [partyAddresses, setPartyAddresses] = useState<{ seller: string | null; buyer: string | null } | null>(null);
+  const lastAutoPlace = useRef<string>("");
 
   // Re-sync the draft only when the SAVED values actually change (after a save +
   // reload) — keyed on content, not object identity, so typing is never reset.
@@ -107,8 +125,26 @@ export function DealTermsEditor({
     let alive = true;
     getFieldOptions("incoterms").then((res) => { if (alive && res.success) setIncotermsOptions(res.data); });
     getFieldOptions("payment_terms").then((res) => { if (alive && res.success) setPaymentTermsOptions(res.data); });
+    getDealPartyAddresses(orderId).then((res) => { if (alive && res.success) setPartyAddresses(res.data); });
     return () => { alive = false; };
-  }, []);
+  }, [orderId]);
+
+  // R2 · pre-fill the incoterms place from the correct party's address when the
+  // incoterm changes. Never clobbers a manual edit: fills only when the place is
+  // empty or still equals the value WE last auto-filled.
+  const autofillIncotermsPlace = (incoterm: string) => {
+    if (!incoterm || !partyAddresses) return;
+    const party = placePartyForIncoterm(incoterm);
+    if (!party) return;
+    const addr = party === "seller" ? partyAddresses.seller : partyAddresses.buyer;
+    if (!addr) return; // no address on file → leave the place as-is
+    setDraft((prev) => {
+      const cur = prev.incotermsPlace.trim();
+      if (cur !== "" && cur !== lastAutoPlace.current.trim()) return prev;
+      lastAutoPlace.current = addr;
+      return { ...prev, incotermsPlace: addr };
+    });
+  };
 
   const set = (k: keyof Draft, v: string) => setDraft((p) => ({ ...p, [k]: v }));
   const dirty = JSON.stringify(draft) !== savedKey;
@@ -156,7 +192,11 @@ export function DealTermsEditor({
         <Field label="Incoterms">
           <Select
             value={draft.incoterms.trim() === "" ? INCOTERMS_NONE : draft.incoterms}
-            onValueChange={(v) => set("incoterms", v === INCOTERMS_NONE ? "" : v)}
+            onValueChange={(v) => {
+              const code = v === INCOTERMS_NONE ? "" : v;
+              set("incoterms", code);
+              autofillIncotermsPlace(code);
+            }}
           >
             <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
             <SelectContent>
