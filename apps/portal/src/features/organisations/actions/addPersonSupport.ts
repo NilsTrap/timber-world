@@ -87,15 +87,58 @@ export async function getAddPersonContext(
 }
 
 /**
+ * The set of portal-user ids a SCOPED (non-admin) caller may see in the typeahead:
+ * users already attached (active membership OR legacy home org) to an org in the
+ * caller's book — their trading partners carrying the book's role flag. This keeps
+ * a salesperson from enumerating supplier-side / other-trader users (Nils's "narrow"
+ * walls). Admins are never restricted.
+ */
+async function bookMemberUserIds(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  callerOrgId: string,
+  forcedGroupKey: "client" | "producer",
+): Promise<Set<string>> {
+  const { data: tps } = await admin
+    .from("organisation_trading_partners")
+    .select("partner_organisation_id")
+    .eq("organisation_id", callerOrgId);
+  const partnerIds = ((tps ?? []) as Array<{ partner_organisation_id: string }>).map(
+    (t) => t.partner_organisation_id,
+  );
+  if (partnerIds.length === 0) return new Set();
+
+  let orgQ = admin.from("organisations").select("id").in("id", partnerIds).eq("is_active", true);
+  orgQ = forcedGroupKey === "client"
+    ? orgQ.eq("is_customer", true)
+    : orgQ.or("is_supplier.eq.true,is_producer.eq.true");
+  const { data: bookOrgs } = await orgQ;
+  const bookOrgIds = ((bookOrgs ?? []) as Array<{ id: string }>).map((o) => o.id);
+  if (bookOrgIds.length === 0) return new Set();
+
+  const userIds = new Set<string>();
+  const { data: mems } = await admin
+    .from("organization_memberships")
+    .select("user_id")
+    .eq("is_active", true)
+    .in("organization_id", bookOrgIds);
+  for (const m of (mems ?? []) as Array<{ user_id: string }>) userIds.add(m.user_id);
+  const { data: legacy } = await admin
+    .from("portal_users")
+    .select("id")
+    .in("organisation_id", bookOrgIds);
+  for (const l of (legacy ?? []) as Array<{ id: string }>) userIds.add(l.id);
+  return userIds;
+}
+
+/**
  * Typeahead over existing platform users for the "add existing" branch. Gated by
  * the same Q2 wall — a caller who may not add people to this org gets nothing.
  * Flags whether each candidate is already an active member of the target org so
  * the UI disables "Add" for them.
  *
- * NOTE (guard relaxation): for a scoped non-admin this exposes the platform user
- * directory (id/name/email) the same way the admin group-member picker already
- * does — acceptable because the caller must already hold book-scoped add rights
- * for this specific org to reach it. Flagged for orchestrator review.
+ * NARROWNESS (Q2): admins search the whole directory; a scoped non-admin only sees
+ * people already in THEIR book (bookMemberUserIds) — never the full platform list.
  */
 export async function searchAddablePeople(
   organisationId: string,
@@ -116,10 +159,23 @@ export async function searchAddablePeople(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  const res = await listPortalUsersSvc(admin, { query: q, limit: 20 });
+  // Q2 narrowness: a scoped (non-admin) caller may only typeahead people already
+  // in their book — never the whole platform directory. Admins search everyone.
+  let restrictToUserIds: Set<string> | null = null;
+  if (scope.mode === "scoped") {
+    const callerOrgId = session.currentOrganizationId || session.organisationId;
+    if (!callerOrgId) return { success: true, data: [] };
+    restrictToUserIds = await bookMemberUserIds(admin, callerOrgId, scope.forcedGroupKey);
+    if (restrictToUserIds.size === 0) return { success: true, data: [] };
+  }
+
+  const res = await listPortalUsersSvc(admin, { query: q, limit: restrictToUserIds ? 100 : 20 });
   if (!res.success) return { success: false, error: res.error, code: res.code };
 
-  const ids = res.data.map((u) => u.id);
+  let rows = res.data;
+  if (restrictToUserIds) rows = rows.filter((u) => restrictToUserIds!.has(u.id)).slice(0, 20);
+
+  const ids = rows.map((u) => u.id);
   const memberIds = new Set<string>();
   if (ids.length > 0) {
     // Active memberships in this org.
@@ -141,7 +197,7 @@ export async function searchAddablePeople(
 
   return {
     success: true,
-    data: res.data.map((u) => ({
+    data: rows.map((u) => ({
       id: u.id,
       email: u.email,
       name: u.name,
