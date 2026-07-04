@@ -57,6 +57,13 @@ Build order: **A → B → (C ∥ D ∥ G) → F → E**. Each epic = one parent
 
 Do NOT run two sessions inside the same epic. If only one dev session is available, plain order A → B → G → D → C → F → E works fine.
 
+**ENDGAME (2026-07-04 — remaining epics E, F, H, I; A–D and G are built).** Run THREE sessions in parallel NOW, then one final epic:
+- **Session 1 → Epic H** (H1 then H2). Hot files: `OrdersOverview.tsx`, `DealTermsEditor.tsx`, `createOrder`/`orderDeals` actions.
+- **Session 2 → Epic I** (I1 → I2 → I4; I3 anytime). Hot files: `features/organisations/`, `features/counterparties/`, `features/access/`, `components/layout/OrganizationSwitcher|Sidebar`. Naming DECIDED: rename nav "Counterparties" → **"CRM"** (label-only; routes + `counterparties.*` module codes unchanged).
+- **Session 3 → Epic E** (E1, E2). Hot files: `GateConfigManager.tsx`, `DealPipeline.tsx`. Fully independent.
+- **Epic F runs LAST, strictly AFTER H** (same session 1 or 3 picks it up): F1 shares `OrdersOverview.tsx` with H1, and F3's deal-code verification depends on H1's allocation fix. Order inside F: F2 → F1 → F3.
+No other orderings are load-bearing. Every session: bus_claim files, rebase before push AND deploy, staging only.
+
 ### Epic A — Bilateral purity: each deal carries only its own order (spec §2.1, §2.4, §5.3) — P1
 
 - **A1. Deal view: own lines only.** `DealPanel.tsx`: remove the dual sell/buy tables; render ONE "Order specification" table = the deal's own line items. `DealLineAdder` loses its `side` prop. Keep add-from-catalog/custom + amount editing (gating changes in B5).
