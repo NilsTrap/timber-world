@@ -120,12 +120,19 @@ export function PartyFields({
  * Which counterparty slot must the current user pick for a valid submission?
  * (An auto-filled / forced slot is completed server-side, so it never blocks
  * submit.) Returns true when every required pick is satisfied.
+ *
+ * L3 · an ADMIN may create/hold a deal with ONE party unset (e.g. a purchase leg
+ * while still shopping suppliers) — so an admin only needs AT LEAST ONE party
+ * (the code mints lazily once both exist; the Parties card fills the blank
+ * later). Salespeople are unaffected — their parties are always known.
  */
 export function partyPickComplete(partyOptions: OrderPartyOptions, value: PartyValue): boolean {
+  if (partyOptions.isAdmin) {
+    return !!value.customerOrganisationId || !!value.sellerOrganisationId;
+  }
   const isSellerSide = partyOptions.userIsTrader || partyOptions.userIsManufacturer;
-  const needCustomer = partyOptions.isAdmin || isSellerSide;
-  const needTrader =
-    partyOptions.isAdmin || !isSellerSide || partyOptions.userTraderOrgs.length > 1;
+  const needCustomer = isSellerSide;
+  const needTrader = !isSellerSide || partyOptions.userTraderOrgs.length > 1;
   if (needCustomer && !value.customerOrganisationId) return false;
   if (needTrader && !value.sellerOrganisationId) return false;
   return true;
