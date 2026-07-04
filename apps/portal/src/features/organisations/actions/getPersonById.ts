@@ -8,6 +8,7 @@ export interface PersonDetail {
   id: string;
   email: string;
   name: string;
+  phone: string | null;
   role: "admin" | "user";
   organisationId: string | null;
   organisationName: string;
@@ -45,6 +46,7 @@ export async function getPersonById(
       id,
       email,
       name,
+      phone,
       role,
       organisation_id,
       auth_user_id,
@@ -90,6 +92,7 @@ export async function getPersonById(
       id: data.id,
       email: data.email,
       name: data.name,
+      phone: data.phone ?? null,
       role: data.role,
       organisationId: data.organisation_id,
       organisationName,

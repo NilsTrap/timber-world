@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@timber/ui";
-import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
+import { getSession, isSuperAdmin } from "@/lib/auth";
 import { getPersonById } from "@/features/organisations/actions/getPersonById";
 import { PersonDetailTabs } from "@/features/organisations/components/PersonDetailTabs";
 
@@ -36,12 +36,10 @@ export default async function PersonDetailPage({
     redirect("/login");
   }
 
-  if (!isAdmin(session)) {
-    const orgId = session.currentOrganizationId || session.organisationId;
-    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("organizations.view")) {
-      notFound();
-    }
+  // Cross-org person detail is admin-only (matches getPersonById's guard) — an
+  // org-scoped viewer must never enumerate other orgs' people.
+  if (!isSuperAdmin(session)) {
+    notFound();
   }
 
   const { id } = await params;

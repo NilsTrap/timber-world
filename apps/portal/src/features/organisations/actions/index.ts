@@ -58,6 +58,17 @@ export { getAvailablePartners } from "./getAvailablePartners";
 export { getAllPeople } from "./getAllPeople";
 export type { Person } from "./getAllPeople";
 
+// K2 · person-centric People directory + person detail memberships
+export { getPeopleDirectory } from "./getPeopleDirectory";
+export type { DirectoryPerson, PersonOrgRef, PersonGroupRef } from "./getPeopleDirectory";
+export { getPersonById } from "./getPersonById";
+export type { PersonDetail } from "./getPersonById";
+export { getPersonMemberships, getAddableOrganisationsForPerson } from "./getPersonMemberships";
+export type { PersonMembership, AddableOrg } from "./getPersonMemberships";
+
+// Q4 · admin manual set-password
+export { setUserPasswordAdmin } from "./setUserPasswordAdmin";
+
 // Per-org reference data exclusions
 export { getOrgRefExclusions } from "./getOrgRefExclusions";
 export { updateOrgRefExclusions } from "./updateOrgRefExclusions";

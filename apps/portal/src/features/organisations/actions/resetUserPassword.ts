@@ -65,7 +65,6 @@ export async function resetUserPassword(
     .from("portal_users")
     .select("id, email, name, role, organisation_id, auth_user_id, status")
     .eq("id", userId)
-    .eq("organisation_id", organisationId)
     .single();
 
   if (userError || !portalUser) {
