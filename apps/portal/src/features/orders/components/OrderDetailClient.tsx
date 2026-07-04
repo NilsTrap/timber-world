@@ -3,27 +3,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowLeftRight, Loader2 } from "lucide-react";
-import { Button } from "@timber/ui";
+import { toast } from "sonner";
+import { ArrowLeft, ArrowLeftRight, Loader2, Pencil, Check, X } from "lucide-react";
+import { Button, Input } from "@timber/ui";
 import { DealPanel } from "./DealPanel";
 import { StageBadge } from "./StageBadge";
 import { getOrder } from "../actions/getOrder";
+import { updateOrder } from "../actions/updateOrder";
+import { fmtDateLV } from "../format";
 import type { Order } from "../types";
 
 const ORDER_LAST_ENTRY_KEY = "order-last-entry";
 
 interface OrderDetailClientProps {
   orderId: string;
-}
-
-/** Latvian date format — DD.MM.YYYY. Tolerates legacy free-text values. */
-function fmtDateLV(v: string | null | undefined): string {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return v;
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${dd}.${mm}.${d.getFullYear()}`;
 }
 
 /**
@@ -38,6 +31,9 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   const searchParams = useSearchParams();
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     const search = searchParams.toString();
@@ -56,6 +52,21 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
   }, [orderId, router]);
 
   useEffect(() => { loadOrder(); }, [loadOrder]);
+
+  // Reference = the deal's human-readable title (orders.name). Editable inline;
+  // updateOrder re-checks permission server-side (name is not a walled field).
+  const startEditName = () => {
+    setNameDraft(order?.name && order.name.trim() !== "-" ? order.name : "");
+    setEditingName(true);
+  };
+  const saveName = useCallback(async () => {
+    setSavingName(true);
+    const res = await updateOrder(orderId, { name: nameDraft.trim() || "-" });
+    setSavingName(false);
+    if (!res.success) { toast.error(res.error); return; }
+    setEditingName(false);
+    await loadOrder();
+  }, [orderId, nameDraft, loadOrder]);
 
   if (isLoading || !order) {
     return (
@@ -84,8 +95,32 @@ export function OrderDetailClient({ orderId }: OrderDetailClientProps) {
               <span className="sr-only">Back to orders</span>
             </Link>
           </Button>
-          <h1 className="text-2xl font-semibold tracking-tight truncate">{title}</h1>
-          {order.dealCode && <span className="ml-auto font-mono text-sm text-muted-foreground">{order.dealCode}</span>}
+          {editingName ? (
+            <span className="flex flex-1 items-center gap-1">
+              <Input
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") setEditingName(false); }}
+                placeholder="Reference (a human-readable title)"
+                className="h-9 max-w-md"
+                autoFocus
+              />
+              <Button variant="ghost" size="icon" onClick={saveName} disabled={savingName} aria-label="Save reference">
+                {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => setEditingName(false)} disabled={savingName} aria-label="Cancel">
+                <X className="h-4 w-4" />
+              </Button>
+            </span>
+          ) : (
+            <span className="flex min-w-0 flex-1 items-center gap-1.5">
+              <h1 className="truncate text-2xl font-semibold tracking-tight">{title}</h1>
+              <Button variant="ghost" size="icon-sm" onClick={startEditName} title="Edit reference" aria-label="Edit reference">
+                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+            </span>
+          )}
+          {order.dealCode && <span className="ml-auto shrink-0 font-mono text-sm text-muted-foreground">{order.dealCode}</span>}
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">

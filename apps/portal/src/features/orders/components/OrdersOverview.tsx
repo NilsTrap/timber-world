@@ -9,6 +9,7 @@ import { getOrders } from "../actions/getOrders";
 import { NewDealDialog } from "./NewDealDialog";
 import { StageBadge } from "./StageBadge";
 import { stageLabel } from "../services/stageColors";
+import { fmtDateLV, initialsOf } from "../format";
 import type { Order } from "../types";
 
 /**
@@ -138,12 +139,13 @@ export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?
             <thead>
               <tr className="border-b bg-muted/50 text-left">
                 <th>Number</th>
+                <th>Reference</th>
                 <th>Direction</th>
                 <th>Buyer</th>
                 <th>Manufacturer</th>
-                <th>Received</th>
+                <th>Created</th>
                 <th>Status</th>
-                <th>Created by</th>
+                <th className="w-16 text-center">By</th>
               </tr>
             </thead>
             <tbody>
@@ -158,7 +160,7 @@ export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?
                   >
                     <td className="font-medium whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5">
-                        {o.dealCode || o.code || o.name || "—"}
+                        {o.dealCode || o.code || "—"}
                         {paired && (
                           <span title="Part of a linked sell/buy chain" aria-label="Part of a linked sell/buy chain">
                             <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
@@ -166,22 +168,34 @@ export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?
                         )}
                       </span>
                     </td>
+                    <td className="text-muted-foreground">{o.name && o.name.trim() !== "-" ? o.name : "—"}</td>
                     <td>
                       <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${dm.cls}`}>{dm.label}</span>
                     </td>
                     <td className="text-muted-foreground">{o.customerOrganisationName || "—"}</td>
                     <td className="text-muted-foreground">{o.sellerOrganisationName || "—"}</td>
-                    <td className="whitespace-nowrap text-muted-foreground">{o.dateReceived}</td>
+                    <td className="whitespace-nowrap text-muted-foreground">{fmtDateLV(o.createdAt)}</td>
                     <td>
                       <StageBadge stage={o.lifecycleStage} strikeThrough={o.lifecycleStage === "cancelled"} />
                     </td>
-                    <td className="text-muted-foreground">{o.createdByName || "—"}</td>
+                    <td className="text-center">
+                      {o.createdByName ? (
+                        <span
+                          title={o.createdByName}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground"
+                        >
+                          {initialsOf(o.createdByName)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-10 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-3 py-10 text-center text-muted-foreground">
                     {orders.length === 0 ? "No orders yet. Create one to start a deal." : "No orders match these filters."}
                   </td>
                 </tr>
