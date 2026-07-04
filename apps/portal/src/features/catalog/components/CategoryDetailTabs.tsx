@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
+import { NewProductDialog } from "./NewProductDialog";
 import {
   saveCategory,
   deleteCategory,
@@ -60,6 +61,7 @@ const FIELD_TYPE_ICON: Record<FieldType, LucideIcon> = {
 
 export function CategoryDetailTabs({ category, fields: initialFields, pricingUnits }: Props) {
   const [fields, setFields] = useState(initialFields);
+  const [showNewProduct, setShowNewProduct] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -71,11 +73,23 @@ export function CategoryDetailTabs({ category, fields: initialFields, pricingUni
             <span className="sr-only">Back to Categories</span>
           </Link>
         </Button>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold tracking-tight">{category.name}</h1>
           {category.description && <p className="text-muted-foreground text-sm">{category.description}</p>}
         </div>
+        <Button className="shrink-0" onClick={() => setShowNewProduct(true)}>
+          <Plus className="h-4 w-4 mr-1.5" /> Add product
+        </Button>
       </div>
+
+      {/* Category is pre-set here — no picker shown. */}
+      <NewProductDialog
+        open={showNewProduct}
+        onOpenChange={setShowNewProduct}
+        categories={[]}
+        defaultCategoryId={category.id}
+        lockCategory
+      />
 
       {/* Category settings + Fields, side by side (50/50). Products live in the
           Products section now, so there's no Products tab here. */}
