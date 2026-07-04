@@ -32,6 +32,8 @@ export const MERGE_FIELD_GROUPS: MergeFieldGroup[] = [
       { label: "Number", token: "docNumber" },
       { label: "Date", token: "fmtDate docDate" },
       { label: "Deal code", token: "dealCode" },
+      // Spine code (SP-###) — the traceable chain identity behind the deal.
+      { label: "Spine code", token: "spineCode" },
       { label: "Currency", token: "currency" },
       // N3 · party order numbers (resolved from the deal's canonical external refs).
       { label: "Customer order no", token: "customerOrderNo" },
@@ -71,6 +73,16 @@ export const MERGE_FIELD_GROUPS: MergeFieldGroup[] = [
       { label: "Buyer SWIFT", token: "buyer.bankSwift" },
       { label: "Buyer signee (name)", token: "buyer.signeeName" },
       { label: "Buyer signee (role)", token: "buyer.signeeRole" },
+    ],
+  },
+  {
+    // The house user who GENERATED the document (populated house-only; a
+    // counterparty/service generate resolves to null → these render empty).
+    heading: "Issuer",
+    items: [
+      { label: "Issuer name", token: "issuer.name" },
+      { label: "Issuer email", token: "issuer.email" },
+      { label: "Issuer phone", token: "issuer.phone" },
     ],
   },
   {
@@ -146,4 +158,47 @@ export const DEFAULT_LINE_ITEM_COLUMNS: string[] = [
 export function basePathOf(token: string): string {
   const parts = token.trim().split(/\s+/);
   return parts[parts.length - 1] ?? token.trim();
+}
+
+// ── Dynamic catalog fields (S1) ─────────────────────────────────────────────
+// Custom catalog fields (e.g. glulam's extras) are PER-LINE-ITEM, so they surface
+// as dynamic LINE-ITEM COLUMNS — never scalar mentions (a scalar attr.<key> would
+// render empty outside the {{#each lineItems}} loop). The editor loads these once
+// (see plate/hooks/use-catalog-template-fields) and feeds them to the column
+// designer (S3) + the pill-label lookup (S1). The DATA behind attr.<key> is
+// populated by the assembler (S2) onto DocLineItem.attr.
+
+/** The slim catalog-field shape the template editor needs (built from getAllFields). */
+export interface CatalogTemplateField {
+  fieldKey: string;
+  fieldLabel: string;
+  /** "select" | "number" | "text" | "boolean" | "file" (catalog FieldType). */
+  fieldType: string;
+  unit: string | null;
+  /** Category assignments — lets the designer scope columns per product group. */
+  categories: { id: string | null; name: string | null; appliesTo: string }[];
+}
+
+/**
+ * Build the dynamic line-item column for a catalog field. The cell uses
+ * `{{lookup attr "<key>"}}` — robust for ANY field key (line-item COLUMN cells are
+ * NOT gated by SAFE_TOKEN, unlike scalar mentions), resolving the display string
+ * the assembler put on DocLineItem.attr. `num` right-aligns numeric fields.
+ */
+export function catalogFieldColumn(field: CatalogTemplateField): LineItemColumn {
+  return {
+    key: `attr.${field.fieldKey}`,
+    header: field.fieldLabel,
+    cell: `{{lookup attr "${field.fieldKey}"}}`,
+    num: field.fieldType === "number",
+  };
+}
+
+/**
+ * Dynamic token → label lookup for placed catalog-field columns, keyed by the
+ * `attr.<fieldKey>` token. COMPOSE this on top of the static MERGE_FIELD_LABELS so
+ * a pill shows the friendly field label; the static map is never mutated.
+ */
+export function catalogFieldLabelLookup(fields: CatalogTemplateField[]): Record<string, string> {
+  return Object.fromEntries(fields.map((f) => [`attr.${f.fieldKey}`, f.fieldLabel]));
 }

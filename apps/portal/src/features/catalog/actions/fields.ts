@@ -14,6 +14,7 @@ import type {
   SaveFieldOptionInput,
 } from "../types";
 import { logAudit } from "@/features/audit/logAudit";
+import type { CatalogTemplateField } from "@/features/documents/compiler/registry";
 
 function toOption(row: any): FieldOption {
   return {
@@ -94,6 +95,34 @@ export async function getAllFields(): Promise<ActionResult<CatalogField[]>> {
     return { ...base, assignments };
   });
 
+  return { success: true, data: fields };
+}
+
+/**
+ * S1 · The catalog fields the document-template editor needs to build dynamic
+ * line-item columns (S3) + friendly pill labels (S1). A slim projection of
+ * getAllFields (same gating: admin OR settings.view/catalogue.view). Custom
+ * catalog fields are per-line-item → they become COLUMNS, not scalar mentions.
+ */
+export async function getCatalogTemplateFields(): Promise<ActionResult<CatalogTemplateField[]>> {
+  const res = await getAllFields();
+  if (!res.success) return res;
+  const fields: CatalogTemplateField[] = res.data
+    // Skip system dimension fields (thickness/width/length) — they already have
+    // dedicated line columns; the editor only wants the CUSTOM attributes.
+    .filter((f) => !f.isSystem)
+    .map((f) => ({
+      fieldKey: f.fieldKey,
+      fieldLabel: f.fieldLabel,
+      fieldType: f.fieldType,
+      unit: f.unit ?? null,
+      // getAllFields attaches `assignments` at runtime (not on CatalogField).
+      categories: (((f as unknown as { assignments?: { categoryId?: string; categoryName?: string; appliesTo?: string }[] }).assignments) ?? []).map((a) => ({
+        id: a.categoryId ?? null,
+        name: a.categoryName ?? null,
+        appliesTo: a.appliesTo ?? "variant",
+      })),
+    }));
   return { success: true, data: fields };
 }
 
