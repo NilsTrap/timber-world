@@ -11,6 +11,9 @@ interface PartyOption {
 }
 
 export interface OrderPartyOptions {
+  /** Whether the caller is a platform admin — admins pick BOTH slots freely; a
+   *  non-admin has one slot auto-filled by their own org's role. */
+  isAdmin: boolean;
   userOrgId: string | null;
   userOrgName: string | null;
   userIsManufacturer: boolean;
@@ -94,6 +97,7 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
     return {
       success: true,
       data: {
+        isAdmin: true,
         userOrgId,
         userOrgName,
         userIsManufacturer,
@@ -118,6 +122,7 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
     return {
       success: true,
       data: {
+        isAdmin: false,
         userOrgId,
         userOrgName,
         userIsManufacturer,
@@ -155,6 +160,7 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
   return {
     success: true,
     data: {
+      isAdmin: false,
       userOrgId,
       userOrgName,
       userIsManufacturer,

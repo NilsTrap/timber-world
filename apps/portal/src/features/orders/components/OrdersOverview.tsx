@@ -6,7 +6,7 @@ import { Plus, Search, Loader2 } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
 import { getOrders } from "../actions/getOrders";
-import { createOrder } from "../actions/createOrder";
+import { NewDealDialog } from "./NewDealDialog";
 import type { Order } from "../types";
 
 /** Per deal-flow stage: label + badge colours (a new/draft order stands out). */
@@ -46,7 +46,7 @@ export function OrdersOverview() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [adding, setAdding] = useState(false);
+  const [newDealOpen, setNewDealOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [customerFilter, setCustomerFilter] = useState("all");
@@ -81,23 +81,16 @@ export function OrdersOverview() {
     );
   }, [orders, search, statusFilter, customerFilter, manufacturerFilter]);
 
-  const handleAdd = async () => {
-    setAdding(true);
-    const res = await createOrder({ name: "-", customerOrganisationId: null, dateReceived: new Date().toISOString().slice(0, 10) });
-    setAdding(false);
-    if (res.success) router.push(`/orders/${res.data.id}`);
-    else toast.error(res.error);
-  };
-
   return (
     <div className="space-y-4">
+      <NewDealDialog open={newDealOpen} onOpenChange={setNewDealOpen} />
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
           <p className="text-sm text-muted-foreground">{orders.length} orders</p>
         </div>
-        <Button onClick={handleAdd} disabled={adding}>
-          {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add order
+        <Button onClick={() => setNewDealOpen(true)}>
+          <Plus className="h-4 w-4" /> Add order
         </Button>
       </div>
 

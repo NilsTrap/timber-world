@@ -1,13 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Pencil } from "lucide-react";
 import {
   Button, Input, Textarea,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@timber/ui";
 import { updateDealTerms, type DealTermsInput } from "../actions/dealActions";
+import { getFieldOptions, type FieldOptionChoice } from "../actions/getFieldOptions";
+
+/** Radix Select forbids an empty-string item value, so a sentinel represents
+ *  "no incoterms" and is mapped back to "" on save. */
+const INCOTERMS_NONE = "__none";
+/** A stored delivery deadline in ISO yyyy-mm-dd drives the calendar input; any
+ *  other (legacy free-text) value falls back to a plain text input. */
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * G2 · Deal-terms editor (§8 merge-field sources). Edits the commercial terms that
@@ -70,9 +79,35 @@ export function DealTermsEditor({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => toDraft(values));
   const [saving, setSaving] = useState(false);
+  // H2 · admin-managed incoterms options (Settings → Fields) + legacy-tolerant
+  // delivery-deadline calendar. Options load lazily when the dialog first opens.
+  const [incotermsOptions, setIncotermsOptions] = useState<FieldOptionChoice[]>([]);
+  const [deadlineTextMode, setDeadlineTextMode] = useState(false);
 
-  const openDialog = () => { setDraft(toDraft(values)); setOpen(true); };
+  const openDialog = () => {
+    const d = toDraft(values);
+    setDraft(d);
+    setDeadlineTextMode(d.deliveryDeadline.trim() !== "" && !ISO_DATE_RE.test(d.deliveryDeadline.trim()));
+    setOpen(true);
+  };
   const set = (k: keyof Draft, v: string) => setDraft((p) => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    if (!open || incotermsOptions.length) return;
+    let alive = true;
+    getFieldOptions("incoterms").then((res) => {
+      if (alive && res.success) setIncotermsOptions(res.data);
+    });
+    return () => { alive = false; };
+  }, [open, incotermsOptions.length]);
+
+  // Keep a legacy/removed stored incoterms value selectable so opening + saving
+  // the dialog never silently drops it.
+  const incotermsChoices = useMemo(() => {
+    const cur = draft.incoterms.trim();
+    const known = incotermsOptions.some((o) => o.value === cur);
+    return cur && !known ? [...incotermsOptions, { value: cur, label: `${cur} (current)` }] : incotermsOptions;
+  }, [incotermsOptions, draft.incoterms]);
 
   const save = async () => {
     // advance % must be a number in 0..100 if given.
@@ -120,7 +155,18 @@ export function DealTermsEditor({
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground" htmlFor="dt-inc">Incoterms</label>
-                <Input id="dt-inc" value={draft.incoterms} onChange={(e) => set("incoterms", e.target.value)} placeholder="e.g. FCA" />
+                <Select
+                  value={draft.incoterms.trim() === "" ? INCOTERMS_NONE : draft.incoterms}
+                  onValueChange={(v) => set("incoterms", v === INCOTERMS_NONE ? "" : v)}
+                >
+                  <SelectTrigger id="dt-inc"><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={INCOTERMS_NONE}>—</SelectItem>
+                    {incotermsChoices.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="col-span-2 space-y-1">
                 <label className="text-xs text-muted-foreground" htmlFor="dt-incp">Incoterms place</label>
@@ -135,7 +181,23 @@ export function DealTermsEditor({
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground" htmlFor="dt-dl">Delivery deadline</label>
-                <Input id="dt-dl" value={draft.deliveryDeadline} onChange={(e) => set("deliveryDeadline", e.target.value)} placeholder="e.g. 2026-08-15 or week 34" />
+                {deadlineTextMode ? (
+                  <>
+                    <Input id="dt-dl" value={draft.deliveryDeadline} onChange={(e) => set("deliveryDeadline", e.target.value)} placeholder="e.g. week 34" />
+                    <button type="button" className="text-[11px] text-primary hover:underline"
+                      onClick={() => { set("deliveryDeadline", ""); setDeadlineTextMode(false); }}>
+                      Pick a date instead
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Input id="dt-dl" type="date" value={draft.deliveryDeadline} onChange={(e) => set("deliveryDeadline", e.target.value)} />
+                    <button type="button" className="text-[11px] text-muted-foreground hover:underline"
+                      onClick={() => setDeadlineTextMode(true)}>
+                      Enter free text instead
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 

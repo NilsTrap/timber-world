@@ -55,6 +55,9 @@ export type OrderDealViewResult = OrderDealView & {
   /** B5: may this viewer edit line amounts (admin OR deal_terms editable). Drives
    *  the client edit affordances; the action re-checks server-side. */
   canEditDealTerms: boolean;
+  /** H1: may this viewer set the deal's parties (admin OR orders.view creator) —
+   *  drives the party-less Draft "Set parties" card. setDealParties re-checks. */
+  canEditParties: boolean;
   /** B4: may this viewer start / see sourcing (admin OR suppliers-book access). */
   canStartSourcing: boolean;
   /** B4: sourcing state on a SELL deal, for canStartSourcing viewers only (else null). */
@@ -111,6 +114,9 @@ export async function getOrderDealView(orderId: string): Promise<ActionResult<Or
 
   const canEditDealTerms = await requireLineWriteAccess(a.actor, a.orgId); // B5 (admin | deal_terms editable)
   const canStartSourcing = isAdmin || (profile ? hasSuppliersBookAccess(profile) : false); // B4
+  // H1: setting parties mirrors createOrder's permission (any orders.view creator);
+  // admins bypass. profile.modules is the org∩user module set (same as createOrder).
+  const canEditParties = isAdmin || (profile ? profile.modules.has("orders.view") : false);
   const seeSupplier = isAdmin || (profile ? resolveFieldAccess(profile).domainVisible("supplier_identity") : false);
   const isBuyLeg = rawDealKind === "purchase_only";
 
@@ -154,6 +160,7 @@ export async function getOrderDealView(orderId: string): Promise<ActionResult<Or
       hasSiblingBuyLeg,
       siblingBuyLegPriced,
       canEditDealTerms,
+      canEditParties,
       canStartSourcing,
       sourcing,
       spineLegs,

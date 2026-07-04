@@ -18,6 +18,7 @@ import { DealStageRail, DealAdvanceControl } from "./DealPipeline";
 import { OrderActivityLog } from "./OrderActivityLog";
 import { DealLineAdder } from "./DealLineAdder";
 import { SourcingCard } from "./SourcingCard";
+import { DealPartiesCard } from "./DealPartiesCard";
 import { ChainCard } from "./ChainCard";
 import { DealHeader } from "./DealHeader";
 import { DealActivitiesCard } from "./DealActivitiesCard";
@@ -90,6 +91,7 @@ export function DealPanel({ orderId }: { orderId: string }) {
       hasSiblingBuyLeg: prev?.hasSiblingBuyLeg ?? false,
       siblingBuyLegPriced: prev?.siblingBuyLegPriced ?? false,
       canEditDealTerms: prev?.canEditDealTerms ?? false,
+      canEditParties: prev?.canEditParties ?? false,
       canStartSourcing: prev?.canStartSourcing ?? false,
       sourcing: prev?.sourcing ?? null,
       spineLegs: prev?.spineLegs ?? [],
@@ -221,6 +223,18 @@ export function DealPanel({ orderId }: { orderId: string }) {
 
       {/* Lifecycle stage rail (needs the width — stays in the main column) */}
       <DealStageRail orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
+
+      {/* H1 · Parties card — a party-less Draft deal has no bilateral code yet;
+          setting its parties mints SELLER-BUYER-NNN. Editable only while Draft
+          (§3.1: a deal is defined by who sells to whom — after Draft it locks). */}
+      {deal.lifecycleStage === "draft" && deal.canEditParties && (deal.customer.id == null || deal.seller.id == null) && (
+        <DealPartiesCard
+          orderId={orderId}
+          customer={{ id: deal.customer.id, name: deal.customer.name }}
+          seller={{ id: deal.seller.id, name: deal.seller.name }}
+          onChanged={load}
+        />
+      )}
 
       {!hasDealData && (
         <EmptyState message="No deal data yet. Deals captured from intake (email / PO / meeting) populate line items here; you can also generate documents below once the deal has line items." />
