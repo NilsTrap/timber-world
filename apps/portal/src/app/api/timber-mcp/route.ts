@@ -155,6 +155,9 @@ async function callTool(name: string, args: any, role: Role) {
     case "timber_update_org": {
       if (!args?.org_id) return toolErr("org_id is required");
       const res = await updateOrg(db, args.org_id, {
+        // Pass code through so an explicit change attempt is REJECTED (immutable),
+        // rather than silently ignored — the tool schema doesn't advertise it.
+        code: args?.code,
         name: args?.name,
         legalAddress: args?.legal_address,
         vatNumber: args?.vat_number,
