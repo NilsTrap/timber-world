@@ -216,6 +216,9 @@ async function callTool(name: string, args: any, role: Role) {
         deliveryDeadline: args?.delivery_deadline ?? null,
         notes: args?.notes ?? null,
         idempotencyKey: args?.idempotency_key ?? null,
+        // L1 · spine-Lego leg: join an origin deal's spine + copy its lines (blank prices).
+        originDealId: args?.origin_deal_id ?? null,
+        copyLines: args?.copy_lines,
         lineItems: mapLineItemArgs(args?.line_items),
       });
       return res.success ? toolOk(res.data) : toolErr(res.error);
@@ -256,9 +259,11 @@ async function callTool(name: string, args: any, role: Role) {
     }
     case "timber_start_sourcing": {
       if (!args?.deal_id || !args?.supplier_organisation_id) return toolErr("deal_id and supplier_organisation_id are required");
-      const res = await startSourcing(db, SERVICE_ACTOR, args.deal_id, args.supplier_organisation_id);
+      // L1 · buyer defaults to the sell deal's seller but is editable (wrong-buyer fix).
+      const res = await startSourcing(db, SERVICE_ACTOR, args.deal_id, args.supplier_organisation_id, args?.buyer_organisation_id ?? null);
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
+
     case "timber_set_margin_approval": {
       if (!args?.deal_id || typeof args?.approved !== "boolean") return toolErr("deal_id and approved (boolean) are required");
       const res = await setMarginApproval(db, SERVICE_ACTOR, args.deal_id, args.approved);

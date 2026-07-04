@@ -79,6 +79,15 @@ const createDealProps =
 ok("create_deal exposes needs_sourcing", "needs_sourcing" in createDealProps);
 ok("create_deal exposes source_organisation_id", "source_organisation_id" in createDealProps);
 
+// L1 (2026-07-04): spine-Lego leg parity — create_deal can fork a leg onto an
+// origin deal's spine (copying its lines), and start_sourcing's buy-leg buyer is
+// editable (the Meeting-1 wrong-buyer fix).
+ok("L1: create_deal exposes origin_deal_id (leg on a spine)", "origin_deal_id" in createDealProps);
+ok("L1: create_deal exposes copy_lines", "copy_lines" in createDealProps);
+const startSourcingProps =
+  ((byName.get("timber_start_sourcing")?.inputSchema as { properties?: Record<string, unknown> })?.properties) ?? {};
+ok("L1: start_sourcing exposes editable buyer_organisation_id", "buyer_organisation_id" in startSourcingProps);
+
 // ── J (2026-07-04): MCP parity for Vilma — every new UI action is a tool ──────
 // The completeness rule becomes EXECUTABLE for the J additions: a future UI action
 // shipped without its MCP tool (or a lost registration) FAILS this build.

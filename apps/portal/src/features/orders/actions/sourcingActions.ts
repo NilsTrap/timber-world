@@ -59,9 +59,24 @@ async function isActiveSupplierOrg(orgId: string): Promise<boolean> {
   return !!data && data.is_active !== false && (data.is_supplier === true || data.is_producer === true);
 }
 
-/** B1 — Start sourcing an existing sell deal: spawn its buy leg (supplier → house)
- *  on the same spine, with the sell lines copied (prices blank). */
-export async function startSourcingAction(input: { orderId: string; supplierOrgId: string }): Promise<ActionResult<SourcingResult>> {
+/** L1 · the editable BUY-leg buyer must be an active trader (never trust the client). */
+async function isActiveTraderOrg(orgId: string): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data } = await admin
+    .from("organisations")
+    .select("is_trader, is_active")
+    .eq("id", orgId)
+    .maybeSingle();
+  return !!data && data.is_active !== false && data.is_trader === true;
+}
+
+/** B1/L1 — Create the next (buy) leg for an existing sell deal: spawn a buy leg
+ *  (supplier → buyer) on the same spine, with the sell lines copied (prices
+ *  blank). The buyer defaults to this deal's seller but is editable (L1 fixes the
+ *  Meeting-1 wrong-buyer bug); a provided buyer is re-validated as an active
+ *  trader. */
+export async function startSourcingAction(input: { orderId: string; supplierOrgId: string; buyerOrgId?: string | null }): Promise<ActionResult<SourcingResult>> {
   const a = await resolveDealActor();
   if (!a.ok) return { success: false, error: a.error, code: a.code };
   if (!(await canSource(a.actor, a.orgId))) {
@@ -70,7 +85,10 @@ export async function startSourcingAction(input: { orderId: string; supplierOrgI
   if (!(await isActiveSupplierOrg(input.supplierOrgId))) {
     return { success: false, error: "That organisation is not an active supplier or producer", code: "VALIDATION_ERROR" };
   }
-  const res = await startSourcing(a.db, a.actor, input.orderId, input.supplierOrgId);
+  if (input.buyerOrgId && !(await isActiveTraderOrg(input.buyerOrgId))) {
+    return { success: false, error: "The buyer must be an active trader", code: "VALIDATION_ERROR" };
+  }
+  const res = await startSourcing(a.db, a.actor, input.orderId, input.supplierOrgId, input.buyerOrgId ?? null);
   if (!res.success) return { success: false, error: res.error, code: res.code };
   revalidatePath(`/orders/${input.orderId}`);
   return { success: true, data: { buyLegOrderId: res.data.id, buyLegDealCode: res.data.dealCode } };
@@ -80,7 +98,7 @@ export async function startSourcingAction(input: { orderId: string; supplierOrgI
  *  and respawn via B1. Never re-points a deal's seller (§3.1 — deal codes are
  *  directional identities). The cancel flags the spine (§6.4); we clear that flag
  *  after the respawn re-establishes the chain. */
-export async function replaceSupplierAction(input: { orderId: string; newSupplierOrgId: string }): Promise<ActionResult<SourcingResult>> {
+export async function replaceSupplierAction(input: { orderId: string; newSupplierOrgId: string; buyerOrgId?: string | null }): Promise<ActionResult<SourcingResult>> {
   const a = await resolveDealActor();
   if (!a.ok) return { success: false, error: a.error, code: a.code };
   if (!(await canSource(a.actor, a.orgId))) {
@@ -88,6 +106,9 @@ export async function replaceSupplierAction(input: { orderId: string; newSupplie
   }
   if (!(await isActiveSupplierOrg(input.newSupplierOrgId))) {
     return { success: false, error: "That organisation is not an active supplier or producer", code: "VALIDATION_ERROR" };
+  }
+  if (input.buyerOrgId && !(await isActiveTraderOrg(input.buyerOrgId))) {
+    return { success: false, error: "The buyer must be an active trader", code: "VALIDATION_ERROR" };
   }
 
   const dealRes = await getOrderDeal(a.db, a.actor, input.orderId);
@@ -133,7 +154,7 @@ export async function replaceSupplierAction(input: { orderId: string; newSupplie
   }
 
   // Respawn with the new supplier (fresh buy leg on the same spine, lines re-copied).
-  const res = await startSourcing(a.db, a.actor, input.orderId, input.newSupplierOrgId);
+  const res = await startSourcing(a.db, a.actor, input.orderId, input.newSupplierOrgId, input.buyerOrgId ?? null);
   if (!res.success) {
     // COMPENSATE: cancel + respawn are not one transaction. On respawn failure,
     // un-cancel the old leg and clear the chain_broken the cancel set, so the deal

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Truck, ArrowRight, RefreshCw } from "lucide-react";
+import { Loader2, Truck, ArrowRight, RefreshCw, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import {
   Button, Label, StatusBadge,
@@ -11,18 +11,25 @@ import {
 } from "@timber/ui";
 import type { DealSourcingState } from "../actions/dealActions";
 import { getSupplierOptions, startSourcingAction, replaceSupplierAction, type SupplierOption } from "../actions/sourcingActions";
+import { getOrderPartyOptions } from "../actions/getOrderPartyOptions";
+
+interface PartyOpt { id: string; code: string; name: string }
 
 /**
- * B4 · Sourcing state on a SELL deal (right action column). Shown only to viewers
- * with sourcing rights (canStartSourcing, resolved server-side). Three states:
- * unsourced → "Start sourcing" CTA; sourced → link to the buy deal + "Replace
- * supplier". Supplier name is only present when the viewer has supplier_identity.
+ * B4/L1 · Sourcing state on a SELL deal (right action column). Shown only to
+ * viewers with sourcing rights (canStartSourcing, resolved server-side). The
+ * "Create next leg" action spawns the buy leg: seller = the picked supplier;
+ * buyer defaults to THIS deal's seller (the trader) but is EDITABLE — L1's fix
+ * for the Meeting-1 wrong-buyer bug.
  */
 export function SourcingCard({
-  orderId, sourcing, onChanged,
+  orderId, sourcing, sellerOrgId, sellerName, onChanged,
 }: {
   orderId: string;
   sourcing: DealSourcingState;
+  /** This deal's seller (the trader) — the default buyer for the new buy leg. */
+  sellerOrgId: string | null;
+  sellerName: string | null;
   onChanged: () => void | Promise<void>;
 }) {
   const [mode, setMode] = useState<null | "start" | "replace">(null);
@@ -71,11 +78,11 @@ export function SourcingCard({
       ) : (
         <>
           <p className="text-xs text-muted-foreground">
-            Not sourced yet. Pick a supplier to create the buy deal on this spine (the sell lines
-            are copied over with prices left blank for Purchasing).
+            Not sourced yet. Create the buy leg on this spine — the sell lines copy over with prices
+            left blank for the new leg to price.
           </p>
           <Button size="sm" className="w-full" onClick={() => setMode("start")}>
-            <Truck className="h-3.5 w-3.5" /> Start sourcing
+            <GitBranch className="h-3.5 w-3.5" /> Create next leg
           </Button>
         </>
       )}
@@ -84,6 +91,8 @@ export function SourcingCard({
         <SupplierDialog
           orderId={orderId}
           mode={mode}
+          defaultBuyerId={sellerOrgId}
+          defaultBuyerName={sellerName}
           onClose={() => setMode(null)}
           onDone={onChanged}
         />
@@ -93,49 +102,65 @@ export function SourcingCard({
 }
 
 function SupplierDialog({
-  orderId, mode, onClose, onDone,
+  orderId, mode, defaultBuyerId, defaultBuyerName, onClose, onDone,
 }: {
   orderId: string;
   mode: "start" | "replace";
+  defaultBuyerId: string | null;
+  defaultBuyerName: string | null;
   onClose: () => void;
   onDone: () => void | Promise<void>;
 }) {
   const [options, setOptions] = useState<SupplierOption[]>([]);
+  const [buyerOptions, setBuyerOptions] = useState<PartyOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [supplierId, setSupplierId] = useState<string>("");
+  const [buyerId, setBuyerId] = useState<string>(defaultBuyerId ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    getSupplierOptions().then((res) => {
+    Promise.all([getSupplierOptions(), getOrderPartyOptions()]).then(([sup, parties]) => {
       if (!alive) return;
       setLoading(false);
-      if (res.success) setOptions(res.data);
-      else setErr(res.error);
+      if (sup.success) setOptions(sup.data);
+      else setErr(sup.error);
+      // Buyer (trader) options — always include this deal's seller as the default,
+      // then any traders the viewer may pick from.
+      const traders = parties.success ? parties.data.traderOptions : [];
+      const merged: PartyOpt[] = [];
+      const seen = new Set<string>();
+      if (defaultBuyerId) {
+        merged.push({ id: defaultBuyerId, code: "", name: defaultBuyerName ?? "This deal's trader" });
+        seen.add(defaultBuyerId);
+      }
+      for (const t of traders) if (!seen.has(t.id)) { merged.push(t); seen.add(t.id); }
+      setBuyerOptions(merged);
     });
     return () => { alive = false; };
-  }, []);
+  }, [defaultBuyerId, defaultBuyerName]);
 
   const confirm = useCallback(async () => {
     if (!supplierId) { setErr("Pick a supplier."); return; }
     setSubmitting(true);
     setErr(null);
+    const buyer = buyerId || null;
     const res = mode === "start"
-      ? await startSourcingAction({ orderId, supplierOrgId: supplierId })
-      : await replaceSupplierAction({ orderId, newSupplierOrgId: supplierId });
+      ? await startSourcingAction({ orderId, supplierOrgId: supplierId, buyerOrgId: buyer })
+      : await replaceSupplierAction({ orderId, newSupplierOrgId: supplierId, buyerOrgId: buyer });
     setSubmitting(false);
     if (!res.success) { setErr(res.error); toast.error(res.error); return; }
-    toast.success(mode === "start" ? "Sourcing started" : "Supplier replaced");
+    toast.success(mode === "start" ? "Next leg created" : "Supplier replaced");
     onClose();
     await onDone();
-  }, [mode, orderId, supplierId, onClose, onDone]);
+  }, [mode, orderId, supplierId, buyerId, onClose, onDone]);
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{mode === "start" ? "Start sourcing" : "Replace supplier"}</DialogTitle>
+          <DialogTitle>{mode === "start" ? "Create next leg" : "Replace supplier"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {mode === "replace" && (
@@ -146,7 +171,7 @@ function SupplierDialog({
             </p>
           )}
           <div className="space-y-1.5">
-            <Label>Supplier</Label>
+            <Label>Supplier <span className="text-muted-foreground">(seller)</span></Label>
             {loading ? (
               <span className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading suppliers…
@@ -164,13 +189,27 @@ function SupplierDialog({
               </Select>
             )}
           </div>
+          {/* L1 · buyer — defaults to this deal's seller (the trader) but editable. */}
+          {!loading && buyerOptions.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Buyer <span className="text-muted-foreground">(who buys from the supplier)</span></Label>
+              <Select value={buyerId} onValueChange={setBuyerId}>
+                <SelectTrigger><SelectValue placeholder="Pick the buyer" /></SelectTrigger>
+                <SelectContent>
+                  {buyerOptions.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>{o.code ? `${o.code} — ${o.name}` : o.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {err && <p className="text-sm text-destructive">{err}</p>}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={submitting}>Cancel</Button>
           <Button onClick={confirm} disabled={submitting || !supplierId}>
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {mode === "start" ? "Start sourcing" : "Replace supplier"}
+            {mode === "start" ? "Create next leg" : "Replace supplier"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -18,6 +18,7 @@ import { DealStageRail, DealAdvanceControl } from "./DealPipeline";
 import { OrderActivityLog } from "./OrderActivityLog";
 import { DealLineAdder } from "./DealLineAdder";
 import { SourcingCard } from "./SourcingCard";
+import { NextLegCard } from "./NextLegCard";
 import { DealPartiesCard } from "./DealPartiesCard";
 import { ChainCard } from "./ChainCard";
 import { DealActivitiesCard } from "./DealActivitiesCard";
@@ -429,10 +430,22 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
             is emphasised, nothing is gated. */}
         <DealActivitiesCard stage={deal.lifecycleStage} direction={deal.viewerDirection} />
 
-        {/* B4 · Sourcing state (Start sourcing / Sourced link). Server sends a
+        {/* B4 · Sourcing state (Create next leg / Sourced link). Server sends a
             non-null `sourcing` only to viewers with sourcing rights (§9.3). */}
         {deal.sourcing && (
-          <SourcingCard orderId={orderId} sourcing={deal.sourcing} onChanged={load} />
+          <SourcingCard
+            orderId={orderId}
+            sourcing={deal.sourcing}
+            sellerOrgId={deal.seller.id}
+            sellerName={deal.seller.name}
+            onChanged={load}
+          />
+        )}
+
+        {/* L1 · Create next leg — admin only. Fork a new deal onto this spine
+            (copies this deal's spec lines, prices blank). Manual chain assembly. */}
+        {isAdmin && (
+          <NextLegCard orderId={orderId} originLabel={deal.dealCode ?? deal.code} />
         )}
 
         {/* Owner margin approval (§5.3). A3: sell subtotal = this deal's own lines;

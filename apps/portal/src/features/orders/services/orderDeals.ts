@@ -500,6 +500,15 @@ export interface CreateOrderDealInput {
   buyerOrganisationId?: string | null;
   spineId?: string | null;
   spineProduct?: Partial<SpineProduct>;
+  /** L1 · attach this new deal as a LEG on an existing origin deal's spine. The
+   *  origin mints its spine now if it lacks one; its spec lines are copied unless
+   *  `copyLines` is false (prices always blanked). Takes precedence for the spine
+   *  over any auto-created one, but an explicit `spineId` still wins. */
+  originDealId?: string | null;
+  /** Copy the origin deal's line items onto this leg (default true when
+   *  `originDealId` is set). Product definition + catalog links + quantities are
+   *  copied; prices are blanked (each leg prices itself). */
+  copyLines?: boolean;
   /** Auto-spawn the matching BUY deal on the same spine (a sale that needs sourcing). */
   needsSourcing?: boolean;
   /** Supplier/producer org that SELLS to us on the auto-spawned buy leg. */
@@ -529,6 +538,30 @@ export interface CreateOrderDealInput {
 export async function createDeal(db: DbClient, actor: ActorContext, input: CreateOrderDealInput): Promise<ActionResult<OrderDealView>> {
   const c = db as DbClient;
 
+  // L1 · "leg on a spine": attach to an existing origin deal's spine and copy its
+  // spec lines (prices blanked — each leg prices itself). The origin mints its
+  // spine NOW if it doesn't have one yet, so the two deals share one traceable
+  // identity. Resolved before the insert so the leg is born on the right spine.
+  let originSpineId: string | null = null;
+  let originLines: Partial<OrderLineItem>[] | null = null;
+  if (input.originDealId) {
+    if (!isValidUUID(input.originDealId)) {
+      return { success: false, error: "Invalid origin deal id", code: "VALIDATION_ERROR" };
+    }
+    const originRes = await getOrderDeal(db, actor, input.originDealId);
+    if (!originRes.success) return originRes;
+    const origin = originRes.data;
+    originSpineId = origin.spineId;
+    if (!originSpineId) {
+      const sp = await createSpine(db, actor, { title: origin.name ?? "Deal", productGroup: origin.productGroup });
+      if (sp.success) {
+        originSpineId = sp.data.id;
+        await attachDealToSpine(db, actor, origin.id, originSpineId);
+      }
+    }
+    if (input.copyLines !== false) originLines = origin.lineItems.map(blankBuyLegLine);
+  }
+
   // Idempotency: if a deal already carries this key as an external ref, return it.
   if (input.idempotencyKey) {
     const { data: existing } = await c
@@ -551,9 +584,11 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
   // Default the selling/trading entity to the house org (Timber International,
   // code TIM) when not specified, so the deal — and the documents generated from
   // it — carry the seller's requisites (VAT, legal address, bank). Overridable
-  // per deal (e.g. The Wood and Good / TWG).
+  // per deal (e.g. The Wood and Good / TWG). NOT for a LEG (originDealId): a leg's
+  // parties are the admin's explicit choice, and a leg may be held with the seller
+  // unset (a purchase leg while still shopping suppliers, L3) — never auto-filled.
   let sellerOrgId = input.sellerOrganisationId ?? null;
-  if (!sellerOrgId) {
+  if (!sellerOrgId && !input.originDealId) {
     const { data: house } = await c.from("organisations").select("id").eq("code", DEFAULT_ENTITY_CODE).maybeSingle();
     sellerOrgId = (house?.id as string | undefined) ?? null;
   }
@@ -587,8 +622,9 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
 
   // Seed the spine AFTER the order exists, so a failed order insert can't leak an
   // orphan spine or burn an SP-### number. Best-effort: a deal without a spine is
-  // valid and recoverable (attach later); a spine without a deal is junk.
-  let spineId = input.spineId ?? null;
+  // valid and recoverable (attach later); a spine without a deal is junk. An
+  // explicit spineId wins; else the origin's spine (leg mode); else a fresh one.
+  let spineId = input.spineId ?? originSpineId ?? null;
   if (!spineId) {
     const sp = await createSpine(db, actor, {
       title: dealName,
@@ -603,8 +639,10 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
   // orphan the row — the code can be re-allocated later via allocateDealCode).
   await allocateDealCode(db, actor, orderId, { customerNameFallback: input.customerNameForCode ?? null });
 
-  if (input.lineItems && input.lineItems.length > 0) {
-    const res = await replaceLineItems(db, actor, orderId, "sell", input.lineItems);
+  // Explicit lines win; else the origin's copied (blanked) spec lines (leg mode).
+  const legLines = input.lineItems && input.lineItems.length > 0 ? input.lineItems : originLines;
+  if (legLines && legLines.length > 0) {
+    const res = await replaceLineItems(db, actor, orderId, "sell", legLines);
     if (!res.success) return res as unknown as ActionResult<OrderDealView>;
   }
 
@@ -624,7 +662,7 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
       sellOrderId: orderId,
       sellName: dealName,
       productGroup: input.productGroup ?? null,
-      houseOrgId: sellerOrgId,
+      buyerOrgId: sellerOrgId, // the sell leg's seller buys, by default
       spineId,
       currency: input.currency ?? "EUR",
       supplierOrgId: input.sourceOrganisationId,
@@ -679,7 +717,11 @@ interface SpawnBuyLegOpts {
   sellOrderId: string;
   sellName: string;
   productGroup: string | null;
-  houseOrgId: string | null;
+  /** The BUYER on the spawned buy leg (who buys from the supplier). Defaults to
+   *  the current deal's seller at the call site, but is now caller-supplied +
+   *  editable — a chain's middle leg need not be bought by the sell-leg seller
+   *  (L1 · fixes the Meeting-1 wrong-buyer bug). */
+  buyerOrgId: string | null;
   spineId: string | null;
   currency: string;
   supplierOrgId: string;
@@ -705,10 +747,10 @@ async function spawnBuyLeg(db: DbClient, actor: ActorContext, opts: SpawnBuyLegO
     dealKind: "purchase_only",
     productGroup: opts.productGroup,
     sellerOrganisationId: opts.supplierOrgId, // supplier sells to us
-    buyerOrganisationId: opts.houseOrgId, // the house buys
+    buyerOrganisationId: opts.buyerOrgId, // the trader that buys (editable, L1)
     // Legacy customer slot mirrors the buyer (customer == buyer invariant until E8
     // retires the 3-party columns; RLS is bilateral seller+buyer since E4).
-    customerOrganisationId: opts.houseOrgId,
+    customerOrganisationId: opts.buyerOrgId,
     spineId: opts.spineId, // SAME spine — no new spine spawned
     currency: opts.currency,
     lineItems: opts.lineItems.length > 0 ? opts.lineItems : undefined,
@@ -743,9 +785,13 @@ export async function startSourcing(
   actor: ActorContext,
   sellOrderId: string,
   supplierOrgId: string,
+  buyerOrgId?: string | null,
 ): Promise<ActionResult<OrderDealView>> {
   if (!isValidUUID(sellOrderId) || !isValidUUID(supplierOrgId)) {
     return { success: false, error: "Invalid id", code: "VALIDATION_ERROR" };
+  }
+  if (buyerOrgId && !isValidUUID(buyerOrgId)) {
+    return { success: false, error: "Invalid buyer id", code: "VALIDATION_ERROR" };
   }
   const dealRes = await getOrderDeal(db, actor, sellOrderId);
   if (!dealRes.success) return dealRes;
@@ -778,7 +824,9 @@ export async function startSourcing(
     sellOrderId,
     sellName: deal.name ?? "Deal",
     productGroup: deal.productGroup,
-    houseOrgId: deal.seller.id, // the house is the seller on the sell leg (§2.4)
+    // Buyer defaults to THIS deal's seller (the trader on the sell leg, §2.4) but
+    // is now caller-editable (L1 · wrong-buyer fix).
+    buyerOrgId: buyerOrgId ?? deal.seller.id,
     spineId,
     currency: deal.currency,
     supplierOrgId,
