@@ -18,7 +18,7 @@
  */
 import { escapeAttr, escapeText } from "./nodes";
 import { compileShell } from "./shell";
-import { LINE_ITEM_COLUMNS, DEFAULT_LINE_ITEM_COLUMNS, basePathOf } from "./registry";
+import { LINE_ITEM_COLUMNS, DEFAULT_LINE_ITEM_COLUMNS, basePathOf, type LineItemColumn } from "./registry";
 import type { CompileOptions } from "./types";
 
 /**
@@ -160,30 +160,60 @@ function serializeTable(el: SlateElement): string {
   return `<table class="rt-table">${rows}</table>`;
 }
 
+/** The persisted def for a dynamic (catalog-field) column, stored on the node. */
+interface StoredColumnDef {
+  header?: unknown;
+  num?: unknown;
+}
+
 /**
- * The repeating line-items table. The Slate node stores only the chosen column
- * keys; the header + item-scoped cell expressions come from LINE_ITEM_COLUMNS,
- * and the body row is wrapped in {{#each lineItems}}…{{/each}} (the seeded look).
+ * Resolve a chosen column KEY to a concrete `LineItemColumn`:
+ *   • a fixed key → its static registry def (LINE_ITEM_COLUMNS);
+ *   • an `attr.<fieldKey>` key → the header STORED on the node (columnDefs) so
+ *     this stays DB-FREE, with the cell DERIVED as `{{lookup attr "<fieldKey>"}}`
+ *     (fieldKey = the `attr.` prefix stripped). A since-deleted catalog field
+ *     still resolves — the stored header renders and the cell yields empty (the
+ *     assembler simply has no `attr.<fieldKey>` value), never a crash;
+ *   • any other unknown key → dropped (null), as before.
+ */
+function resolveLineItemColumn(
+  key: string,
+  defs: Record<string, StoredColumnDef> | undefined,
+): LineItemColumn | null {
+  if (Object.prototype.hasOwnProperty.call(LINE_ITEM_COLUMNS, key)) return LINE_ITEM_COLUMNS[key]!;
+  if (key.startsWith("attr.")) {
+    const fieldKey = key.slice("attr.".length);
+    if (!fieldKey) return null;
+    const def = defs?.[key];
+    const header = typeof def?.header === "string" ? def.header : fieldKey;
+    return { key, header, cell: `{{lookup attr "${fieldKey}"}}`, num: def?.num === true };
+  }
+  return null;
+}
+
+/**
+ * The repeating line-items table. The Slate node stores the chosen column KEYS
+ * (`columns`) plus, for dynamic catalog-field columns, their resolved defs
+ * (`columnDefs["attr.<fieldKey>"] = { header, num }`) so the header text travels
+ * inside doc_json and this renderer needs NO DB read. Each key resolves via
+ * `resolveLineItemColumn`; the body row is wrapped in {{#each lineItems}}…{{/each}}
+ * (the seeded look).
  */
 function serializeLineItems(el: SlateElement): string {
-  const chosen = Array.isArray((el as { columns?: unknown }).columns)
-    ? ((el as { columns: unknown[] }).columns.filter(
-        (k): k is string => typeof k === "string" && Object.prototype.hasOwnProperty.call(LINE_ITEM_COLUMNS, k),
-      ))
+  const rawCols = Array.isArray((el as { columns?: unknown }).columns)
+    ? (el as { columns: unknown[] }).columns.filter((k): k is string => typeof k === "string")
     : [];
-  const cols = chosen.length ? chosen : DEFAULT_LINE_ITEM_COLUMNS;
+  const defs = (el as { columnDefs?: Record<string, StoredColumnDef> }).columnDefs;
+  const resolved = rawCols
+    .map((k) => resolveLineItemColumn(k, defs))
+    .filter((c): c is LineItemColumn => c !== null);
+  const cols = resolved.length
+    ? resolved
+    : DEFAULT_LINE_ITEM_COLUMNS.map((k) => LINE_ITEM_COLUMNS[k]!);
   const th = cols
-    .map((k) => {
-      const d = LINE_ITEM_COLUMNS[k]!;
-      return `<th${d.num ? ' class="num"' : ""}>${escapeText(d.header)}</th>`;
-    })
+    .map((d) => `<th${d.num ? ' class="num"' : ""}>${escapeText(d.header)}</th>`)
     .join("");
-  const td = cols
-    .map((k) => {
-      const d = LINE_ITEM_COLUMNS[k]!;
-      return `<td${d.num ? ' class="num"' : ""}>${d.cell}</td>`;
-    })
-    .join("");
+  const td = cols.map((d) => `<td${d.num ? ' class="num"' : ""}>${d.cell}</td>`).join("");
   return `<table class="items"><thead><tr>${th}</tr></thead><tbody>{{#each lineItems}}<tr>${td}</tr>{{/each}}</tbody></table>`;
 }
 

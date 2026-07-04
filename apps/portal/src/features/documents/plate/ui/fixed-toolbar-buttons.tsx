@@ -30,6 +30,7 @@ import {
   OutdentToolbarButton,
 } from './indent-toolbar-button';
 import { InsertToolbarButton } from './insert-toolbar-button';
+import { LineItemsToolbarButton } from './line-items-toolbar-button';
 import { MergeFieldToolbarButton } from './merge-field-toolbar-button';
 import { LineHeightToolbarButton } from './line-height-toolbar-button';
 import { LinkToolbarButton } from './link-toolbar-button';
@@ -75,6 +76,7 @@ export function FixedToolbarButtons() {
 
           <ToolbarGroup>
             <MergeFieldToolbarButton />
+            <LineItemsToolbarButton />
             <InsertToolbarButton />
             <TurnIntoToolbarButton />
             <FontSizeToolbarButton />
