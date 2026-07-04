@@ -14,6 +14,7 @@ import {
   cancelDeal,
   evaluateAdvance,
   recordGateConfirmation,
+  setDealStage,
   listGateConfigs,
   upsertGateConfig,
   type AdvanceEvaluation,
@@ -21,6 +22,7 @@ import {
   type GateBlock,
 } from "../services/lifecycle";
 import { resolveDealActor } from "./_dealActor";
+import { logOrderActivity } from "./logOrderActivity";
 
 /** Advance a deal one milestone if its gate is satisfied. Re-checks orders.view. */
 export async function advanceDealAction(orderId: string): Promise<ActionResult<{ stage: string }>> {
@@ -38,6 +40,26 @@ export async function cancelDealAction(orderId: string): Promise<ActionResult<{ 
   const res = await cancelDeal(a.db, a.actor, orderId);
   if (res.success) revalidatePath(`/orders/${orderId}`);
   return res;
+}
+
+/**
+ * R8 · Manually set a deal to any lifecycle stage (house-user/admin override). Same
+ * actor gate as advanceDealAction (resolveDealActor → orders.view / admin), so a pure
+ * counterparty login can't reach it. Logs the manual move — and a gate bypass when a
+ * forward move crossed the current stage's unsatisfied gate — via logOrderActivity.
+ */
+export async function setDealStageAction(orderId: string, targetStage: string): Promise<ActionResult<{ stage: string }>> {
+  const a = await resolveDealActor();
+  if (!a.ok) return { success: false, error: a.error, code: a.code };
+  const res = await setDealStage(a.db, a.actor, orderId, targetStage);
+  if (!res.success) return res;
+  const { previousStage, stage, gateBypassed, bypassedRequirements } = res.data;
+  const details =
+    `${previousStage} → ${stage}` +
+    (gateBypassed ? ` · gate bypassed${bypassedRequirements.length ? ` (${bypassedRequirements.join(", ")})` : ""}` : "");
+  await logOrderActivity(orderId, a.actor.portalUserId, "Stage set manually", details, "list");
+  revalidatePath(`/orders/${orderId}`);
+  return { success: true, data: { stage } };
 }
 
 /** Record a party sign-off / buyer-acceptance confirmation for the current-stage gate. */
