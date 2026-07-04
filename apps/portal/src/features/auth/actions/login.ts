@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { logLoginEvent } from "@/features/audit/actions/logLoginEvent";
 import { loginSchema, type LoginInput } from "../schemas/login";
 
 type ActionResult<T> =
@@ -91,6 +92,11 @@ export async function loginUser(
         updated_at: new Date().toISOString(),
       })
       .eq("id", portalUser.id);
+  }
+
+  // 5b. Record a login-history event (fire-and-forget; never blocks login).
+  if (portalUser) {
+    await logLoginEvent(portalUser.id, email);
   }
 
   // 6. Return redirect path

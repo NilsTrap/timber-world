@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { logLoginEvent } from "@/features/audit/actions/logLoginEvent";
 import type { ActionResult } from "@/features/organisations/types";
 
 /**
@@ -79,6 +80,9 @@ export async function completeInvite(
     console.error("Failed to update portal user status:", statusError);
     // Non-critical - user can still log in, status will be updated on next login
   }
+
+  // 4b. Record a login-history event for this first login (fire-and-forget).
+  await logLoginEvent(portalUser.id, user.email ?? "");
 
   // 5. Determine redirect based on role
   let redirectTo = "/dashboard";
