@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -11,7 +11,7 @@ import {
 } from "@timber/ui";
 import { getOrderPartyOptions, type OrderPartyOptions } from "../actions/getOrderPartyOptions";
 import { createOrder } from "../actions/createOrder";
-import { getOriginDealOptions, createDealLegAction, type OriginDealOption } from "../actions/legActions";
+import { getOriginDealOptions, createDealLegAction, duplicateDealAction, type OriginDealOption } from "../actions/legActions";
 import { getCurrencies } from "@/features/catalog/actions/currencies";
 import { PartyFields, partyPickComplete, type PartyValue } from "./PartyFields";
 
@@ -58,10 +58,15 @@ export function NewDealDialog({
   const [currencyOptions, setCurrencyOptions] = useState<{ code: string; name: string }[]>(FALLBACK_CURRENCIES);
 
   // L1 · mode + origin (admin only). A preset origin forces leg mode.
-  const [mode, setMode] = useState<"blank" | "leg">(presetOriginDealId ? "leg" : "blank");
+  // R5 · a third mode "copy" duplicates an existing order (parties/terms/priced
+  // lines) into a new Draft origin.
+  const [mode, setMode] = useState<"blank" | "leg" | "copy">(presetOriginDealId ? "leg" : "blank");
   const [originOptions, setOriginOptions] = useState<OriginDealOption[] | null>(null);
   const [originId, setOriginId] = useState<string>(presetOriginDealId ?? "");
   const [legValue, setLegValue] = useState<PartyValue>({ customerOrganisationId: null, sellerOrganisationId: null });
+  // R5 · copy mode: the source deal + a search filter over the origin list.
+  const [copyId, setCopyId] = useState<string>("");
+  const [copySearch, setCopySearch] = useState("");
 
   // R7 · load currency options once when the dialog opens (active only, fallback set).
   useEffect(() => {
@@ -98,9 +103,10 @@ export function NewDealDialog({
     return () => { alive = false; };
   }, [open, partyOptions]);
 
-  // Load origin deals lazily the first time leg mode is shown (admin only).
+  // Load origin deals lazily the first time leg OR copy mode is shown (admin only) —
+  // both pick from the same existing-deal list.
   useEffect(() => {
-    if (!open || mode !== "leg" || originOptions || !partyOptions?.isAdmin) return;
+    if (!open || (mode !== "leg" && mode !== "copy") || originOptions || !partyOptions?.isAdmin) return;
     let alive = true;
     getOriginDealOptions().then((res) => {
       if (!alive) return;
@@ -154,29 +160,53 @@ export function NewDealDialog({
     router.push(`/orders/${res.data.id}`);
   }, [originId, name, legValue, router]);
 
+  // R5 · duplicate an existing order into a new Draft origin (prices kept).
+  const createCopy = useCallback(async () => {
+    if (!copyId) { toast.error("Pick an order to copy."); return; }
+    setSubmitting(true);
+    const res = await duplicateDealAction({ sourceDealId: copyId });
+    setSubmitting(false);
+    if (!res.success) { toast.error(res.error); return; }
+    toast.success(res.data.dealCode ? `Deal ${res.data.dealCode} created` : "Deal duplicated");
+    router.push(`/orders/${res.data.id}`);
+  }, [copyId, router]);
+
   const canSubmitBlank = !!partyOptions && partyPickComplete(partyOptions, value) && !submitting;
   // A leg needs an origin + at least one party (the code mints lazily once both exist).
   const canSubmitLeg =
     !!originId && (!!legValue.sellerOrganisationId || !!legValue.customerOrganisationId) && !submitting;
+  const canSubmitCopy = !!copyId && !submitting;
 
   const originLabel = (o: OriginDealOption) =>
     [o.dealCode ?? o.code, o.buyerName, o.spineCode].filter(Boolean).join(" · ");
+
+  // R5 · deals matching the copy-mode search (code / buyer / seller), newest first.
+  const copyCandidates = useMemo(() => {
+    const q = copySearch.trim().toLowerCase();
+    const list = originOptions ?? [];
+    if (!q) return list;
+    return list.filter((o) =>
+      [o.dealCode, o.code, o.buyerName, o.sellerName].filter(Boolean).some((s) => s!.toLowerCase().includes(q)),
+    );
+  }, [originOptions, copySearch]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!submitting) onOpenChange(o); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{mode === "leg" ? "New leg on a spine" : "New deal"}</DialogTitle>
+          <DialogTitle>{mode === "leg" ? "New leg on a spine" : mode === "copy" ? "Copy an existing order" : "New deal"}</DialogTitle>
           <DialogDescription>
             {mode === "leg"
               ? "Fork a new deal onto an existing order's spine — its spec lines copy over (prices blank)."
+              : mode === "copy"
+              ? "Duplicate an order into a new Draft — parties, terms and priced lines copy over onto a fresh spine."
               : "Pick the parties — the deal code is assigned automatically."}
           </DialogDescription>
         </DialogHeader>
 
-        {/* L1 · mode choice — ADMIN ONLY. A preset origin locks leg mode. */}
+        {/* L1/R5 · mode choice — ADMIN ONLY. A preset origin locks leg mode. */}
         {isAdmin && !presetOriginDealId && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0">
             <Button
               type="button"
               variant={mode === "blank" ? "default" : "outline"}
@@ -191,11 +221,21 @@ export function NewDealDialog({
               type="button"
               variant={mode === "leg" ? "default" : "outline"}
               size="sm"
-              className="rounded-l-none"
+              className="rounded-none border-l-0"
               onClick={() => setMode("leg")}
               disabled={submitting}
             >
               Leg from an order
+            </Button>
+            <Button
+              type="button"
+              variant={mode === "copy" ? "default" : "outline"}
+              size="sm"
+              className="rounded-l-none border-l-0"
+              onClick={() => setMode("copy")}
+              disabled={submitting}
+            >
+              Copy an order
             </Button>
           </div>
         )}
@@ -285,6 +325,41 @@ export function NewDealDialog({
               <Input id="nd-leg-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. UK middle leg" />
             </div>
           </div>
+        ) : partyOptions && mode === "copy" ? (
+          <div className="space-y-2">
+            <Label>Order to copy</Label>
+            <Input
+              value={copySearch}
+              onChange={(e) => setCopySearch(e.target.value)}
+              placeholder="Search by code, buyer or seller…"
+            />
+            {originOptions == null ? (
+              <span className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading deals…
+              </span>
+            ) : copyCandidates.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">
+                {originOptions.length === 0 ? "No existing deals to copy from." : "No deals match your search."}
+              </p>
+            ) : (
+              <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-1">
+                {copyCandidates.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => setCopyId(o.id)}
+                    className={`w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted ${copyId === o.id ? "bg-primary/10 ring-1 ring-primary/40" : ""}`}
+                  >
+                    <span className="font-medium tabular-nums">{o.dealCode ?? o.code}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {[o.sellerName, o.buyerName].filter(Boolean).join(" → ") || "—"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">The copy starts as a Draft with a new deal code — documents are not copied.</p>
+          </div>
         ) : null}
 
         <DialogFooter>
@@ -292,6 +367,10 @@ export function NewDealDialog({
           {mode === "leg" ? (
             <Button onClick={createLeg} disabled={!canSubmitLeg}>
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Create leg
+            </Button>
+          ) : mode === "copy" ? (
+            <Button onClick={createCopy} disabled={!canSubmitCopy}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Create copy
             </Button>
           ) : (
             <Button onClick={createBlank} disabled={!canSubmitBlank}>

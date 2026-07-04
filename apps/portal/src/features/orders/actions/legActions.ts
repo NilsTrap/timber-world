@@ -12,7 +12,8 @@
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "../types";
 import { resolveDealActor } from "./_dealActor";
-import { createDeal, listDeals } from "../services/orderDeals";
+import { createDeal, duplicateDeal, getOrderDeal, listDeals } from "../services/orderDeals";
+import { logOrderActivity } from "./logOrderActivity";
 
 export interface OriginDealOption {
   id: string;
@@ -22,6 +23,8 @@ export interface OriginDealOption {
   code: string;
   /** Buyer (customer) name, for the dropdown label. */
   buyerName: string | null;
+  /** R5 · Seller (trader) name, for the copy-from-existing picker label. */
+  sellerName: string | null;
   /** Spine code (SP-###) or null if the origin has no spine yet (minted on use). */
   spineCode: string | null;
 }
@@ -55,6 +58,7 @@ export async function getOriginDealOptions(): Promise<ActionResult<OriginDealOpt
       dealCode: d.dealCode,
       code: d.code,
       buyerName: d.buyer.name ?? d.customer.name ?? null,
+      sellerName: d.seller.name ?? null,
       spineCode: d.spineId ? spineCodeById.get(d.spineId) ?? null : null,
     }));
 
@@ -90,5 +94,37 @@ export async function createDealLegAction(input: {
 
   revalidatePath(`/orders/${res.data.id}`);
   revalidatePath(`/orders/${input.originDealId}`);
+  return { success: true, data: { id: res.data.id, dealCode: res.data.dealCode } };
+}
+
+/**
+ * R5 · "Copy from existing order" — duplicate a deal into a NEW ORIGIN (fresh spine
+ * + own code, Draft), copying parties, currency, all terms and the spec lines WITH
+ * their prices. ADMIN-ONLY, mirroring createDealLegAction: duplicating an arbitrary
+ * deal copies its parties + prices verbatim (a wall-leak risk for salespeople), and
+ * the source picker (getOriginDealOptions) is already admin-only. Extending this to
+ * salespeople-own-trader is a deliberate follow-up. Logs "Duplicated from <code>" on
+ * the new deal via logOrderActivity.
+ */
+export async function duplicateDealAction(input: { sourceDealId: string }): Promise<ActionResult<{ id: string; dealCode: string | null }>> {
+  const a = await resolveDealActor();
+  if (!a.ok) return { success: false, error: a.error, code: a.code };
+  if (!a.actor.isPlatformAdmin) return { success: false, error: "Admins only", code: "FORBIDDEN" };
+
+  // Resolve the source code first for the activity note (also validates access).
+  const srcRes = await getOrderDeal(a.db, a.actor, input.sourceDealId);
+  if (!srcRes.success) return { success: false, error: srcRes.error, code: srcRes.code };
+
+  const res = await duplicateDeal(a.db, a.actor, input.sourceDealId);
+  if (!res.success) return { success: false, error: res.error, code: res.code };
+
+  await logOrderActivity(
+    res.data.id,
+    a.actor.portalUserId,
+    "Deal duplicated",
+    `Duplicated from ${srcRes.data.dealCode ?? srcRes.data.code}`,
+    "list",
+  );
+  revalidatePath(`/orders/${res.data.id}`);
   return { success: true, data: { id: res.data.id, dealCode: res.data.dealCode } };
 }

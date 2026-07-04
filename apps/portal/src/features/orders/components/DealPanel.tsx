@@ -19,6 +19,7 @@ import { OrderActivityLog } from "./OrderActivityLog";
 import { DealLineAdder } from "./DealLineAdder";
 import { SourcingCard } from "./SourcingCard";
 import { NextLegCard } from "./NextLegCard";
+import { DuplicateDealButton } from "./DuplicateDealButton";
 import { DealPartiesCard } from "./DealPartiesCard";
 import { ChainCard } from "./ChainCard";
 import { DealActivitiesCard } from "./DealActivitiesCard";
@@ -586,6 +587,10 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
         {isAdmin && (
           <NextLegCard orderId={orderId} originLabel={deal.dealCode ?? deal.code} />
         )}
+
+        {/* R5 · Duplicate this deal into a new Draft origin (fresh spine, prices
+            kept). Admin only — mirrors the leg mechanic's gating. */}
+        {isAdmin && <DuplicateDealButton orderId={orderId} />}
 
         {/* Owner margin approval (§5.3). A3: sell subtotal = this deal's own lines;
             buy subtotal = the spine-sibling buy leg's line total (§2.3), resolved

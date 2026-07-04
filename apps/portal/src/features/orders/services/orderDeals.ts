@@ -737,6 +737,54 @@ export function blankBuyLegLine(li: Partial<OrderLineItem>): Partial<OrderLineIt
   };
 }
 
+/**
+ * R5 · copy a spec line for a DUPLICATED origin deal. Reuses blankBuyLegLine for the
+ * full product DEFINITION (attributes, option ids, catalog links, dimensions,
+ * quantities, notes) but then KEEPS the money — unlike a leg/buy copy, a duplicate
+ * reuses the source's pricing verbatim so the new Draft opens fully priced.
+ */
+export function copyDealLine(li: Partial<OrderLineItem>): Partial<OrderLineItem> {
+  return {
+    ...blankBuyLegLine(li),
+    unitPriceCents: li.unitPriceCents ?? null,
+    vatRate: li.vatRate ?? null,
+    lineTotalCents: li.lineTotalCents ?? null,
+  };
+}
+
+/**
+ * R5 · Duplicate a deal into a NEW ORIGIN deal. Copies both parties, currency, all
+ * commercial terms, product group and the spec lines WITH their amounts (copyDealLine
+ * keeps prices). Explicitly does NOT reuse the source's spine — with no originDealId
+ * createDeal mints a FRESH spine + its own deal code and starts in Draft — and does
+ * NOT copy documents, external refs or stage. Permission is enforced by the caller.
+ */
+export async function duplicateDeal(db: DbClient, actor: ActorContext, sourceDealId: string): Promise<ActionResult<OrderDealView>> {
+  if (!isValidUUID(sourceDealId)) return { success: false, error: "Invalid deal id", code: "VALIDATION_ERROR" };
+  const srcRes = await getOrderDeal(db, actor, sourceDealId);
+  if (!srcRes.success) return srcRes;
+  const src = srcRes.data;
+  return createDeal(db, actor, {
+    name: src.name,
+    productGroup: src.productGroup,
+    dealKind: src.dealKind as DealKind,
+    sellerOrganisationId: src.seller.id,
+    customerOrganisationId: src.customer.id,
+    buyerOrganisationId: src.buyer.id,
+    producerOrganisationId: src.producer.id,
+    currency: src.currency,
+    incoterms: src.incoterms,
+    incotermsPlace: src.incotermsPlace,
+    advancePct: src.advancePct,
+    paymentTerms: src.paymentTerms,
+    deliveryTerms: src.deliveryTerms,
+    deliveryDeadline: src.deliveryDeadline,
+    transportBilling: src.transportBilling as TransportBilling,
+    notes: src.notes,
+    lineItems: src.lineItems.map(copyDealLine),
+  });
+}
+
 interface SpawnBuyLegOpts {
   sellOrderId: string;
   sellName: string;
