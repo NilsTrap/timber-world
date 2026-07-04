@@ -26,22 +26,27 @@ function toType(row: any): PackagingType {
 }
 
 export async function getPackagingTypes(): Promise<ActionResult<PackagingType[]>> {
-  const session = await getSession();
-  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) {
-    const orgId = session.currentOrganizationId || session.organisationId;
-    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  try {
+    const session = await getSession();
+    if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+    if (!isAdmin(session)) {
+      const orgId = session.currentOrganizationId || session.organisationId;
+      const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+      if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    }
+
+    const supabase = await createClient();
+    const { data, error } = await (supabase as any)
+      .from("catalog_packaging_types")
+      .select("*")
+      .order("sort_order", { ascending: true });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: (data || []).map(toType) };
+  } catch (e) {
+    // Never reject at the server-action boundary (masked render error → dead page).
+    return { success: false, error: e instanceof Error ? e.message : "Failed to load packaging types" };
   }
-
-  const supabase = await createClient();
-  const { data, error } = await (supabase as any)
-    .from("catalog_packaging_types")
-    .select("*")
-    .order("sort_order", { ascending: true });
-
-  if (error) return { success: false, error: error.message };
-  return { success: true, data: (data || []).map(toType) };
 }
 
 export interface SavePackagingTypeInput {

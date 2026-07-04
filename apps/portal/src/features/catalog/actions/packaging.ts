@@ -32,25 +32,31 @@ function toAssignment(row: any): VariantPackaging {
 }
 
 export async function getVariantPackaging(variantId: string): Promise<ActionResult<VariantPackaging[]>> {
-  const session = await getSession();
-  if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isAdmin(session)) {
-    const orgId = session.currentOrganizationId || session.organisationId;
-    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  try {
+    const session = await getSession();
+    if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+    if (!isAdmin(session)) {
+      const orgId = session.currentOrganizationId || session.organisationId;
+      const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
+      if (!mods.has("catalogue.view")) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+    }
+
+    const supabase = await createClient();
+    const { data, error } = await (supabase as any)
+      .from("catalog_variant_packaging_assignments")
+      .select("*, catalog_packaging_types(name, pieces_per_package, description, sort_order)")
+      .eq("variant_id", variantId);
+
+    if (error) return { success: false, error: error.message };
+    const list = (data || []).map(toAssignment).sort(
+      (a: VariantPackaging, b: VariantPackaging) => a.piecesPerPackage - b.piecesPerPackage
+    );
+    return { success: true, data: list };
+  } catch (e) {
+    // Never reject at the server-action boundary — a mount-time rejection here
+    // surfaces as a masked render error and can break the page.
+    return { success: false, error: e instanceof Error ? e.message : "Failed to load packaging" };
   }
-
-  const supabase = await createClient();
-  const { data, error } = await (supabase as any)
-    .from("catalog_variant_packaging_assignments")
-    .select("*, catalog_packaging_types(name, pieces_per_package, description, sort_order)")
-    .eq("variant_id", variantId);
-
-  if (error) return { success: false, error: error.message };
-  const list = (data || []).map(toAssignment).sort(
-    (a: VariantPackaging, b: VariantPackaging) => a.piecesPerPackage - b.piecesPerPackage
-  );
-  return { success: true, data: list };
 }
 
 export interface AssignPackagingInput {

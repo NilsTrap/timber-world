@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Plus, Trash2, Loader2, Boxes } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Plus, Trash2, Loader2, Boxes, AlertTriangle } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
 import {
@@ -19,23 +19,42 @@ const fmtPcs = (n: number) => `${n.toLocaleString("en-GB")} pcs`;
  * has been added. The Packaging card is where those options are defined; this card
  * says HOW MUCH is on hand in each. Quantities are inline-editable; total in pieces.
  */
-export function VariantStockCard({ variantId }: { variantId: string }) {
-  const [summary, setSummary] = useState<VariantStockSummary | null>(null);
-  const [packaging, setPackaging] = useState<VariantPackaging[]>([]);
-  const [loading, setLoading] = useState(true);
+export function VariantStockCard({
+  variantId,
+  initialSummary = null,
+  initialPackaging = [],
+  initialError = null,
+}: {
+  variantId: string;
+  initialSummary?: VariantStockSummary | null;
+  initialPackaging?: VariantPackaging[];
+  initialError?: string | null;
+}) {
+  // Initial data is loaded server-side and passed in (see the P0 fix in the
+  // route + VariantDetailPage) — no mount-time server-action round-trip, which
+  // was the crash surface. `load()` still refreshes after mutations, resiliently.
+  const [summary, setSummary] = useState<VariantStockSummary | null>(initialSummary);
+  const [packaging, setPackaging] = useState<VariantPackaging[]>(initialPackaging);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(initialError);
   const [adding, setAdding] = useState(false);
   const [formPackaging, setFormPackaging] = useState<string>("");
   const [formQty, setFormQty] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const [s, pk] = await Promise.all([getVariantStock(variantId), getVariantPackaging(variantId)]);
-    if (s.success) setSummary(s.data);
-    if (pk.success) setPackaging(pk.data);
-    setLoading(false);
+    setLoading(true);
+    try {
+      const [s, pk] = await Promise.all([getVariantStock(variantId), getVariantPackaging(variantId)]);
+      if (s.success) { setSummary(s.data); setError(null); } else { setError(s.error); }
+      if (pk.success) setPackaging(pk.data);
+    } catch (e) {
+      // A refresh failure must never take the page down — show it inline.
+      setError(e instanceof Error ? e.message : "Failed to refresh stock");
+    } finally {
+      setLoading(false);
+    }
   }, [variantId]);
-
-  useEffect(() => { load(); }, [load]);
 
   const entries = summary?.entries ?? [];
   const usedPackaging = new Set(entries.map((e) => e.packagingTypeId).filter(Boolean) as string[]);
@@ -83,7 +102,17 @@ export function VariantStockCard({ variantId }: { variantId: string }) {
         )}
       </div>
 
-      {loading ? (
+      {error ? (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p>Couldn&apos;t load stock. {error}</p>
+            <button onClick={() => load()} className="mt-1 underline text-xs" disabled={loading}>
+              {loading ? "Retrying…" : "Retry"}
+            </button>
+          </div>
+        </div>
+      ) : loading ? (
         <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
       ) : packaging.length === 0 ? (
         <p className="text-sm text-muted-foreground">

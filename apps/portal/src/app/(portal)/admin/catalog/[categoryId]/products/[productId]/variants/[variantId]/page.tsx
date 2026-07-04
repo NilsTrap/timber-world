@@ -7,6 +7,9 @@ import { getProduct } from "@/features/catalog/actions/products";
 import { getVariants } from "@/features/catalog/actions/variants";
 import { getPricingUnits } from "@/features/catalog/actions/pricingUnits";
 import { getCurrencies, getCatalogCurrencyPrices } from "@/features/catalog/actions/currencies";
+import { getVariantStock } from "@/features/catalog/actions/stock";
+import { getVariantPackaging } from "@/features/catalog/actions/packaging";
+import { getPackagingTypes } from "@/features/catalog/actions/packagingTypes";
 import { VariantDetailPage } from "@/features/catalog/components/VariantDetailPage";
 
 export const metadata: Metadata = { title: "Variant Detail" };
@@ -47,11 +50,30 @@ export default async function VariantPage({ params }: Props) {
   const units = unitsResult.success ? unitsResult.data : [];
   const unit = units.find((u) => u.code === catResult.data.primaryUnit) ?? null;
 
-  const [currenciesResult, pricesResult] = await Promise.all([
+  // Load stock + packaging server-side (same proven pattern as the data above)
+  // rather than via mount-time server actions in the client cards. The old
+  // client-mount round-trips were the P0 crash surface (9xcebr): a rejection
+  // there surfaced as a masked "Server Components render" error and broke the
+  // page. Server-fetched initial data means the cards render with data and no
+  // mount RPC is needed. (`getVariantStock`/etc. can't reject — hardened.)
+  const [currenciesResult, pricesResult, stockResult, packagingResult, packagingTypesResult] = await Promise.all([
     getCurrencies(),
     getCatalogCurrencyPrices([variantId, productId, categoryId]),
+    getVariantStock(variantId),
+    getVariantPackaging(variantId),
+    getPackagingTypes(),
   ]);
   const altCurrencies = (currenciesResult.success ? currenciesResult.data : []).filter((c) => !c.isBase && c.isActive);
+
+  const initialStock = stockResult.success ? stockResult.data : null;
+  const initialPackaging = packagingResult.success ? packagingResult.data : [];
+  const initialPackagingTypes = packagingTypesResult.success ? packagingTypesResult.data : [];
+  // Per-card load error (inline-rendered, never fatal). Each card surfaces only
+  // its OWN read failure — a packaging-read failure shows on the Packaging card,
+  // not mislabeled on the Stock card (the Stock card just loses its add-options
+  // and still shows its stock data). Packaging needs its list + the types.
+  const stockError = !stockResult.success ? stockResult.error : null;
+  const packagingError = !packagingResult.success ? packagingResult.error : (!packagingTypesResult.success ? packagingTypesResult.error : null);
 
   return (
     <VariantDetailPage
@@ -65,6 +87,11 @@ export default async function VariantPage({ params }: Props) {
       variantFields={variantFields}
       altCurrencies={altCurrencies}
       currencyPrices={pricesResult.success ? pricesResult.data : {}}
+      initialStock={initialStock}
+      initialPackaging={initialPackaging}
+      initialPackagingTypes={initialPackagingTypes}
+      stockError={stockError}
+      packagingError={packagingError}
     />
   );
 }

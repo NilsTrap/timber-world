@@ -1,30 +1,34 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { useState } from "react";
+import { Plus, Trash2, X, AlertTriangle } from "lucide-react";
 import { Button, Input } from "@timber/ui";
 import { toast } from "sonner";
 import { getVariantPackaging, assignVariantPackaging, removeVariantPackaging, type VariantPackaging } from "../actions/packaging";
-import { getPackagingTypes } from "../actions/packagingTypes";
 import type { PackagingType } from "../actions/packagingTypes";
 
-export function VariantPackagingSection({ variantId }: { variantId: string }) {
-  const [assigned, setAssigned] = useState<VariantPackaging[]>([]);
-  const [types, setTypes] = useState<PackagingType[]>([]);
-  const [loaded, setLoaded] = useState(false);
+export function VariantPackagingSection({
+  variantId,
+  initialAssigned = [],
+  initialTypes = [],
+  initialError = null,
+}: {
+  variantId: string;
+  initialAssigned?: VariantPackaging[];
+  initialTypes?: PackagingType[];
+  initialError?: string | null;
+}) {
+  // Initial data comes from the server (see the P0 fix) — no mount-time
+  // server-action round-trip (that was the crash surface); the section always
+  // renders, showing an inline error if the server load failed.
+  const [assigned, setAssigned] = useState<VariantPackaging[]>(initialAssigned);
+  const [types] = useState<PackagingType[]>(initialTypes.filter((x) => x.isActive));
+  const [error] = useState<string | null>(initialError);
   const [showForm, setShowForm] = useState(false);
   const [typeId, setTypeId] = useState("");
   const [priceOverride, setPriceOverride] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    Promise.all([getVariantPackaging(variantId), getPackagingTypes()]).then(([a, t]) => {
-      if (a.success) setAssigned(a.data);
-      if (t.success) setTypes(t.data.filter((x) => x.isActive));
-      setLoaded(true);
-    });
-  }, [variantId]);
 
   const assignedTypeIds = new Set(assigned.map((a) => a.packagingTypeId));
   const available = types.filter((t) => !assignedTypeIds.has(t.id));
@@ -62,8 +66,6 @@ export function VariantPackagingSection({ variantId }: { variantId: string }) {
     }
   };
 
-  if (!loaded) return null;
-
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -74,6 +76,13 @@ export function VariantPackagingSection({ variantId }: { variantId: string }) {
           </Button>
         )}
       </div>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>Couldn&apos;t load packaging. {error}</span>
+        </div>
+      )}
 
       {assigned.map((a) => (
         <div key={a.id} className="flex items-center gap-3 text-sm rounded border px-3 py-2">
@@ -88,7 +97,7 @@ export function VariantPackagingSection({ variantId }: { variantId: string }) {
         </div>
       ))}
 
-      {loaded && assigned.length === 0 && !showForm && (
+      {!error && assigned.length === 0 && !showForm && (
         <p className="text-sm text-muted-foreground">No packaging assigned. Pick from the global packaging types.</p>
       )}
 

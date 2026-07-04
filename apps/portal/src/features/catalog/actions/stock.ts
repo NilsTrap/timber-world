@@ -28,10 +28,17 @@ async function assertCatalogueAccess() {
 }
 
 export async function getVariantStock(variantId: string): Promise<ActionResult<VariantStockSummary>> {
-  const gate = await assertCatalogueAccess();
-  if (!gate.ok) return { success: false, error: gate.error };
-  const supabase = await createClient();
-  return getVariantStockService(supabase, variantId);
+  try {
+    const gate = await assertCatalogueAccess();
+    if (!gate.ok) return { success: false, error: gate.error };
+    const supabase = await createClient();
+    return await getVariantStockService(supabase, variantId);
+  } catch (e) {
+    // Never let a mount-time read reject at the server-action boundary (that
+    // surfaces as a masked "Server Components render" error and can break the
+    // page). Always hand back a graceful result the UI can render inline.
+    return { success: false, error: e instanceof Error ? e.message : "Failed to load stock" };
+  }
 }
 
 /** Create or update a variant's stock quantity for a packaging form (null = loose). */

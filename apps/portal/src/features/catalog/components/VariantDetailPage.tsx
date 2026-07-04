@@ -13,6 +13,9 @@ import { useLightbox, ImageThumbGrid } from "./CatalogImages";
 import { VariantStockCard } from "./VariantStockCard";
 import type { FieldValueState } from "./ProductDetailContent";
 import { VariantPackagingSection } from "./VariantPackagingSection";
+import type { VariantStockSummary } from "../actions/stock";
+import type { VariantPackaging } from "../actions/packaging";
+import type { PackagingType } from "../actions/packagingTypes";
 import { setVariantCurrencyOverride, type CurrencyPriceMap } from "../actions/currencies";
 import { effectiveRateEurCents, computeQuantity, lineTotalCents, formatMoney } from "../pricing";
 import type { CatalogVariant, CategoryField, PricingUnit, CatalogCurrency } from "../types";
@@ -28,9 +31,14 @@ interface Props {
   variantFields: CategoryField[];
   altCurrencies: CatalogCurrency[];
   currencyPrices: CurrencyPriceMap;
+  initialStock: VariantStockSummary | null;
+  initialPackaging: VariantPackaging[];
+  initialPackagingTypes: PackagingType[];
+  stockError: string | null;
+  packagingError: string | null;
 }
 
-export function VariantDetailPage({ variant: initialVariant, categoryId, productId, productName, unit, productBasePriceEurCents, categoryDefaultPriceEurCents, variantFields, altCurrencies, currencyPrices }: Props) {
+export function VariantDetailPage({ variant: initialVariant, categoryId, productId, productName, unit, productBasePriceEurCents, categoryDefaultPriceEurCents, variantFields, altCurrencies, currencyPrices, initialStock, initialPackaging, initialPackagingTypes, stockError, packagingError }: Props) {
   const router = useRouter();
   const [variant, setVariant] = useState(initialVariant);
   const [thickness, setThickness] = useState(variant.thicknessMm?.toString() || "");
@@ -298,11 +306,21 @@ export function VariantDetailPage({ variant: initialVariant, categoryId, product
           </div>
 
           {/* Stock (manual, by packaging form) */}
-          <VariantStockCard variantId={variant.id} />
+          <VariantStockCard
+            variantId={variant.id}
+            initialSummary={initialStock}
+            initialPackaging={initialPackaging}
+            initialError={stockError}
+          />
 
           {/* Packaging */}
           <div className="rounded-lg border bg-card p-5">
-            <VariantPackagingSection variantId={variant.id} />
+            <VariantPackagingSection
+              variantId={variant.id}
+              initialAssigned={initialPackaging}
+              initialTypes={initialPackagingTypes}
+              initialError={packagingError}
+            />
           </div>
         </div>
       </div>
