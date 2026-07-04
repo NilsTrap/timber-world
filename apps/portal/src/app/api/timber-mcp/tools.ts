@@ -616,4 +616,63 @@ export const TOOLS: ToolDef[] = [
       },
     },
   },
+  // ── J3: access-group / user-group WRITE surface (full-token only) ────────────
+  {
+    name: "timber_set_user_groups",
+    description:
+      "Replace a user's access-group membership in ONE organisation (full replacement — the provided group_ids become the user's complete set of groups in that org; pass [] to remove all). A user's effective rights are the union of their groups' rights, capped by the org's module ceiling. FULL-token only. Note: the portal's cached effective-permissions for that user refresh on their next revalidation, not instantly.",
+    readOnly: false,
+    lifecycle: "access",
+    inputSchema: {
+      type: "object",
+      properties: {
+        user_id: { type: "string", description: "Portal user UUID (from timber_list_users)." },
+        organisation_id: { type: "string", description: "Organisation UUID the membership is scoped to." },
+        group_ids: { type: "array", items: { type: "string" }, description: "The user's COMPLETE set of access-group UUIDs in this org (full replace; [] clears)." },
+      },
+      required: ["user_id", "organisation_id", "group_ids"],
+    },
+  },
+  {
+    name: "timber_upsert_access_group",
+    description:
+      "Create or update an access group. Omit group_id to CREATE (name required; key is slugified from the name); pass group_id to UPDATE its name/description. Optionally set the rights matrix in the same call — `rights` is a FULL REPLACE of the group's rights (omitted sub-fields are cleared), so send the complete matrix. Returns the group id. FULL-token only.",
+    readOnly: false,
+    lifecycle: "access",
+    inputSchema: {
+      type: "object",
+      properties: {
+        group_id: { type: "string", description: "Access group UUID to update. Omit to create a new group." },
+        name: { type: "string", description: "Group name (required on create)." },
+        description: { type: "string", description: "Group description." },
+        rights: {
+          type: "object",
+          description: "OPTIONAL full-replace rights matrix. Omit to leave rights unchanged.",
+          properties: {
+            modules: { type: "array", items: { type: "string" }, description: "Enabled portal module codes (e.g. 'orders.view', 'counterparties.suppliers')." },
+            deal_visibility: { type: "array", items: { type: "string" }, description: "Deal-row visibility keys (e.g. 'side.buy', 'side.sell')." },
+            field_domains: { type: "object", description: "Per-domain field grants: { <domain>: { visible: boolean, editable: boolean } }. Domains: pricing, deal_terms, financial_docs, logistics, customer_identity, supplier_identity, chain." },
+            field_overrides: { type: "object", description: "Per-field overrides: { <field_key>: { visible: boolean, editable: boolean } }." },
+            scope: { type: "string", enum: ["mine", "company", "all"], description: "Deal scope (default 'mine')." },
+            actions: { type: "array", items: { type: "string" }, description: "Action grants as '<resource>:<key>' (e.g. 'counterparty:suppliers')." },
+          },
+        },
+      },
+    },
+  },
+  {
+    name: "timber_delete_access_group",
+    description:
+      "Delete an access group. System groups cannot be deleted. If the group has member assignments, the call is refused unless force=true (its members lose the group's rights on delete) — mirroring the portal's destructive-delete confirmation. FULL-token only.",
+    readOnly: false,
+    lifecycle: "access",
+    inputSchema: {
+      type: "object",
+      properties: {
+        group_id: { type: "string", description: "Access group UUID to delete." },
+        force: { type: "boolean", description: "Set true to confirm deleting a group that still has members." },
+      },
+      required: ["group_id"],
+    },
+  },
 ];

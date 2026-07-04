@@ -63,8 +63,15 @@ ok("a deal can be advanced through its gate via MCP (write)", advance != null &&
 const cancel = byName.get("timber_cancel_deal");
 ok("a deal can be cancelled via MCP (write)", cancel != null && cancel.readOnly === false);
 
-// 8. The access step is read-only in this phase (group WRITES deferred to a later epic).
-ok("access step is read-only for now", TOOLS.filter((t) => t.lifecycle === "access").every((t) => t.readOnly));
+// 8. J3: the access step now exposes BOTH reads AND writes (group CRUD + rights +
+//    user-group assignment). All access writes are full-token only.
+const accessTools = TOOLS.filter((t) => t.lifecycle === "access");
+ok("access step has a read tool", accessTools.some((t) => t.readOnly));
+ok("access step has a write tool", accessTools.some((t) => !t.readOnly));
+for (const req of ["timber_set_user_groups", "timber_upsert_access_group", "timber_delete_access_group"]) {
+  const t = byName.get(req);
+  ok(`J3 access write ${req} is registered as a full-token write`, t != null && t.readOnly === false);
+}
 
 // 9. create_deal exposes the bilateral buy-leg auto-spawn (needs_sourcing + source_organisation_id).
 const createDealProps =

@@ -26,6 +26,8 @@ import { getVariantStock, saveVariantStockEntry } from "@/features/catalog/servi
 import { listCatalogProducts, getCatalogVariant } from "@/features/catalog/services/products";
 import { listOrgs, getOrg, createOrg, updateOrg } from "@/features/organisations/services/orgService";
 import { listAccessGroups, getAccessGroupDetail, getUserAccessGroups, listPortalUsers } from "@/features/access/services/groupsRead";
+import { createAccessGroup, updateAccessGroup, deleteAccessGroup, saveGroupRights, updateUserAccessGroups } from "@/features/access/services/groupsWrite";
+import type { GroupRightsInput } from "@/features/access/types";
 import { TOOLS } from "./tools";
 
 export const dynamic = "force-dynamic";
@@ -395,6 +397,65 @@ async function callTool(name: string, args: any, role: Role) {
     }
     case "timber_list_users": {
       const res = await listPortalUsers(db, { query: args?.query, orgId: args?.org_id, limit: args?.limit });
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    // ── J3: access-group / user-group WRITES (full-token only) ────────────────
+    // NOTE: these mutate the DB directly and cannot bust the portal's per-member
+    // next/cache tags (only a request-scoped action can) — affected users' cached
+    // effective permissions refresh on their next natural revalidation.
+    case "timber_set_user_groups": {
+      if (!args?.user_id || !args?.organisation_id || !Array.isArray(args?.group_ids)) {
+        return toolErr("user_id, organisation_id and group_ids[] are required");
+      }
+      const res = await updateUserAccessGroups(db, args.user_id, args.organisation_id, args.group_ids);
+      return res.success ? toolOk(res.data) : toolErr(res.error);
+    }
+    case "timber_upsert_access_group": {
+      let groupId: string | undefined = args?.group_id;
+      if (groupId) {
+        // Update name/description if provided.
+        if (args?.name !== undefined || args?.description !== undefined) {
+          const upd = await updateAccessGroup(db, groupId, { name: args?.name, description: args?.description });
+          if (!upd.success) return toolErr(upd.error);
+        }
+      } else {
+        if (!args?.name) return toolErr("name is required to create a group (or pass group_id to update)");
+        const created = await createAccessGroup(db, { name: args.name, description: args?.description });
+        if (!created.success) return toolErr(created.error);
+        groupId = created.data.id;
+      }
+      // Optional FULL-REPLACE of the rights matrix.
+      if (args?.rights && typeof args.rights === "object") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const r = args.rights as any;
+        const rights: GroupRightsInput = {
+          modules: Array.isArray(r.modules) ? r.modules : [],
+          dealVisibility: Array.isArray(r.deal_visibility) ? r.deal_visibility : [],
+          fieldDomains: r.field_domains && typeof r.field_domains === "object" ? r.field_domains : {},
+          fieldOverrides: r.field_overrides && typeof r.field_overrides === "object" ? r.field_overrides : {},
+          scope: r.scope === "company" || r.scope === "all" ? r.scope : "mine",
+          actions: Array.isArray(r.actions) ? r.actions : [],
+        };
+        const saved = await saveGroupRights(db, groupId, rights);
+        if (!saved.success) return toolErr(saved.error);
+      }
+      return toolOk({ id: groupId });
+    }
+    case "timber_delete_access_group": {
+      if (!args?.group_id) return toolErr("group_id is required");
+      // Mirror the UI's destructive warning: refuse if the group has members unless
+      // force is set (the UI shows "N user assignments will be removed" + confirm).
+      if (!args?.force) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { count } = await (db as any)
+          .from("user_access_groups")
+          .select("user_id", { count: "exact", head: true })
+          .eq("group_id", args.group_id);
+        if ((count ?? 0) > 0) {
+          return toolErr(`This group has ${count} user assignment(s); deleting removes them. Re-call with force=true to confirm.`);
+        }
+      }
+      const res = await deleteAccessGroup(db, args.group_id);
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     default:
