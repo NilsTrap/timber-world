@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 import {
-  Button, Input, Textarea,
+  Input, Textarea,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@timber/ui";
 import { updateDealTerms, type DealTermsInput } from "../actions/dealActions";
@@ -34,12 +33,14 @@ function placePartyForIncoterm(incoterm: string): "seller" | "buyer" | null {
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * G2/H2 · Deal-terms editor — now INLINE (Edgars 2026-07-04: no modal). The
- * commercial terms that feed a generated quotation/contract (incoterms, advance,
- * payment/delivery terms, deadline, notes) + per-deal signee overrides (G3) edit
- * in place; a Save bar appears only when there are unsaved changes. Rendered by
- * DealPanel only when the deal_terms field-wall allows editing; the action
- * re-checks server-side.
+ * G2/H2 · Deal-terms editor — INLINE + AUTOSAVING (R4: no Save button). Each
+ * commercial term that feeds a generated quotation/contract (incoterms + place,
+ * payment terms, deadline, notes) + per-deal signee overrides (G3) persists on
+ * its own: selects/date on change, text on blur/Enter (debounced while typing).
+ * Every write goes through the same updateDealTerms action (advance_pct is derived
+ * from the payment term server-side, R3). Optimistic; a failed field reverts and
+ * toasts. Rendered by DealPanel only when the deal_terms field-wall allows editing;
+ * the action re-checks server-side.
  */
 export interface DealTermsValues {
   incoterms: string | null;
@@ -88,38 +89,44 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/** The deal-term fields that autosave (advance_pct is derived server-side from the
+ *  payment term; delivery_terms is no longer edited here). */
+type SavableKey =
+  | "incoterms" | "incotermsPlace" | "paymentTerms" | "deliveryDeadline" | "notes"
+  | "sellerSigneeName" | "sellerSigneeRole" | "buyerSigneeName" | "buyerSigneeRole";
+
 export function DealTermsEditor({
   orderId,
   values,
   sellerName,
   buyerName,
-  onSaved,
 }: {
   orderId: string;
   values: DealTermsValues;
   sellerName: string | null;
   buyerName: string | null;
-  onSaved: () => Promise<void> | void;
+  /** Kept for API compatibility with DealPanel. R4 autosaves per field and does
+   *  NOT reload the parent on every keystroke — a reload would clobber in-progress
+   *  edits in other fields — so this is intentionally not invoked. */
+  onSaved?: () => Promise<void> | void;
 }) {
-  const savedKey = useMemo(() => JSON.stringify(toDraft(values)), [values]);
   const [draft, setDraft] = useState<Draft>(() => toDraft(values));
-  const [saving, setSaving] = useState(false);
   const [incotermsOptions, setIncotermsOptions] = useState<FieldOptionChoice[]>([]);
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<FieldOptionChoice[]>([]);
-  const [deadlineTextMode, setDeadlineTextMode] = useState(false);
+  const [deadlineTextMode, setDeadlineTextMode] = useState(() => {
+    const dd = (values.deliveryDeadline ?? "").trim();
+    return dd !== "" && !ISO_DATE_RE.test(dd);
+  });
   // R2 · seller/buyer addresses for the incoterms-place auto-fill, plus a ref
   // recording the LAST value we auto-filled so a manual edit is never clobbered.
   const [partyAddresses, setPartyAddresses] = useState<{ seller: string | null; buyer: string | null } | null>(null);
   const lastAutoPlace = useRef<string>("");
-
-  // Re-sync the draft only when the SAVED values actually change (after a save +
-  // reload) — keyed on content, not object identity, so typing is never reset.
-  useEffect(() => {
-    const d = toDraft(values);
-    setDraft(d);
-    setDeadlineTextMode(d.deliveryDeadline.trim() !== "" && !ISO_DATE_RE.test(d.deliveryDeadline.trim()));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedKey]);
+  // R4 · the last PERSISTED draft (for skip-if-unchanged + revert-on-error) and the
+  // per-field debounce timers. The draft is the editor's source of truth — we never
+  // re-sync it from `values` after mount (autosave keeps the DB in step), so a
+  // background reload of the deal can't clobber an in-progress edit.
+  const savedRef = useRef<Draft>(toDraft(values));
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     let alive = true;
@@ -129,25 +136,71 @@ export function DealTermsEditor({
     return () => { alive = false; };
   }, [orderId]);
 
-  // R2 · pre-fill the incoterms place from the correct party's address when the
-  // incoterm changes. Never clobbers a manual edit: fills only when the place is
-  // empty or still equals the value WE last auto-filled.
-  const autofillIncotermsPlace = (incoterm: string) => {
-    if (!incoterm || !partyAddresses) return;
-    const party = placePartyForIncoterm(incoterm);
-    if (!party) return;
-    const addr = party === "seller" ? partyAddresses.seller : partyAddresses.buyer;
-    if (!addr) return; // no address on file → leave the place as-is
-    setDraft((prev) => {
-      const cur = prev.incotermsPlace.trim();
-      if (cur !== "" && cur !== lastAutoPlace.current.trim()) return prev;
-      lastAutoPlace.current = addr;
-      return { ...prev, incotermsPlace: addr };
-    });
-  };
+  // Clear any pending debounce timers on unmount so a fired timer can't update an
+  // unmounted component.
+  useEffect(() => {
+    const t = timers.current;
+    return () => { for (const id of Object.values(t)) clearTimeout(id); };
+  }, []);
 
   const set = (k: keyof Draft, v: string) => setDraft((p) => ({ ...p, [k]: v }));
-  const dirty = JSON.stringify(draft) !== savedKey;
+
+  // R4 · persist ONE field through updateDealTerms (same field-wall gate; server
+  // derives advance_pct when payment_terms is the field). Skips a no-op; on failure
+  // reverts the field to its last saved value and toasts.
+  const saveField = async (key: SavableKey, rawValue: string) => {
+    if (savedRef.current[key] === rawValue) return;
+    const terms: DealTermsInput = {};
+    terms[key] = nn(rawValue);
+    const res = await updateDealTerms({ orderId, terms });
+    if (!res.success) {
+      toast.error(res.error);
+      const prev = savedRef.current[key];
+      setDraft((p) => ({ ...p, [key]: prev }));
+      return;
+    }
+    savedRef.current = { ...savedRef.current, [key]: rawValue };
+  };
+
+  const clearTimer = (key: SavableKey) => {
+    const id = timers.current[key];
+    if (id) { clearTimeout(id); delete timers.current[key]; }
+  };
+  /** Debounced autosave for text fields (fires ~600ms after the last keystroke). */
+  const debouncedSave = (key: SavableKey, value: string) => {
+    clearTimer(key);
+    timers.current[key] = setTimeout(() => { delete timers.current[key]; void saveField(key, value); }, 600);
+  };
+  /** Immediate autosave (blur / Enter / select / date), cancelling any debounce. */
+  const flushSave = (key: SavableKey, value: string) => {
+    clearTimer(key);
+    void saveField(key, value);
+  };
+
+  // Shared handler props for a debounced text Input / Textarea.
+  const inputAutosave = (key: SavableKey) => ({
+    value: draft[key],
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => { set(key, e.target.value); debouncedSave(key, e.target.value); },
+    onBlur: (e: React.FocusEvent<HTMLInputElement>) => flushSave(key, e.target.value),
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") e.currentTarget.blur(); },
+  });
+
+  // R2 · pre-fill the incoterms place from the correct party's address when the
+  // incoterm changes; returns the filled value so the caller can persist it too.
+  // Never clobbers a manual edit: fills only when the place is empty or still
+  // equals the value WE last auto-filled.
+  const autofillIncotermsPlace = (incoterm: string): string | null => {
+    if (!incoterm || !partyAddresses) return null;
+    const party = placePartyForIncoterm(incoterm);
+    if (!party) return null;
+    const addr = party === "seller" ? partyAddresses.seller : partyAddresses.buyer;
+    if (!addr) return null; // no address on file → leave the place as-is
+    const cur = draft.incotermsPlace.trim();
+    if (cur !== "" && cur !== lastAutoPlace.current.trim()) return null;
+    lastAutoPlace.current = addr;
+    setDraft((prev) => ({ ...prev, incotermsPlace: addr }));
+    return addr;
+  };
 
   const incotermsChoices = useMemo(() => {
     const cur = draft.incoterms.trim();
@@ -163,29 +216,6 @@ export function DealTermsEditor({
     return cur && !known ? [...paymentTermsOptions, { value: cur, label: `${cur} (current)` }] : paymentTermsOptions;
   }, [paymentTermsOptions, draft.paymentTerms]);
 
-  const save = async () => {
-    // R3: advance_pct is DERIVED server-side from the chosen payment term (no
-    // longer a hand-edited field); delivery_terms is no longer edited here (kept
-    // in the DB + its doc merge token for legacy documents).
-    const terms: DealTermsInput = {
-      incoterms: nn(draft.incoterms),
-      incotermsPlace: nn(draft.incotermsPlace),
-      paymentTerms: nn(draft.paymentTerms),
-      deliveryDeadline: nn(draft.deliveryDeadline),
-      notes: nn(draft.notes),
-      sellerSigneeName: nn(draft.sellerSigneeName),
-      sellerSigneeRole: nn(draft.sellerSigneeRole),
-      buyerSigneeName: nn(draft.buyerSigneeName),
-      buyerSigneeRole: nn(draft.buyerSigneeRole),
-    };
-    setSaving(true);
-    const res = await updateDealTerms({ orderId, terms });
-    setSaving(false);
-    if (!res.success) { toast.error(res.error); return; }
-    toast.success("Deal terms updated");
-    await onSaved();
-  };
-
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-3">
@@ -195,7 +225,9 @@ export function DealTermsEditor({
             onValueChange={(v) => {
               const code = v === INCOTERMS_NONE ? "" : v;
               set("incoterms", code);
-              autofillIncotermsPlace(code);
+              flushSave("incoterms", code);
+              const filled = autofillIncotermsPlace(code);
+              if (filled != null) flushSave("incotermsPlace", filled);
             }}
           >
             <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
@@ -206,18 +238,18 @@ export function DealTermsEditor({
           </Select>
         </Field>
         <Field label="Incoterms place">
-          <Input className="h-8" value={draft.incotermsPlace} onChange={(e) => set("incotermsPlace", e.target.value)} placeholder="e.g. Riga" />
+          <Input className="h-8" {...inputAutosave("incotermsPlace")} placeholder="e.g. Riga" />
         </Field>
 
         <Field label="Delivery deadline">
           {deadlineTextMode ? (
             <>
-              <Input className="h-8" value={draft.deliveryDeadline} onChange={(e) => set("deliveryDeadline", e.target.value)} placeholder="e.g. week 34" />
-              <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => { set("deliveryDeadline", ""); setDeadlineTextMode(false); }}>Pick a date instead</button>
+              <Input className="h-8" {...inputAutosave("deliveryDeadline")} placeholder="e.g. week 34" />
+              <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => { set("deliveryDeadline", ""); setDeadlineTextMode(false); flushSave("deliveryDeadline", ""); }}>Pick a date instead</button>
             </>
           ) : (
             <>
-              <Input className="h-8" type="date" value={draft.deliveryDeadline} onChange={(e) => set("deliveryDeadline", e.target.value)} />
+              <Input className="h-8" type="date" value={draft.deliveryDeadline} onChange={(e) => { set("deliveryDeadline", e.target.value); flushSave("deliveryDeadline", e.target.value); }} />
               <button type="button" className="text-[11px] text-muted-foreground hover:underline" onClick={() => setDeadlineTextMode(true)}>Enter free text instead</button>
             </>
           )}
@@ -225,7 +257,7 @@ export function DealTermsEditor({
         <Field label="Payment terms">
           <Select
             value={draft.paymentTerms.trim() === "" ? PAYMENT_TERMS_NONE : draft.paymentTerms}
-            onValueChange={(v) => set("paymentTerms", v === PAYMENT_TERMS_NONE ? "" : v)}
+            onValueChange={(v) => { const val = v === PAYMENT_TERMS_NONE ? "" : v; set("paymentTerms", val); flushSave("paymentTerms", val); }}
           >
             <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
             <SelectContent>
@@ -237,42 +269,31 @@ export function DealTermsEditor({
       </div>
 
       <Field label="Notes">
-        <Textarea value={draft.notes} onChange={(e) => set("notes", e.target.value)} rows={2} placeholder="Free-text notes shown on the generated documents" />
+        <Textarea
+          value={draft.notes}
+          onChange={(e) => { set("notes", e.target.value); debouncedSave("notes", e.target.value); }}
+          onBlur={(e) => flushSave("notes", e.target.value)}
+          rows={2} placeholder="Free-text notes shown on the generated documents"
+        />
       </Field>
 
       <div className="border-t pt-3">
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Signatories (documents)</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-3">
           <Field label={`Seller signee — name${sellerName ? ` (${sellerName})` : ""}`}>
-            <Input className="h-8" value={draft.sellerSigneeName} onChange={(e) => set("sellerSigneeName", e.target.value)} placeholder="Defaults from the org" />
+            <Input className="h-8" {...inputAutosave("sellerSigneeName")} placeholder="Defaults from the org" />
           </Field>
           <Field label="Seller signee — role">
-            <Input className="h-8" value={draft.sellerSigneeRole} onChange={(e) => set("sellerSigneeRole", e.target.value)} placeholder="e.g. Director" />
+            <Input className="h-8" {...inputAutosave("sellerSigneeRole")} placeholder="e.g. Director" />
           </Field>
           <Field label={`Buyer signee — name${buyerName ? ` (${buyerName})` : ""}`}>
-            <Input className="h-8" value={draft.buyerSigneeName} onChange={(e) => set("buyerSigneeName", e.target.value)} placeholder="Defaults from the org" />
+            <Input className="h-8" {...inputAutosave("buyerSigneeName")} placeholder="Defaults from the org" />
           </Field>
           <Field label="Buyer signee — role">
-            <Input className="h-8" value={draft.buyerSigneeRole} onChange={(e) => set("buyerSigneeRole", e.target.value)} placeholder="e.g. Purchasing manager" />
+            <Input className="h-8" {...inputAutosave("buyerSigneeRole")} placeholder="e.g. Purchasing manager" />
           </Field>
         </div>
       </div>
-
-      {/* N4 · Save/Discard live in a card FOOTER pinned to the bottom (Nils: "save
-          pogu būtu jānolaiž"). Sticky so it stays reachable at the viewport bottom
-          while editing the long form; breaks out of the card's padding to sit flush
-          with the card's bottom edge. Only shown when there are unsaved changes. */}
-      {dirty && (
-        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex items-center justify-between gap-2 rounded-b-lg border-t bg-card px-4 py-2.5">
-          <span className="text-xs text-muted-foreground">Unsaved changes</span>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setDraft(toDraft(values))} disabled={saving}>Discard</Button>
-            <Button size="sm" onClick={save} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save terms"}
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
