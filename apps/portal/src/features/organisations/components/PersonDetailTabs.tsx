@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import LoginHistorySection from "@/features/audit/components/LoginHistorySection";
 import {
   Tabs,
   TabsContent,
@@ -369,7 +370,7 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
               <CardTitle>Login history</CardTitle>
             </CardHeader>
             <CardContent>
-              <div data-login-history-slot />{/* orchestrator wires <LoginHistorySection userId={person.id}/> from @/features/audit here at integration */}
+              <LoginHistorySection userId={person.id} />
             </CardContent>
           </Card>
         </TabsContent>
