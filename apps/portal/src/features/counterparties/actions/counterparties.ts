@@ -16,31 +16,14 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getSession, isAdmin } from "@/lib/auth";
-import { getAccessProfile } from "@/lib/access";
 import { getPlatformSetting } from "@/features/access/actions/platformSettings";
+import { requireBookAccess } from "../access";
 import type {
   ActionResult,
   CounterpartyBook,
   CounterpartyInput,
   CounterpartyRow,
 } from "../types";
-
-type Session = NonNullable<Awaited<ReturnType<typeof getSession>>>;
-
-// clients/suppliers are rights-gated; the traders book (L2) is ADMIN-ONLY and
-// never consults these (kept here only to satisfy the Record key set).
-const BOOK_ACTION: Record<CounterpartyBook, string> = {
-  clients: "counterparty:clients",
-  suppliers: "counterparty:suppliers",
-  traders: "counterparty:traders",
-};
-
-const BOOK_MODULE: Record<CounterpartyBook, string> = {
-  clients: "counterparties.clients",
-  suppliers: "counterparties.suppliers",
-  traders: "counterparties.traders",
-};
 
 const COUNTERPARTY_COLUMNS =
   "id, code, name, registration_number, vat_number, legal_address, country, email, phone, website, bank_name, bank_account_number, bank_swift_code, default_signee_name, default_signee_role, is_active, is_customer, is_supplier, is_producer, is_trader";
@@ -78,33 +61,6 @@ function isInBook(row: any, book: CounterpartyBook): boolean {
   if (book === "clients") return row.is_customer === true;
   if (book === "traders") return row.is_trader === true;
   return row.is_supplier === true || row.is_producer === true;
-}
-
-/** Auth + per-book right check. Admins pass; others need the action right. */
-async function requireBookAccess(
-  book: CounterpartyBook,
-): Promise<
-  | { ok: true; session: Session; callerOrgId: string | null }
-  | { ok: false; error: string; code: string }
-> {
-  const session = await getSession();
-  if (!session) return { ok: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  const callerOrgId = session.currentOrganizationId || session.organisationId;
-  if (isAdmin(session)) return { ok: true, session, callerOrgId };
-  // L2 · the Traders book is ADMIN-ONLY — salespeople/purchasing must not see a
-  // traders address book. No rights path exists for non-admins.
-  if (book === "traders") return { ok: false, error: "Permission denied", code: "FORBIDDEN" };
-  const profile = await getAccessProfile(session.portalUserId, callerOrgId);
-  // Require BOTH the book action right AND the ceiling-capped module. Action
-  // rights are not intersected with the org ceiling (unlike module rights),
-  // so gating on the action alone would let a user in an EXTERNAL org — whose
-  // org never enables the counterparties.* modules (migration 009 seeds them
-  // for internal orgs only) — read/write the whole platform-wide book through
-  // the service-role client below. profile.modules IS ceiling-capped.
-  if (!profile.actions.has(BOOK_ACTION[book]) || !profile.modules.has(BOOK_MODULE[book])) {
-    return { ok: false, error: "Permission denied", code: "FORBIDDEN" };
-  }
-  return { ok: true, session, callerOrgId };
 }
 
 /**
