@@ -12,28 +12,39 @@ interface PartyOption {
 
 export interface OrderPartyOptions {
   /** Whether the caller is a platform admin — admins pick BOTH slots freely; a
-   *  non-admin has one slot auto-filled by their own org's role. */
+   *  non-admin has one slot bound by their org role / trader membership. */
   isAdmin: boolean;
   userOrgId: string | null;
   userOrgName: string | null;
+  /** Legacy seller-side signal (current org is_manufacturer). Kept for the
+   *  OrdersTable inline party editor; the New-deal dialog uses userIsTrader. */
   userIsManufacturer: boolean;
+  /** L2 · the caller is bound to at least one trader org (a salesperson). */
+  userIsTrader: boolean;
   customerOptions: PartyOption[];
+  /** Legacy seller pick list (is_manufacturer). Kept for OrdersTable. */
   manufacturerOptions: PartyOption[];
+  /** L2 · the "Trader" (seller) pick list — admins: all is_trader orgs; a
+   *  salesperson: their own trader orgs; customer-side: is_trader partners. */
+  traderOptions: PartyOption[];
+  /** L2 · the caller's own trader-org memberships (drives auto-select when one). */
+  userTraderOrgs: PartyOption[];
   producerOptions: PartyOption[];
 }
 
 /**
  * Get Order Party Options (role-aware)
  *
- * Returns the organisations a user may assign to an order's Customer / Manufacturer
- * (seller) slots, plus their own org info so the UI can decide which slot is
- * auto-filled and which is picked.
+ * Returns the organisations a user may assign to an order's Customer / Trader
+ * (seller) slots, plus their own org + trader-membership info so the UI can
+ * decide which slot is auto-filled and which is picked.
  *
- * - Admins: customerOptions = all active is_customer orgs; manufacturerOptions =
- *   all active is_manufacturer orgs.
- * - Non-admins: options are drawn from the user's trading partners, filtered by
- *   role + active. The user's own org fills the opposite slot (handled server-side
- *   on create), so it is intentionally not included in the pick lists.
+ * - Admins: customerOptions = all active is_customer orgs; traderOptions = all
+ *   active is_trader orgs.
+ * - Salesperson (bound to trader org[s]): traderOptions = their own trader orgs
+ *   (auto-selected when exactly one); customerOptions from their trading partners.
+ * - Customer-side non-admin: options are trading partners filtered by role; the
+ *   user's own org fills the Customer slot (server-side on create).
  */
 export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOptions>> {
   const session = await getSession();
@@ -62,6 +73,22 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
     }
   }
 
+  // L2 · the user's trader-org memberships — the house companies a salesperson
+  // may sell from (auto-selected when exactly one).
+  const membershipOrgIds = session.memberships.map((m) => m.organizationId).filter(Boolean);
+  let userTraderOrgs: PartyOption[] = [];
+  if (!isAdmin(session) && membershipOrgIds.length > 0) {
+    const { data: traderMemberOrgs } = await client
+      .from("organisations")
+      .select("id, code, name")
+      .in("id", membershipOrgIds)
+      .eq("is_trader", true)
+      .eq("is_active", true)
+      .order("code");
+    userTraderOrgs = (traderMemberOrgs ?? []) as PartyOption[];
+  }
+  const userIsTrader = userTraderOrgs.length > 0;
+
   // Admins: all active role-flagged orgs
   if (isAdmin(session)) {
     const { data: customerOrgs, error: customerErr } = await client
@@ -84,6 +111,16 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
       return { success: false, error: "Failed to fetch manufacturer organisations", code: "QUERY_FAILED" };
     }
 
+    const { data: traderOrgs, error: traderErr } = await client
+      .from("organisations")
+      .select("id, code, name")
+      .eq("is_active", true)
+      .eq("is_trader", true)
+      .order("code");
+    if (traderErr) {
+      return { success: false, error: "Failed to fetch trader organisations", code: "QUERY_FAILED" };
+    }
+
     const { data: producerOrgs, error: producerErr } = await client
       .from("organisations")
       .select("id, code, name")
@@ -101,8 +138,11 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
         userOrgId,
         userOrgName,
         userIsManufacturer,
+        userIsTrader: false,
         customerOptions: (customerOrgs ?? []) as PartyOption[],
         manufacturerOptions: (manufacturerOrgs ?? []) as PartyOption[],
+        traderOptions: (traderOrgs ?? []) as PartyOption[],
+        userTraderOrgs: [],
         producerOptions: (producerOrgs ?? []) as PartyOption[],
       },
     };
@@ -126,8 +166,13 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
         userOrgId,
         userOrgName,
         userIsManufacturer,
+        userIsTrader,
         customerOptions: [],
         manufacturerOptions: [],
+        // A salesperson still sells from their own trader org(s) even with no
+        // trading partners loaded (their Customer book may just be empty).
+        traderOptions: userIsTrader ? userTraderOrgs : [],
+        userTraderOrgs,
         producerOptions: [],
       },
     };
@@ -139,7 +184,7 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
 
   const { data: partnerOrgs, error: orgsError } = await client
     .from("organisations")
-    .select("id, code, name, is_customer, is_manufacturer, is_producer, is_active")
+    .select("id, code, name, is_customer, is_manufacturer, is_producer, is_trader, is_active")
     .in("id", partnerIds)
     .eq("is_active", true)
     .order("code");
@@ -148,7 +193,7 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
     return { success: false, error: "Failed to fetch organisations", code: "QUERY_FAILED" };
   }
 
-  type PartnerOrgRow = PartyOption & { is_customer: boolean; is_manufacturer: boolean; is_producer: boolean; is_active: boolean };
+  type PartnerOrgRow = PartyOption & { is_customer: boolean; is_manufacturer: boolean; is_producer: boolean; is_trader: boolean; is_active: boolean };
   const rows = (partnerOrgs ?? []) as PartnerOrgRow[];
 
   const toOption = (o: PartnerOrgRow): PartyOption => ({ id: o.id, code: o.code, name: o.name });
@@ -156,6 +201,9 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
   const customerOptions = rows.filter((o) => o.is_customer === true).map(toOption);
   const manufacturerOptions = rows.filter((o) => o.is_manufacturer === true).map(toOption);
   const producerOptions = rows.filter((o) => o.is_producer === true).map(toOption);
+  // A salesperson sells from their OWN trader orgs; a customer-side user picks a
+  // trader from their is_trader trading partners.
+  const traderOptions = userIsTrader ? userTraderOrgs : rows.filter((o) => o.is_trader === true).map(toOption);
 
   return {
     success: true,
@@ -164,8 +212,11 @@ export async function getOrderPartyOptions(): Promise<ActionResult<OrderPartyOpt
       userOrgId,
       userOrgName,
       userIsManufacturer,
+      userIsTrader,
       customerOptions,
       manufacturerOptions,
+      traderOptions,
+      userTraderOrgs,
       producerOptions,
     },
   };

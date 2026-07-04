@@ -12,16 +12,19 @@ export interface PartyValue {
 }
 
 /**
- * H1 · Shared Customer (buyer) + Manufacturer (seller) picker, used by the
- * new-deal dialog and the draft Parties card. It mirrors the SERVER slot logic
- * exactly (resolvePartySlots / createOrder): an admin picks both slots freely; a
- * non-admin whose org is a Manufacturer picks only the Customer (their own org is
- * the forced seller); a non-admin customer-side user picks only the Manufacturer
- * (their own org is the forced customer). The forced slot is shown read-only so
- * the user sees who they are — the server, not this component, enforces it.
+ * L2 · Shared Customer (buyer) + Trader (seller) picker, used by the new-deal
+ * dialog and the draft Parties card. It mirrors the SERVER slot logic exactly
+ * (resolvePartySlots / createOrder):
+ *   - an admin picks both slots freely (Trader = any is_trader org);
+ *   - a salesperson (bound to trader org[s]) picks the Customer, and the Trader
+ *     is their own trader org — locked when they have exactly one, a dropdown of
+ *     their traders when they have several;
+ *   - a customer-side user picks the Trader (their own org is the forced buyer).
+ * The forced/locked slot is shown read-only — the server, not this component,
+ * enforces it.
  *
- * UI labels follow the house convention: seller = "Manufacturer", customer =
- * "Customer" (CLAUDE.md party naming).
+ * The seller slot's user label is "Trader" (the house's own trading company);
+ * the DB column stays seller_organisation_id (CLAUDE.md party naming).
  */
 export function PartyFields({
   partyOptions,
@@ -39,9 +42,18 @@ export function PartyFields({
   lockedCustomerName?: string | null;
   lockedSellerName?: string | null;
 }) {
-  const pickCustomer = (partyOptions.isAdmin || partyOptions.userIsManufacturer) && lockedCustomerName == null;
-  const pickManufacturer = (partyOptions.isAdmin || !partyOptions.userIsManufacturer) && lockedSellerName == null;
+  // Seller-side = a salesperson bound to trader org(s), or a legacy
+  // manufacturer-side org (pre-trader-flag). Such a user's Trader is their own
+  // org; they pick the Customer. Everyone else picks the Trader.
+  const isSellerSide = partyOptions.userIsTrader || partyOptions.userIsManufacturer;
+  const pickCustomer = (partyOptions.isAdmin || isSellerSide) && lockedCustomerName == null;
+  const pickTrader =
+    lockedSellerName == null &&
+    (partyOptions.isAdmin || !isSellerSide || partyOptions.userTraderOrgs.length > 1);
   const ownOrgLabel = partyOptions.userOrgName ?? "Your organisation";
+  // The read-only trader label when a single trader is bound to the salesperson.
+  const soleTrader = partyOptions.userTraderOrgs.length === 1 ? partyOptions.userTraderOrgs[0] : null;
+  const soleTraderLabel = soleTrader ? (soleTrader.code ? `${soleTrader.code} — ${soleTrader.name}` : soleTrader.name) : ownOrgLabel;
 
   return (
     <div className="space-y-3">
@@ -73,31 +85,31 @@ export function PartyFields({
         )}
       </div>
 
-      {/* Manufacturer (seller) */}
+      {/* Trader (seller) */}
       <div className="space-y-1.5">
-        <Label>Manufacturer</Label>
+        <Label>Trader</Label>
         {lockedSellerName != null ? (
           <p className="text-sm rounded-md border bg-muted/40 px-3 py-2">{lockedSellerName} <span className="text-muted-foreground">(set)</span></p>
-        ) : pickManufacturer ? (
-          partyOptions.manufacturerOptions.length === 0 ? (
+        ) : pickTrader ? (
+          partyOptions.traderOptions.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No manufacturers in your book yet — add one in CRM.
+              No traders available yet.
             </p>
           ) : (
             <Select
               value={value.sellerOrganisationId ?? ""}
               onValueChange={(v) => onChange({ sellerOrganisationId: v || null })}
             >
-              <SelectTrigger><SelectValue placeholder="Pick the manufacturer" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Pick the trader" /></SelectTrigger>
               <SelectContent>
-                {partyOptions.manufacturerOptions.map((o) => (
+                {partyOptions.traderOptions.map((o) => (
                   <SelectItem key={o.id} value={o.id}>{o.code ? `${o.code} — ${o.name}` : o.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           )
         ) : (
-          <p className="text-sm rounded-md border bg-muted/40 px-3 py-2">{ownOrgLabel} <span className="text-muted-foreground">(you)</span></p>
+          <p className="text-sm rounded-md border bg-muted/40 px-3 py-2">{soleTraderLabel} <span className="text-muted-foreground">(you)</span></p>
         )}
       </div>
     </div>
@@ -106,13 +118,22 @@ export function PartyFields({
 
 /**
  * Which counterparty slot must the current user pick for a valid submission?
- * (The forced own-org slot is filled server-side, so it never blocks submit.)
- * Returns true when every required pick is satisfied.
+ * (An auto-filled / forced slot is completed server-side, so it never blocks
+ * submit.) Returns true when every required pick is satisfied.
+ *
+ * L3 · an ADMIN may create/hold a deal with ONE party unset (e.g. a purchase leg
+ * while still shopping suppliers) — so an admin only needs AT LEAST ONE party
+ * (the code mints lazily once both exist; the Parties card fills the blank
+ * later). Salespeople are unaffected — their parties are always known.
  */
 export function partyPickComplete(partyOptions: OrderPartyOptions, value: PartyValue): boolean {
-  const needCustomer = partyOptions.isAdmin || partyOptions.userIsManufacturer;
-  const needManufacturer = partyOptions.isAdmin || !partyOptions.userIsManufacturer;
+  if (partyOptions.isAdmin) {
+    return !!value.customerOrganisationId || !!value.sellerOrganisationId;
+  }
+  const isSellerSide = partyOptions.userIsTrader || partyOptions.userIsManufacturer;
+  const needCustomer = isSellerSide;
+  const needTrader = !isSellerSide || partyOptions.userTraderOrgs.length > 1;
   if (needCustomer && !value.customerOrganisationId) return false;
-  if (needManufacturer && !value.sellerOrganisationId) return false;
+  if (needTrader && !value.sellerOrganisationId) return false;
   return true;
 }

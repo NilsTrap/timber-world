@@ -241,7 +241,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "timber_create_deal",
     description:
-      "Create a new (sell-side) deal — a bilateral trade record seeded on its own spine. Use after extracting an order from an email, voice note, or meeting transcript. Set needs_sourcing=true + source_organisation_id to AUTO-SPAWN the matching BUY (sourcing) leg on the SAME spine (supplier → the house); the created deal's upstream_deal_id then points to that spawned buy leg. Returns the created deal with its generated code. Pass idempotency_key to make repeated calls safe (a repeat returns the same deal and never re-spawns).",
+      "Create a new (sell-side) deal — a bilateral trade record seeded on its own spine. Use after extracting an order from an email, voice note, or meeting transcript. Set needs_sourcing=true + source_organisation_id to AUTO-SPAWN the matching BUY (sourcing) leg on the SAME spine (supplier → the house); the created deal's upstream_deal_id then points to that spawned buy leg. Set origin_deal_id to instead create a LEG on an EXISTING deal's spine (spine-Lego): the new deal joins that deal's spine and copies its spec lines (prices blank) — chains have no fixed shape, legs are assembled manually. Returns the created deal with its generated code. Pass idempotency_key to make repeated calls safe (a repeat returns the same deal and never re-spawns).",
     readOnly: false,
     lifecycle: "deal_create",
     inputSchema: {
@@ -281,6 +281,8 @@ export const TOOLS: ToolDef[] = [
         delivery_deadline: { type: "string", description: "Delivery deadline (free text, e.g. 'July 2026')." },
         notes: { type: "string", description: "Free-text notes." },
         idempotency_key: { type: "string", description: "Stable key to dedupe repeated creates from a retried workflow." },
+        origin_deal_id: { type: "string", description: "Spine-Lego LEG: attach this new deal as a leg on the origin deal's SPINE (the origin mints its spine now if it lacks one). The origin's spec lines are copied unless copy_lines=false — product definition + catalog links + quantities; PRICES BLANK (each leg prices itself). No fixed chain shape; parties are your explicit choice (a leg may be held with a party unset)." },
+        copy_lines: { type: "boolean", description: "When origin_deal_id is set, copy the origin's spec lines onto this leg (default true; prices always left blank)." },
         line_items: {
           type: "array",
           description: "Sell-side line items. Each: {product_name, wood_species, humidity, processing, quality, thickness, width, length, pieces, volume_m3, unit, unit_price_cents, vat_rate}.",
@@ -359,6 +361,7 @@ export const TOOLS: ToolDef[] = [
       properties: {
         deal_id: { type: "string", description: "The SELL deal (order) UUID to source from." },
         supplier_organisation_id: { type: "string", description: "Supplier organisation UUID that SELLS to the house on the spawned buy leg (from the suppliers book — is_supplier or is_producer)." },
+        buyer_organisation_id: { type: "string", description: "The trader that BUYS from the supplier on the spawned buy leg. Defaults to the sell deal's seller (the trader on the sell leg) but is editable — a chain's middle leg need not be bought by the sell-leg seller. Must be an active is_trader org." },
       },
       required: ["deal_id", "supplier_organisation_id"],
     },

@@ -13,7 +13,7 @@ import { crmSyncOrg } from "./oscarCrm";
 type DbClient = any;
 
 const ORG_SELECT =
-  "id, code, name, is_active, is_external, is_customer, is_manufacturer, is_producer, is_supplier, default_signee_name, default_signee_role, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, crm_org_id, crm_synced_at, created_at, updated_at";
+  "id, code, name, is_active, is_external, is_customer, is_manufacturer, is_producer, is_supplier, is_trader, default_signee_name, default_signee_role, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, crm_org_id, crm_synced_at, created_at, updated_at";
 
 export interface OrgView {
   id: string;
@@ -25,6 +25,7 @@ export interface OrgView {
   isManufacturer: boolean;
   isProducer: boolean;
   isSupplier: boolean;
+  isTrader: boolean;
   defaultSigneeName: string | null;
   defaultSigneeRole: string | null;
   legalAddress: string | null;
@@ -60,6 +61,7 @@ function mapOrg(row: any): OrgView {
     isManufacturer: row.is_manufacturer ?? false,
     isProducer: row.is_producer ?? false,
     isSupplier: row.is_supplier ?? false,
+    isTrader: row.is_trader ?? false,
     defaultSigneeName: row.default_signee_name ?? null,
     defaultSigneeRole: row.default_signee_role ?? null,
     legalAddress: row.legal_address ?? null,
@@ -155,6 +157,7 @@ export interface UpdateOrgFlags {
   isManufacturer?: boolean;
   isProducer?: boolean;
   isSupplier?: boolean;
+  isTrader?: boolean;
   isActive?: boolean;
 }
 
@@ -209,6 +212,7 @@ export async function updateOrg(
   if (typeof input.isManufacturer === "boolean") u.is_manufacturer = input.isManufacturer;
   if (typeof input.isProducer === "boolean") u.is_producer = input.isProducer;
   if (typeof input.isSupplier === "boolean") u.is_supplier = input.isSupplier;
+  if (typeof input.isTrader === "boolean") u.is_trader = input.isTrader;
   if (typeof input.isActive === "boolean") u.is_active = input.isActive;
 
   // Nothing to change → idempotent no-op, return the org as-is.

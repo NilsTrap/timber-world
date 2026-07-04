@@ -131,6 +131,22 @@ export async function assembleDocumentData(db: DbClient, actor: ActorContext, in
   if (!gate.ok) return { success: false, error: gate.reason, code: "WRONG_LEG" };
 
   const side: DealSide = input.side ?? defaultSideFor(input.docType);
+
+  // L3 · a deal may be HELD with one party unset (a leg while still shopping),
+  // but a document needs BOTH parties for its seller/buyer blocks. Fail clearly
+  // rather than emit a PDF with a blank party card. (Tiny early guard — the rest
+  // of assembly is unchanged.)
+  const effectiveBuyerId = side === "buy"
+    ? (deal.producer.id ?? deal.buyer.id ?? deal.customer.id)
+    : (deal.buyer.id ?? deal.customer.id);
+  if (!deal.seller.id || !effectiveBuyerId) {
+    return {
+      success: false,
+      error: "This deal is missing a party (customer / trader). Set both parties before generating documents.",
+      code: "MISSING_PARTY",
+    };
+  }
+
   const admin = createAdminClient() as AnyDb;
 
   // A4 (§8.2): a document's parties are the deal's bilateral seller/buyer.

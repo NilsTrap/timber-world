@@ -70,6 +70,7 @@ export function OrganisationDetailTabs({
   const [isManufacturer, setIsManufacturer] = useState(organisation.isManufacturer);
   const [isProducer, setIsProducer] = useState(organisation.isProducer);
   const [isSupplier, setIsSupplier] = useState(organisation.isSupplier);
+  const [isTrader, setIsTrader] = useState(organisation.isTrader);
   const [isTogglingRole, setIsTogglingRole] = useState(false);
 
   // Editable fields (name/code inline editing)
@@ -140,7 +141,7 @@ export function OrganisationDetailTabs({
   };
 
   const handleRoleToggle = async (
-    role: "customer" | "manufacturer" | "producer" | "supplier",
+    role: "customer" | "manufacturer" | "producer" | "supplier" | "trader",
     current: boolean
   ) => {
     setIsTogglingRole(true);
@@ -150,7 +151,8 @@ export function OrganisationDetailTabs({
       if (role === "customer") setIsCustomer(result.data.enabled);
       else if (role === "manufacturer") setIsManufacturer(result.data.enabled);
       else if (role === "producer") setIsProducer(result.data.enabled);
-      else setIsSupplier(result.data.enabled);
+      else if (role === "supplier") setIsSupplier(result.data.enabled);
+      else setIsTrader(result.data.enabled);
     } else {
       toast.error(result.error);
     }
@@ -488,27 +490,45 @@ export function OrganisationDetailTabs({
                     >
                       Supplier
                     </Button>
+                    <Button
+                      variant={isTrader ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleRoleToggle("trader", isTrader)}
+                      disabled={isTogglingRole}
+                    >
+                      Trader
+                    </Button>
                   </div>
-                  {/* I1 · "Appears in" — the CRM books are filtered VIEWS of this
-                      one org list (Clients = customer; Suppliers = supplier OR
-                      producer). Reveal where this org lands so an unflagged
-                      (internal) org shows WHY it's in no book. */}
+                  {/* I1/L2 · "Appears in" — the CRM books are filtered VIEWS of
+                      this one org list (Clients = customer; Suppliers = supplier
+                      OR producer; Traders = trader, admin-only). Reveal where this
+                      org lands so an unflagged (internal) org shows WHY it's in no
+                      book. */}
                   <p className="mt-1.5 text-xs text-muted-foreground">
-                    {isCustomer || isSupplier || isProducer ? (
-                      <>
-                        Appears in:{" "}
-                        {isCustomer && (
-                          <a href="/counterparties/clients" className="text-primary hover:underline">Clients book</a>
-                        )}
-                        {isCustomer && (isSupplier || isProducer) && " · "}
-                        {(isSupplier || isProducer) && (
-                          <a href="/counterparties/suppliers" className="text-primary hover:underline">Suppliers book</a>
-                        )}
-                        <span className="ml-1 text-muted-foreground/70">— the CRM books are filtered views of this org list.</span>
-                      </>
-                    ) : (
-                      "Internal — appears in no CRM book (toggle a role to place it in Clients or Suppliers)."
-                    )}
+                    {(() => {
+                      const books: React.ReactNode[] = [];
+                      if (isCustomer) books.push(
+                        <a key="c" href="/counterparties/clients" className="text-primary hover:underline">Clients book</a>
+                      );
+                      if (isSupplier || isProducer) books.push(
+                        <a key="s" href="/counterparties/suppliers" className="text-primary hover:underline">Suppliers book</a>
+                      );
+                      if (isTrader) books.push(
+                        <a key="t" href="/counterparties/traders" className="text-primary hover:underline">Traders book</a>
+                      );
+                      if (books.length === 0) {
+                        return "Internal — appears in no CRM book (toggle a role to place it in Clients, Suppliers or Traders).";
+                      }
+                      return (
+                        <>
+                          Appears in:{" "}
+                          {books.map((b, i) => (
+                            <span key={i}>{i > 0 ? " · " : ""}{b}</span>
+                          ))}
+                          <span className="ml-1 text-muted-foreground/70">— the CRM books are filtered views of this org list.</span>
+                        </>
+                      );
+                    })()}
                   </p>
                 </div>
               </div>

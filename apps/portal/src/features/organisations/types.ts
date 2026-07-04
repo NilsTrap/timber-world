@@ -21,6 +21,10 @@ export interface Organisation {
   /** I1 (E4 column): a supplier sells goods to the house on buy legs. Drives the
    *  CRM Suppliers book (is_supplier OR is_producer). */
   isSupplier: boolean;
+  /** L2 (Wave 2): a trader is one of the house's own trading companies — the
+   *  seller side of a deal. Drives the New-deal "Trader" slot + admin-only CRM
+   *  Traders book. Independent of is_manufacturer (legacy) which is left intact. */
+  isTrader: boolean;
   legalAddress: string | null;
   vatNumber: string | null;
   registrationNumber: string | null;

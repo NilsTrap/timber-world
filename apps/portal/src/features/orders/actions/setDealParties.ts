@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "../types";
+import { getSession } from "@/lib/auth";
 import { resolveDealActor } from "./_dealActor";
-import { resolvePartySlots } from "./_validateOrderParty";
+import { resolvePartySlots, getTraderMembershipOrgIds } from "./_validateOrderParty";
 import { allocateDealCode } from "../services/orderDeals";
 import { logOrderActivity } from "./logOrderActivity";
 
@@ -47,9 +48,15 @@ export async function setDealParties(input: {
     return { success: false, error: "Deal parties are already set and locked (change = cancel + recreate)", code: "ALREADY_SET" };
   }
 
+  // L2 · trader-membership binding (mirrors createOrder). getSession is cached,
+  // so this is cheap even though resolveDealActor already read it.
+  const session = await getSession();
+  const userTraderOrgIds = a.actor.isPlatformAdmin
+    ? []
+    : await getTraderMembershipOrgIds(client, (session?.memberships ?? []).map((m) => m.organizationId));
   const slots = await resolvePartySlots(
     client,
-    { isAdmin: a.actor.isPlatformAdmin, userOrgId: a.orgId },
+    { isAdmin: a.actor.isPlatformAdmin, userOrgId: a.orgId, userTraderOrgIds },
     { customerOrganisationId: input.customerOrganisationId, sellerOrganisationId: input.sellerOrganisationId },
   );
   if (!slots.ok) return { success: false, error: slots.error, code: slots.code };
