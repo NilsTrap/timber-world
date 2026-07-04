@@ -9,6 +9,10 @@ import type { DealSide, DocType, DocState, OrderLineItem, OrderExternalRef } fro
 import { resolveVat } from "../vat";
 import { amountInWords } from "./amountInWords";
 import { titleFor } from "./registry";
+import {
+  CUSTOMER_ORDER_NO_REF_TYPE, SUPPLIER_ORDER_NO_REF_TYPE,
+  CUSTOMER_ORDER_NO_LABEL, SUPPLIER_ORDER_NO_LABEL,
+} from "../partyOrderNumbers";
 import type { DocumentData, DocLineItem, PartyCard } from "./types";
 
 /**
@@ -51,6 +55,8 @@ export function refLabel(refType: string): string {
     case "client_project": return "Client project";
     case "client_job": return "Client job";
     case "client_po": return "Client PO";
+    case CUSTOMER_ORDER_NO_REF_TYPE: return CUSTOMER_ORDER_NO_LABEL;
+    case SUPPLIER_ORDER_NO_REF_TYPE: return SUPPLIER_ORDER_NO_LABEL;
     default: return "Ref";
   }
 }
@@ -98,6 +104,9 @@ export function buildDocumentData(input: BuildDocumentDataInput): DocumentData {
   const totalCents = subtotalCents + vatCents;
 
   const docState = input.docState ?? null;
+  // N3 · resolve the canonical party order numbers from the deal's refs so they can
+  // be placed as dedicated merge fields (they also stay in the externalRefs block).
+  const refValueOf = (t: string) => input.externalRefs.find((r) => r.refType === t)?.refValue ?? null;
   return {
     docType: input.docType,
     docTitle: titleFor(input.docType, docState),
@@ -111,6 +120,8 @@ export function buildDocumentData(input: BuildDocumentDataInput): DocumentData {
     externalRefs: input.externalRefs
       .filter((r) => r.refType !== "other")
       .map((r) => ({ label: r.label || refLabel(r.refType), value: r.refValue })),
+    customerOrderNo: refValueOf(CUSTOMER_ORDER_NO_REF_TYPE),
+    supplierOrderNo: refValueOf(SUPPLIER_ORDER_NO_REF_TYPE),
     incoterms: input.incoterms ? `${input.incoterms}${input.incotermsPlace ? ` ${input.incotermsPlace}` : ""}` : null,
     paymentTerms: input.paymentTerms,
     deliveryTerms: input.deliveryTerms,

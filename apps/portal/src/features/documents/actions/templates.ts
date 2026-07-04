@@ -390,9 +390,12 @@ function buildSampleDocumentData(docType: DocType): DocumentData {
       bankSwift: null,
     },
     externalRefs: [
-      { label: "Client ref", value: "PO-2026-0042" },
+      { label: "Customer order no.", value: "PO-2026-0042" },
+      { label: "Supplier order no.", value: "SO-88120" },
       { label: "Contract", value: "TW/2026/1" },
     ],
+    customerOrderNo: "PO-2026-0042",
+    supplierOrderNo: "SO-88120",
     incoterms: "FCA Riga (Incoterms 2020)",
     paymentTerms: "30% advance, balance before loading",
     deliveryTerms: "By truck, full load",

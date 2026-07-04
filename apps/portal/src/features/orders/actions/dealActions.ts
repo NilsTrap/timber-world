@@ -10,9 +10,9 @@ import { getSession } from "@/lib/auth";
 import { getAccessProfile } from "@/lib/access";
 import type { AccessProfile } from "@/lib/access/types";
 import type { ActionResult } from "../types";
-import type { DealSide, DocType, OrderLineItem } from "../services/dealModel";
+import type { DealSide, DocType, OrderLineItem, OrderExternalRef } from "../services/dealModel";
 import { projectDealView, resolveFieldAccess } from "../services/dealFields";
-import { getOrderDeal, updateLineItemAmounts, updateDealFields, setMarginApproval, resolveViewerDirection, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
+import { getOrderDeal, updateLineItemAmounts, updateDealFields, setMarginApproval, setExternalRefs, resolveViewerDirection, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
 import { logOrderActivity } from "./logOrderActivity";
 import { generateDocument, regenerateDocument, getDocumentUrl, deleteDocument, uploadSignedDocument, getSignedDocumentUrl, deleteSignedDocument, type GeneratedDocument } from "../services/orderDocuments";
 import { getSpineBuyLegs, getSpineLegs, type SpineLegRef } from "../services/spineSiblings";
@@ -221,6 +221,32 @@ export async function updateDealTerms(input: { orderId: string; terms: DealTerms
   const res = await updateDealFields(a.db, a.actor, input.orderId, patch);
   if (res.success) {
     await logOrderActivity(input.orderId, a.actor.portalUserId, "Deal terms updated", undefined, "list");
+    revalidatePath(`/orders/${input.orderId}`);
+  }
+  return res;
+}
+
+/**
+ * N3 · Set a deal's external references — the canonical party order numbers
+ * ("Customer order no." / "Supplier order no.") plus any free extra refs. Same
+ * field-wall gate as deal terms (admin OR deal_terms-editable); re-checked
+ * server-side. Full replace of the deal's non-internal refs (internal idempotency
+ * markers are preserved by setExternalRefs). Logs to the deal's activity log.
+ */
+export async function setDealReferences(input: { orderId: string; refs: OrderExternalRef[] }): Promise<ActionResult<OrderExternalRef[]>> {
+  const a = await resolveDealActor();
+  if (!a.ok) return { success: false, error: a.error, code: a.code };
+  if (!(await requireLineWriteAccess(a.actor, a.orgId))) {
+    return { success: false, error: "You cannot edit deal references", code: "FORBIDDEN" };
+  }
+  // Whitelist: only keep refs with a non-empty value; never forward the internal
+  // 'other' type (reserved for idempotency markers — setExternalRefs preserves it).
+  const clean = input.refs
+    .filter((r) => r.refType !== "other" && r.refValue != null && r.refValue.trim() !== "")
+    .map((r) => ({ refType: r.refType, refValue: r.refValue.trim(), label: r.label?.trim() || null }));
+  const res = await setExternalRefs(a.db, a.actor, input.orderId, clean);
+  if (res.success) {
+    await logOrderActivity(input.orderId, a.actor.portalUserId, "Deal references updated", undefined, "list");
     revalidatePath(`/orders/${input.orderId}`);
   }
   return res;

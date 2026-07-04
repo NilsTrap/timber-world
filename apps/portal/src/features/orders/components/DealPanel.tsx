@@ -23,6 +23,7 @@ import { ChainCard } from "./ChainCard";
 import { DealActivitiesCard } from "./DealActivitiesCard";
 import { DealTermsEditor } from "./DealTermsEditor";
 import { DealFilesCard } from "./DealFilesCard";
+import { DealReferencesCard } from "./DealReferencesCard";
 import { suggestedDocsFor } from "../services/dealActivities";
 import { DOC_TYPE_LABELS, expectedDocsForDealKind } from "../services/documents/registry";
 import { lineTotalCents } from "../services/documents/assemble";
@@ -325,6 +326,18 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
           </>
         )}
       </div>
+
+      {/* N3 · References — the deal's party order numbers (Customer / Supplier
+          order no.) + free extras. Its OWN card (not folded into Terms). Same edit
+          gate as deal terms. Shown once the deal has data. */}
+      {hasDealData && (
+        <DealReferencesCard
+          orderId={orderId}
+          refs={deal.externalRefs}
+          canEdit={deal.canEditDealTerms}
+          onSaved={load}
+        />
+      )}
 
       {/* A1 (§2.1): ONE order-specification table = this deal's own line items.
           No sell/buy split — the buy leg is a separate deal on the same spine.

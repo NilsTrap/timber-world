@@ -88,7 +88,13 @@ const sample: DocumentData = {
     bankAccount: null,
     bankSwift: null,
   },
-  externalRefs: [{ label: "Client ref", value: "PO-42" }],
+  externalRefs: [
+    { label: "Client ref", value: "PO-42" },
+    { label: "Customer order no.", value: "CUST-777" },
+    { label: "Supplier order no.", value: "SUP-999" },
+  ],
+  customerOrderNo: "CUST-777",
+  supplierOrderNo: "SUP-999",
   incoterms: "FCA Riga",
   paymentTerms: "30 days",
   deliveryTerms: "By truck",
@@ -137,6 +143,8 @@ const tpl = `<h1>{{docTitle}} — {{docNumber}}</h1>
 <p>VAT {{totals.vatRate}}%: {{money totals.vatCents}}</p>
 <p>Total: {{moneyCur totals.totalCents}}</p>
 <p>Advance: {{pct advancePct}}</p>
+<p>Customer order no: {{customerOrderNo}}</p>
+<p>Supplier order no: {{supplierOrderNo}}</p>
 <p>Notes: {{notes}}</p>`;
 
 const out = mergeTemplate(tpl, sample);
@@ -151,6 +159,9 @@ truthy("each loop fmtM3 helper", out.includes("1,500"));
 truthy("subtotal money + currency literal", out.includes("Subtotal: 976,50 EUR"));
 truthy("moneyCur reads root currency", out.includes("Total: 1 181,56 EUR"));
 truthy("pct helper renders advance", out.includes("Advance: 30%"));
+// N3 · party order numbers as dedicated merge fields.
+truthy("customer order no merge field", out.includes("Customer order no: CUST-777"));
+truthy("supplier order no merge field", out.includes("Supplier order no: SUP-999"));
 // null fields render empty, never the literal "undefined"
 truthy("null buyer VAT renders empty", out.includes("Buyer: DDC Ltd (VAT )"));
 truthy("null notes renders empty", out.includes("Notes: </p>"));

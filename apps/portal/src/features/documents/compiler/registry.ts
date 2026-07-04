@@ -33,6 +33,9 @@ export const MERGE_FIELD_GROUPS: MergeFieldGroup[] = [
       { label: "Date", token: "fmtDate docDate" },
       { label: "Deal code", token: "dealCode" },
       { label: "Currency", token: "currency" },
+      // N3 · party order numbers (resolved from the deal's canonical external refs).
+      { label: "Customer order no", token: "customerOrderNo" },
+      { label: "Supplier order no", token: "supplierOrderNo" },
       { label: "Notes", token: "notes" },
     ],
   },
