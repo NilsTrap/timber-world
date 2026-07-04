@@ -9,6 +9,7 @@
  * downloads — no per-object storage RLS needed). Server-only.
  */
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sanitizeStorageFileName } from "@/lib/utils/storage";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
 import type { ActorContext, DealSide, DocType, DocState, DbClient } from "./dealModel";
@@ -391,4 +392,94 @@ export async function getDocumentUrl(db: DbClient, _actor: ActorContext, documen
   const { data: signed, error: signErr } = await admin.storage.from(STORAGE_BUCKET).createSignedUrl(row.storage_path, 60 * 60 * 24 * 7);
   if (signErr || !signed?.signedUrl) return { success: false, error: signErr?.message ?? "Could not sign URL", code: "SIGN_FAILED" };
   return { success: true, data: { url: signed.signedUrl, fileName: row.file_name ?? null } };
+}
+
+// ── N2 (b) · Signed versions of a generated document ───────────────────────────
+// A generated order_documents row can carry a counterparty-SIGNED PDF uploaded
+// alongside the system-generated one (Nils: "esošajiem uzģenerētajiem dokumentiem
+// jāspēj uploadot parakstīto versiju."). Stored in the SAME private bucket under a
+// signed/ prefix; recorded on signed_storage_path/file_name/uploaded_at/by.
+// Upload doubles as replace (a fresh upload overwrites the previous signed file).
+// Caller enforces permission (deal_terms-editable OR admin).
+
+export interface SignedUploadInput {
+  documentId: string;
+  bytes: Uint8Array;
+  fileName: string;
+  mimeType: string;
+}
+
+/** Store (or replace) the signed version of a generated document. */
+export async function uploadSignedDocument(_db: DbClient, actor: ActorContext, input: SignedUploadInput): Promise<ActionResult<{ id: string; url: string | null }>> {
+  if (!isValidUUID(input.documentId)) return { success: false, error: "Invalid document id", code: "VALIDATION_ERROR" };
+  const admin = createAdminClient() as AnyDb;
+  const { data: row, error } = await admin
+    .from("order_documents")
+    .select("id, order_id, doc_type, signed_storage_path")
+    .eq("id", input.documentId)
+    .maybeSingle();
+  if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };
+  if (!row) return { success: false, error: "Document not found", code: "NOT_FOUND" };
+
+  const safeName = sanitizeStorageFileName(input.fileName) || "signed.pdf";
+  const storagePath = `${row.order_id}/${row.doc_type}/signed/${input.documentId}-${safeName}`;
+  const { error: uploadErr } = await admin.storage
+    .from(STORAGE_BUCKET)
+    .upload(storagePath, input.bytes, { contentType: input.mimeType || "application/octet-stream", upsert: true });
+  if (uploadErr) return { success: false, error: `Storage upload failed: ${uploadErr.message}`, code: "UPLOAD_FAILED" };
+
+  // Replace: remove a superseded signed file left at a DIFFERENT path (the file
+  // name changed) so no orphan lingers. Same-path uploads were upserted above.
+  const prev = row.signed_storage_path as string | null;
+  if (prev && prev !== storagePath) {
+    await admin.storage.from(STORAGE_BUCKET).remove([prev]);
+  }
+
+  const { error: updErr } = await admin
+    .from("order_documents")
+    .update({
+      signed_storage_path: storagePath,
+      signed_file_name: input.fileName,
+      signed_uploaded_at: new Date().toISOString(),
+      signed_uploaded_by: actor.portalUserId,
+    })
+    .eq("id", input.documentId);
+  if (updErr) {
+    await admin.storage.from(STORAGE_BUCKET).remove([storagePath]); // best-effort cleanup
+    return { success: false, error: updErr.message, code: "UPDATE_FAILED" };
+  }
+
+  const { data: signed } = await admin.storage.from(STORAGE_BUCKET).createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+  return { success: true, data: { id: input.documentId, url: signed?.signedUrl ?? null } };
+}
+
+/** Mint a fresh signed download URL for a document's uploaded signed version. */
+export async function getSignedDocumentUrl(db: DbClient, _actor: ActorContext, documentId: string): Promise<ActionResult<{ url: string; fileName: string | null }>> {
+  if (!isValidUUID(documentId)) return { success: false, error: "Invalid document id", code: "VALIDATION_ERROR" };
+  const c = db as AnyDb;
+  const { data: row, error } = await c.from("order_documents").select("signed_storage_path, signed_file_name").eq("id", documentId).single();
+  if (error || !row?.signed_storage_path) return { success: false, error: error?.message ?? "No signed version uploaded", code: "NOT_FOUND" };
+  const admin = createAdminClient() as AnyDb;
+  const { data: signed, error: signErr } = await admin.storage.from(STORAGE_BUCKET).createSignedUrl(row.signed_storage_path, 60 * 60 * 24 * 7);
+  if (signErr || !signed?.signedUrl) return { success: false, error: signErr?.message ?? "Could not sign URL", code: "SIGN_FAILED" };
+  return { success: true, data: { url: signed.signedUrl, fileName: row.signed_file_name ?? null } };
+}
+
+/** Delete a document's uploaded signed version (file + the signed_* columns).
+ *  Leaves the generated document row itself intact. Idempotent. Caller-gated. */
+export async function deleteSignedDocument(_db: DbClient, _actor: ActorContext, documentId: string): Promise<ActionResult<{ id: string }>> {
+  if (!isValidUUID(documentId)) return { success: false, error: "Invalid document id", code: "VALIDATION_ERROR" };
+  const admin = createAdminClient() as AnyDb;
+  const { data: row, error } = await admin.from("order_documents").select("id, signed_storage_path").eq("id", documentId).maybeSingle();
+  if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };
+  if (!row) return { success: true, data: { id: documentId } }; // already gone
+  if (row.signed_storage_path) {
+    await admin.storage.from(STORAGE_BUCKET).remove([row.signed_storage_path as string]); // best-effort
+  }
+  const { error: updErr } = await admin
+    .from("order_documents")
+    .update({ signed_storage_path: null, signed_file_name: null, signed_uploaded_at: null, signed_uploaded_by: null })
+    .eq("id", documentId);
+  if (updErr) return { success: false, error: updErr.message, code: "UPDATE_FAILED" };
+  return { success: true, data: { id: documentId } };
 }

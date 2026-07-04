@@ -82,10 +82,21 @@ export interface OrderLineItem {
   isStandard: boolean;
 }
 
+export type OrderExternalRefType =
+  | "client_project"
+  | "client_job"
+  | "client_po"
+  | "other"
+  // N3: canonical party order numbers (Customer order no. / Supplier order no.)
+  | "customer_order_no"
+  | "supplier_order_no"
+  // N3: a free extra ref with a user-supplied label.
+  | "custom";
+
 export interface OrderExternalRef {
   id?: string;
   orderId?: string;
-  refType: "client_project" | "client_job" | "client_po" | "other";
+  refType: OrderExternalRefType;
   refValue: string;
   label: string | null;
 }
@@ -104,6 +115,10 @@ export interface OrderDocumentMeta {
   oscarDocId: string | null;
   oscarDocUrl: string | null;
   createdAt: string;
+  /** N2 (b): an uploaded counterparty-signed version of this document (null = none). */
+  signedStoragePath: string | null;
+  signedFileName: string | null;
+  signedUploadedAt: string | null;
 }
 
 /** Universal deal-level fields layered onto `orders`. */

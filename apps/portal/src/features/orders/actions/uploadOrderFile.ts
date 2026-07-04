@@ -32,7 +32,7 @@ export async function uploadOrderFile(
     return { success: false, error: "File too large. Maximum size: 100MB", code: "FILE_TOO_LARGE" };
   }
 
-  if (category !== "customer" && category !== "production") {
+  if (category !== "customer" && category !== "production" && category !== "deal") {
     return { success: false, error: "Invalid category", code: "INVALID_CATEGORY" };
   }
 
@@ -84,7 +84,7 @@ export async function uploadOrderFile(
     return { success: false, error: "Failed to save file record", code: "INSERT_FAILED" };
   }
 
-  const fileTab = category === "customer" ? "list" : "production";
+  const fileTab = category === "production" ? "production" : "list";
   await logOrderActivity(orderId, session.portalUserId, "file_uploaded", `Uploaded ${category} file: ${row.file_name}`, fileTab);
 
   return {

@@ -4,6 +4,7 @@
  *   src/features/orders/services/__tests__/document-assemble.test.ts`
  */
 import { lineTotalCents, toDocLine, buildDocumentData, defaultSideFor, refLabel } from "../documents/assemble";
+import { partyOrderNumbers, CUSTOMER_ORDER_NO_LABEL, SUPPLIER_ORDER_NO_LABEL } from "../partyOrderNumbers";
 import type { OrderLineItem } from "../dealModel";
 
 let passed = 0;
@@ -95,6 +96,41 @@ const dom = buildDocumentData({
 eq("GB domestic VAT 20%", dom.totals.vatRate, 20);
 eq("GB domestic vat cents", dom.totals.vatCents, 2000);
 eq("GB domestic total", dom.totals.totalCents, 12000);
+
+// ── N3 · party order numbers (canonical refs → scalar fields + accessor) ──
+eq("refLabel customer_order_no", refLabel("customer_order_no"), CUSTOMER_ORDER_NO_LABEL);
+eq("refLabel supplier_order_no", refLabel("supplier_order_no"), SUPPLIER_ORDER_NO_LABEL);
+
+const withRefs = buildDocumentData({
+  docType: "sales_spec", side: "sell", docNumber: "Spec No 2", docDate: "2026-07-04T00:00:00Z",
+  dealCode: "TIMSOM002", currency: "EUR",
+  seller: { name: "Timber Intl", country: "LV" }, buyer: { name: "DDC", country: "GB" },
+  incoterms: null, incotermsPlace: null, advancePct: null, paymentTerms: null,
+  deliveryTerms: null, deliveryDeadline: null, notes: null,
+  externalRefs: [
+    { refType: "customer_order_no", refValue: "CUST-777", label: CUSTOMER_ORDER_NO_LABEL },
+    { refType: "supplier_order_no", refValue: "SUP-999", label: SUPPLIER_ORDER_NO_LABEL },
+    { refType: "custom", refValue: "X-1", label: "Extra" },
+    { refType: "other", refValue: "idem:z", label: "idempotency" },
+  ],
+  lineItems: [li({ unit: "m3", volumeM3: 1, unitPriceCents: 10000 })],
+});
+eq("customerOrderNo scalar populated", withRefs.customerOrderNo, "CUST-777");
+eq("supplierOrderNo scalar populated", withRefs.supplierOrderNo, "SUP-999");
+ok("party refs + custom render, 'other' dropped", withRefs.externalRefs.length === 3
+  && withRefs.externalRefs.some((r) => r.label === CUSTOMER_ORDER_NO_LABEL && r.value === "CUST-777")
+  && withRefs.externalRefs.some((r) => r.label === SUPPLIER_ORDER_NO_LABEL && r.value === "SUP-999")
+  && !withRefs.externalRefs.some((r) => r.value === "idem:z"));
+
+// accessor handed to M1 (tolerant of camelCase + snake_case rows)
+eq("accessor from OrderExternalRef[]", partyOrderNumbers([
+  { refType: "customer_order_no", refValue: "C1", label: null },
+  { refType: "supplier_order_no", refValue: "S1", label: null },
+]), { customerOrderNo: "C1", supplierOrderNo: "S1" });
+eq("accessor from raw DB rows", partyOrderNumbers([
+  { ref_type: "customer_order_no", ref_value: "C2" },
+]), { customerOrderNo: "C2", supplierOrderNo: null });
+eq("accessor empty", partyOrderNumbers([]), { customerOrderNo: null, supplierOrderNo: null });
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;

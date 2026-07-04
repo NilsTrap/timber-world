@@ -332,7 +332,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "timber_set_deal_refs",
-    description: "Replace a deal's client external reference codes (project / job / PO). Idempotent (full replace; internal idempotency markers preserved).",
+    description: "Replace a deal's external reference codes: the client refs (project / job / PO), the N3 canonical party order numbers (customer_order_no / supplier_order_no — the customer's & supplier's OWN order numbers, which render on documents and in lists), and generic 'custom' refs. Idempotent (full replace; internal idempotency markers preserved).",
     readOnly: false,
     lifecycle: "deal_update",
     inputSchema: {
@@ -341,7 +341,7 @@ export const TOOLS: ToolDef[] = [
         deal_id: { type: "string", description: "Deal UUID." },
         refs: {
           type: "array",
-          description: "Client external refs. Each: {ref_type: 'client_project'|'client_job'|'client_po', ref_value, label?}.",
+          description: "External refs. Each: {ref_type: 'client_project'|'client_job'|'client_po'|'customer_order_no'|'supplier_order_no'|'custom', ref_value, label?}. Use label to set a friendly caption for 'custom' refs.",
           items: { type: "object" },
         },
       },

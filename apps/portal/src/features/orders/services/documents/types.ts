@@ -58,6 +58,11 @@ export interface DocumentData {
   seller: PartyCard;
   buyer: PartyCard;
   externalRefs: { label: string; value: string }[];
+  /** N3 · the deal's canonical party order numbers, resolved from externalRefs, so
+   *  templates can place them as dedicated merge fields (they also appear in the
+   *  generic externalRefs block). null when not set on the deal. */
+  customerOrderNo: string | null;
+  supplierOrderNo: string | null;
   incoterms: string | null;
   paymentTerms: string | null;
   deliveryTerms: string | null;

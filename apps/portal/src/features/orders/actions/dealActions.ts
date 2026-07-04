@@ -10,11 +10,11 @@ import { getSession } from "@/lib/auth";
 import { getAccessProfile } from "@/lib/access";
 import type { AccessProfile } from "@/lib/access/types";
 import type { ActionResult } from "../types";
-import type { DealSide, DocType, OrderLineItem } from "../services/dealModel";
+import type { DealSide, DocType, OrderLineItem, OrderExternalRef } from "../services/dealModel";
 import { projectDealView, resolveFieldAccess } from "../services/dealFields";
-import { getOrderDeal, updateLineItemAmounts, updateDealFields, setMarginApproval, resolveViewerDirection, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
+import { getOrderDeal, updateLineItemAmounts, updateDealFields, setMarginApproval, setExternalRefs, resolveViewerDirection, type OrderDealView, type LineItemAmountPatch } from "../services/orderDeals";
 import { logOrderActivity } from "./logOrderActivity";
-import { generateDocument, regenerateDocument, getDocumentUrl, deleteDocument, type GeneratedDocument } from "../services/orderDocuments";
+import { generateDocument, regenerateDocument, getDocumentUrl, deleteDocument, uploadSignedDocument, getSignedDocumentUrl, deleteSignedDocument, type GeneratedDocument } from "../services/orderDocuments";
 import { getSpineBuyLegs, getSpineLegs, type SpineLegRef } from "../services/spineSiblings";
 import { resolveDealActor } from "./_dealActor";
 import { requireLineWriteAccess } from "./_lineAccess";
@@ -226,6 +226,32 @@ export async function updateDealTerms(input: { orderId: string; terms: DealTerms
   return res;
 }
 
+/**
+ * N3 · Set a deal's external references — the canonical party order numbers
+ * ("Customer order no." / "Supplier order no.") plus any free extra refs. Same
+ * field-wall gate as deal terms (admin OR deal_terms-editable); re-checked
+ * server-side. Full replace of the deal's non-internal refs (internal idempotency
+ * markers are preserved by setExternalRefs). Logs to the deal's activity log.
+ */
+export async function setDealReferences(input: { orderId: string; refs: OrderExternalRef[] }): Promise<ActionResult<OrderExternalRef[]>> {
+  const a = await resolveDealActor();
+  if (!a.ok) return { success: false, error: a.error, code: a.code };
+  if (!(await requireLineWriteAccess(a.actor, a.orgId))) {
+    return { success: false, error: "You cannot edit deal references", code: "FORBIDDEN" };
+  }
+  // Whitelist: only keep refs with a non-empty value; never forward the internal
+  // 'other' type (reserved for idempotency markers — setExternalRefs preserves it).
+  const clean = input.refs
+    .filter((r) => r.refType !== "other" && r.refValue != null && r.refValue.trim() !== "")
+    .map((r) => ({ refType: r.refType, refValue: r.refValue.trim(), label: r.label?.trim() || null }));
+  const res = await setExternalRefs(a.db, a.actor, input.orderId, clean);
+  if (res.success) {
+    await logOrderActivity(input.orderId, a.actor.portalUserId, "Deal references updated", undefined, "list");
+    revalidatePath(`/orders/${input.orderId}`);
+  }
+  return res;
+}
+
 /** B5: edit price/quantity on a deal's line items. Allowed for platform admins OR
  * actors whose access-group grants `deal_terms` editable (Salesperson / Purchasing).
  * The profile check is side-blind; which DEALS the actor can write is enforced by
@@ -285,6 +311,58 @@ export async function getOrderDocumentUrl(documentId: string): Promise<ActionRes
   const a = await resolveDealActor();
   if (!a.ok) return { success: false, error: a.error, code: a.code };
   return getDocumentUrl(a.db, a.actor, documentId);
+}
+
+/**
+ * N2 (b) · Upload (or replace) the counterparty-signed version of a generated
+ * document. House action — admin OR a deal_terms-editable user (Salesperson /
+ * Purchasing). The signed PDF arrives as FormData (`file`). Re-checked server-side.
+ */
+const MAX_SIGNED_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+export async function uploadSignedOrderDocument(input: { documentId: string; orderId: string; formData: FormData }): Promise<ActionResult<{ id: string; url: string | null }>> {
+  const a = await resolveDealActor();
+  if (!a.ok) return { success: false, error: a.error, code: a.code };
+  if (!(await requireLineWriteAccess(a.actor, a.orgId))) {
+    return { success: false, error: "You cannot upload a signed version", code: "FORBIDDEN" };
+  }
+  const file = input.formData.get("file") as File | null;
+  if (!file) return { success: false, error: "No file provided", code: "NO_FILE" };
+  if (file.size > MAX_SIGNED_FILE_SIZE) return { success: false, error: "File too large. Maximum size: 100MB", code: "FILE_TOO_LARGE" };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const res = await uploadSignedDocument(a.db, a.actor, {
+    documentId: input.documentId,
+    bytes,
+    fileName: file.name,
+    mimeType: file.type || "application/octet-stream",
+  });
+  if (res.success) {
+    await logOrderActivity(input.orderId, a.actor.portalUserId, "Signed document uploaded", undefined, "list");
+    revalidatePath(`/orders/${input.orderId}`);
+  }
+  return res;
+}
+
+/** N2 (b) · Mint a signed download URL for a document's uploaded signed version. */
+export async function getSignedOrderDocumentUrl(documentId: string): Promise<ActionResult<{ url: string; fileName: string | null }>> {
+  const a = await resolveDealActor();
+  if (!a.ok) return { success: false, error: a.error, code: a.code };
+  return getSignedDocumentUrl(a.db, a.actor, documentId);
+}
+
+/** N2 (b) · Delete a document's uploaded signed version (file + signed_* columns).
+ *  Same house gate as upload; re-checked server-side. Confirmed in the UI. */
+export async function deleteSignedOrderDocument(input: { documentId: string; orderId: string }): Promise<ActionResult<{ id: string }>> {
+  const a = await resolveDealActor();
+  if (!a.ok) return { success: false, error: a.error, code: a.code };
+  if (!(await requireLineWriteAccess(a.actor, a.orgId))) {
+    return { success: false, error: "You cannot delete the signed version", code: "FORBIDDEN" };
+  }
+  const res = await deleteSignedDocument(a.db, a.actor, input.documentId);
+  if (res.success) {
+    await logOrderActivity(input.orderId, a.actor.portalUserId, "Signed document removed", undefined, "list");
+    revalidatePath(`/orders/${input.orderId}`);
+  }
+  return res;
 }
 
 /**
