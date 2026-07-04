@@ -13,6 +13,8 @@ import { getFieldOptions, type FieldOptionChoice } from "../actions/getFieldOpti
 /** Radix Select forbids an empty-string item value, so a sentinel represents
  *  "no incoterms" and is mapped back to "" on save. */
 const INCOTERMS_NONE = "__none";
+/** Same sentinel trick for the R3 Payment terms dropdown (admin-managed field). */
+const PAYMENT_TERMS_NONE = "__none";
 /** A stored delivery deadline in ISO yyyy-mm-dd drives the calendar input; any
  *  other (legacy free-text) value falls back to a plain text input. */
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -89,6 +91,7 @@ export function DealTermsEditor({
   const [draft, setDraft] = useState<Draft>(() => toDraft(values));
   const [saving, setSaving] = useState(false);
   const [incotermsOptions, setIncotermsOptions] = useState<FieldOptionChoice[]>([]);
+  const [paymentTermsOptions, setPaymentTermsOptions] = useState<FieldOptionChoice[]>([]);
   const [deadlineTextMode, setDeadlineTextMode] = useState(false);
 
   // Re-sync the draft only when the SAVED values actually change (after a save +
@@ -103,6 +106,7 @@ export function DealTermsEditor({
   useEffect(() => {
     let alive = true;
     getFieldOptions("incoterms").then((res) => { if (alive && res.success) setIncotermsOptions(res.data); });
+    getFieldOptions("payment_terms").then((res) => { if (alive && res.success) setPaymentTermsOptions(res.data); });
     return () => { alive = false; };
   }, []);
 
@@ -115,19 +119,22 @@ export function DealTermsEditor({
     return cur && !known ? [...incotermsOptions, { value: cur, label: `${cur} (current)` }] : incotermsOptions;
   }, [incotermsOptions, draft.incoterms]);
 
+  // R3 · a stored value that predates the seeded option set (legacy free-text
+  // payment terms) is surfaced as a "(current)" choice so the Select can show it.
+  const paymentTermsChoices = useMemo(() => {
+    const cur = draft.paymentTerms.trim();
+    const known = paymentTermsOptions.some((o) => o.value === cur);
+    return cur && !known ? [...paymentTermsOptions, { value: cur, label: `${cur} (current)` }] : paymentTermsOptions;
+  }, [paymentTermsOptions, draft.paymentTerms]);
+
   const save = async () => {
-    let advancePct: number | null = null;
-    if (draft.advancePct.trim() !== "") {
-      const n = Number(draft.advancePct.trim().replace(",", "."));
-      if (!Number.isFinite(n) || n < 0 || n > 100) { toast.error("Advance % must be a number between 0 and 100"); return; }
-      advancePct = n;
-    }
+    // R3: advance_pct is DERIVED server-side from the chosen payment term (no
+    // longer a hand-edited field); delivery_terms is no longer edited here (kept
+    // in the DB + its doc merge token for legacy documents).
     const terms: DealTermsInput = {
       incoterms: nn(draft.incoterms),
       incotermsPlace: nn(draft.incotermsPlace),
-      advancePct,
       paymentTerms: nn(draft.paymentTerms),
-      deliveryTerms: nn(draft.deliveryTerms),
       deliveryDeadline: nn(draft.deliveryDeadline),
       notes: nn(draft.notes),
       sellerSigneeName: nn(draft.sellerSigneeName),
@@ -161,9 +168,6 @@ export function DealTermsEditor({
         <Field label="Incoterms place">
           <Input className="h-8" value={draft.incotermsPlace} onChange={(e) => set("incotermsPlace", e.target.value)} placeholder="e.g. Riga" />
         </Field>
-        <Field label="Advance %">
-          <Input className="h-8" type="number" min="0" max="100" value={draft.advancePct} onChange={(e) => set("advancePct", e.target.value)} placeholder="e.g. 30" />
-        </Field>
 
         <Field label="Delivery deadline">
           {deadlineTextMode ? (
@@ -179,10 +183,16 @@ export function DealTermsEditor({
           )}
         </Field>
         <Field label="Payment terms">
-          <Input className="h-8" value={draft.paymentTerms} onChange={(e) => set("paymentTerms", e.target.value)} placeholder="e.g. 30% advance, balance before dispatch" />
-        </Field>
-        <Field label="Delivery terms">
-          <Input className="h-8" value={draft.deliveryTerms} onChange={(e) => set("deliveryTerms", e.target.value)} placeholder="e.g. Delivered to the customer's warehouse" />
+          <Select
+            value={draft.paymentTerms.trim() === "" ? PAYMENT_TERMS_NONE : draft.paymentTerms}
+            onValueChange={(v) => set("paymentTerms", v === PAYMENT_TERMS_NONE ? "" : v)}
+          >
+            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={PAYMENT_TERMS_NONE}>—</SelectItem>
+              {paymentTermsChoices.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </Field>
       </div>
 

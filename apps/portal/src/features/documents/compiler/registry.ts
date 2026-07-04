@@ -78,7 +78,7 @@ export const MERGE_FIELD_GROUPS: MergeFieldGroup[] = [
     items: [
       { label: "Incoterms", token: "incoterms" },
       { label: "Payment terms", token: "paymentTerms" },
-      { label: "Delivery terms", token: "deliveryTerms" },
+      { label: "Delivery terms (deprecated)", token: "deliveryTerms" },
       { label: "Delivery deadline", token: "deliveryDeadline" },
       { label: "Advance %", token: "pct advancePct" },
     ],
