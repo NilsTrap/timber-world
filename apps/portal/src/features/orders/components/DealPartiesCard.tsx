@@ -47,10 +47,16 @@ export function DealPartiesCard({
       setLoading(false);
       if (!res.success) { setLoadErr(res.error); return; }
       setPartyOptions(res.data);
-      // Admin default for a still-blank seller: pre-select the house org when it
-      // is a manufacturer (so the code mints HOUSE-BUYER-NNN); still changeable.
-      if (!seller.id && res.data.isAdmin && res.data.userOrgId && res.data.manufacturerOptions.some((o) => o.id === res.data.userOrgId)) {
-        setValue((v) => ({ ...v, sellerOrganisationId: res.data.userOrgId }));
+      // L2 · Default a still-blank Trader (seller): a salesperson's sole trader
+      // org, or (admin) their own org when it is a trader; still changeable.
+      if (!seller.id) {
+        const d = res.data;
+        const soleTrader = d.userTraderOrgs.length === 1 ? d.userTraderOrgs[0] : null;
+        if (soleTrader) {
+          setValue((v) => ({ ...v, sellerOrganisationId: soleTrader.id }));
+        } else if (d.isAdmin && d.userOrgId && d.traderOptions.some((o) => o.id === d.userOrgId)) {
+          setValue((v) => ({ ...v, sellerOrganisationId: d.userOrgId }));
+        }
       }
     });
     return () => { alive = false; };
@@ -79,7 +85,7 @@ export function DealPartiesCard({
         <span className="font-medium">Parties not set</span>
       </div>
       <p className="text-xs text-muted-foreground">
-        This deal has no {customer.id ? "manufacturer" : seller.id ? "customer" : "customer or manufacturer"} yet.
+        This deal has no {customer.id ? "trader" : seller.id ? "customer" : "customer or trader"} yet.
         Set the parties to assign the deal its <span className="font-medium">SELLER-BUYER</span> code. Parties lock once the deal leaves Draft.
       </p>
       <Button size="sm" onClick={() => setOpen(true)}>
@@ -105,7 +111,7 @@ export function DealPartiesCard({
               value={value}
               onChange={(patch) => setValue((v) => ({ ...v, ...patch }))}
               lockedCustomerName={customer.id ? customer.name ?? "Customer" : undefined}
-              lockedSellerName={seller.id ? seller.name ?? "Manufacturer" : undefined}
+              lockedSellerName={seller.id ? seller.name ?? "Trader" : undefined}
             />
           ) : null}
 

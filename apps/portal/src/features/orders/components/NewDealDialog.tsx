@@ -38,10 +38,15 @@ export function NewDealDialog({ open, onOpenChange }: { open: boolean; onOpenCha
       setLoading(false);
       if (!res.success) { setLoadErr(res.error); return; }
       setPartyOptions(res.data);
-      // Admin default: pre-select the house org as the Manufacturer when it is one
-      // (so the code mints as HOUSE-BUYER-NNN); the admin can still change it.
-      if (res.data.isAdmin && res.data.userOrgId && res.data.manufacturerOptions.some((o) => o.id === res.data.userOrgId)) {
-        setValue((v) => ({ ...v, sellerOrganisationId: res.data.userOrgId }));
+      // L2 · Trader (seller) default. A salesperson bound to exactly ONE trader
+      // org gets it auto-selected (locked). An admin pre-selects their own org
+      // when it is a trader (so the code mints HOUSE-BUYER-NNN); still changeable.
+      const d = res.data;
+      const soleTrader = d.userTraderOrgs.length === 1 ? d.userTraderOrgs[0] : null;
+      if (soleTrader) {
+        setValue((v) => ({ ...v, sellerOrganisationId: soleTrader.id }));
+      } else if (d.isAdmin && d.userOrgId && d.traderOptions.some((o) => o.id === d.userOrgId)) {
+        setValue((v) => ({ ...v, sellerOrganisationId: d.userOrgId }));
       }
     });
     return () => { alive = false; };

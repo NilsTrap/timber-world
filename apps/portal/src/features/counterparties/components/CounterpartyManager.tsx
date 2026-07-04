@@ -15,6 +15,7 @@ import type { CounterpartyBook, CounterpartyRow } from "../types";
 const BOOK_LABELS: Record<CounterpartyBook, { title: string; record: string }> = {
   clients: { title: "Clients", record: "client" },
   suppliers: { title: "Suppliers", record: "supplier" },
+  traders: { title: "Traders", record: "trader" },
 };
 
 interface EditorState {

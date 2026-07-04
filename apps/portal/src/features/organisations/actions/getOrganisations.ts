@@ -46,7 +46,7 @@ export async function getOrganisations(
   // 3. Fetch organisations
   let query = client
     .from("organisations")
-    .select("id, code, name, is_active, is_external, is_customer, is_manufacturer, is_producer, is_supplier, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, logo_url, created_at, updated_at");
+    .select("id, code, name, is_active, is_external, is_customer, is_manufacturer, is_producer, is_supplier, is_trader, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, logo_url, created_at, updated_at");
 
   if (!includeInactive) {
     query = query.eq("is_active", true);
@@ -115,6 +115,7 @@ export async function getOrganisations(
       isManufacturer: row.is_manufacturer as boolean,
       isProducer: row.is_producer as boolean,
       isSupplier: (row.is_supplier as boolean) ?? false,
+      isTrader: (row.is_trader as boolean) ?? false,
       legalAddress: (row.legal_address as string | null) ?? null,
       vatNumber: (row.vat_number as string | null) ?? null,
       registrationNumber: (row.registration_number as string | null) ?? null,

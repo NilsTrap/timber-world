@@ -28,18 +28,22 @@ import type {
 
 type Session = NonNullable<Awaited<ReturnType<typeof getSession>>>;
 
+// clients/suppliers are rights-gated; the traders book (L2) is ADMIN-ONLY and
+// never consults these (kept here only to satisfy the Record key set).
 const BOOK_ACTION: Record<CounterpartyBook, string> = {
   clients: "counterparty:clients",
   suppliers: "counterparty:suppliers",
+  traders: "counterparty:traders",
 };
 
 const BOOK_MODULE: Record<CounterpartyBook, string> = {
   clients: "counterparties.clients",
   suppliers: "counterparties.suppliers",
+  traders: "counterparties.traders",
 };
 
 const COUNTERPARTY_COLUMNS =
-  "id, code, name, registration_number, vat_number, legal_address, country, email, phone, website, bank_name, bank_account_number, bank_swift_code, default_signee_name, default_signee_role, is_active, is_customer, is_supplier, is_producer";
+  "id, code, name, registration_number, vat_number, legal_address, country, email, phone, website, bank_name, bank_account_number, bank_swift_code, default_signee_name, default_signee_role, is_active, is_customer, is_supplier, is_producer, is_trader";
 
 /** Trim a value; empty → null (blank card fields store as NULL). */
 function nn(v: string | null | undefined): string | null {
@@ -71,9 +75,9 @@ function mapRow(row: any): CounterpartyRow {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isInBook(row: any, book: CounterpartyBook): boolean {
-  return book === "clients"
-    ? row.is_customer === true
-    : row.is_supplier === true || row.is_producer === true;
+  if (book === "clients") return row.is_customer === true;
+  if (book === "traders") return row.is_trader === true;
+  return row.is_supplier === true || row.is_producer === true;
 }
 
 /** Auth + per-book right check. Admins pass; others need the action right. */
@@ -87,6 +91,9 @@ async function requireBookAccess(
   if (!session) return { ok: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   const callerOrgId = session.currentOrganizationId || session.organisationId;
   if (isAdmin(session)) return { ok: true, session, callerOrgId };
+  // L2 · the Traders book is ADMIN-ONLY — salespeople/purchasing must not see a
+  // traders address book. No rights path exists for non-admins.
+  if (book === "traders") return { ok: false, error: "Permission denied", code: "FORBIDDEN" };
   const profile = await getAccessProfile(session.portalUserId, callerOrgId);
   // Require BOTH the book action right AND the ceiling-capped module. Action
   // rights are not intersected with the org ceiling (unlike module rights),
@@ -146,7 +153,9 @@ export async function listCounterparties(
   query =
     book === "clients"
       ? query.eq("is_customer", true)
-      : query.or("is_supplier.eq.true,is_producer.eq.true");
+      : book === "traders"
+        ? query.eq("is_trader", true)
+        : query.or("is_supplier.eq.true,is_producer.eq.true");
 
   const { data, error } = await query;
   if (error) {
@@ -206,9 +215,10 @@ export async function createCounterparty(
 
   if (existing) {
     if (isInBook(existing, book)) {
+      const singular = book === "clients" ? "client" : book === "traders" ? "trader" : "supplier";
       return {
         success: false,
-        error: `A ${book === "clients" ? "client" : "supplier"} with code ${code} already exists`,
+        error: `A ${singular} with code ${code} already exists`,
         code: "DUPLICATE",
       };
     }
@@ -249,9 +259,15 @@ export async function createCounterparty(
       .insert({
         code,
         name,
-        is_external: true,
+        // Traders are the house's OWN companies (internal); clients/suppliers
+        // are external counterparties.
+        is_external: book !== "traders",
         is_active: true,
-        ...(book === "clients" ? { is_customer: true } : { is_supplier: true }),
+        ...(book === "clients"
+          ? { is_customer: true }
+          : book === "traders"
+            ? { is_trader: true }
+            : { is_supplier: true }),
         registration_number: nn(input.registrationNumber),
         vat_number: nn(input.vatNumber),
         legal_address: nn(input.legalAddress),

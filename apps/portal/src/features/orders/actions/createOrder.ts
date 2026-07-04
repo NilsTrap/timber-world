@@ -5,7 +5,7 @@ import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { createOrderSchema } from "../schemas";
 import type { Order, ActionResult } from "../types";
 import { logOrderActivity } from "./logOrderActivity";
-import { resolvePartySlots } from "./_validateOrderParty";
+import { resolvePartySlots, getTraderMembershipOrgIds } from "./_validateOrderParty";
 import { allocateDealCode } from "../services/orderDeals";
 import type { ActorContext } from "../services/dealModel";
 
@@ -85,9 +85,14 @@ export async function createOrder(input: {
   // 5. Determine party slots (role-based auto-fill + trading-partner walls),
   // shared with the H1 draft party-setter so both enforce identical rules.
   const userOrgId = session.currentOrganizationId || session.organisationId;
+  // L2 · the salesperson is bound to their trader org(s) via membership — the
+  // server-trusted list behind the "Trader" (seller) slot.
+  const userTraderOrgIds = isAdmin(session)
+    ? []
+    : await getTraderMembershipOrgIds(client, session.memberships.map((m) => m.organizationId));
   const slots = await resolvePartySlots(
     client,
-    { isAdmin: isAdmin(session), userOrgId },
+    { isAdmin: isAdmin(session), userOrgId, userTraderOrgIds },
     { customerOrganisationId: inputCustomerOrgId, sellerOrganisationId: inputSellerOrgId },
   );
   if (!slots.ok) return { success: false, error: slots.error, code: slots.code };

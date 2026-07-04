@@ -106,6 +106,8 @@ export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
   { href: "/counterparties", label: "CRM", iconName: "Handshake", group: "deals", children: [
     { href: "/counterparties/clients", label: "Clients" },
     { href: "/counterparties/suppliers", label: "Suppliers" },
+    // L2 · Traders book is ADMIN-ONLY — only listed in the admin nav.
+    { href: "/counterparties/traders", label: "Traders" },
   ]},
   { href: "agent-app", label: "UK Agent app", iconName: "Store", group: "agent", collapsible: true,
     children: AGENT_APP_CHILDREN },

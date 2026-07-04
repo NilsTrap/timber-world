@@ -121,7 +121,7 @@ export async function updateOrganisation(
     .from("organisations")
     .update(updatePayload)
     .eq("id", id)
-    .select("id, code, name, is_active, is_external, is_customer, is_manufacturer, is_producer, is_supplier, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, logo_url, crm_org_id, created_at, updated_at")
+    .select("id, code, name, is_active, is_external, is_customer, is_manufacturer, is_producer, is_supplier, is_trader, legal_address, vat_number, registration_number, country, phone, email, website, bank_name, bank_account_number, bank_swift_code, logo_url, crm_org_id, created_at, updated_at")
     .single();
 
   if (error) {
@@ -152,6 +152,7 @@ export async function updateOrganisation(
     isManufacturer: data.is_manufacturer as boolean,
     isProducer: data.is_producer as boolean,
     isSupplier: (data.is_supplier as boolean) ?? false,
+    isTrader: (data.is_trader as boolean) ?? false,
     legalAddress: (data.legal_address as string | null) ?? null,
     vatNumber: (data.vat_number as string | null) ?? null,
     registrationNumber: (data.registration_number as string | null) ?? null,

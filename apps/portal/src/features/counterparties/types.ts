@@ -1,20 +1,24 @@
 /**
- * E4 · Counterparties (spec §9.3) — the two walled address books over the
+ * E4 · Counterparties (spec §9.3) — the walled address books over the
  * organisations table:
  *
  *   clients   = organisations with is_customer = true
  *   suppliers = organisations with is_supplier = true OR is_producer = true
+ *   traders   = organisations with is_trader = true  (L2, ADMIN-ONLY — the
+ *               house's own trading companies; salespeople/purchasing never
+ *               need a traders book)
  *
- * A "counterparty record" IS an organisations row (created is_external +
- * is_active with the book flag). Access is rights-gated per book
- * (action/counterparty/clients|suppliers), not admin-only.
+ * A "counterparty record" IS an organisations row (created is_active with the
+ * book flag; clients/suppliers are is_external, traders are internal house
+ * companies). Clients/suppliers access is rights-gated per book
+ * (action/counterparty/clients|suppliers); the traders book is admin-only.
  */
 
 export type ActionResult<T> =
   | { success: true; data: T }
   | { success: false; error: string; code?: string };
 
-export type CounterpartyBook = "clients" | "suppliers";
+export type CounterpartyBook = "clients" | "suppliers" | "traders";
 
 export interface CounterpartyRow {
   id: string;
