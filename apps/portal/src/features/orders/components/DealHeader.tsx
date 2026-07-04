@@ -8,8 +8,8 @@ import { StageBadge } from "./StageBadge";
  * C1 · Direction-aware deal header (§2.5).
  *
  * States what the deal is FROM THE VIEWER's standpoint: a house user whose side
- * is the seller sees "Sell deal — facing customer <buyer>"; whose side is the
- * buyer sees "Buy deal — facing supplier <seller>"; a counterparty login sees it
+ * is the seller sees "Sell deal — facing Buyer <buyer>"; whose side is the
+ * buyer sees "Buy deal — facing Seller <seller>"; a counterparty login sees it
  * from THEIR side (a producer, who is the seller of their leg, sees a Sell deal).
  * Direction + facing party are resolved server-side (getOrderDealView) — the
  * client cannot derive them (it does not know the viewer's org).
@@ -28,6 +28,9 @@ export function DealHeader({
   lifecycleStage: string;
 }) {
   const title = direction === "sell" ? "Sell deal" : "Buy deal";
+  // R1: the deal's two roles are BUYER + SELLER. The server's facingParty.role
+  // ("customer"/"supplier") stays the contract; here it renders as Buyer/Seller.
+  const facingLabel = facingParty.role === "customer" ? "Buyer" : "Seller";
   const facingName = facingParty.name ?? "—";
   const caption = STAGE_CAPTIONS[lifecycleStage];
 
@@ -46,7 +49,7 @@ export function DealHeader({
         )}
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        facing {facingParty.role}{" "}
+        facing {facingLabel}{" "}
         <span className="font-medium text-foreground">{facingName}</span>
         {legacyCode && !dealCode ? <span className="ml-2 font-mono text-xs">{legacyCode}</span> : null}
       </p>

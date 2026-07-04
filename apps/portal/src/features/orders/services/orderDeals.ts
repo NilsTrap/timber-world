@@ -259,6 +259,27 @@ export async function updateDealFields(db: DbClient, _actor: ActorContext, order
   const u: Record<string, unknown> = {};
   if (patch.dealKind !== undefined) u.deal_kind = patch.dealKind;
   if (patch.productGroup !== undefined) u.product_group = patch.productGroup;
+  // R7 · currency is writable ONLY while the deal is Draft (changing it after the
+  // lines are priced would leave the amounts denominated in the wrong currency),
+  // and only to an ACTIVE catalog currency. A null/blank is ignored (currency is
+  // NOT NULL with a DB default of 'EUR'). The gate lives here so it protects every
+  // caller (portal terms editor + MCP timber_update_deal) identically.
+  if (patch.currency != null && String(patch.currency).trim() !== "") {
+    const code = String(patch.currency).trim().toUpperCase();
+    const { data: cur } = await c
+      .from("catalog_currencies")
+      .select("code")
+      .eq("code", code)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!cur) return { success: false, error: `Unknown or inactive currency "${code}".`, code: "VALIDATION_ERROR" };
+    const { data: ord } = await c.from("orders").select("lifecycle_stage").eq("id", orderId).maybeSingle();
+    const stage = (ord?.lifecycle_stage as string | null) ?? "draft";
+    if (stage !== "draft") {
+      return { success: false, error: "Currency can only be changed while the deal is a Draft.", code: "CONFLICT" };
+    }
+    u.currency = code;
+  }
   if (patch.incoterms !== undefined) u.incoterms = patch.incoterms;
   if (patch.incotermsPlace !== undefined) u.incoterms_place = patch.incotermsPlace;
   if (patch.advancePct !== undefined) u.advance_pct = patch.advancePct;
@@ -714,6 +735,54 @@ export function blankBuyLegLine(li: Partial<OrderLineItem>): Partial<OrderLineIt
     vatRate: null,
     lineTotalCents: null,
   };
+}
+
+/**
+ * R5 · copy a spec line for a DUPLICATED origin deal. Reuses blankBuyLegLine for the
+ * full product DEFINITION (attributes, option ids, catalog links, dimensions,
+ * quantities, notes) but then KEEPS the money — unlike a leg/buy copy, a duplicate
+ * reuses the source's pricing verbatim so the new Draft opens fully priced.
+ */
+export function copyDealLine(li: Partial<OrderLineItem>): Partial<OrderLineItem> {
+  return {
+    ...blankBuyLegLine(li),
+    unitPriceCents: li.unitPriceCents ?? null,
+    vatRate: li.vatRate ?? null,
+    lineTotalCents: li.lineTotalCents ?? null,
+  };
+}
+
+/**
+ * R5 · Duplicate a deal into a NEW ORIGIN deal. Copies both parties, currency, all
+ * commercial terms, product group and the spec lines WITH their amounts (copyDealLine
+ * keeps prices). Explicitly does NOT reuse the source's spine — with no originDealId
+ * createDeal mints a FRESH spine + its own deal code and starts in Draft — and does
+ * NOT copy documents, external refs or stage. Permission is enforced by the caller.
+ */
+export async function duplicateDeal(db: DbClient, actor: ActorContext, sourceDealId: string): Promise<ActionResult<OrderDealView>> {
+  if (!isValidUUID(sourceDealId)) return { success: false, error: "Invalid deal id", code: "VALIDATION_ERROR" };
+  const srcRes = await getOrderDeal(db, actor, sourceDealId);
+  if (!srcRes.success) return srcRes;
+  const src = srcRes.data;
+  return createDeal(db, actor, {
+    name: src.name,
+    productGroup: src.productGroup,
+    dealKind: src.dealKind as DealKind,
+    sellerOrganisationId: src.seller.id,
+    customerOrganisationId: src.customer.id,
+    buyerOrganisationId: src.buyer.id,
+    producerOrganisationId: src.producer.id,
+    currency: src.currency,
+    incoterms: src.incoterms,
+    incotermsPlace: src.incotermsPlace,
+    advancePct: src.advancePct,
+    paymentTerms: src.paymentTerms,
+    deliveryTerms: src.deliveryTerms,
+    deliveryDeadline: src.deliveryDeadline,
+    transportBilling: src.transportBilling as TransportBilling,
+    notes: src.notes,
+    lineItems: src.lineItems.map(copyDealLine),
+  });
 }
 
 interface SpawnBuyLegOpts {

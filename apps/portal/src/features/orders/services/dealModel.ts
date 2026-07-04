@@ -125,6 +125,10 @@ export interface OrderDocumentMeta {
 export interface DealFieldsPatch {
   dealKind?: DealKind;
   productGroup?: string | null;
+  /** R7 · deal currency (EUR/GBP/…). Writable ONLY while the deal is Draft and
+   *  only to an active catalog currency — see updateDealFields (the gate travels
+   *  with the write so every caller, portal + MCP, is protected). */
+  currency?: string | null;
   incoterms?: string | null;
   incotermsPlace?: string | null;
   advancePct?: number | null;

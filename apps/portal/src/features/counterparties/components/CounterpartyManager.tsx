@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Building2 } from "lucide-react";
+import { Loader2, Plus, Pencil, Building2, Users } from "lucide-react";
 import {
   Button, Input, Switch,
   Table, TableHeader, TableBody, TableHead, TableRow, TableCell,
@@ -11,6 +11,8 @@ import {
 } from "@timber/ui";
 import { listCounterparties, createCounterparty, updateCounterparty } from "../actions";
 import type { CounterpartyBook, CounterpartyRow } from "../types";
+import { OrgContactsSection } from "./OrgContactsSection";
+import { CrmOrgUsersSection } from "./CrmOrgUsersSection";
 
 const BOOK_LABELS: Record<CounterpartyBook, { title: string; record: string }> = {
   clients: { title: "Clients", record: "client" },
@@ -62,6 +64,13 @@ const EMPTY_EDITOR: EditorState = {
  * book's records (clients or suppliers) with a Dialog editor for add/edit.
  * Codes are 3-letter, uppercase, immutable after creation. Mirrors the
  * GateConfigManager pattern.
+ *
+ * TWO-VIEW SPLIT (Q1): this walled per-book CRM view and the admin
+ * `OrganisationsTable` (/admin/organisations) both render rows from the SAME
+ * `organisations` table but are deliberately kept as two components — this is
+ * the rights-gated per-book address view (card fields), that is the cross-org
+ * admin management view. They share the dense `<Table>` primitive so they read
+ * consistently; do not merge them.
  */
 export function CounterpartyManager({ book, isAdmin = false }: { book: CounterpartyBook; isAdmin?: boolean }) {
   const [rows, setRows] = useState<CounterpartyRow[]>([]);
@@ -163,6 +172,12 @@ export function CounterpartyManager({ book, isAdmin = false }: { book: Counterpa
               <TableRow>
                 <TableHead className="w-16">Code</TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead className="w-20">
+                  <span className="flex items-center">
+                    <Users className="mr-1 h-3.5 w-3.5" />
+                    Users
+                  </span>
+                </TableHead>
                 <TableHead>Reg No</TableHead>
                 <TableHead>VAT</TableHead>
                 <TableHead>Country</TableHead>
@@ -177,6 +192,7 @@ export function CounterpartyManager({ book, isAdmin = false }: { book: Counterpa
                 <TableRow key={r.id} className={r.isActive ? "" : "opacity-50"}>
                   <TableCell className="font-medium">{r.code}</TableCell>
                   <TableCell>{r.name}</TableCell>
+                  <TableCell className="text-center">{r.userCount ?? 0}</TableCell>
                   <TableCell>{r.registrationNumber ?? "—"}</TableCell>
                   <TableCell>{r.vatNumber ?? "—"}</TableCell>
                   <TableCell>{r.country ?? "—"}</TableCell>
@@ -316,6 +332,27 @@ export function CounterpartyManager({ book, isAdmin = false }: { book: Counterpa
                   <Switch checked={editor.isActive} onCheckedChange={(c) => set({ isActive: c })} id="cp-active" />
                   <label htmlFor="cp-active" className="text-sm">Active</label>
                 </div>
+              )}
+
+              {/* K1 · CRM contacts — only for an existing record (needs the org
+                  id). "Use as signee" writes the org default signee; sync the
+                  open editor fields so a follow-up save keeps them consistent. */}
+              {editor.id != null && (
+                <OrgContactsSection
+                  organisationId={editor.id}
+                  onSigneeUpdated={(name, role) =>
+                    set({ defaultSigneeName: name, defaultSigneeRole: role ?? "" })
+                  }
+                />
+              )}
+
+              {/* Q3 · CRM × users — list/add portal users for this org via the
+                  same walled K3 flow (scope enforced server-side: admin full
+                  picker; sales→forced Client group; purchasing→forced Producer
+                  group; trader orgs are admin-only). onChanged re-runs `load` so
+                  the book's Users count stays current after an add. */}
+              {editor.id != null && (
+                <CrmOrgUsersSection organisationId={editor.id} onChanged={load} />
               )}
             </div>
           )}

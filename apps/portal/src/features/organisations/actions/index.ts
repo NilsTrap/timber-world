@@ -19,6 +19,10 @@ export { deleteOrganisationUser } from "./deleteOrganisationUser";
 export { searchUserByEmail, addExistingUserToOrganisation } from "./addExistingUserToOrganisation";
 export type { ExistingUserInfo } from "./addExistingUserToOrganisation";
 
+// K3/Q2 · Add-person flow (typeahead + create + inline groups) & membership removal
+export { getAddPersonContext, searchAddablePeople } from "./addPersonSupport";
+export { removeUserFromOrganisation } from "./removeUserFromOrganisation";
+
 // User credential actions (Story 7.3)
 export { sendUserCredentials } from "./sendUserCredentials";
 
@@ -53,6 +57,17 @@ export { getAvailablePartners } from "./getAvailablePartners";
 // People (all users across organisations)
 export { getAllPeople } from "./getAllPeople";
 export type { Person } from "./getAllPeople";
+
+// K2 · person-centric People directory + person detail memberships
+export { getPeopleDirectory } from "./getPeopleDirectory";
+export type { DirectoryPerson, PersonOrgRef, PersonGroupRef } from "./getPeopleDirectory";
+export { getPersonById } from "./getPersonById";
+export type { PersonDetail } from "./getPersonById";
+export { getPersonMemberships, getAddableOrganisationsForPerson } from "./getPersonMemberships";
+export type { PersonMembership, AddableOrg } from "./getPersonMemberships";
+
+// Q4 · admin manual set-password
+export { setUserPasswordAdmin } from "./setUserPasswordAdmin";
 
 // Per-org reference data exclusions
 export { getOrgRefExclusions } from "./getOrgRefExclusions";

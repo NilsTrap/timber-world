@@ -1,10 +1,11 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { getSession, isSuperAdmin } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getSession } from "@/lib/auth";
 import { z } from "zod";
 import type { OrganisationUser, ActionResult } from "../types";
 import { isValidUUID } from "../types";
+import { resolveAddPersonScope, applyAddPersonGroups } from "./_addPersonScope";
 
 /**
  * Create Organisation User Schema
@@ -26,48 +27,41 @@ const createUserSchema = z.object({
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 
 /**
- * Create Organisation User
+ * Create Organisation User (K3 · Q2 book-scoped)
  *
- * Creates a new user within an organisation.
- * The user is created with:
- * - role = 'user' (default)
- * - status = 'created' (no auth credentials yet)
- * - is_active = true
- *
+ * Creates a new user within an organisation:
+ * - role = 'user', status = 'created' (no auth credentials yet), is_active = true
  * Status flow: created → invited (after credentials sent) → active (after first login)
  *
- * Super Admin only endpoint.
+ * AUTHORISATION (Q2): admins may create for ANY org and pass `groupIds` (full
+ * picker). A book-scoped non-admin (salesperson/purchasing) may create ONLY for
+ * an org in their clients/suppliers book — enforced by resolveAddPersonScope —
+ * and the access group is FORCED server-side (client group / producer group);
+ * any `groupIds` they pass are ignored. Trader orgs are admin-only.
+ *
+ * The gate is the wall: after it passes, writes run on the service-role client
+ * (bypassing RLS) — the same deliberate pattern as counterparties' orgContacts.
  */
 export async function createOrganisationUser(
   organisationId: string,
-  input: CreateUserInput
+  input: CreateUserInput,
+  groupIds?: string[],
 ): Promise<ActionResult<OrganisationUser>> {
-  // 1. Check authentication
+  // 1. Authentication
   const session = await getSession();
   if (!session) {
-    return {
-      success: false,
-      error: "Not authenticated",
-      code: "UNAUTHENTICATED",
-    };
+    return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
   }
 
-  // 2. Check Super Admin role
-  if (!isSuperAdmin(session)) {
-    return {
-      success: false,
-      error: "Permission denied",
-      code: "FORBIDDEN",
-    };
-  }
-
-  // 3. Validate organisation ID
+  // 2. Validate organisation ID
   if (!isValidUUID(organisationId)) {
-    return {
-      success: false,
-      error: "Invalid organisation ID",
-      code: "INVALID_ID",
-    };
+    return { success: false, error: "Invalid organisation ID", code: "INVALID_ID" };
+  }
+
+  // 3. Q2 wall — may this caller create a user for this org? (admin | scoped | no)
+  const scope = await resolveAddPersonScope(session, organisationId);
+  if (!scope.ok) {
+    return { success: false, error: scope.error, code: scope.code };
   }
 
   // 4. Validate input with Zod
@@ -81,53 +75,34 @@ export async function createOrganisationUser(
   }
 
   const { name, email } = parsed.data;
-  const supabase = await createClient();
-
-  // 5. Check for duplicate email (globally unique across all portal_users)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existingUser } = await (supabase as any)
+  const supabase = createAdminClient() as any;
+
+  // 5. Duplicate email (globally unique across all portal_users)
+  const { data: existingUser } = await supabase
     .from("portal_users")
     .select("id")
     .eq("email", email)
-    .single();
+    .maybeSingle();
 
   if (existingUser) {
-    return {
-      success: false,
-      error: "Email already registered",
-      code: "DUPLICATE_EMAIL",
-    };
+    return { success: false, error: "Email already registered", code: "DUPLICATE_EMAIL" };
   }
 
   // 6. Verify organisation exists
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: org } = await (supabase as any)
+  const { data: org } = await supabase
     .from("organisations")
     .select("id")
     .eq("id", organisationId)
-    .single();
+    .maybeSingle();
 
   if (!org) {
-    return {
-      success: false,
-      error: "Organisation not found",
-      code: "ORG_NOT_FOUND",
-    };
+    return { success: false, error: "Organisation not found", code: "ORG_NOT_FOUND" };
   }
 
-  // 7. Get current user's portal_users ID for invited_by
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: currentPortalUser } = await (supabase as any)
-    .from("portal_users")
-    .select("id")
-    .eq("auth_user_id", session.id)
-    .single();
-
-  const invitedById = currentPortalUser?.id ?? null;
-
-  // 8. Insert new user
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  // 7. Insert new user (invited_at/invited_by are set later, when credentials
+  //    are sent; auth_user_id stays NULL until then).
+  const { data, error } = await supabase
     .from("portal_users")
     .insert({
       email,
@@ -136,19 +111,28 @@ export async function createOrganisationUser(
       organisation_id: organisationId,
       is_active: true,
       status: "created",
-      // invited_at and invited_by will be set when credentials are sent
-      // auth_user_id is NULL - will be set when credentials are created
     })
     .select("id, email, name, role, organisation_id, auth_user_id, is_active, status, invited_at, invited_by, last_login_at, created_at, updated_at")
     .single();
 
   if (error) {
     console.error("Failed to create organisation user:", error);
-    return {
-      success: false,
-      error: "Failed to create user",
-      code: "CREATE_FAILED",
-    };
+    return { success: false, error: "Failed to create user", code: "CREATE_FAILED" };
+  }
+
+  // 8. Inline access-group assignment (Q2: forced group for scoped callers;
+  //    validated picker for admins) + cache-tag bust.
+  const groupRes = await applyAddPersonGroups(
+    supabase,
+    scope,
+    data.id as string,
+    organisationId,
+    groupIds,
+  );
+  if (!groupRes.success) {
+    // The user row exists; surface the group failure so the admin can retry via
+    // the Groups action rather than silently leaving them un-grouped.
+    return { success: false, error: `User created but group assignment failed: ${groupRes.error}`, code: "GROUP_ASSIGN_FAILED" };
   }
 
   // 9. Transform and return
@@ -163,14 +147,11 @@ export async function createOrganisationUser(
     status: data.status as "created" | "invited" | "active",
     invitedAt: data.invited_at as string | null,
     invitedBy: data.invited_by as string | null,
-    invitedByName: null, // Not fetched on create, will be populated on list
+    invitedByName: null,
     lastLoginAt: data.last_login_at as string | null,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
   };
 
-  return {
-    success: true,
-    data: user,
-  };
+  return { success: true, data: user };
 }

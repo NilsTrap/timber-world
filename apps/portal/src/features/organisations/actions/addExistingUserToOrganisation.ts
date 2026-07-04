@@ -1,9 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession, isSuperAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
+import { resolveAddPersonScope, applyAddPersonGroups } from "./_addPersonScope";
 
 /**
  * Existing user info returned by search
@@ -116,22 +118,26 @@ export async function searchUserByEmail(
 }
 
 /**
- * Add Existing User To Organisation
+ * Add Existing User To Organisation (K3 · Q2 book-scoped)
  *
- * Adds an existing user to an organization via organization_memberships.
- * Super Admin only.
+ * Adds an existing user to an organisation via organization_memberships, then
+ * assigns access groups inline (one pass).
+ *
+ * AUTHORISATION (Q2): admins may add to ANY org and pass `groupIds` (full
+ * picker). A book-scoped non-admin (salesperson/purchasing) may add ONLY to an
+ * org in their clients/suppliers book — enforced by resolveAddPersonScope — and
+ * the access group is FORCED server-side; any `groupIds` they pass are ignored.
+ * Trader orgs are admin-only. The gate is the wall: after it passes, writes run
+ * on the service-role client (the same pattern as counterparties' orgContacts).
  */
 export async function addExistingUserToOrganisation(
   userId: string,
-  organisationId: string
+  organisationId: string,
+  groupIds?: string[],
 ): Promise<ActionResult<{ userId: string; organisationId: string }>> {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  }
-
-  if (!isSuperAdmin(session)) {
-    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   if (!isValidUUID(userId)) {
@@ -142,40 +148,44 @@ export async function addExistingUserToOrganisation(
     return { success: false, error: "Invalid organisation ID", code: "INVALID_ORG_ID" };
   }
 
-  const supabase = await createClient();
+  // Q2 wall — may this caller add a user to this org? (admin | scoped | no)
+  const scope = await resolveAddPersonScope(session, organisationId);
+  if (!scope.ok) {
+    return { success: false, error: scope.error, code: scope.code };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createAdminClient() as any;
 
   // Verify user exists
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: user, error: userError } = await (supabase as any)
+  const { data: user, error: userError } = await supabase
     .from("portal_users")
-    .select("id, name, email")
+    .select("id, name, email, organisation_id")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
 
   if (userError || !user) {
     return { success: false, error: "User not found", code: "USER_NOT_FOUND" };
   }
 
   // Verify organisation exists
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: org, error: orgError } = await (supabase as any)
+  const { data: org, error: orgError } = await supabase
     .from("organisations")
     .select("id")
     .eq("id", organisationId)
-    .single();
+    .maybeSingle();
 
   if (orgError || !org) {
     return { success: false, error: "Organisation not found", code: "ORG_NOT_FOUND" };
   }
 
-  // Check if membership already exists
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existingMembership } = await (supabase as any)
+  // Existing membership?
+  const { data: existingMembership } = await supabase
     .from("organization_memberships")
     .select("id, is_active")
     .eq("user_id", userId)
     .eq("organization_id", organisationId)
-    .single();
+    .maybeSingle();
 
   if (existingMembership) {
     if (existingMembership.is_active) {
@@ -183,8 +193,7 @@ export async function addExistingUserToOrganisation(
     }
 
     // Reactivate inactive membership
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase as any)
+    const { error: updateError } = await supabase
       .from("organization_memberships")
       .update({ is_active: true })
       .eq("id", existingMembership.id);
@@ -193,48 +202,39 @@ export async function addExistingUserToOrganisation(
       console.error("Failed to reactivate membership:", updateError);
       return { success: false, error: "Failed to add user to organisation", code: "UPDATE_FAILED" };
     }
-
-    return { success: true, data: { userId, organisationId } };
-  }
-
-  // Check if user's legacy organisation_id matches this org
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: userWithOrg } = await (supabase as any)
-    .from("portal_users")
-    .select("organisation_id")
-    .eq("id", userId)
-    .single();
-
-  if (userWithOrg?.organisation_id === organisationId) {
+  } else if (user.organisation_id === organisationId) {
+    // Their legacy home org already IS this org — already a member.
     return { success: false, error: "User is already a member of this organisation", code: "ALREADY_MEMBER" };
+  } else {
+    // Current user's portal_users id for invited_by
+    const { data: currentPortalUser } = await supabase
+      .from("portal_users")
+      .select("id")
+      .eq("auth_user_id", session.id)
+      .maybeSingle();
+
+    const { error: insertError } = await supabase
+      .from("organization_memberships")
+      .insert({
+        user_id: userId,
+        organization_id: organisationId,
+        is_active: true,
+        is_primary: false,
+        invited_at: new Date().toISOString(),
+        invited_by: currentPortalUser?.id ?? null,
+      });
+
+    if (insertError) {
+      console.error("Failed to create membership:", insertError);
+      return { success: false, error: "Failed to add user to organisation", code: "INSERT_FAILED" };
+    }
   }
 
-  // Get current user's portal_users ID for invited_by
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: currentPortalUser } = await (supabase as any)
-    .from("portal_users")
-    .select("id")
-    .eq("auth_user_id", session.id)
-    .single();
-
-  const invitedById = currentPortalUser?.id ?? null;
-
-  // Create new membership
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: insertError } = await (supabase as any)
-    .from("organization_memberships")
-    .insert({
-      user_id: userId,
-      organization_id: organisationId,
-      is_active: true,
-      is_primary: false,
-      invited_at: new Date().toISOString(),
-      invited_by: invitedById,
-    });
-
-  if (insertError) {
-    console.error("Failed to create membership:", insertError);
-    return { success: false, error: "Failed to add user to organisation", code: "INSERT_FAILED" };
+  // Inline access-group assignment (Q2 forced group for scoped callers;
+  // validated picker for admins) + cache-tag bust.
+  const groupRes = await applyAddPersonGroups(supabase, scope, userId, organisationId, groupIds);
+  if (!groupRes.success) {
+    return { success: false, error: `User added but group assignment failed: ${groupRes.error}`, code: "GROUP_ASSIGN_FAILED" };
   }
 
   return { success: true, data: { userId, organisationId } };

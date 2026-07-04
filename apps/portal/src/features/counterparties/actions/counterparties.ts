@@ -16,31 +16,14 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getSession, isAdmin } from "@/lib/auth";
-import { getAccessProfile } from "@/lib/access";
 import { getPlatformSetting } from "@/features/access/actions/platformSettings";
+import { requireBookAccess } from "../access";
 import type {
   ActionResult,
   CounterpartyBook,
   CounterpartyInput,
   CounterpartyRow,
 } from "../types";
-
-type Session = NonNullable<Awaited<ReturnType<typeof getSession>>>;
-
-// clients/suppliers are rights-gated; the traders book (L2) is ADMIN-ONLY and
-// never consults these (kept here only to satisfy the Record key set).
-const BOOK_ACTION: Record<CounterpartyBook, string> = {
-  clients: "counterparty:clients",
-  suppliers: "counterparty:suppliers",
-  traders: "counterparty:traders",
-};
-
-const BOOK_MODULE: Record<CounterpartyBook, string> = {
-  clients: "counterparties.clients",
-  suppliers: "counterparties.suppliers",
-  traders: "counterparties.traders",
-};
 
 const COUNTERPARTY_COLUMNS =
   "id, code, name, registration_number, vat_number, legal_address, country, email, phone, website, bank_name, bank_account_number, bank_swift_code, default_signee_name, default_signee_role, is_active, is_customer, is_supplier, is_producer, is_trader";
@@ -80,33 +63,6 @@ function isInBook(row: any, book: CounterpartyBook): boolean {
   return row.is_supplier === true || row.is_producer === true;
 }
 
-/** Auth + per-book right check. Admins pass; others need the action right. */
-async function requireBookAccess(
-  book: CounterpartyBook,
-): Promise<
-  | { ok: true; session: Session; callerOrgId: string | null }
-  | { ok: false; error: string; code: string }
-> {
-  const session = await getSession();
-  if (!session) return { ok: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  const callerOrgId = session.currentOrganizationId || session.organisationId;
-  if (isAdmin(session)) return { ok: true, session, callerOrgId };
-  // L2 · the Traders book is ADMIN-ONLY — salespeople/purchasing must not see a
-  // traders address book. No rights path exists for non-admins.
-  if (book === "traders") return { ok: false, error: "Permission denied", code: "FORBIDDEN" };
-  const profile = await getAccessProfile(session.portalUserId, callerOrgId);
-  // Require BOTH the book action right AND the ceiling-capped module. Action
-  // rights are not intersected with the org ceiling (unlike module rights),
-  // so gating on the action alone would let a user in an EXTERNAL org — whose
-  // org never enables the counterparties.* modules (migration 009 seeds them
-  // for internal orgs only) — read/write the whole platform-wide book through
-  // the service-role client below. profile.modules IS ceiling-capped.
-  if (!profile.actions.has(BOOK_ACTION[book]) || !profile.modules.has(BOOK_MODULE[book])) {
-    return { ok: false, error: "Permission denied", code: "FORBIDDEN" };
-  }
-  return { ok: true, session, callerOrgId };
-}
-
 /**
  * Ensure symmetric organisation_trading_partners links between the caller's
  * org and the counterparty org — this is what makes the record pickable on
@@ -133,6 +89,51 @@ async function ensureTradingPartnerLinks(
     if (error && error.code !== "23505") {
       console.error("Failed to link counterparty as trading partner:", error);
     }
+  }
+}
+
+/**
+ * Q3 · Batched active-user count per org — mutates each row's `userCount`.
+ * Mirrors getOrganisations' union logic so a CRM book shows the SAME number as
+ * the admin Orgs table: legacy `portal_users.organisation_id` ∪ active
+ * `organization_memberships` (deduped). One query per source — no N+1.
+ */
+async function attachUserCounts(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  rows: CounterpartyRow[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  const orgIds = rows.map((r) => r.id);
+
+  const { data: legacyUsers } = await admin
+    .from("portal_users")
+    .select("id, organisation_id")
+    .in("organisation_id", orgIds);
+
+  // org_id -> set of legacy user ids (matches getOrganisations: unfiltered by is_active).
+  const legacyByOrg = new Map<string, Set<string>>();
+  for (const u of (legacyUsers ?? []) as Array<{ id: string; organisation_id: string | null }>) {
+    if (!u.organisation_id) continue;
+    if (!legacyByOrg.has(u.organisation_id)) legacyByOrg.set(u.organisation_id, new Set());
+    legacyByOrg.get(u.organisation_id)!.add(u.id);
+  }
+
+  const { data: memberships } = await admin
+    .from("organization_memberships")
+    .select("organization_id, user_id")
+    .eq("is_active", true)
+    .in("organization_id", orgIds);
+
+  // org_id -> count of active members NOT already counted via legacy.
+  const extraByOrg = new Map<string, number>();
+  for (const m of (memberships ?? []) as Array<{ organization_id: string; user_id: string }>) {
+    if (legacyByOrg.get(m.organization_id)?.has(m.user_id)) continue;
+    extraByOrg.set(m.organization_id, (extraByOrg.get(m.organization_id) ?? 0) + 1);
+  }
+
+  for (const r of rows) {
+    r.userCount = (legacyByOrg.get(r.id)?.size ?? 0) + (extraByOrg.get(r.id) ?? 0);
   }
 }
 
@@ -163,7 +164,9 @@ export async function listCounterparties(
     return { success: false, error: "Failed to load records", code: "FETCH_FAILED" };
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { success: true, data: ((data || []) as any[]).map(mapRow) };
+  const rows = ((data || []) as any[]).map(mapRow);
+  await attachUserCounts(admin, rows);
+  return { success: true, data: rows };
 }
 
 /**

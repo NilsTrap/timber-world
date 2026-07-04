@@ -226,6 +226,16 @@ function FieldsTab({
       sortOrder: patch.sortOrder ?? f.sortOrder,
     });
 
+  // R6 · flip one show-flag (Filter / Detail / Price-list) in place: optimistic
+  // update, then persist via the SAME saveFieldAssignment upsert the applies_to
+  // editor uses (no remove-and-re-add). Surface the error on failure (mirrors
+  // applyOrdering — the optimistic row is corrected on the next reload).
+  const toggleFlag = async (field: CategoryField, patch: Partial<CategoryField>) => {
+    onFieldsChange(fields.map((f) => (f.id === field.id ? { ...field, ...patch } : f)));
+    const res = await persistAssignment(field, patch);
+    if (!res.success) toast.error(res.error);
+  };
+
   // Persist a new full ordering (product group then variant group) — every row's
   // applies_to + sort_order — so drag-reorder and cross-group moves both stick.
   const applyOrdering = async (combined: CategoryField[]) => {
@@ -354,12 +364,14 @@ function FieldsTab({
               onReorder={(g) => reorderGroup("product", g)} onChangeAppliesTo={changeAppliesTo}
               onRemove={handleRemoveAssignment} expandedId={expandedId} setExpandedId={setExpandedId}
               onFieldUpdate={(u) => onFieldsChange(fields.map((f) => (f.id === u.id ? u : f)))}
+              onToggleFlag={toggleFlag}
             />
             <FieldGroup
               title="Variant fields" which="variant" groupFields={variantFields}
               onReorder={(g) => reorderGroup("variant", g)} onChangeAppliesTo={changeAppliesTo}
               onRemove={handleRemoveAssignment} expandedId={expandedId} setExpandedId={setExpandedId}
               onFieldUpdate={(u) => onFieldsChange(fields.map((f) => (f.id === u.id ? u : f)))}
+              onToggleFlag={toggleFlag}
             />
           </>
         )}
@@ -373,7 +385,7 @@ function FieldsTab({
 // ============================================================================
 
 function FieldGroup({
-  title, which, groupFields, onReorder, onChangeAppliesTo, onRemove, expandedId, setExpandedId, onFieldUpdate,
+  title, which, groupFields, onReorder, onChangeAppliesTo, onRemove, expandedId, setExpandedId, onFieldUpdate, onToggleFlag,
 }: {
   title: string;
   which: AppliesTo;
@@ -384,6 +396,7 @@ function FieldGroup({
   expandedId: string | null;
   setExpandedId: (id: string | null) => void;
   onFieldUpdate: (f: CategoryField) => void;
+  onToggleFlag: (field: CategoryField, patch: Partial<CategoryField>) => void;
 }) {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
@@ -434,14 +447,26 @@ function FieldGroup({
                     <span className="truncate font-mono text-xs text-muted-foreground">{field.fieldKey}</span>
                     {field.unit && <span className="shrink-0 text-xs text-muted-foreground">({field.unit})</span>}
                   </div>
-                  {(field.showInFilter || field.showInDetail || field.showInPriceList || (field.options?.length ?? 0) > 0) && (
-                    <div className="mt-0.5 flex gap-2 text-[11px] text-muted-foreground">
-                      {field.showInFilter && <span>Filter</span>}
-                      {field.showInDetail && <span>Detail</span>}
-                      {field.showInPriceList && <span>Price&nbsp;list</span>}
-                      {field.options && field.options.length > 0 && <span>{field.options.length}&nbsp;options</span>}
-                    </div>
-                  )}
+                  {/* R6 · show-flags editable in place — each toggle persists immediately
+                      via saveFieldAssignment (same upsert as the applies_to dropdown). */}
+                  <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
+                    <label className="flex cursor-pointer items-center gap-1" title="Show as a catalog filter">
+                      <input type="checkbox" className="h-3 w-3" checked={field.showInFilter}
+                        onChange={(e) => onToggleFlag(field, { showInFilter: e.target.checked })} />
+                      Filter
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1" title="Show on the product/variant detail">
+                      <input type="checkbox" className="h-3 w-3" checked={field.showInDetail}
+                        onChange={(e) => onToggleFlag(field, { showInDetail: e.target.checked })} />
+                      Detail
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1" title="Show on the price list">
+                      <input type="checkbox" className="h-3 w-3" checked={field.showInPriceList}
+                        onChange={(e) => onToggleFlag(field, { showInPriceList: e.target.checked })} />
+                      Price&nbsp;list
+                    </label>
+                    {field.options && field.options.length > 0 && <span className="ml-1">{field.options.length}&nbsp;options</span>}
+                  </div>
                 </div>
                 <select
                   value={field.appliesTo}

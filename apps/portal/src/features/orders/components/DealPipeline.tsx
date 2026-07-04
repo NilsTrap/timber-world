@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronRight, Loader2, Check, XCircle, ArrowRight } from "lucide-react";
 import {
   Button, StatusBadge, SectionHeader,
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@timber/ui";
@@ -11,7 +12,7 @@ import {
   LIFECYCLE_STAGES, CANCELLED_STAGE, LIFECYCLE_RANK, describeBlock, isCancellableStage,
   type GateBlock, type AdvanceEvaluation,
 } from "../services/lifecycle";
-import { advanceDealAction, cancelDealAction, evaluateAdvanceAction, recordGateConfirmationAction } from "../actions/lifecycleActions";
+import { advanceDealAction, cancelDealAction, evaluateAdvanceAction, recordGateConfirmationAction, setDealStageAction } from "../actions/lifecycleActions";
 import { StageBadge } from "./StageBadge";
 
 const STAGE_LABELS: Record<string, string> = {
@@ -66,16 +67,47 @@ export function DealStageRail({
     await onChanged();
   }, [orderId, onChanged]);
 
+  // R8 · manual (free) stage move — a house-user/admin override that jumps the deal to
+  // any milestone (forward, backward, multi-step). The server (setDealStageAction →
+  // resolveDealActor) is the wall: a counterparty login without orders.view is refused.
+  // The gated "Advance" button coexists; this bypasses gates on purpose (audit-logged).
+  const onSetStage = useCallback(async (target: string) => {
+    if (target === lifecycleStage) return;
+    setBusy(true);
+    setError(null);
+    const res = await setDealStageAction(orderId, target);
+    setBusy(false);
+    if (!res.success) { setError(res.error); return; }
+    await onChanged();
+  }, [orderId, lifecycleStage, onChanged]);
+
   return (
     <div className="space-y-3">
       <SectionHeader
         title="Deal pipeline"
         subtitle={cancelled ? "This deal is cancelled." : undefined}
         action={
-          canCancel ? (
-            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setConfirmCancel(true)} disabled={busy}>
-              <XCircle className="h-3.5 w-3.5" /> Cancel deal
-            </Button>
+          !cancelled ? (
+            <div className="flex items-center gap-2">
+              {/* R8 · Set stage — jump to any milestone (override; coexists with Advance). */}
+              <Select value="" onValueChange={onSetStage} disabled={busy}>
+                <SelectTrigger className="h-8 w-[132px] text-xs" title="Move this deal to any milestone (override)">
+                  <SelectValue placeholder="Set stage…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LIFECYCLE_STAGES.map((s) => (
+                    <SelectItem key={s} value={s} disabled={s === lifecycleStage}>
+                      {stageLabel(s)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {canCancel && (
+                <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setConfirmCancel(true)} disabled={busy}>
+                  <XCircle className="h-3.5 w-3.5" /> Cancel deal
+                </Button>
+              )}
+            </div>
           ) : undefined
         }
       />

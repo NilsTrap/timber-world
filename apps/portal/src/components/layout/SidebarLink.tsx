@@ -121,9 +121,11 @@ interface SidebarLinkProps {
 const LAST_ENTRY_KEYS: Record<string, string> = {
   "/production": "production-last-entry",
   "/shipments": "shipment-last-entry",
-  "/admin/organisations": "organisation-last-entry",
-  // Orders intentionally NOT here: clicking "Orders" should always open the
-  // overview table, not jump back into the last order's detail view.
+  // Orders and Organisations are intentionally NOT here: clicking those nav
+  // links should always open the overview list, never deep-jump back into the
+  // last-visited detail view. For Organisations the deep-jump read as a nav
+  // glitch — from another section you could never reach the list, you always
+  // landed on the last org's detail page (Q1, 2026-07-04).
 };
 
 export function SidebarLink({ href, label, iconName, isCollapsed, badge, group }: SidebarLinkProps) {

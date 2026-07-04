@@ -46,7 +46,8 @@ export async function toggleUserActive(
     };
   }
 
-  if (!isValidUUID(organisationId)) {
+  // organisationId is advisory (is_active is person-level) — validate only if given.
+  if (organisationId && !isValidUUID(organisationId)) {
     return {
       success: false,
       error: "Invalid organisation ID",
@@ -56,11 +57,13 @@ export async function toggleUserActive(
 
   const supabase = await createClient();
 
-  // 4. Verify user exists and belongs to the specified organisation
+  // 4. Verify the user exists. is_active is a person-level flag (not per-org), so
+  //    this is not bound to one org — the person-centric view toggles a user who
+  //    may belong to several orgs.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existingUser } = await (supabase as any)
     .from("portal_users")
-    .select("id, organisation_id")
+    .select("id")
     .eq("id", userId)
     .single();
 
@@ -69,14 +72,6 @@ export async function toggleUserActive(
       success: false,
       error: "User not found",
       code: "USER_NOT_FOUND",
-    };
-  }
-
-  if (existingUser.organisation_id !== organisationId) {
-    return {
-      success: false,
-      error: "User does not belong to this organisation",
-      code: "USER_ORG_MISMATCH",
     };
   }
 

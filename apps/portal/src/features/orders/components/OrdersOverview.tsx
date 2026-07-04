@@ -156,8 +156,8 @@ export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?
         </div>
         <FilterSelect value={statusFilter} onChange={setStatusFilter} label="All statuses" options={stages.map((s) => ({ value: s, label: stageLabel(s) }))} />
         <FilterSelect value={directionFilter} onChange={setDirectionFilter} label="All directions" options={[{ value: "sell", label: "Sell" }, { value: "buy", label: "Buy" }]} />
-        <FilterSelect value={customerFilter} onChange={setCustomerFilter} label="All customers" options={customers.map((c) => ({ value: c, label: c }))} />
-        <FilterSelect value={manufacturerFilter} onChange={setManufacturerFilter} label="All manufacturers" options={manufacturers.map((m) => ({ value: m, label: m }))} />
+        <FilterSelect value={customerFilter} onChange={setCustomerFilter} label="All buyers" options={customers.map((c) => ({ value: c, label: c }))} />
+        <FilterSelect value={manufacturerFilter} onChange={setManufacturerFilter} label="All sellers" options={manufacturers.map((m) => ({ value: m, label: m }))} />
         {/* M1 · spine grouping — admin only (§6.2). Only paired spines are worth grouping. */}
         {isAdmin && pairedSpineCodes.length > 0 && (
           <FilterSelect value={spineFilter} onChange={setSpineFilter} label="All spines" options={pairedSpineCodes.map((c) => ({ value: c, label: c }))} />
@@ -175,7 +175,7 @@ export function OrdersOverview({ isAdmin = false, userOrgId = null }: { isAdmin?
                 <th>Reference</th>
                 <th>Direction</th>
                 <th>Buyer</th>
-                <th>Manufacturer</th>
+                <th>Seller</th>
                 {isAdmin && <th className="text-right">Volume</th>}
                 <th>Created</th>
                 <th>Status</th>

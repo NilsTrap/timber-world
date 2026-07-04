@@ -3,7 +3,6 @@ import { redirect, notFound } from "next/navigation";
 import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
 import { getOrganisationById } from "@/features/organisations/actions/getOrganisationById";
 import { OrganisationDetailTabs } from "@/features/organisations/components/OrganisationDetailTabs";
-import { OrganisationEntryMemory } from "@/features/organisations/components/OrganisationEntryMemory";
 import { OrganisationBackLink } from "@/features/organisations/components/OrganisationBackLink";
 
 interface OrganisationDetailPageProps {
@@ -76,7 +75,6 @@ export default async function OrganisationDetailPage({
       </div>
 
       <OrganisationDetailTabs organisation={organisation} defaultTab={tab} />
-      <OrganisationEntryMemory />
     </div>
   );
 }
