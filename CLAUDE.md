@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **START HERE: read `docs/nils-agent-onboarding.md` before your first change.** It carries the environment rules that override everything in this file where they conflict — most importantly: **PRODUCTION IS FROZEN; all work happens on the staging branch `feature/timber-spec-phase` + the staging environment only.** It also has the current deploy runbook, DB rules, and the reading order for the new-platform docs (`docs/wave2-spine-lego.md` supersedes the legacy sections below where they disagree about deals).
+
 ## Project Overview
 
 This is a **BMad Method Framework** installation (v6.0.0-alpha.22) for the **Timber World Platform** project. BMad (Business Model Architecture Development) is an AI-assisted product development methodology with specialized agents and structured workflows.
