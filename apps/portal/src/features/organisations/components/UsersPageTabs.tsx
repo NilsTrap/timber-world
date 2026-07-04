@@ -15,13 +15,19 @@ import { OrganisationsTable } from "./OrganisationsTable";
 import { PeopleTable } from "./PeopleTable";
 import { OrganisationForm } from "./OrganisationForm";
 
+interface UsersPageTabsProps {
+  /** K2 · the person-centric People directory is cross-org, so it is admin-only.
+   *  When false the People tab is hidden (a scoped viewer only sees Organisations). */
+  canManagePeople: boolean;
+}
+
 /**
  * Users Page Tabs
  *
  * Client component that renders the Organisations/People tabs
  * with the Add Organisation button next to the tab list.
  */
-export function UsersPageTabs() {
+export function UsersPageTabs({ canManagePeople }: UsersPageTabsProps) {
   const [activeTab, setActiveTab] = useState("organisations");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -32,7 +38,7 @@ export function UsersPageTabs() {
         <div className="flex items-center justify-between">
           <TabsList>
             <TabsTrigger value="organisations">Organisations</TabsTrigger>
-            <TabsTrigger value="people">People</TabsTrigger>
+            {canManagePeople && <TabsTrigger value="people">People</TabsTrigger>}
           </TabsList>
           {activeTab === "organisations" && (
             <Button onClick={() => setIsFormOpen(true)}>
@@ -50,13 +56,15 @@ export function UsersPageTabs() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="people" className="mt-4">
-          <Card>
-            <CardContent className="pt-6">
-              <PeopleTable />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {canManagePeople && (
+          <TabsContent value="people" className="mt-4">
+            <Card>
+              <CardContent className="pt-6">
+                <PeopleTable />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       <OrganisationForm

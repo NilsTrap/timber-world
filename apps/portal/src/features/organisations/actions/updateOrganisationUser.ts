@@ -7,7 +7,10 @@ import type { OrganisationUser, ActionResult } from "../types";
 import { isValidUUID } from "../types";
 
 /**
- * Update Organisation User Schema
+ * Update Organisation User Schema (Q4 · name / email / phone).
+ *
+ * name is required; email + phone are optional so existing callers that pass only
+ * a name keep working. email/phone are person-level attributes on portal_users.
  */
 const updateUserSchema = z.object({
   name: z
@@ -15,15 +18,35 @@ const updateUserSchema = z.object({
     .min(1, "Name is required")
     .max(100, "Name must be 100 characters or less")
     .trim(),
+  email: z
+    .string()
+    .email("Invalid email address")
+    .max(255, "Email must be 255 characters or less")
+    .trim()
+    .toLowerCase()
+    .optional(),
+  phone: z
+    .string()
+    .max(40, "Phone must be 40 characters or less")
+    .trim()
+    .nullable()
+    .optional(),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
 /**
- * Update Organisation User
+ * Update Organisation User (Q4)
  *
- * Updates a user's name within an organisation.
- * Only name can be edited (email is immutable).
+ * Updates a person's profile fields: name (required), and optionally email and
+ * phone. email is globally unique across portal_users, so a change is checked for
+ * collisions. Fields are person-level, so the update is NOT bound to one org —
+ * `organisationId` is accepted for the per-org callers but no longer required to
+ * match the user's home org (this action also serves the person-centric detail
+ * where the person may belong to several orgs).
+ *
+ * NOTE: this updates portal_users.email only; it does NOT change the Supabase
+ * auth login email. Keeping them in sync (if ever needed) is a separate concern.
  *
  * Super Admin only endpoint.
  */
@@ -60,7 +83,8 @@ export async function updateOrganisationUser(
     };
   }
 
-  if (!isValidUUID(organisationId)) {
+  // organisationId is advisory here (person-level edit) — validate only if given.
+  if (organisationId && !isValidUUID(organisationId)) {
     return {
       success: false,
       error: "Invalid organisation ID",
@@ -78,14 +102,14 @@ export async function updateOrganisationUser(
     };
   }
 
-  const { name } = parsed.data;
+  const { name, email, phone } = parsed.data;
   const supabase = await createClient();
 
-  // 5. Verify user exists and belongs to the specified organisation
+  // 5. Verify the user exists (person-level edit — not bound to one org).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existingUser } = await (supabase as any)
     .from("portal_users")
-    .select("id, organisation_id")
+    .select("id, email")
     .eq("id", userId)
     .single();
 
@@ -97,19 +121,33 @@ export async function updateOrganisationUser(
     };
   }
 
-  if (existingUser.organisation_id !== organisationId) {
-    return {
-      success: false,
-      error: "User does not belong to this organisation",
-      code: "USER_ORG_MISMATCH",
-    };
+  // 5b. Build the update payload (name always; email/phone only when supplied).
+  const updatePayload: Record<string, unknown> = { name };
+
+  if (email !== undefined && email !== existingUser.email) {
+    // Email is globally unique — reject a collision with another portal user.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: clash } = await (supabase as any)
+      .from("portal_users")
+      .select("id")
+      .eq("email", email)
+      .neq("id", userId)
+      .maybeSingle();
+    if (clash) {
+      return { success: false, error: "Email already registered", code: "DUPLICATE_EMAIL" };
+    }
+    updatePayload.email = email;
+  }
+
+  if (phone !== undefined) {
+    updatePayload.phone = phone === "" ? null : phone;
   }
 
   // 6. Update user
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("portal_users")
-    .update({ name })
+    .update(updatePayload)
     .eq("id", userId)
     .select("id, email, name, role, organisation_id, auth_user_id, is_active, status, invited_at, invited_by, last_login_at, created_at, updated_at")
     .single();
