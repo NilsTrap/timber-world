@@ -20,7 +20,6 @@ import { DealLineAdder } from "./DealLineAdder";
 import { SourcingCard } from "./SourcingCard";
 import { DealPartiesCard } from "./DealPartiesCard";
 import { ChainCard } from "./ChainCard";
-import { DealHeader } from "./DealHeader";
 import { DealActivitiesCard } from "./DealActivitiesCard";
 import { DealTermsEditor } from "./DealTermsEditor";
 import { suggestedDocsFor } from "../services/dealActivities";
@@ -45,7 +44,7 @@ function lineDims(li: OrderLineItem): string {
   return [li.thickness, li.width, li.length].filter(Boolean).join(" × ") || "—";
 }
 
-export function DealPanel({ orderId }: { orderId: string }) {
+export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealChanged?: () => void }) {
   const [deal, setDeal] = useState<OrderDealViewResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [docType, setDocType] = useState<DocType>("sales_spec");
@@ -66,7 +65,9 @@ export function DealPanel({ orderId }: { orderId: string }) {
     if (res.success) { setDeal(res.data); setError(null); }
     else setError(res.error);
     setLoading(false);
-  }, [orderId]);
+    // Keep the page header (stage badge, parties, code) in sync after any change.
+    onDealChanged?.();
+  }, [orderId, onDealChanged]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -196,10 +197,11 @@ export function DealPanel({ orderId }: { orderId: string }) {
   // Provisional until a sibling buy leg exists AND carries prices.
   const marginProvisional = !deal.hasSiblingBuyLeg || !deal.siblingBuyLegPriced;
 
+  // Read-only summary (shown to viewers who can't edit terms). Deal kind
+  // (buy_sell/purchase_only) and product group are internal discriminators, not
+  // commercial terms — deliberately not shown here (the direction is in the page
+  // header). Notes is rendered separately below with its own label.
   const summary: Array<{ label: string; value: string | null }> = [
-    { label: "Deal code", value: deal.dealCode },
-    { label: "Kind", value: deal.dealKind },
-    { label: "Product group", value: deal.productGroup },
     { label: "Currency", value: deal.currency },
     { label: "Incoterms", value: deal.incoterms ? `${deal.incoterms}${deal.incotermsPlace ? ` ${deal.incotermsPlace}` : ""}` : null },
     { label: "Advance", value: deal.advancePct != null ? `${deal.advancePct}%` : null },
@@ -212,16 +214,8 @@ export function DealPanel({ orderId }: { orderId: string }) {
     <div className="flex flex-col lg:flex-row gap-6 items-start">
       {/* LEFT — deal content */}
       <div className="flex-1 min-w-0 space-y-6">
-      {/* C1 · Direction-aware header — what this deal is, from the viewer's side. */}
-      <DealHeader
-        dealCode={deal.dealCode}
-        legacyCode={deal.code}
-        direction={deal.viewerDirection}
-        facingParty={deal.facingParty}
-        lifecycleStage={deal.lifecycleStage}
-      />
-
-      {/* Lifecycle stage rail (needs the width — stays in the main column) */}
+      {/* Lifecycle stage rail — the first thing on the page (the deal identity is
+          in the page header now; the Order/Deal tabs are retired). */}
       <DealStageRail orderId={orderId} lifecycleStage={deal.lifecycleStage} onChanged={load} />
 
       {/* H1 · Parties card — a party-less Draft deal has no bilateral code yet;
@@ -240,42 +234,46 @@ export function DealPanel({ orderId }: { orderId: string }) {
         <EmptyState message="No deal data yet. Deals captured from intake (email / PO / meeting) populate line items here; you can also generate documents below once the deal has line items." />
       )}
 
-      {/* Deal summary + G2 terms editor */}
+      {/* Deal terms — inline editing (deal_terms field-wall gate); read-only
+          summary for viewers who can't edit. */}
       <div className="rounded-lg border bg-card p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Terms</h3>
-          {/* G2: edit the commercial terms + signee (deal_terms field-wall gate). */}
-          {deal.canEditDealTerms && (
-            <DealTermsEditor
-              orderId={orderId}
-              values={{
-                incoterms: deal.incoterms,
-                incotermsPlace: deal.incotermsPlace,
-                advancePct: deal.advancePct,
-                paymentTerms: deal.paymentTerms,
-                deliveryTerms: deal.deliveryTerms,
-                deliveryDeadline: deal.deliveryDeadline,
-                notes: deal.notes,
-                sellerSigneeName: deal.sellerSigneeName,
-                sellerSigneeRole: deal.sellerSigneeRole,
-                buyerSigneeName: deal.buyerSigneeName,
-                buyerSigneeRole: deal.buyerSigneeRole,
-              }}
-              sellerName={deal.seller.name}
-              buyerName={deal.buyer.name}
-              onSaved={load}
-            />
-          )}
-        </div>
-        <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
-          {summary.map((row) => (
-            <div key={row.label} className="flex flex-col">
-              <dt className="text-muted-foreground text-xs">{row.label}</dt>
-              <dd className="font-medium">{row.value ?? "—"}</dd>
+        <h3 className="mb-3 text-sm font-semibold">Terms</h3>
+        {deal.canEditDealTerms ? (
+          <DealTermsEditor
+            orderId={orderId}
+            values={{
+              incoterms: deal.incoterms,
+              incotermsPlace: deal.incotermsPlace,
+              advancePct: deal.advancePct,
+              paymentTerms: deal.paymentTerms,
+              deliveryTerms: deal.deliveryTerms,
+              deliveryDeadline: deal.deliveryDeadline,
+              notes: deal.notes,
+              sellerSigneeName: deal.sellerSigneeName,
+              sellerSigneeRole: deal.sellerSigneeRole,
+              buyerSigneeName: deal.buyerSigneeName,
+              buyerSigneeRole: deal.buyerSigneeRole,
+            }}
+            sellerName={deal.seller.name}
+            buyerName={deal.buyer.name}
+            onSaved={load}
+          />
+        ) : (
+          <>
+            <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+              {summary.map((row) => (
+                <div key={row.label} className="flex flex-col">
+                  <dt className="text-muted-foreground text-xs">{row.label}</dt>
+                  <dd className="font-medium">{row.value ?? "—"}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="mt-3">
+              <dt className="text-muted-foreground text-xs">Notes</dt>
+              <dd className="text-sm whitespace-pre-wrap">{deal.notes || "—"}</dd>
             </div>
-          ))}
-        </dl>
-        {deal.notes && <p className="mt-3 text-sm text-muted-foreground whitespace-pre-wrap">{deal.notes}</p>}
+          </>
+        )}
       </div>
 
       {/* A1 (§2.1): ONE order-specification table = this deal's own line items.
@@ -490,11 +488,8 @@ export function DealPanel({ orderId }: { orderId: string }) {
             server sends an empty array to everyone else (ChainCard renders nothing). */}
         <ChainCard legs={deal.spineLegs} currentOrderId={orderId} currency={deal.currency} />
 
-        {/* Activity log — status changes, edits, etc. */}
-        <div className="rounded-lg border bg-card p-4 space-y-2">
-          <h3 className="text-sm font-semibold">Activity</h3>
-          <OrderActivityLog orderId={orderId} />
-        </div>
+        {/* Activity log — status changes, edits, etc. (self-contained card) */}
+        <OrderActivityLog orderId={orderId} />
       </div>
 
       {/* Delete-document confirm (admin) */}

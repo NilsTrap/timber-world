@@ -70,7 +70,7 @@ export function DealStageRail({
     <div className="space-y-3">
       <SectionHeader
         title="Deal pipeline"
-        subtitle={cancelled ? "This deal is cancelled." : `Current stage: ${stageLabel(lifecycleStage)}`}
+        subtitle={cancelled ? "This deal is cancelled." : undefined}
         action={
           canCancel ? (
             <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setConfirmCancel(true)} disabled={busy}>

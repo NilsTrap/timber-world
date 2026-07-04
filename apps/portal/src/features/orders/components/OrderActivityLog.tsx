@@ -44,39 +44,37 @@ export function OrderActivityLog({ orderId, tab }: OrderActivityLogProps) {
   }, [loadLog]);
 
   return (
-    <div className="space-y-3">
-      <h2 className="text-lg font-semibold flex items-center gap-2">
-        <History className="h-5 w-5" />
-        Activity Log
-      </h2>
+    <div className="rounded-lg border bg-card p-4 space-y-2">
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+        <History className="h-4 w-4 text-muted-foreground" />
+        Activity
+      </h3>
       {loading ? (
-        <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading activity...
+        <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
         </div>
       ) : entries.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-2">No activity recorded yet.</p>
+        <p className="py-1 text-xs text-muted-foreground">No activity yet.</p>
       ) : (
-        <div className="rounded-md border divide-y max-h-[400px] overflow-auto">
+        <ul className="max-h-[360px] divide-y overflow-auto">
           {entries.map((entry) => (
-            <div key={entry.id} className="flex items-start gap-3 px-3 py-2 text-sm">
-              <span className="text-xs text-muted-foreground whitespace-nowrap pt-0.5">
-                {formatDateTime(entry.createdAt)}
-              </span>
-              <div className="flex-1 min-w-0">
-                <span className="font-medium">{ACTION_LABELS[entry.action] ?? entry.action}</span>
-                {entry.details && (
-                  <span className="text-muted-foreground"> — {entry.details}</span>
-                )}
+            <li key={entry.id} className="py-2 first:pt-0">
+              {/* Compact + stacked so it never squeezes/wraps badly in the narrow
+                  action column: action + time on top, details + who beneath. */}
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-sm font-medium leading-tight">{ACTION_LABELS[entry.action] ?? entry.action}</span>
+                <time className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground">{formatDateTime(entry.createdAt)}</time>
               </div>
-              {entry.userName && (
-                <span className="text-xs text-muted-foreground whitespace-nowrap pt-0.5">
+              {(entry.details || entry.userName) && (
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {entry.details}
+                  {entry.details && entry.userName ? " · " : ""}
                   {entry.userName}
-                </span>
+                </p>
               )}
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

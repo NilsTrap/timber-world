@@ -31,7 +31,7 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
   const { data, error } = await client
     .from("orders")
     .select(`
-      id, code, name, project_number, customer_organisation_id, seller_organisation_id, producer_organisation_id, buyer_organisation_id, planned_date, date_received, date_loaded,
+      id, code, deal_code, deal_kind, lifecycle_stage, name, project_number, customer_organisation_id, seller_organisation_id, producer_organisation_id, buyer_organisation_id, planned_date, date_received, date_loaded,
       volume_m3, value_cents, currency, status, notes,
       created_by, created_at, updated_at,
       customer:organisations!orders_customer_organisation_id_fkey (code, name),
@@ -94,6 +94,10 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
     plTotalValue: 0,
     plPercentFromInvoice: 0,
     plannedDate: data.planned_date ?? null,
+    code: data.code ?? null,
+    dealCode: data.deal_code ?? null,
+    dealKind: data.deal_kind ?? null,
+    lifecycleStage: data.lifecycle_stage ?? null,
     invoiceNumber: null,
     packageNumber: null,
     transportInvoiceNumber: null,
