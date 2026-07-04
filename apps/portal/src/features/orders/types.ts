@@ -217,9 +217,11 @@ export const CURRENCIES = ["EUR", "GBP", "USD"] as const;
 export type Currency = (typeof CURRENCIES)[number];
 
 /**
- * Order file category
+ * Order file category. `deal` = free-form external files attached to a deal from
+ * the deal Documents panel (N2) — separate from the legacy customer/production
+ * order-tab categories.
  */
-export type OrderFileCategory = "customer" | "production";
+export type OrderFileCategory = "customer" | "production" | "deal";
 
 /**
  * Order file attachment

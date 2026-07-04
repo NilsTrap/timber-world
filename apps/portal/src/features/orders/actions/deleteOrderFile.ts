@@ -45,7 +45,7 @@ export async function deleteOrderFile(fileId: string): Promise<ActionResult<null
     return { success: false, error: "Failed to delete file", code: "DELETE_FAILED" };
   }
 
-  const fileTab = file.category === "customer" ? "list" : "production";
+  const fileTab = file.category === "production" ? "production" : "list";
   await logOrderActivity(file.order_id, session.portalUserId, "file_deleted", `Deleted ${file.category} file: ${file.file_name}`, fileTab);
 
   return { success: true, data: null };

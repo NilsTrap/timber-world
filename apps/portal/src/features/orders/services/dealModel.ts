@@ -104,6 +104,10 @@ export interface OrderDocumentMeta {
   oscarDocId: string | null;
   oscarDocUrl: string | null;
   createdAt: string;
+  /** N2 (b): an uploaded counterparty-signed version of this document (null = none). */
+  signedStoragePath: string | null;
+  signedFileName: string | null;
+  signedUploadedAt: string | null;
 }
 
 /** Universal deal-level fields layered onto `orders`. */

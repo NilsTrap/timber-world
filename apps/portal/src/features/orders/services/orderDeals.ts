@@ -170,7 +170,7 @@ export async function getOrderDeal(db: DbClient, _actor: ActorContext, orderId: 
   const [{ data: items }, { data: refs }, { data: docs }] = await Promise.all([
     c.from("order_line_items").select("*").eq("order_id", orderId).order("side").order("line_no"),
     c.from("order_external_refs").select("*").eq("order_id", orderId).order("created_at"),
-    c.from("order_documents").select("id, order_id, doc_type, side, doc_number, status, doc_state, storage_path, file_name, oscar_doc_id, oscar_doc_url, created_at").eq("order_id", orderId).order("created_at", { ascending: false }),
+    c.from("order_documents").select("id, order_id, doc_type, side, doc_number, status, doc_state, storage_path, file_name, oscar_doc_id, oscar_doc_url, created_at, signed_storage_path, signed_file_name, signed_uploaded_at").eq("order_id", orderId).order("created_at", { ascending: false }),
   ]);
 
   const view: OrderDealView = {
@@ -185,6 +185,9 @@ export async function getOrderDeal(db: DbClient, _actor: ActorContext, orderId: 
       docState: (d.doc_state as OrderDocumentMeta["docState"]) ?? null,
       storagePath: (d.storage_path as string) ?? null, fileName: (d.file_name as string) ?? null,
       oscarDocId: (d.oscar_doc_id as string) ?? null, oscarDocUrl: (d.oscar_doc_url as string) ?? null, createdAt: d.created_at as string,
+      signedStoragePath: (d.signed_storage_path as string) ?? null,
+      signedFileName: (d.signed_file_name as string) ?? null,
+      signedUploadedAt: (d.signed_uploaded_at as string) ?? null,
     })),
   };
   return { success: true, data: view };

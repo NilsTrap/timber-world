@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Loader2, FileText, Download, Plus, Pencil, Trash2, ShieldCheck, Sparkles, CheckCircle2, Circle, BadgeCheck } from "lucide-react";
+import { useEffect, useRef, useState, useCallback, type ChangeEvent } from "react";
+import { Loader2, FileText, Download, Plus, Pencil, Trash2, ShieldCheck, Sparkles, CheckCircle2, Circle, BadgeCheck, Upload, FileCheck2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import {
   Button, Input,
@@ -22,6 +22,7 @@ import { DealPartiesCard } from "./DealPartiesCard";
 import { ChainCard } from "./ChainCard";
 import { DealActivitiesCard } from "./DealActivitiesCard";
 import { DealTermsEditor } from "./DealTermsEditor";
+import { DealFilesCard } from "./DealFilesCard";
 import { suggestedDocsFor } from "../services/dealActivities";
 import { DOC_TYPE_LABELS, expectedDocsForDealKind } from "../services/documents/registry";
 import { lineTotalCents } from "../services/documents/assemble";
@@ -29,6 +30,7 @@ import {
   getOrderDealView, generateOrderDocument, getOrderDocumentUrl,
   updateDealLineItemAmounts, deleteOrderDocument, setDealMarginApproval,
   firmOrderSpecification,
+  uploadSignedOrderDocument, getSignedOrderDocumentUrl, deleteSignedOrderDocument,
 } from "../actions/dealActions";
 import { removeLineItem } from "../actions/catalogPicker";
 
@@ -151,6 +153,54 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
     if (!res.success) { setError(res.error); return; }
     await load();
   }, [docToDelete, orderId, load]);
+
+  // N2 (b) · signed-version upload / replace / download / delete on a generated doc.
+  const signedFileInputRef = useRef<HTMLInputElement>(null);
+  const signedTargetIdRef = useRef<string | null>(null);
+  const [uploadingSignedId, setUploadingSignedId] = useState<string | null>(null);
+  const [downloadingSignedId, setDownloadingSignedId] = useState<string | null>(null);
+  const [signedToDelete, setSignedToDelete] = useState<{ id: string; number: string } | null>(null);
+  const [deletingSigned, setDeletingSigned] = useState(false);
+
+  const onPickSigned = useCallback((documentId: string) => {
+    signedTargetIdRef.current = documentId;
+    signedFileInputRef.current?.click();
+  }, []);
+
+  const onSignedFileChosen = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const documentId = signedTargetIdRef.current;
+    e.target.value = ""; // allow re-picking the same file
+    if (!file || !documentId) return;
+    setUploadingSignedId(documentId);
+    setError(null);
+    const formData = new FormData();
+    formData.set("file", file);
+    const res = await uploadSignedOrderDocument({ documentId, orderId, formData });
+    setUploadingSignedId(null);
+    if (!res.success) { toast.error(res.error); return; }
+    toast.success("Signed version uploaded");
+    await load();
+  }, [orderId, load]);
+
+  const onDownloadSigned = useCallback(async (documentId: string) => {
+    setDownloadingSignedId(documentId);
+    const res = await getSignedOrderDocumentUrl(documentId);
+    setDownloadingSignedId(null);
+    if (res.success) window.open(res.data.url, "_blank", "noopener");
+    else toast.error(res.error);
+  }, []);
+
+  const onConfirmDeleteSigned = useCallback(async () => {
+    if (!signedToDelete) return;
+    setDeletingSigned(true);
+    const res = await deleteSignedOrderDocument({ documentId: signedToDelete.id, orderId });
+    setDeletingSigned(false);
+    setSignedToDelete(null);
+    if (!res.success) { toast.error(res.error); return; }
+    toast.success("Signed version removed");
+    await load();
+  }, [signedToDelete, orderId, load]);
 
   if (loading) {
     return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
@@ -363,7 +413,7 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
                 <TableHead>Type</TableHead>
                 <TableHead>Side</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">{isAdmin ? "Actions" : "Download"}</TableHead>
+                <TableHead className="text-right">{isAdmin || deal.canEditDealTerms ? "Actions" : "Download"}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -376,6 +426,12 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
                       {/* D1: the sales_spec's quotation→firm state. */}
                       {d.docState === "quotation" && <StatusBadge variant="draft">Quotation</StatusBadge>}
                       {d.docState === "firm" && <StatusBadge variant="success">Firm</StatusBadge>}
+                      {/* N2 (b): a signed version has been uploaded. */}
+                      {d.signedStoragePath && (
+                        <StatusBadge variant="success">
+                          <span className="flex items-center gap-1"><FileCheck2 className="h-3 w-3" />Signed</span>
+                        </StatusBadge>
+                      )}
                     </span>
                   </TableCell>
                   <TableCell>{d.side}</TableCell>
@@ -398,6 +454,53 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
                       <Button variant="ghost" size="sm" onClick={() => onDownload(d.id)}>
                         <Download className="h-4 w-4" /> PDF
                       </Button>
+                      {/* N2 (b): signed-version controls. Download available to any
+                          viewer of the doc; upload/replace/delete gated on deal_terms. */}
+                      {d.signedStoragePath ? (
+                        <>
+                          <Button
+                            variant="ghost" size="sm"
+                            onClick={() => onDownloadSigned(d.id)}
+                            disabled={downloadingSignedId === d.id}
+                            title="Download the signed version"
+                          >
+                            {downloadingSignedId === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck2 className="h-4 w-4" />} Signed
+                          </Button>
+                          {deal.canEditDealTerms && (
+                            <>
+                              <Button
+                                variant="ghost" size="sm"
+                                onClick={() => onPickSigned(d.id)}
+                                disabled={uploadingSignedId === d.id}
+                                title="Replace the signed version"
+                                aria-label={`Replace signed version of ${d.docNumber}`}
+                              >
+                                {uploadingSignedId === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                              </Button>
+                              <Button
+                                variant="ghost" size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => setSignedToDelete({ id: d.id, number: d.docNumber })}
+                                title="Delete the signed version"
+                                aria-label={`Delete signed version of ${d.docNumber}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        deal.canEditDealTerms && (
+                          <Button
+                            variant="ghost" size="sm"
+                            onClick={() => onPickSigned(d.id)}
+                            disabled={uploadingSignedId === d.id}
+                            title="Upload a signed version of this document"
+                          >
+                            {uploadingSignedId === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload signed
+                          </Button>
+                        )
+                      )}
                       {isAdmin && (
                         <Button
                           variant="ghost"
@@ -416,6 +519,20 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
             </TableBody>
           </Table>
         )}
+
+        {/* N2 (b): one hidden picker drives the per-row Upload/Replace-signed actions. */}
+        <input
+          ref={signedFileInputRef}
+          type="file"
+          className="hidden"
+          onChange={onSignedFileChosen}
+        />
+      </div>
+
+      {/* N2 (a): free-form external file attachments on the deal (restores the
+          legacy Order-tab file section on the deal view). */}
+      <div className="rounded-lg border bg-card p-4">
+        <DealFilesCard orderId={orderId} />
       </div>
       </div>{/* end LEFT column */}
 
@@ -509,6 +626,28 @@ export function DealPanel({ orderId, onDealChanged }: { orderId: string; onDealC
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deletingDoc ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* N2 (b): delete-signed-version confirm */}
+      <AlertDialog open={!!signedToDelete} onOpenChange={(o) => { if (!o) setSignedToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove the signed version of {signedToDelete?.number}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This deletes only the uploaded signed file. The generated document stays. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingSigned}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); onConfirmDeleteSigned(); }}
+              disabled={deletingSigned}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingSigned ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
