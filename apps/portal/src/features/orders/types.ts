@@ -122,8 +122,14 @@ export interface Order {
   valueCents: number | null;
   currency: "EUR" | "GBP" | "USD";
   status: OrderStatus;
-  /** Deal code (e.g. ORD-172) — the order's canonical number. Populated by getOrders. */
+  /** Legacy ORD-NNN code (DB `code`). Fallback display for deals with no bilateral deal_code. */
+  code?: string | null;
+  /** Bilateral deal code (SELLER-BUYER-NNN). Populated by getOrders; null on legacy/party-less deals. */
   dealCode?: string | null;
+  /** Deal kind — 'buy_sell' (a SELL deal) or 'purchase_only' (a BUY leg). Drives the F1 direction badge. */
+  dealKind?: string | null;
+  /** Spine id linking the sell/buy legs of a chain. Owner/admin only (field-walled to the `chain` domain). */
+  spineId?: string | null;
   /** Deal lifecycle stage (draft/confirmed/produced/loaded/delivered/cancelled). Populated by getOrders. */
   lifecycleStage?: string | null;
   notes: string | null;

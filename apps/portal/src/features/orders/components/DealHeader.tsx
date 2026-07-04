@@ -1,8 +1,8 @@
 "use client";
 
 import { ArrowLeftRight } from "lucide-react";
-import { StatusBadge } from "@timber/ui";
 import { STAGE_CAPTIONS } from "../services/dealActivities";
+import { StageBadge } from "./StageBadge";
 
 /**
  * C1 · Direction-aware deal header (§2.5).
@@ -38,10 +38,9 @@ export function DealHeader({
           <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
         </div>
-        <StatusBadge variant={stageBadgeVariant(lifecycleStage)}>
-          {stageLabel(lifecycleStage)}
+        <StageBadge stage={lifecycleStage} strikeThrough={lifecycleStage === "cancelled"}>
           {caption ? <span className="font-normal opacity-70"> · {caption}</span> : null}
-        </StatusBadge>
+        </StageBadge>
         {dealCode && (
           <span className="ml-auto font-mono text-sm text-muted-foreground">{dealCode}</span>
         )}
@@ -53,30 +52,4 @@ export function DealHeader({
       </p>
     </div>
   );
-}
-
-function stageLabel(stage: string): string {
-  return stage.charAt(0).toUpperCase() + stage.slice(1);
-}
-
-/** Local stage→badge map. F2 will centralise the §12 palette across surfaces. */
-function stageBadgeVariant(
-  stage: string,
-): "draft" | "pending" | "success" | "error" | "info" | "warning" {
-  switch (stage) {
-    case "draft":
-      return "draft";
-    case "confirmed":
-      return "pending";
-    case "produced":
-      return "info";
-    case "loaded":
-      return "warning";
-    case "delivered":
-      return "success";
-    case "cancelled":
-      return "error";
-    default:
-      return "info";
-  }
 }

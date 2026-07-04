@@ -12,6 +12,7 @@ import {
   type GateBlock, type AdvanceEvaluation,
 } from "../services/lifecycle";
 import { advanceDealAction, cancelDealAction, evaluateAdvanceAction, recordGateConfirmationAction } from "../actions/lifecycleActions";
+import { StageBadge } from "./StageBadge";
 
 const STAGE_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -91,7 +92,7 @@ export function DealStageRail({
               {isDone ? (
                 <StatusBadge variant="success"><span className="inline-flex items-center gap-1"><Check className="h-3 w-3" />{stageLabel(stage)}</span></StatusBadge>
               ) : isCurrent ? (
-                <StatusBadge variant="info" className="ring-2 ring-blue-400 ring-offset-1">{stageLabel(stage)}</StatusBadge>
+                <StageBadge stage={stage} className="ring-2 ring-foreground/40 ring-offset-1" />
               ) : (
                 <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${cancelled ? "bg-gray-100 text-gray-400 line-through" : "bg-gray-100 text-gray-500"}`}>
                   {stageLabel(stage)}
@@ -103,7 +104,7 @@ export function DealStageRail({
         {cancelled && (
           <div className="flex items-center gap-1.5">
             <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
-            <StatusBadge variant="error"><span className="inline-flex items-center gap-1"><XCircle className="h-3 w-3" />Cancelled</span></StatusBadge>
+            <StageBadge stage="cancelled" className="gap-1"><XCircle className="ml-1 h-3 w-3" /></StageBadge>
           </div>
         )}
       </div>
