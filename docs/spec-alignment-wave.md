@@ -141,3 +141,4 @@ Tasks created 2026-07-03 on the Oscar board (project `0d2f3a0a-0755-4274-9218-22
 | F — Overview & branding | `hrabm6` | F1 `zytdkn` · F2 `4w3xpk` · F3 `jsjw2g` |
 | G — Placeholders ↔ deal data | `kqtkmz` | G1 `m59783` · G2 `7cc282` · G3 `tc67xe` · G4 `e7gkcc` · G5 `z8d8gr` |
 | H — UAT fixes (2026-07-04): new-deal parties dialog + Parties card + auto deal code; Incoterms dropdown (Settings→Fields-managed) + calendar deadline | `swgbkj` | H1 `y3s98j` · H2 `k89g7y` |
+| I — Identity & CRM consolidation (2026-07-04): one-truth UX (is_supplier toggle BUG + appears-in indicator + cross-links), group-assignment discoverability (People column + group Members tab), org-switcher retirement, legacy audit. PARALLEL-SAFE with H (no hot-file overlap). | `u4r9jx` | I1 `hraagf` · I2 `kgatbx` · I3 `me76z9` · I4 `8nke4x` |
