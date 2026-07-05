@@ -32,6 +32,7 @@ import { assembleDocumentData, generateDocument, regenerateDocument } from "@/fe
 import { getSpine, listSpineDeals, getSpineLineage } from "@/features/orders/services/spines";
 import type { SpineProduct } from "@/features/orders/services/spines";
 import { evaluateAdvance, advanceDeal, recordGateConfirmation, cancelDeal, listGateConfigs } from "@/features/orders/services/lifecycle";
+import { parseAdvanceFromPaymentTerm } from "@/features/orders/services/paymentTerms";
 import { getAccessProfile } from "@/lib/access";
 import { resolveFieldAccess, projectDealView } from "@/features/orders/services/dealFields";
 import type { ToolDef, ToolHandler, AuthCtx, UserCtx, UserWriteCapability } from "../types";
@@ -137,7 +138,7 @@ export const dealTools: ToolDef[] = [
   },
   {
     name: "timber_update_deal",
-    description: "Update a deal's header fields (deal kind, product group, incoterms, advance %, payment/delivery terms + deadline, transport billing, and the G3 per-deal signee overrides for the seller/buyer signature blocks). Only the provided fields change. Idempotent.",
+    description: "Update a deal's header fields (deal kind, product group, currency [Draft-only], incoterms, advance %, payment terms, delivery deadline, transport billing, notes, and the G3 per-deal signee overrides). R3: setting payment_terms derives advance_% from the chosen option unless advance_pct is passed explicitly. delivery_terms is DEPRECATED (superseded by incoterms; kept only for legacy documents). Only the provided fields change. Idempotent.",
     readOnly: false,
     lifecycle: "deal_update",
     inputSchema: {
@@ -146,12 +147,14 @@ export const dealTools: ToolDef[] = [
         deal_id: { type: "string", description: "Deal UUID." },
         deal_kind: { type: "string", enum: ["buy_sell", "sale_only", "purchase_only"] },
         product_group: { type: "string" },
+        currency: { type: "string", description: "R7: deal currency (e.g. EUR/GBP). Writable only while the deal is Draft, and only to an active catalog currency." },
         incoterms: { type: "string" },
         incoterms_place: { type: "string" },
-        advance_pct: { type: "number" },
+        advance_pct: { type: "number", description: "Advance %. Usually derived from payment_terms (R3); pass explicitly to override." },
         payment_terms: { type: "string" },
-        delivery_terms: { type: "string" },
+        delivery_terms: { type: "string", description: "DEPRECATED — superseded by incoterms; retained only for legacy documents." },
         delivery_deadline: { type: "string" },
+        notes: { type: "string", description: "Free-text deal notes." },
         transport_billing: { type: "string", enum: ["in_price", "separate_line", "separate_invoice"] },
         seller_signee_name: { type: "string", description: "G3: per-deal override for the seller-side signatory's name on documents (defaults from the seller org's default signee at deal creation)." },
         seller_signee_role: { type: "string", description: "G3: per-deal override for the seller-side signatory's role/title." },
@@ -590,16 +593,26 @@ export const dealHandlers: Record<string, ToolHandler> = {
   timber_update_deal: async (args, ctx) => {
     const { db, actor } = ctx;
     if (!args?.deal_id) return toolErr("deal_id is required");
+    // R3 · payment_terms drives advance_% (unless advance_pct is passed explicitly),
+    // matching the portal terms editor — so documents render the right advance.
+    const advancePct =
+      args?.advance_pct !== undefined
+        ? args.advance_pct
+        : args?.payment_terms != null
+          ? parseAdvanceFromPaymentTerm(args.payment_terms as string)
+          : undefined;
     const res = await updateDealFields(db, actor, args.deal_id, {
       dealKind: args?.deal_kind as DealKind | undefined,
       productGroup: args?.product_group,
+      currency: args?.currency,
       incoterms: args?.incoterms,
       incotermsPlace: args?.incoterms_place,
-      advancePct: args?.advance_pct,
+      advancePct,
       paymentTerms: args?.payment_terms,
       deliveryTerms: args?.delivery_terms,
       deliveryDeadline: args?.delivery_deadline,
       transportBilling: args?.transport_billing as TransportBilling | undefined,
+      notes: args?.notes,
       // G3 · per-deal signee overrides (seller/buyer signature blocks on docs).
       sellerSigneeName: args?.seller_signee_name,
       sellerSigneeRole: args?.seller_signee_role,
