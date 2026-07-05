@@ -144,6 +144,109 @@ async function main() {
   ok("J4: timber_get_variant_stock is a read", isRead("timber_get_variant_stock"));
   ok("J4: timber_set_variant_stock is a full-token write", isWrite("timber_set_variant_stock"));
 
+  // ── T3-T7 (2026-07-05): the 53 tools Epic T added (deals +12, crm +13,
+  // catalog +28), taking the surface 40 → 93. Same EXECUTABLE completeness
+  // contract as the J block: a new UI action shipped without its MCP tool (or a
+  // lost / mis-flagged registration) FAILS this build. For each new tool assert
+  // it is registered with the correct read/write flag; for the key ones assert a
+  // critical arg is in its schema (and, where it matters, its user-key capability).
+  const req = (n: string) =>
+    ((byName.get(n)?.inputSchema as { required?: string[] })?.required) ?? [];
+  const cap = (n: string) => USER_WRITE_CAPABILITY[n];
+
+  // T-deals (+12) — duplicate, stage/parties/signee edits, deal-file + signed-doc
+  // attachments, document delete, gate-config authoring.
+  for (const w of [
+    "timber_duplicate_deal", "timber_set_deal_stage", "timber_set_deal_parties",
+    "timber_use_contact_as_signee", "timber_upload_deal_file", "timber_delete_deal_file",
+    "timber_upload_signed_document", "timber_delete_signed_document",
+    "timber_delete_document", "timber_upsert_gate_config",
+  ]) ok(`T-deals write ${w} is a full-token write`, isWrite(w));
+  for (const r of ["timber_get_deal_signee_context", "timber_get_signed_document_url"])
+    ok(`T-deals read ${r} is a read`, isRead(r));
+  ok("T: set_deal_stage exposes stage", "stage" in props("timber_set_deal_stage"));
+  ok("T: set_deal_parties exposes customer + seller org ids",
+    "customer_organisation_id" in props("timber_set_deal_parties") &&
+    "seller_organisation_id" in props("timber_set_deal_parties"));
+  ok("T: use_contact_as_signee side is a seller|buyer enum",
+    ((props("timber_use_contact_as_signee").side as { enum?: string[] })?.enum ?? []).join() === "seller,buyer");
+  ok("T: use_contact_as_signee requires contact_id", req("timber_use_contact_as_signee").includes("contact_id"));
+  ok("T: upload_deal_file exposes content (base64 body)", "content" in props("timber_upload_deal_file"));
+  ok("T: upload_signed_document exposes content + document_id",
+    "content" in props("timber_upload_signed_document") && "document_id" in props("timber_upload_signed_document"));
+  ok("T: upsert_gate_config exposes requirements", "requirements" in props("timber_upsert_gate_config"));
+  ok("T: delete_document is admin-capability gated", cap("timber_delete_document") === "admin");
+  ok("T: upsert_gate_config is admin-capability gated", cap("timber_upsert_gate_config") === "admin");
+
+  // T-crm (+13) — org-contact book, people directory + person CRUD, platform settings.
+  for (const w of [
+    "timber_upsert_org_contact", "timber_delete_org_contact", "timber_create_person",
+    "timber_add_person_to_org", "timber_remove_person_from_org", "timber_update_person",
+    "timber_toggle_person_active", "timber_resend_person_invite", "timber_set_platform_setting",
+  ]) ok(`T-crm write ${w} is a full-token write`, isWrite(w));
+  for (const r of [
+    "timber_list_org_contacts", "timber_get_people_directory", "timber_get_person",
+    "timber_get_platform_setting",
+  ]) ok(`T-crm read ${r} is a read`, isRead(r));
+  // The counterparty-gated book-writes carry the FINE per-org capability, not admin —
+  // this is what lets a salesperson/purchasing key manage its own trading partners.
+  for (const c of [
+    "timber_upsert_org_contact", "timber_delete_org_contact", "timber_create_person",
+    "timber_add_person_to_org", "timber_remove_person_from_org",
+  ]) ok(`T: ${c} is counterparty-capability gated`, cap(c) === "counterparty");
+  ok("T: create_person requires + exposes org_id",
+    req("timber_create_person").includes("org_id") && "org_id" in props("timber_create_person"));
+  ok("T: upsert_org_contact requires org_id", req("timber_upsert_org_contact").includes("org_id"));
+  ok("T: set_platform_setting exposes key + value",
+    "key" in props("timber_set_platform_setting") && "value" in props("timber_set_platform_setting"));
+  ok("T: set_platform_setting is admin-capability gated", cap("timber_set_platform_setting") === "admin");
+  ok("T: person-management writes are admin-gated",
+    cap("timber_update_person") === "admin" && cap("timber_toggle_person_active") === "admin" &&
+    cap("timber_resend_person_invite") === "admin");
+
+  // T-catalog (+28) — category / field / field-option / assignment / product /
+  // variant / packaging / currency CRUD + bulk action + stock delete. All are
+  // admin-gated FULL-token writes; list/get_category + the currency reads are reads.
+  for (const w of [
+    "timber_save_category", "timber_duplicate_category", "timber_delete_category",
+    "timber_save_field", "timber_delete_field", "timber_save_field_option", "timber_delete_field_option",
+    "timber_save_field_assignment", "timber_remove_field_assignment",
+    "timber_save_product", "timber_duplicate_product", "timber_delete_product", "timber_bulk_product_action",
+    "timber_save_variant", "timber_delete_variant",
+    "timber_save_packaging_type", "timber_delete_packaging_type",
+    "timber_assign_variant_packaging", "timber_remove_variant_packaging",
+    "timber_save_currency", "timber_delete_currency", "timber_update_currency_prices",
+    "timber_set_variant_currency_override", "timber_delete_variant_stock",
+  ]) {
+    ok(`T-catalog write ${w} is a full-token write`, isWrite(w));
+    ok(`T-catalog write ${w} is admin-capability gated`, cap(w) === "admin");
+  }
+  for (const r of [
+    "timber_list_categories", "timber_get_category",
+    "timber_list_currencies", "timber_get_catalog_currency_prices",
+  ]) ok(`T-catalog read ${r} is a read`, isRead(r));
+  // bulk_product_action's discriminator (delete | set_active | set_visibility |
+  // move_to_category) is a required arg (enum values documented in its description;
+  // the handler validates them).
+  ok("T: bulk_product_action exposes action", "action" in props("timber_bulk_product_action"));
+  ok("T: bulk_product_action requires action + product_ids",
+    req("timber_bulk_product_action").includes("action") && req("timber_bulk_product_action").includes("product_ids"));
+  ok("T: save_variant exposes product_id + price_eur_cents",
+    "product_id" in props("timber_save_variant") && "price_eur_cents" in props("timber_save_variant"));
+  ok("T: set_variant_currency_override exposes variant_id + currency_code + price_cents",
+    ["variant_id", "currency_code", "price_cents"].every((k) => k in props("timber_set_variant_currency_override")));
+  ok("T: get_catalog_currency_prices exposes entity_ids", "entity_ids" in props("timber_get_catalog_currency_prices"));
+  ok("T: save_field exposes field_key + field_type",
+    "field_key" in props("timber_save_field") && "field_type" in props("timber_save_field"));
+
+  // T3 · update_deal refresh — currency + notes now settable on the header (R3).
+  ok("T3: update_deal exposes currency", "currency" in props("timber_update_deal"));
+  ok("T3: update_deal exposes notes", "notes" in props("timber_update_deal"));
+
+  // Headline count guard: Epic T took the surface 40 → 93 (+53). Locks the number a
+  // regression (or an unregistered/dropped tool) would otherwise move silently.
+  ok("T: tool count is 93 (was 40, +53 in Epic T)", TOOLS.length === 93);
+
   // 10. T2 · per-user WRITE authorization is DENY-by-default: EVERY write tool
   //     (readOnly:false) MUST declare a user-key capability in USER_WRITE_CAPABILITY,
   //     and read-only tools must NOT (they need no write gate). A new write tool
