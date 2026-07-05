@@ -47,15 +47,42 @@ const SUPPLIERS_MODULE = "counterparties.suppliers";
  * full rights. Never trusts the client for scope/group; all facts are read
  * server-side with the service-role client (the gate IS the wall — the same
  * deliberate pattern as counterparties' orgContacts).
+ *
+ * Thin session wrapper over `resolveAddPersonScopeByProfile` (T5): it derives the
+ * caller facts (portal-user id, current org, admin bypass) from the cookie session
+ * and delegates. The MCP CRM tools call the profile-based twin directly with the
+ * request AuthCtx (no cookie session available), so both surfaces share ONE Q2 wall.
  */
 export async function resolveAddPersonScope(
   session: SessionUser,
   targetOrgId: string,
 ): Promise<AddPersonScope> {
-  // Admins: unrestricted (keep both the isAdmin and legacy isSuperAdmin bypass).
-  if (isAdmin(session) || isSuperAdmin(session)) return { ok: true, mode: "admin" };
+  return resolveAddPersonScopeByProfile(
+    session.portalUserId,
+    session.currentOrganizationId || session.organisationId,
+    // Admin bypass: keep both the isAdmin and legacy isSuperAdmin paths.
+    isAdmin(session) || isSuperAdmin(session),
+    targetOrgId,
+  );
+}
 
-  const callerOrgId = session.currentOrganizationId || session.organisationId;
+/**
+ * T5 · The Q2 wall, factored to accept resolved CALLER FACTS instead of a cookie
+ * session, so a non-session caller (the MCP user-scoped key) enforces the SAME
+ * scope. `isAdmin` is the caller's admin-bypass bit (session: isAdmin||isSuperAdmin;
+ * MCP: actor.isPlatformAdmin). `callerOrgId` is the org whose book/trading-partner
+ * edge scopes a non-admin. All target-org facts are still read server-side (the
+ * client is never trusted for scope/group).
+ */
+export async function resolveAddPersonScopeByProfile(
+  portalUserId: string | null,
+  callerOrgId: string | null,
+  isAdmin: boolean,
+  targetOrgId: string,
+): Promise<AddPersonScope> {
+  // Admins: unrestricted.
+  if (isAdmin) return { ok: true, mode: "admin" };
+
   if (!callerOrgId) return { ok: false, error: "Permission denied", code: "FORBIDDEN" };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,7 +113,7 @@ export async function resolveAddPersonScope(
 
   // Which book right does the caller hold? (action right AND ceiling-capped module —
   // the same pair counterparties' requireBookAccess demands.)
-  const profile = await getAccessProfile(session.portalUserId, callerOrgId);
+  const profile = await getAccessProfile(portalUserId, callerOrgId);
   const hasClients = profile.actions.has(CLIENTS_ACTION) && profile.modules.has(CLIENTS_MODULE);
   const hasSuppliers = profile.actions.has(SUPPLIERS_ACTION) && profile.modules.has(SUPPLIERS_MODULE);
 
