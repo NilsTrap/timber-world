@@ -11,6 +11,7 @@ import {
   Badge,
   Input,
   Label,
+  Checkbox,
   Select,
   SelectContent,
   SelectItem,
@@ -67,6 +68,7 @@ export function PersonApiKeysSection({ personId, orgOptions }: PersonApiKeysSect
   const [loading, setLoading] = useState(true);
   const [label, setLabel] = useState("");
   const [orgPin, setOrgPin] = useState<string>(NO_PIN);
+  const [readonly, setReadonly] = useState(false);
   const [issuing, setIssuing] = useState(false);
   const [issued, setIssued] = useState<{ plaintext: string; label: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -87,13 +89,14 @@ export function PersonApiKeysSection({ personId, orgOptions }: PersonApiKeysSect
 
   const onIssue = async () => {
     setIssuing(true);
-    const r = await issueMcpApiKey(personId, label.trim() || null, orgPin === NO_PIN ? null : orgPin);
+    const r = await issueMcpApiKey(personId, label.trim() || null, orgPin === NO_PIN ? null : orgPin, readonly);
     setIssuing(false);
     if (r.success) {
       setIssued({ plaintext: r.data.plaintext, label: r.data.label });
       setCopied(false);
       setLabel("");
       setOrgPin(NO_PIN);
+      setReadonly(false);
       load();
     } else {
       toast.error(r.error);
@@ -168,9 +171,20 @@ export function PersonApiKeysSection({ personId, orgOptions }: PersonApiKeysSect
               Issue key
             </Button>
           </div>
+          <div className="mt-3 flex items-center gap-2">
+            <Checkbox
+              id="mcp-key-readonly"
+              checked={readonly}
+              onCheckedChange={(v) => setReadonly(v === true)}
+            />
+            <Label htmlFor="mcp-key-readonly" className="text-sm font-normal">
+              Read-only (blocks every write tool, regardless of this user&apos;s permissions)
+            </Label>
+          </div>
           <p className="mt-2 text-xs text-muted-foreground">
             A key grants MCP access scoped to this user&apos;s own portal permissions (row-level walls
-            apply). The full key is shown once at creation and cannot be retrieved later.
+            apply). A read-only key can only read. The full key is shown once at creation and cannot
+            be retrieved later.
           </p>
         </div>
 
@@ -201,6 +215,11 @@ export function PersonApiKeysSection({ personId, orgOptions }: PersonApiKeysSect
                       {k.organisationName && (
                         <Badge variant="outline" className="text-[10px]">
                           Pin: {k.organisationName}
+                        </Badge>
+                      )}
+                      {k.isReadonly && (
+                        <Badge variant="outline" className="text-[10px]">
+                          Read-only
                         </Badge>
                       )}
                     </div>

@@ -21,20 +21,30 @@
  *     hashed (sha256) and looked up in mcp_api_keys. A match resolves to a
  *     user-JWT-scoped client (RLS applies the user's OWN portal walls) + a user
  *     actor whose isPlatformAdmin reflects the user's REAL status. A per-user key
- *     can therefore NEVER exceed its owner's portal permissions. User keys are
- *     treated as role="full" for the readonly filter — the read/write split is a
- *     containment lever for the shared owner tokens, not for user keys, whose
- *     blast radius is already bounded by RLS + the user's app-level authz (e.g.
- *     margin approval still requires a real platform admin). FAIL CLOSED: a
+ *     can therefore NEVER exceed its owner's portal permissions. FAIL CLOSED: a
  *     missing SUPABASE_JWT_SECRET, an unknown/revoked key, or a user without an
  *     auth identity → 401, never an admin fallback.
+ *
+ *     T2 closes the authz gaps a review found in T1:
+ *      - WRITE authz (HIGH-1): the user JWT's RLS walls WHICH rows a key may touch,
+ *        but app-level authz (WHICH fields/actions a user may edit, e.g. deal_terms)
+ *        lives in the portal ACTION layer and is skipped when MCP dispatches to
+ *        services directly. callTool re-applies the SAME capability the twin portal
+ *        action checks (USER_WRITE_CAPABILITY → authorizeUserWrite) BEFORE dispatch,
+ *        for a per-user key only. DENY-by-default: a write tool with no declared
+ *        capability is refused over a user key.
+ *      - READ projection: deal reads (get/list) run through the key owner's field
+ *        wall (projectDealView), exactly like the portal Deal tab, so a salesperson
+ *        key never sees chain / supplier / margin fields.
+ *      - READ-ONLY keys (MEDIUM-3): mcp_api_keys.is_readonly → role="readonly", so
+ *        the readonly filter blocks every write regardless of the owner's perms.
  *
  * SECURITY — actor.isServiceAgent: the user actor carries isServiceAgent:true only
  * to tag audit rows actor_type='service' and to keep the document issuer null on
  * the MCP channel. It MUST NOT be read anywhere as an authz bypass — the row-level
- * data walls come from the user-JWT `db`, not from trusting the actor. (One latent
- * bypass, upsertGateConfig in services/lifecycle.ts, treats isServiceAgent as
- * admin-equivalent but is NOT wired to any MCP tool; flagged for T2/modularization.)
+ * data walls come from the user-JWT `db`, not from trusting the actor. (T2/LOW-5 split
+ * the last latent bypass: upsertGateConfig in services/lifecycle.ts now requires a
+ * REAL isPlatformAdmin, never isServiceAgent.)
  */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -54,7 +64,11 @@ import type { GroupRightsInput } from "@/features/access/types";
 import { logAudit } from "@/features/audit/logAudit";
 import { hashApiKey } from "@/lib/mcp/apiKeys";
 import { resolveMcpUserActor } from "@/lib/mcp/resolveMcpUserActor";
-import { TOOLS } from "./tools";
+import { getAccessProfile } from "@/lib/access";
+import type { AccessProfile } from "@/lib/access/types";
+import { resolveFieldAccess, projectDealView } from "@/features/orders/services/dealFields";
+import type { OrderDealView, OrderDealSummary } from "@/features/orders/services/orderDeals";
+import { TOOLS, USER_WRITE_CAPABILITY, type UserWriteCapability } from "./tools";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +92,7 @@ type AuthCtx =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   | { kind: "env"; role: Role; db: any; actor: ActorContext; orgId: null }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  | { kind: "user"; role: "full"; db: any; actor: ActorContext; orgId: string | null; keyId: string };
+  | { kind: "user"; role: Role; db: any; actor: ActorContext; orgId: string | null; keyId: string };
 
 // Tool catalog (definitions) lives in ./tools; dispatch is below.
 
@@ -112,7 +126,7 @@ async function resolveUserKeyAuth(token: string, body: any): Promise<AuthCtx | n
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: key } = await (admin as any)
     .from("mcp_api_keys")
-    .select("id, portal_user_id, label, organisation_id, revoked_at")
+    .select("id, portal_user_id, label, organisation_id, revoked_at, is_readonly")
     .eq("key_hash", keyHash)
     .maybeSingle();
   if (!key || key.revoked_at) return null; // unknown or revoked ⇒ unauthorized
@@ -132,20 +146,34 @@ async function resolveUserKeyAuth(token: string, body: any): Promise<AuthCtx | n
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   void (admin as any).from("mcp_api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", key.id);
 
-  return { kind: "user", role: "full", db: resolved.db, actor: resolved.actor, orgId: resolved.orgId, keyId: key.id as string };
+  // T2 · MEDIUM-3: a read-only key resolves to role="readonly" so the existing
+  // readonly filter (callTool + tools/list) blocks EVERY write tool — regardless
+  // of the owner's portal permissions. A full key stays role="full" and is then
+  // additionally bounded by the per-user write-authz gate + the user JWT's RLS.
+  const role: Role = key.is_readonly === true ? "readonly" : "full";
+  return { kind: "user", role, db: resolved.db, actor: resolved.actor, orgId: resolved.orgId, keyId: key.id as string };
 }
 
-/** pin ▸ per-call org_id arg ▸ primary active membership ▸ legacy home org. */
+/** pin ▸ per-call org_id arg (only if the owner is an active member) ▸ primary
+ *  active membership ▸ legacy home org. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function resolveKeyOrg(admin: any, key: any, argOrgId: unknown): Promise<string | null> {
-  if (key.organisation_id) return key.organisation_id as string;
-  if (typeof argOrgId === "string" && UUID_RE.test(argOrgId)) return argOrgId;
+  if (key.organisation_id) return key.organisation_id as string; // the key's pin always wins
+  // Load the owner's ACTIVE memberships once — used both to validate a per-call
+  // org_id and to pick the primary fallback.
   const { data: mems } = await admin
     .from("organization_memberships")
     .select("organization_id, is_primary")
     .eq("user_id", key.portal_user_id)
     .eq("is_active", true);
   const rows = (mems ?? []) as Array<{ organization_id: string; is_primary: boolean }>;
+  // T2 · LOW-4: accept a per-call org_id ONLY when the owner is an ACTIVE member of
+  // it. A forged/foreign org_id is IGNORED (falls through to the primary), so it can
+  // never set a bogus audit-org attribution. Row-level access is walled by the user
+  // JWT's RLS regardless, so this can't over-read — it protects audit context only.
+  if (typeof argOrgId === "string" && UUID_RE.test(argOrgId) && rows.some((r) => r.organization_id === argOrgId)) {
+    return argOrgId;
+  }
   const primary = rows.find((r) => r.is_primary)?.organization_id ?? rows[0]?.organization_id ?? null;
   if (primary) return primary;
   const { data: pu } = await admin.from("portal_users").select("organisation_id").eq("id", key.portal_user_id).maybeSingle();
@@ -168,6 +196,98 @@ function toolErr(message: string) {
   return { content: [{ type: "text", text: `Error: ${message}` }], isError: true };
 }
 
+// ── T2 · per-user write authorization + read field-wall projection ────────────
+type UserCtx = Extract<AuthCtx, { kind: "user" }>;
+
+/**
+ * T2 · HIGH-1 · Authorize a WRITE tool for a PER-USER key. Returns null when
+ * allowed, or a FORBIDDEN message when refused. A REAL platform-admin owner
+ * (actor.isPlatformAdmin reflects the user's TRUE status) passes every write, like
+ * the portal admin bypass. Otherwise the tool's declared capability
+ * (USER_WRITE_CAPABILITY) is resolved from the owner's access profile in the key's
+ * org — the SAME check the twin portal action applies. A write tool with NO declared
+ * capability is DENIED (deny-by-default).
+ */
+async function authorizeUserWrite(name: string, ctx: UserCtx): Promise<string | null> {
+  if (ctx.actor.isPlatformAdmin) return null; // real-admin owner ⇒ portal-admin bypass
+  const capability: UserWriteCapability | undefined = USER_WRITE_CAPABILITY[name];
+  if (!capability) {
+    // Deny-by-default: a write tool must positively declare its user-key capability.
+    return `Tool "${name}" is not authorized over a per-user key.`;
+  }
+  const profile = await getAccessProfile(ctx.actor.portalUserId, ctx.orgId);
+  if (userHasCapability(profile, capability)) return null;
+  return userWriteDenialMessage(capability);
+}
+
+/** Pure capability check against a resolved profile — mirrors the portal gates
+ *  (requireLineWriteAccess / resolveDealActor's orders.view / hasSuppliersBookAccess
+ *  / the catalogue module gate). A real-admin owner is handled by the caller. */
+function userHasCapability(profile: AccessProfile, capability: UserWriteCapability): boolean {
+  switch (capability) {
+    case "admin":
+      // Non-admins never satisfy an admin capability at the app layer (RLS also
+      // admin-walls these tables); a real-admin owner already returned above.
+      return false;
+    case "deal_terms":
+      return resolveFieldAccess(profile).domainEditable("deal_terms");
+    case "orders_view":
+      return profile.modules.has("orders.view");
+    case "suppliers_book":
+      return profile.actions.has("counterparty:suppliers") && profile.modules.has("counterparties.suppliers");
+    case "catalogue":
+      return profile.modules.has("catalogue.view");
+    default:
+      return false;
+  }
+}
+
+function userWriteDenialMessage(capability: UserWriteCapability): string {
+  switch (capability) {
+    case "admin":
+      return "FORBIDDEN: this action is restricted to a platform administrator.";
+    case "deal_terms":
+      return "FORBIDDEN: this key's owner cannot edit deal terms (no deal-terms edit right).";
+    case "orders_view":
+      return "FORBIDDEN: this key's owner cannot manage deals (no Orders module).";
+    case "suppliers_book":
+      return "FORBIDDEN: this key's owner cannot start sourcing (no suppliers-book access).";
+    case "catalogue":
+      return "FORBIDDEN: this key's owner cannot edit catalog stock (no Catalogue module).";
+    default:
+      return "FORBIDDEN";
+  }
+}
+
+/** T2 · Should a deal READ be projected for this actor? Only a NON-admin user
+ *  actor is walled; env tokens + real-admin user keys see the full view. */
+function shouldProjectReads(ctx: AuthCtx): ctx is UserCtx {
+  return ctx.kind === "user" && !ctx.actor.isPlatformAdmin;
+}
+
+/** Project one deal view through the key owner's field wall — the SAME
+ *  projectDealView(view, resolveFieldAccess(profile), orgId) the portal Deal tab
+ *  applies (chain / supplier / customer / margins / deal-terms hidden per grant). */
+async function projectDealForUser(view: OrderDealView, ctx: UserCtx): Promise<OrderDealView> {
+  const profile = await getAccessProfile(ctx.actor.portalUserId, ctx.orgId);
+  return projectDealView(view, resolveFieldAccess(profile), ctx.orgId);
+}
+
+/** Project each list summary through the same wall. Row-level exclusion (a
+ *  salesperson never sees BUY legs) is already enforced by the user JWT's RLS
+ *  (side.buy visibility) on listDeals; here we only blank the walled header fields
+ *  (chain / customer / supplier / deal terms), mirroring get_deal. */
+async function projectSummariesForUser(rows: OrderDealSummary[], ctx: UserCtx): Promise<OrderDealSummary[]> {
+  const profile = await getAccessProfile(ctx.actor.portalUserId, ctx.orgId);
+  const access = resolveFieldAccess(profile);
+  return rows.map((r) => {
+    const projected = projectDealView({ ...r, lineItems: [] }, access, ctx.orgId);
+    const { lineItems, ...rest } = projected;
+    void lineItems; // summary carries no line items — drop the empty array we added
+    return rest as OrderDealSummary;
+  });
+}
+
 // ── Tool dispatch ────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function callTool(name: string, args: any, ctx: AuthCtx) {
@@ -177,10 +297,22 @@ async function callTool(name: string, args: any, ctx: AuthCtx) {
     return toolErr(`Tool "${name}" requires a full-access token (this token is read-only).`);
   }
 
+  // T2 · HIGH-1 · per-user WRITE authorization. The user JWT's RLS walls WHICH rows
+  // a key may touch, but app-level authz (WHICH fields/actions a user may edit)
+  // lives in the portal ACTION layer and is SKIPPED when MCP dispatches to services
+  // directly. Re-apply the SAME capability the twin portal action checks, BEFORE
+  // dispatch. The env owner token is the trusted owner-agent (admin/god) and bypasses
+  // this — its blast radius is the deliberate FULL/READONLY split, not user authz.
+  if (ctx.kind === "user" && !def.readOnly) {
+    const denial = await authorizeUserWrite(name, ctx);
+    if (denial) return toolErr(denial);
+  }
+
   // db + actor come paired from the resolved auth context (env → admin+SERVICE_ACTOR,
   // user key → user-JWT client + user actor). The org/catalog/access/deal services
   // therefore run on the user JWT for a user key, so RLS applies the user's walls.
-  const result = await dispatchTool(name, args, ctx.db, ctx.actor);
+  // The ctx also lets deal READS be projected through the user's field wall (T2).
+  const result = await dispatchTool(name, args, ctx);
 
   // Q5.2 · fire-and-forget audit for every successful mutation tool (reads are not
   // audited). The passed actor tags the row: SERVICE_ACTOR → actor_type='service'
@@ -202,7 +334,8 @@ async function callTool(name: string, args: any, ctx: AuthCtx) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function dispatchTool(name: string, args: any, db: any, actor: ActorContext) {
+async function dispatchTool(name: string, args: any, ctx: AuthCtx) {
+  const { db, actor } = ctx;
   switch (name) {
     case "timber_get_attribute_definitions": {
       const res = await listDefinitions(db);
@@ -305,12 +438,20 @@ async function dispatchTool(name: string, args: any, db: any, actor: ActorContex
         productGroup: args?.product_group,
         limit: args?.limit,
       });
-      return res.success ? toolOk(res.data) : toolErr(res.error);
+      if (!res.success) return toolErr(res.error);
+      // T2 · field-wall projection for a non-admin user key (RLS already excludes
+      // buy legs via side.buy visibility); env/admin see the full summaries.
+      const data = shouldProjectReads(ctx) ? await projectSummariesForUser(res.data, ctx) : res.data;
+      return toolOk(data);
     }
     case "timber_get_deal": {
       if (!args?.deal_id) return toolErr("deal_id is required");
       const res = await getOrderDeal(db, actor, args.deal_id);
-      return res.success ? toolOk(res.data) : toolErr(res.error);
+      if (!res.success) return toolErr(res.error);
+      // T2 · project the deal through the key owner's field wall (chain / supplier /
+      // customer / margins / deal terms) — the SAME projection as the portal Deal tab.
+      const data = shouldProjectReads(ctx) ? await projectDealForUser(res.data, ctx) : res.data;
+      return toolOk(data);
     }
     case "timber_create_deal": {
       if (args?.needs_sourcing && !args?.source_organisation_id) {

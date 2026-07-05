@@ -174,7 +174,11 @@ export async function upsertGateConfig(
   actor: ActorContext,
   input: UpsertGateInput,
 ): Promise<ActionResult<GateConfigRow>> {
-  if (!actor.isPlatformAdmin && !actor.isServiceAgent) {
+  // T2 · LOW-5: require a REAL platform admin — isServiceAgent must never grant
+  // admin authority. The env owner token has isPlatformAdmin:true so it still
+  // passes; a per-user MCP key (isServiceAgent:true, isPlatformAdmin=user's real
+  // status) no longer bypasses. Prevents a footgun if a gate-config tool is wired.
+  if (!actor.isPlatformAdmin) {
     return { success: false, error: "Only an admin can configure gates", code: "FORBIDDEN" };
   }
   if (!LIFECYCLE_STAGES.includes(input.fromStage as LifecycleStage) || input.fromStage === "delivered") {

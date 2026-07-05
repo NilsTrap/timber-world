@@ -11,6 +11,8 @@ export interface McpApiKeyRow {
   label: string | null;
   organisationId: string | null;
   organisationName: string | null;
+  /** T2/MEDIUM-3 · read-only scope: the key resolves to role=readonly (read tools only). */
+  isReadonly: boolean;
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;

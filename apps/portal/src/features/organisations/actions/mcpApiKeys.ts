@@ -17,11 +17,13 @@ import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
 import type { McpApiKeyRow, IssuedMcpApiKey } from "./mcpApiKeys.types";
 
-/** Issue a new MCP key for a portal user. Returns the plaintext ONCE. */
+/** Issue a new MCP key for a portal user. Returns the plaintext ONCE.
+ *  `isReadonly` (T2/MEDIUM-3) scopes the key to read tools only. */
 export async function issueMcpApiKey(
   userId: string,
   label: string | null,
   organisationId: string | null,
+  isReadonly = false,
 ): Promise<ActionResult<IssuedMcpApiKey>> {
   const session = await getSession();
   if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
@@ -55,6 +57,7 @@ export async function issueMcpApiKey(
       key_hash: keyHash,
       label: cleanLabel,
       organisation_id: organisationId,
+      is_readonly: isReadonly === true,
     })
     .select("id")
     .single();
@@ -69,7 +72,7 @@ export async function issueMcpApiKey(
     resourceType: "mcp_api_key",
     resourceId: inserted.id as string,
     organisationId: organisationId ?? undefined,
-    metadata: { portal_user_id: userId, label: cleanLabel, org_pinned: !!organisationId },
+    metadata: { portal_user_id: userId, label: cleanLabel, org_pinned: !!organisationId, is_readonly: isReadonly === true },
   });
 
   return { success: true, data: { id: inserted.id as string, label: cleanLabel, plaintext } };
@@ -86,7 +89,7 @@ export async function listMcpApiKeys(userId: string): Promise<ActionResult<McpAp
   const admin = createAdminClient() as any;
   const { data, error } = await admin
     .from("mcp_api_keys")
-    .select("id, label, organisation_id, created_at, last_used_at, revoked_at, organisation:organisations(name)")
+    .select("id, label, organisation_id, is_readonly, created_at, last_used_at, revoked_at, organisation:organisations(name)")
     .eq("portal_user_id", userId)
     .order("created_at", { ascending: false });
 
@@ -98,6 +101,7 @@ export async function listMcpApiKeys(userId: string): Promise<ActionResult<McpAp
     label: r.label ?? null,
     organisationId: r.organisation_id ?? null,
     organisationName: r.organisation?.name ?? null,
+    isReadonly: r.is_readonly === true,
     createdAt: r.created_at,
     lastUsedAt: r.last_used_at ?? null,
     revokedAt: r.revoked_at ?? null,
