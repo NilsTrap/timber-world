@@ -601,16 +601,21 @@ async function dispatchTool(name: string, args: any, ctx: AuthCtx) {
     // ── E7: spine reads (chain + rollup + lineage) ────────────────────────────
     case "timber_get_spine": {
       if (!args?.spine_id) return toolErr("spine_id is required");
+      // §6.2: the full spine/chain overview is owner-only — a non-admin user key must
+      // not read cross-leg rollup. The env owner token is isPlatformAdmin=true.
+      if (!actor.isPlatformAdmin) return toolErr("Spine overview is admin-only");
       const res = await getSpine(db, actor, args.spine_id);
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     case "timber_list_spine_deals": {
       if (!args?.spine_id) return toolErr("spine_id is required");
+      if (!actor.isPlatformAdmin) return toolErr("Spine overview is admin-only");
       const res = await listSpineDeals(db, actor, args.spine_id);
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
     case "timber_get_spine_lineage": {
       if (!args?.spine_id) return toolErr("spine_id is required");
+      if (!actor.isPlatformAdmin) return toolErr("Spine overview is admin-only");
       const res = await getSpineLineage(db, actor, args.spine_id);
       return res.success ? toolOk(res.data) : toolErr(res.error);
     }
