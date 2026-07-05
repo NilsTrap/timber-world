@@ -26,17 +26,40 @@ import {
   listDealsMissingDocs,
   startSourcing,
   setMarginApproval,
+  duplicateDeal,
 } from "@/features/orders/services/orderDeals";
 import type { OrderDealView, OrderDealSummary } from "@/features/orders/services/orderDeals";
-import { assembleDocumentData, generateDocument, regenerateDocument } from "@/features/orders/services/orderDocuments";
+import {
+  assembleDocumentData,
+  generateDocument,
+  regenerateDocument,
+  deleteDocument,
+  uploadSignedDocument,
+  getSignedDocumentUrl,
+  deleteSignedDocument,
+} from "@/features/orders/services/orderDocuments";
 import { getSpine, listSpineDeals, getSpineLineage } from "@/features/orders/services/spines";
 import type { SpineProduct } from "@/features/orders/services/spines";
-import { evaluateAdvance, advanceDeal, recordGateConfirmation, cancelDeal, listGateConfigs } from "@/features/orders/services/lifecycle";
+import {
+  evaluateAdvance,
+  advanceDeal,
+  recordGateConfirmation,
+  cancelDeal,
+  listGateConfigs,
+  setDealStage,
+  upsertGateConfig,
+} from "@/features/orders/services/lifecycle";
+import type { GateBlock } from "@/features/orders/services/lifecycle";
+// T4 · pure (db, actor) services factored out of the portal getSession actions so the
+// MCP deal surface can call them directly (the portal actions keep using their own copy).
+import { setDealParties } from "@/features/orders/services/dealParties";
+import { uploadOrderFile, deleteOrderFile } from "@/features/orders/services/orderFiles";
+import { getDealSigneeContext } from "@/features/orders/services/dealSignees";
 import { parseAdvanceFromPaymentTerm } from "@/features/orders/services/paymentTerms";
 import { getAccessProfile } from "@/lib/access";
 import { resolveFieldAccess, projectDealView } from "@/features/orders/services/dealFields";
 import type { ToolDef, ToolHandler, AuthCtx, UserCtx, UserWriteCapability } from "../types";
-import { toolOk, toolErr } from "../types";
+import { toolOk, toolErr, UUID_RE } from "../types";
 
 // D2: doc-type enum comes from the single-source registry (not a hardcoded list).
 const DOC_TYPE_ENUM = DOC_TYPES;
@@ -353,7 +376,7 @@ export const dealTools: ToolDef[] = [
   {
     name: "timber_list_gate_configs",
     description:
-      "List the configured lifecycle gates (per deal_kind + from_stage): the requirement blocks (party sign-offs, buyer acceptance, required documents) that must be satisfied before a deal advances past that stage. Read-only — gates are authored in the portal admin UI.",
+      "List the configured lifecycle gates — ONE gate set per from_stage (N1: gates are KIND-AGNOSTIC, a single set applies to every deal regardless of deal kind). Each gate carries the requirement blocks (party sign-offs, buyer acceptance, required documents) that must be satisfied before a deal advances past that stage. Read-only — gates are authored in the portal admin UI (write via timber_upsert_gate_config).",
     readOnly: true,
     lifecycle: "gates",
     inputSchema: { type: "object", properties: {} },
@@ -400,6 +423,179 @@ export const dealTools: ToolDef[] = [
       required: ["deal_id"],
     },
   },
+  // ── T4: duplicate / free stage-jump / party-set (fill a party-less draft) ──────
+  {
+    name: "timber_duplicate_deal",
+    description:
+      "Duplicate a deal (R5): create a NEW draft copying the source deal's header (parties, product group, currency, incoterms, terms, notes) and its line items, seeded on its own fresh spine. Returns the new deal with its freshly-minted code. Admin-only.",
+    readOnly: false,
+    lifecycle: "deal_create",
+    inputSchema: {
+      type: "object",
+      properties: { source_deal_id: { type: "string", description: "The deal (order) UUID to duplicate." } },
+      required: ["source_deal_id"],
+    },
+  },
+  {
+    name: "timber_set_deal_stage",
+    description:
+      "Set a deal's lifecycle stage DIRECTLY (R8 free stage-jump: draft/confirmed/produced/loaded/delivered), bypassing gate checks. A forward move that skips an unsatisfied, configured gate is recorded as a manual OVERRIDE (the bypassed requirements are logged) — use timber_advance_deal for the gated path. Rejects a no-op and a cancelled deal; guarded against a concurrent move (STAGE_CONFLICT).",
+    readOnly: false,
+    lifecycle: "gates",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deal_id: { type: "string", description: "Deal (order) UUID." },
+        stage: { type: "string", enum: ["draft", "confirmed", "produced", "loaded", "delivered"], description: "Target lifecycle stage." },
+      },
+      required: ["deal_id", "stage"],
+    },
+  },
+  {
+    name: "timber_set_deal_parties",
+    description:
+      "Set the Customer (buyer) + Manufacturer (seller) on a party-less DRAFT deal (H1) — e.g. an MCP-created draft — then mint its bilateral deal code. Parties are only settable while Draft and each slot is set ONCE then locked (a change after that is cancel + recreate, §3.1). Fills only an empty slot; the customer & manufacturer must differ. Returns the (re-)minted deal code.",
+    readOnly: false,
+    lifecycle: "deal_update",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deal_id: { type: "string", description: "Deal (order) UUID (a party-less draft)." },
+        customer_organisation_id: { type: "string", description: "Customer (buyer) organisation UUID." },
+        seller_organisation_id: { type: "string", description: "Manufacturer/trader (seller) organisation UUID." },
+      },
+      required: ["deal_id"],
+    },
+  },
+  {
+    name: "timber_use_contact_as_signee",
+    description:
+      "Set a deal's per-deal signee override (G3) for one side from a CRM contact of that side's party org: copies the contact's name + role into the deal's seller/buyer signee fields that render on documents. The contact must belong to the deal's org on that side (seller = seller org; buyer = buyer org, else the customer org). Returns the updated deal.",
+    readOnly: false,
+    lifecycle: "deal_update",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deal_id: { type: "string", description: "Deal (order) UUID." },
+        side: { type: "string", enum: ["seller", "buyer"], description: "Which signature block to set (seller side or buyer side)." },
+        contact_id: { type: "string", description: "org_contacts UUID of a contact on that side's party org." },
+      },
+      required: ["deal_id", "side", "contact_id"],
+    },
+  },
+  {
+    name: "timber_get_deal_signee_context",
+    description:
+      "Read the per-side signee context for a deal (R9): for the seller side and the buyer side, the party org id + name and that org's DEFAULT signee name/role. Drives the signee picker + shows who signs when there is no per-deal override. Read-only.",
+    readOnly: true,
+    lifecycle: "deal_update",
+    inputSchema: {
+      type: "object",
+      properties: { deal_id: { type: "string", description: "Deal (order) UUID." } },
+      required: ["deal_id"],
+    },
+  },
+  // ── T4: external files on a deal (base64 content, ≤5MB decoded) ────────────────
+  {
+    name: "timber_upload_deal_file",
+    description:
+      "Attach an external file to a deal (stored under the deal's 'deal' file category). Pass the file as base64 in `content` — the DECODED size must be ≤ 5MB (larger is rejected before upload). Returns the created file record (id, name, size).",
+    readOnly: false,
+    lifecycle: "documents",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deal_id: { type: "string", description: "Deal (order) UUID." },
+        file_name: { type: "string", description: "Original file name (with extension)." },
+        content: { type: "string", description: "File bytes as base64 (a data: URL prefix is tolerated). Decoded size must be ≤ 5MB." },
+        mime_type: { type: "string", description: "MIME type, e.g. 'application/pdf' (optional; inferred from the name otherwise)." },
+      },
+      required: ["deal_id", "file_name", "content"],
+    },
+  },
+  {
+    name: "timber_delete_deal_file",
+    description: "Remove a file previously attached to a deal (deletes the storage object + the file record). Idempotent — deleting an already-gone file succeeds.",
+    readOnly: false,
+    lifecycle: "documents",
+    inputSchema: {
+      type: "object",
+      properties: { file_id: { type: "string", description: "order_files UUID (from timber_upload_deal_file / timber_get_deal)." } },
+      required: ["file_id"],
+    },
+  },
+  // ── T4: N2 signed versions of a generated document + admin doc delete ──────────
+  {
+    name: "timber_upload_signed_document",
+    description:
+      "Upload (or replace) the counterparty-SIGNED version of an already-generated document (N2). Stored alongside the system-generated PDF on the same order_documents row. Pass the signed file as base64 in `content` — DECODED size must be ≤ 5MB (larger is rejected). Returns the document id + a signed download URL for the uploaded version.",
+    readOnly: false,
+    lifecycle: "documents",
+    inputSchema: {
+      type: "object",
+      properties: {
+        document_id: { type: "string", description: "order_documents UUID of the generated document to attach the signed version to." },
+        file_name: { type: "string", description: "Signed file name (e.g. 'contract-signed.pdf')." },
+        content: { type: "string", description: "Signed file bytes as base64 (a data: URL prefix is tolerated). Decoded size must be ≤ 5MB." },
+        mime_type: { type: "string", description: "MIME type (default 'application/pdf')." },
+      },
+      required: ["document_id", "file_name", "content"],
+    },
+  },
+  {
+    name: "timber_delete_signed_document",
+    description: "Delete the uploaded SIGNED version of a document (N2) — removes the signed file + clears the signed_* columns, leaving the generated document row itself intact. Idempotent.",
+    readOnly: false,
+    lifecycle: "documents",
+    inputSchema: {
+      type: "object",
+      properties: { document_id: { type: "string", description: "order_documents UUID." } },
+      required: ["document_id"],
+    },
+  },
+  {
+    name: "timber_get_signed_document_url",
+    description: "Mint a fresh signed download URL for a document's uploaded SIGNED version (N2). Fails if no signed version has been uploaded. Read-only.",
+    readOnly: true,
+    lifecycle: "documents",
+    inputSchema: {
+      type: "object",
+      properties: { document_id: { type: "string", description: "order_documents UUID." } },
+      required: ["document_id"],
+    },
+  },
+  {
+    name: "timber_delete_document",
+    description: "Delete a generated document from a deal (removes the order_documents row + its storage object, including any uploaded signed version). Admin-only. Idempotent — deleting an already-gone document succeeds.",
+    readOnly: false,
+    lifecycle: "documents",
+    inputSchema: {
+      type: "object",
+      properties: { document_id: { type: "string", description: "order_documents UUID to delete." } },
+      required: ["document_id"],
+    },
+  },
+  // ── T4: admin gate configuration (write side of timber_list_gate_configs) ──────
+  {
+    name: "timber_upsert_gate_config",
+    description:
+      "Create or replace the lifecycle gate for a from_stage (N1: gates are KIND-AGNOSTIC — one set per stage, applied to every deal). The gate's requirement blocks must all be satisfied before a deal advances past that stage. Admin-only. Requirement block shapes: {type:'party_signoff', party:'seller'|'buyer'}, {type:'acceptance'}, {type:'condition', condition:'document_present', docType?:<doc type>}. ('payment_recorded' has no wired source yet and is rejected.)",
+    readOnly: false,
+    lifecycle: "gates",
+    inputSchema: {
+      type: "object",
+      properties: {
+        from_stage: { type: "string", enum: ["draft", "confirmed", "produced", "loaded"], description: "The stage whose exit gate this configures (delivered is terminal, no gate)." },
+        requirements: {
+          type: "array",
+          description: "The requirement blocks (all must be satisfied to advance). Each: {type:'party_signoff', party:'seller'|'buyer'} | {type:'acceptance'} | {type:'condition', condition:'document_present', docType?}.",
+          items: { type: "object" },
+        },
+        is_active: { type: "boolean", description: "Whether the gate is active (default true). An inactive/empty gate auto-advances." },
+      },
+      required: ["from_stage", "requirements"],
+    },
+  },
 ];
 
 /**
@@ -415,6 +611,13 @@ export const dealCaps: Record<string, UserWriteCapability> = {
   timber_get_document_data: "deal_terms",
   timber_generate_document: "deal_terms",
   timber_firm_order_specification: "deal_terms",
+  // T4 · deal_terms-editable: party-set + signee override, deal files, N2 signed versions
+  timber_set_deal_parties: "deal_terms",
+  timber_use_contact_as_signee: "deal_terms",
+  timber_upload_deal_file: "deal_terms",
+  timber_delete_deal_file: "deal_terms",
+  timber_upload_signed_document: "deal_terms",
+  timber_delete_signed_document: "deal_terms",
   // orders.view house user (create / status / numbering / lifecycle)
   timber_create_deal: "orders_view",
   timber_allocate_deal_code: "orders_view",
@@ -422,10 +625,14 @@ export const dealCaps: Record<string, UserWriteCapability> = {
   timber_advance_deal: "orders_view",
   timber_cancel_deal: "orders_view",
   timber_record_gate_confirmation: "orders_view", // + service own-party check
+  timber_set_deal_stage: "orders_view", // T4 · free stage-jump (mirrors the orders.view/house gate)
   // suppliers-book access
   timber_start_sourcing: "suppliers_book",
-  // owner/admin-only (RLS admin-walled; service also self-checks for margin)
+  // owner/admin-only (RLS admin-walled; service also self-checks)
   timber_set_margin_approval: "admin",
+  timber_duplicate_deal: "admin", // T4 · portal duplicateDealAction is admin-only
+  timber_delete_document: "admin", // T4 · deleteDocument requires isPlatformAdmin
+  timber_upsert_gate_config: "admin", // T4 · upsertGateConfig requires REAL isPlatformAdmin
 };
 
 // ── T2 · deal-read field-wall projection (moved verbatim from route.ts) ────────
@@ -512,6 +719,25 @@ function mapLineItemArgs(items: any): any[] {
     lineTotalCents: it.line_total_cents ?? null,
     notes: it.notes ?? null,
   }));
+}
+
+// T4 · 5MB DECODED cap on base64 file uploads (deal files + N2 signed documents).
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Decode a base64 `content` arg into bytes and enforce the ≤5MB DECODED cap BEFORE
+ * the file touches storage. Tolerates a leading `data:<type>;base64,` URL prefix.
+ * Returns the bytes, or a user-facing error string if the payload is empty/oversized.
+ */
+function decodeUploadContent(content: unknown): { bytes: Uint8Array } | { error: string } {
+  if (typeof content !== "string" || content.length === 0) return { error: "content (base64) is required" };
+  const b64 = content.replace(/^data:[^;,]*;base64,/, "");
+  const buf = Buffer.from(b64, "base64");
+  if (buf.byteLength === 0) return { error: "content decoded to 0 bytes — not valid base64?" };
+  if (buf.byteLength > MAX_UPLOAD_BYTES) {
+    return { error: `File too large: ${buf.byteLength} bytes decoded exceeds the 5MB cap (${MAX_UPLOAD_BYTES} bytes)` };
+  }
+  return { bytes: new Uint8Array(buf) };
 }
 
 /**
@@ -771,6 +997,144 @@ export const dealHandlers: Record<string, ToolHandler> = {
     const { db, actor } = ctx;
     if (!args?.deal_id) return toolErr("deal_id is required");
     const res = await cancelDeal(db, actor, args.deal_id);
+    return res.success ? toolOk(res.data) : toolErr(res.error);
+  },
+  // ── T4: duplicate / free stage-jump / party-set / signee ───────────────────
+  timber_duplicate_deal: async (args, ctx) => {
+    const { db, actor } = ctx;
+    if (!args?.source_deal_id) return toolErr("source_deal_id is required");
+    const res = await duplicateDeal(db, actor, args.source_deal_id);
+    return res.success ? toolOk(res.data) : toolErr(res.error);
+  },
+  timber_set_deal_stage: async (args, ctx) => {
+    const { db, actor } = ctx;
+    if (!args?.deal_id || !args?.stage) return toolErr("deal_id and stage are required");
+    const res = await setDealStage(db, actor, args.deal_id, args.stage);
+    return res.success ? toolOk(res.data) : toolErr(res.error);
+  },
+  timber_set_deal_parties: async (args, ctx) => {
+    const { db, actor } = ctx;
+    if (!args?.deal_id) return toolErr("deal_id is required");
+    if (!args?.customer_organisation_id && !args?.seller_organisation_id) {
+      return toolErr("Provide at least one of customer_organisation_id / seller_organisation_id");
+    }
+    const res = await setDealParties(db, actor, ctx.orgId, {
+      orderId: args.deal_id,
+      customerOrganisationId: args?.customer_organisation_id ?? null,
+      sellerOrganisationId: args?.seller_organisation_id ?? null,
+    });
+    return res.success ? toolOk(res.data) : toolErr(res.error);
+  },
+  timber_use_contact_as_signee: async (args, ctx) => {
+    const { db, actor } = ctx;
+    if (!args?.deal_id || !args?.contact_id) return toolErr("deal_id and contact_id are required");
+    if (args.side !== "seller" && args.side !== "buyer") return toolErr("side must be 'seller' or 'buyer'");
+    if (!UUID_RE.test(args.deal_id) || !UUID_RE.test(args.contact_id)) return toolErr("deal_id and contact_id must be UUIDs");
+    // Resolve the deal's party org for the chosen side (buyer mirrors the document
+    // buyer card: bilateral buyer, else the legacy customer slot).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: dealRow } = await (db as any)
+      .from("orders")
+      .select("seller_organisation_id, customer_organisation_id, buyer_organisation_id")
+      .eq("id", args.deal_id)
+      .maybeSingle();
+    if (!dealRow) return toolErr("Deal not found");
+    const partyOrgId: string | null =
+      args.side === "seller"
+        ? (dealRow.seller_organisation_id ?? null)
+        : (dealRow.buyer_organisation_id ?? dealRow.customer_organisation_id ?? null);
+    if (!partyOrgId) return toolErr(`This deal has no ${args.side}-side party set`);
+    // The contact must belong to that party org (K1 book-wall: RLS also limits which
+    // contacts a user key can even read).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: contact } = await (db as any)
+      .from("org_contacts")
+      .select("id, organisation_id, name, role_title")
+      .eq("id", args.contact_id)
+      .maybeSingle();
+    if (!contact || contact.organisation_id !== partyOrgId) {
+      return toolErr("Contact not found on this deal's party org for that side");
+    }
+    const signeeName = (contact.name as string | null) ?? null;
+    const signeeRole = (contact.role_title as string | null) ?? null;
+    const patch =
+      args.side === "seller"
+        ? { sellerSigneeName: signeeName, sellerSigneeRole: signeeRole }
+        : { buyerSigneeName: signeeName, buyerSigneeRole: signeeRole };
+    const res = await updateDealFields(db, actor, args.deal_id, patch);
+    return res.success ? toolOk(res.data) : toolErr(res.error);
+  },
+  timber_get_deal_signee_context: async (args, ctx) => {
+    const { db, actor } = ctx;
+    if (!args?.deal_id) return toolErr("deal_id is required");
+    const res = await getDealSigneeContext(db, actor, args.deal_id);
+    return res.success ? toolOk(res.data) : toolErr(res.error);
+  },
+  // ── T4: external files on a deal (base64 content, ≤5MB decoded) ─────────────
+  timber_upload_deal_file: async (args, ctx) => {
+    const { db, actor } = ctx;
+    if (!args?.deal_id || !args?.file_name) return toolErr("deal_id and file_name are required");
+    if (!UUID_RE.test(args.deal_id)) return toolErr("deal_id must be a UUID");
+    const decoded = decodeUploadContent(args?.content);
+    if ("error" in decoded) return toolErr(decoded.error);
+    const res = await uploadOrderFile(db, actor, {
+      orderId: args.deal_id,
+      category: "deal",
+      bytes: decoded.bytes,
+      fileName: args.file_name,
+      mimeType: args?.mime_type ?? null,
+    });
+    return res.success ? toolOk(res.data) : toolErr(res.error);
+  },
+  timber_delete_deal_file: async (args, ctx) => {
+    const { db, actor } = ctx;
+    if (!args?.file_id) return toolErr("file_id is required");
+    const res = await deleteOrderFile(db, actor, args.file_id);
+    return res.success ? toolOk(res.data) : toolErr(res.error);
+  },
+  // ── T4: N2 signed versions of a generated document + admin doc delete ──────
+  timber_upload_signed_document: async (args, ctx) => {
+    const { db, actor } = ctx;
+    if (!args?.document_id || !args?.file_name) return toolErr("document_id and file_name are required");
+    if (!UUID_RE.test(args.document_id)) return toolErr("document_id must be a UUID");
+    const decoded = decodeUploadContent(args?.content);
+    if ("error" in decoded) return toolErr(decoded.error);
+    const res = await uploadSignedDocument(db, actor, {
+      documentId: args.document_id,
+      bytes: decoded.bytes,
+      fileName: args.file_name,
+      mimeType: args?.mime_type ?? "application/pdf",
+    });
+    return res.success ? toolOk(res.data) : toolErr(res.error);
+  },
+  timber_delete_signed_document: async (args, ctx) => {
+    const { db, actor } = ctx;
+    if (!args?.document_id) return toolErr("document_id is required");
+    const res = await deleteSignedDocument(db, actor, args.document_id);
+    return res.success ? toolOk(res.data) : toolErr(res.error);
+  },
+  timber_get_signed_document_url: async (args, ctx) => {
+    const { db, actor } = ctx;
+    if (!args?.document_id) return toolErr("document_id is required");
+    const res = await getSignedDocumentUrl(db, actor, args.document_id);
+    return res.success ? toolOk(res.data) : toolErr(res.error);
+  },
+  timber_delete_document: async (args, ctx) => {
+    const { db, actor } = ctx;
+    if (!args?.document_id) return toolErr("document_id is required");
+    const res = await deleteDocument(db, actor, args.document_id);
+    return res.success ? toolOk(res.data) : toolErr(res.error);
+  },
+  // ── T4: admin gate configuration (write side of timber_list_gate_configs) ──
+  timber_upsert_gate_config: async (args, ctx) => {
+    const { db, actor } = ctx;
+    if (!args?.from_stage) return toolErr("from_stage is required");
+    if (!Array.isArray(args?.requirements)) return toolErr("requirements[] is required");
+    const res = await upsertGateConfig(db, actor, {
+      fromStage: args.from_stage,
+      requirements: args.requirements as GateBlock[],
+      isActive: args?.is_active,
+    });
     return res.success ? toolOk(res.data) : toolErr(res.error);
   },
 };
