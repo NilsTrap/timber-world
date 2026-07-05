@@ -55,6 +55,7 @@ import { PersonEditDialog, type EditablePerson } from "./PersonEditDialog";
 import { PersonSetPasswordDialog } from "./PersonSetPasswordDialog";
 import { AddPersonToOrgDialog } from "./AddPersonToOrgDialog";
 import { UserGroupsDialog } from "./UserGroupsDialog";
+import { PersonApiKeysSection } from "./PersonApiKeysSection";
 
 interface PersonDetailTabsProps {
   person: PersonDetail;
@@ -236,6 +237,7 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="organisations">Organisations ({memberships.length})</TabsTrigger>
+          <TabsTrigger value="api-keys">API keys</TabsTrigger>
           <TabsTrigger value="login-history">Login history</TabsTrigger>
         </TabsList>
 
@@ -361,6 +363,14 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── API keys (Epic T / T1 · super-admin) ────────────────── */}
+        <TabsContent value="api-keys" className="mt-4">
+          <PersonApiKeysSection
+            personId={person.id}
+            orgOptions={memberships.map((m) => ({ id: m.orgId, name: m.orgName }))}
+          />
         </TabsContent>
 
         {/* ── Login history (slot wired by the orchestrator) ──────── */}

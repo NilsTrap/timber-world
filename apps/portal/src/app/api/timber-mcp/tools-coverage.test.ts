@@ -5,7 +5,7 @@
  * Run: from apps/portal, `../../tests/rls-and-perf/node_modules/.bin/tsx \
  *   src/app/api/timber-mcp/tools-coverage.test.ts`
  */
-import { TOOLS, LIFECYCLE_STEPS } from "./tools";
+import { TOOLS, LIFECYCLE_STEPS, USER_WRITE_CAPABILITY } from "./tools";
 
 let passed = 0;
 let failed = 0;
@@ -124,6 +124,27 @@ ok("J4: timber_list_catalog_products is a read", isRead("timber_list_catalog_pro
 ok("J4: timber_get_catalog_variant is a read", isRead("timber_get_catalog_variant"));
 ok("J4: timber_get_variant_stock is a read", isRead("timber_get_variant_stock"));
 ok("J4: timber_set_variant_stock is a full-token write", isWrite("timber_set_variant_stock"));
+
+// 10. T2 · per-user WRITE authorization is DENY-by-default: EVERY write tool
+//     (readOnly:false) MUST declare a user-key capability in USER_WRITE_CAPABILITY,
+//     and read-only tools must NOT (they need no write gate). A new write tool
+//     shipped without its capability fails HERE (and is refused over a user key at
+//     runtime) — the enforcement that a user key can never exceed its owner's perms.
+const ALLOWED_CAPS = new Set(["admin", "deal_terms", "orders_view", "suppliers_book", "catalogue"]);
+for (const t of TOOLS) {
+  if (t.readOnly) {
+    ok(`${t.name} (read) has NO write capability`, !(t.name in USER_WRITE_CAPABILITY));
+  } else {
+    ok(`${t.name} (write) declares a user-key capability`, t.name in USER_WRITE_CAPABILITY);
+    ok(`${t.name} capability is a known value`, ALLOWED_CAPS.has(USER_WRITE_CAPABILITY[t.name] as string));
+  }
+}
+// No capability entry may reference a non-existent / read-only tool (drift guard).
+const toolByName = new Map(TOOLS.map((t) => [t.name, t]));
+for (const name of Object.keys(USER_WRITE_CAPABILITY)) {
+  const t = toolByName.get(name);
+  ok(`capability entry ${name} maps to a registered write tool`, t != null && t.readOnly === false);
+}
 
 console.log(`\n${passed} passed, ${failed} failed — ${TOOLS.length} tools across ${LIFECYCLE_STEPS.length} lifecycle steps`);
 if (failed > 0) process.exitCode = 1;

@@ -31,6 +31,30 @@ export const LIFECYCLE_STEPS = [
 
 export type LifecycleStep = (typeof LIFECYCLE_STEPS)[number];
 
+/**
+ * T2 · The app-level capability a PER-USER MCP key's owner must hold to invoke a
+ * WRITE tool — mirroring the SAME authorization the twin portal action applies.
+ * RLS on the user-JWT client walls WHICH rows a key can touch; this descriptor
+ * walls WHICH capability (which the row-level JWT can't express). Enforced in the
+ * MCP route ONLY for a per-user key (`kind==="user"`); the env owner token is the
+ * trusted owner-agent (admin/god) and bypasses it entirely.
+ *
+ *  - "admin"          → the owner is a REAL platform admin (org card, access-group
+ *                       and margin-approval writes are owner/admin-only in the portal).
+ *  - "deal_terms"     → deal_terms-editable (requireLineWriteAccess): deal terms,
+ *                       line items, external refs, document assemble/generate/firm.
+ *  - "orders_view"    → a house user with the orders.view module (create deal,
+ *                       status, allocate code, advance/cancel, gate confirmation).
+ *  - "suppliers_book" → suppliers-book access (start sourcing).
+ *  - "catalogue"      → the catalogue.view module (variant stock write).
+ */
+export type UserWriteCapability =
+  | "admin"
+  | "deal_terms"
+  | "orders_view"
+  | "suppliers_book"
+  | "catalogue";
+
 export interface ToolDef {
   name: string;
   description: string;
@@ -679,3 +703,50 @@ export const TOOLS: ToolDef[] = [
     },
   },
 ];
+
+/**
+ * T2 · Per-tool WRITE capability for a PER-USER MCP key — the single, auditable
+ * source of truth the route enforces for `kind==="user"` calls (the env owner
+ * token bypasses it). EVERY write tool (readOnly:false) MUST appear here; the
+ * coverage test fails the build otherwise, and the route DENIES a user-actor write
+ * whose tool is absent (deny-by-default). Each value is the SAME authorization the
+ * twin portal action applies (see UserWriteCapability); RLS on the user JWT is the
+ * DB backstop that additionally walls WHICH rows/tables the key may touch.
+ *
+ * RLS-vs-app split (verified against the migrations):
+ *  - deal writes (orders / order_line_items): RLS is NOT admin-only — a non-admin
+ *    party member with the row right can write, so RLS alone would let a
+ *    visibility-only user mutate deal terms. The app capability here ("deal_terms"
+ *    / "orders_view" / "suppliers_book") is the REQUIRED wall; RLS walls the rows.
+ *  - org / access-group / catalog-stock / gate-config writes: RLS is admin-only
+ *    (is_current_user_platform_admin) — a non-admin key is blocked at the DB. The
+ *    "admin"/"catalogue" capability here mirrors the portal's own app gate and is
+ *    defence-in-depth on top of that RLS backstop.
+ */
+export const USER_WRITE_CAPABILITY: Record<string, UserWriteCapability> = {
+  // deal_terms-editable (requireLineWriteAccess): terms, lines, refs, documents, firming
+  timber_upsert_deal_line_items: "deal_terms",
+  timber_update_deal: "deal_terms",
+  timber_set_deal_refs: "deal_terms",
+  timber_get_document_data: "deal_terms",
+  timber_generate_document: "deal_terms",
+  timber_firm_order_specification: "deal_terms",
+  // orders.view house user (create / status / numbering / lifecycle)
+  timber_create_deal: "orders_view",
+  timber_allocate_deal_code: "orders_view",
+  timber_set_deal_status: "orders_view",
+  timber_advance_deal: "orders_view",
+  timber_cancel_deal: "orders_view",
+  timber_record_gate_confirmation: "orders_view", // + service own-party check
+  // suppliers-book access
+  timber_start_sourcing: "suppliers_book",
+  // owner/admin-only (RLS admin-walled; service also self-checks for margin)
+  timber_set_margin_approval: "admin",
+  timber_create_org: "admin",
+  timber_update_org: "admin",
+  timber_set_user_groups: "admin",
+  timber_upsert_access_group: "admin",
+  timber_delete_access_group: "admin",
+  // catalogue.view (RLS admin-walled backstop mirrors the portal's own gate)
+  timber_set_variant_stock: "catalogue",
+};
