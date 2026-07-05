@@ -56,6 +56,7 @@ import { setDealParties } from "@/features/orders/services/dealParties";
 import { uploadOrderFile, deleteOrderFile } from "@/features/orders/services/orderFiles";
 import { getDealSigneeContext } from "@/features/orders/services/dealSignees";
 import { parseAdvanceFromPaymentTerm } from "@/features/orders/services/paymentTerms";
+import { resolvePartySlots, getTraderMembershipOrgIds } from "@/features/orders/actions/_validateOrderParty";
 import { getAccessProfile } from "@/lib/access";
 import { resolveFieldAccess, projectDealView } from "@/features/orders/services/dealFields";
 import type { ToolDef, ToolHandler, AuthCtx, UserCtx, UserWriteCapability } from "../types";
@@ -773,6 +774,22 @@ export const dealHandlers: Record<string, ToolHandler> = {
     if (args?.needs_sourcing && !args?.source_organisation_id) {
       return toolErr("source_organisation_id is required when needs_sourcing is true.");
     }
+    // Parity with the portal Add-Order wall (T review): a non-admin key may only
+    // name a counterparty that is a trading partner of its org (seller must be its
+    // trader org). The env owner token is isPlatformAdmin and takes parties verbatim.
+    // Prevents naming an ARBITRARY org as a party, which RLS would then expose the deal to.
+    if (!actor.isPlatformAdmin) {
+      const traderOrgIds = await getTraderMembershipOrgIds(db, ctx.orgId ? [ctx.orgId] : []);
+      const slots = await resolvePartySlots(
+        db,
+        { isAdmin: false, userOrgId: ctx.orgId, userTraderOrgIds: traderOrgIds },
+        {
+          customerOrganisationId: args?.customer_organisation_id ?? args?.buyer_organisation_id ?? null,
+          sellerOrganisationId: args?.seller_organisation_id ?? null,
+        },
+      );
+      if (!slots.ok) return toolErr(slots.error);
+    }
     const res = await createDeal(db, actor, {
       name: args?.name ?? null,
       productGroup: args?.product_group ?? null,
@@ -850,6 +867,18 @@ export const dealHandlers: Record<string, ToolHandler> = {
   timber_start_sourcing: async (args, ctx) => {
     const { db, actor } = ctx;
     if (!args?.deal_id || !args?.supplier_organisation_id) return toolErr("deal_id and supplier_organisation_id are required");
+    // Parity (T review): a non-admin key may only source from a trading partner of
+    // its org (admins/env-owner skip). Prevents sourcing from an arbitrary supplier.
+    if (!actor.isPlatformAdmin) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: tp } = await (db as any)
+        .from("organisation_trading_partners")
+        .select("partner_organisation_id")
+        .eq("organisation_id", ctx.orgId)
+        .eq("partner_organisation_id", args.supplier_organisation_id)
+        .maybeSingle();
+      if (!tp) return toolErr("The chosen supplier is not one of your trading partners.");
+    }
     // L1 · buyer defaults to the sell deal's seller but is editable (wrong-buyer fix).
     const res = await startSourcing(db, actor, args.deal_id, args.supplier_organisation_id, args?.buyer_organisation_id ?? null);
     return res.success ? toolOk(res.data) : toolErr(res.error);

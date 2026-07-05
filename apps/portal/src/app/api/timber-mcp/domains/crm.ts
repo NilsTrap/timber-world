@@ -407,20 +407,18 @@ export const crmTools: ToolDef[] = [
 ];
 
 /** T2/T5 · WRITE capabilities for this domain (deny-by-default: every write tool
- *  MUST appear here). Org card + access-group + people + platform-settings writes
- *  are all "admin" — a per-user key writes them only if its owner is a REAL platform
- *  admin (route.authorizeUserWrite), else FORBIDDEN.
+ *  MUST appear here). Org card + access-group + people-admin + platform-settings
+ *  writes are "admin" — a per-user key writes them only if its owner is a REAL
+ *  platform admin (route.authorizeUserWrite), else FORBIDDEN.
  *
  *  T5 book-scoped person/contact WRITES (upsert/delete contact, create/add/remove
- *  person) are ALSO capped "admin" here — see the NOTE on those handlers. Their
- *  handlers already carry the FINE Q2 per-org book check (client of a per-user key),
- *  but the route's coarse write-authz gate (userHasCapability) recognises only the
- *  5 fixed capabilities and has no clients/suppliers-book capability. Admitting a
- *  NON-admin book user (salesperson/purchasing) to these writes needs a new
- *  `counterparty` capability wired into route.ts + types.ts + tools-coverage — all
- *  outside this stream's edit scope. Until then these writes are admin/env-only;
- *  flipping the cap value later unlocks the handlers unchanged. READS
- *  (list_org_contacts) already apply the fine book scope to per-user keys. */
+ *  person) are capped "counterparty" — a COARSE gate (the owner holds the clients OR
+ *  suppliers book; wired in route.ts userHasCapability + types.ts + tools-coverage).
+ *  The FINE Q2 per-org book check runs in each handler (contactGate /
+ *  resolveAddPersonScopeByProfile against the TARGET org): a salesperson key
+ *  (counterparty:clients) is REFUSED on supplier/trader orgs, purchasing on clients,
+ *  trader-org people are admin-only — the coarse cap alone never authorizes. READS
+ *  (list_org_contacts / people) apply the same fine book scope to per-user keys. */
 export const crmCaps: Record<string, UserWriteCapability> = {
   timber_create_org: "admin",
   timber_update_org: "admin",
