@@ -52,6 +52,7 @@ export type UserWriteCapability =
   | "deal_terms"
   | "orders_view"
   | "suppliers_book"
+  | "counterparty"
   | "catalogue";
 
 export interface ToolDef {

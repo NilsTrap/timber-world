@@ -149,7 +149,7 @@ async function main() {
   //     and read-only tools must NOT (they need no write gate). A new write tool
   //     shipped without its capability fails HERE (and is refused over a user key at
   //     runtime) — the enforcement that a user key can never exceed its owner's perms.
-  const ALLOWED_CAPS = new Set(["admin", "deal_terms", "orders_view", "suppliers_book", "catalogue"]);
+  const ALLOWED_CAPS = new Set(["admin", "deal_terms", "orders_view", "suppliers_book", "counterparty", "catalogue"]);
   for (const t of TOOLS) {
     if (t.readOnly) {
       ok(`${t.name} (read) has NO write capability`, !(t.name in USER_WRITE_CAPABILITY));

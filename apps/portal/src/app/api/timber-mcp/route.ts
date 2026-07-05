@@ -207,6 +207,13 @@ function userHasCapability(profile: AccessProfile, capability: UserWriteCapabili
       return profile.modules.has("orders.view");
     case "suppliers_book":
       return profile.actions.has("counterparty:suppliers") && profile.modules.has("counterparties.suppliers");
+    case "counterparty":
+      // Coarse gate: the owner holds SOME CRM book (clients or suppliers). The FINE
+      // per-org book scope (salesperson→clients / purchasing→suppliers, trader orgs
+      // admin-only) is enforced inside the CRM tool handlers (contactGate /
+      // resolveAddPersonScopeByProfile) with the target org.
+      return (profile.actions.has("counterparty:clients") && profile.modules.has("counterparties.clients"))
+        || (profile.actions.has("counterparty:suppliers") && profile.modules.has("counterparties.suppliers"));
     case "catalogue":
       return profile.modules.has("catalogue.view");
     default:
@@ -224,6 +231,8 @@ function userWriteDenialMessage(capability: UserWriteCapability): string {
       return "FORBIDDEN: this key's owner cannot manage deals (no Orders module).";
     case "suppliers_book":
       return "FORBIDDEN: this key's owner cannot start sourcing (no suppliers-book access).";
+    case "counterparty":
+      return "FORBIDDEN: this key's owner has no CRM book access (clients or suppliers).";
     case "catalogue":
       return "FORBIDDEN: this key's owner cannot edit catalog stock (no Catalogue module).";
     default:

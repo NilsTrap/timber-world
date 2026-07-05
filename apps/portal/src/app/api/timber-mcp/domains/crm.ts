@@ -427,13 +427,15 @@ export const crmCaps: Record<string, UserWriteCapability> = {
   timber_set_user_groups: "admin",
   timber_upsert_access_group: "admin",
   timber_delete_access_group: "admin",
-  // T5 org contacts (book-scoped; admin-capped for now — see NOTE above)
-  timber_upsert_org_contact: "admin",
-  timber_delete_org_contact: "admin",
-  // T5 people (create/add/remove are book-scoped Q2; update/toggle/invite are admin)
-  timber_create_person: "admin",
-  timber_add_person_to_org: "admin",
-  timber_remove_person_from_org: "admin",
+  // T5 org contacts (book-scoped: coarse `counterparty` route gate + the FINE per-org
+  // book check runs in the handler — contactGate/checkContactAccessForOrgByProfile).
+  timber_upsert_org_contact: "counterparty",
+  timber_delete_org_contact: "counterparty",
+  // T5 people (create/add/remove are book-scoped Q2 → coarse `counterparty` + the fine
+  // resolveAddPersonScopeByProfile check in the handler; update/toggle/invite are admin)
+  timber_create_person: "counterparty",
+  timber_add_person_to_org: "counterparty",
+  timber_remove_person_from_org: "counterparty",
   timber_update_person: "admin",
   timber_toggle_person_active: "admin",
   timber_resend_person_invite: "admin",
