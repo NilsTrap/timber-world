@@ -196,14 +196,17 @@ async function main() {
     // (c) a catalog write is FORBIDDEN (admin capability the salesperson lacks).
     {
       const r = await mcpCall(plaintext, "timber_save_variant", { id: anyVariant?.id, price_eur_cents: 12345 });
-      ok("(c) catalog write (save_variant) is FORBIDDEN for a salesperson key", r.toolError != null && /forbidden/i.test(r.toolError), `toolError=${r.toolError ?? "none"} rpc=${r.rpcError ?? "none"}`);
+      ok("(c) catalog write (save_variant) is FORBIDDEN for a salesperson key", r.toolError != null && /forbidden|permission denied/i.test(r.toolError), `toolError=${r.toolError ?? "none"} rpc=${r.rpcError ?? "none"}`);
     }
 
     // (d) CRM book scope — write allowed on a CLIENT org, FORBIDDEN on a SUPPLIER org.
     let createdClientContactId: string | null = null;
     {
       const onSupplier = await mcpCall(plaintext, "timber_upsert_org_contact", { org_id: supplierOrg.id, name: "t7-denial supplier probe (should be refused)" });
-      ok("(d1) upsert_org_contact on a SUPPLIER org is FORBIDDEN for a salesperson key", onSupplier.toolError != null && /forbidden/i.test(onSupplier.toolError), `toolError=${onSupplier.toolError ?? "none"}`);
+      // The coarse `counterparty` cap admits the salesperson (they hold the clients book);
+      // the FINE per-org check (contactGate) then refuses the supplier org — its message is
+      // "Permission denied", so accept either wording.
+      ok("(d1) upsert_org_contact on a SUPPLIER org is FORBIDDEN for a salesperson key", onSupplier.toolError != null && /forbidden|permission denied/i.test(onSupplier.toolError), `toolError=${onSupplier.toolError ?? "none"}`);
 
       const onClient = await mcpCall(plaintext, "timber_upsert_org_contact", { org_id: clientOrg.id, name: "t7-denial client probe (delete me)", notes: "temporary — T7 denial scaffold" });
       const allowed = onClient.toolError == null && (onClient.payload?.id || onClient.payload?.contact?.id);
