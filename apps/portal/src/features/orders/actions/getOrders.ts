@@ -265,16 +265,34 @@ export async function getOrders(options?: {
           .in("production_entry_id", [...allProductionEntryIds])
       : Promise.resolve({ data: [] as Array<{ production_entry_id: string; volume_m3: string }> });
 
-  let fileQuery = client
-    .from("order_files")
-    .select("order_id")
-    .in("order_id", orderIds);
-  if (options?.fileCountCategory) {
-    fileQuery = fileQuery.eq("category", options.fileCountCategory);
-  }
-  const filesPromise = orderIds.length > 0 ? fileQuery : Promise.resolve({ data: [] as Array<{ order_id: string }> });
+  // Fetch ALL order-file rows in pages. PostgREST caps an unpaginated query at
+  // 1000 rows, so once order_files grows past 1000 the un-ranged query silently
+  // dropped the overflow — the newest orders' files (which sort last) stopped
+  // being counted and their Files column went blank. Page through explicitly so
+  // every order's count is correct regardless of table size.
+  const fetchAllFileRows = async (): Promise<Array<{ order_id: string }>> => {
+    if (orderIds.length === 0) return [];
+    const PAGE = 1000;
+    const rows: Array<{ order_id: string }> = [];
+    for (let from = 0; ; from += PAGE) {
+      let q = client
+        .from("order_files")
+        .select("order_id")
+        .in("order_id", orderIds)
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (options?.fileCountCategory) {
+        q = q.eq("category", options.fileCountCategory);
+      }
+      const { data, error } = await q;
+      if (error || !data || data.length === 0) break;
+      rows.push(...(data as Array<{ order_id: string }>));
+      if (data.length < PAGE) break;
+    }
+    return rows;
+  };
 
-  const [{ data: inputsData }, { data: fileCounts }] = await Promise.all([inputsPromise, filesPromise]);
+  const [{ data: inputsData }, fileRows] = await Promise.all([inputsPromise, fetchAllFileRows()]);
 
   const inputsByEntryId: Record<string, number> = {};
   if (inputsData) {
@@ -286,10 +304,8 @@ export async function getOrders(options?: {
   }
 
   const fileCountMap = new Map<string, number>();
-  if (fileCounts) {
-    for (const row of fileCounts as Array<{ order_id: string }>) {
-      fileCountMap.set(row.order_id, (fileCountMap.get(row.order_id) ?? 0) + 1);
-    }
+  for (const row of fileRows) {
+    fileCountMap.set(row.order_id, (fileCountMap.get(row.order_id) ?? 0) + 1);
   }
 
   // 7. Transform to Order type
