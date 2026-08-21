@@ -34,8 +34,14 @@ if (git("status", "--short")) {
 
 const projectConfigPath = resolve(".vercel/project.json");
 if (!existsSync(projectConfigPath)) {
-  console.error("Missing .vercel/project.json; link the staging project first.");
-  process.exit(2);
+  const linked = spawnSync(
+    "npx",
+    ["--yes", "vercel", "link", "--yes", "--project", STAGING_PROJECT, "--scope", STAGING_SCOPE],
+    { cwd: resolve("."), encoding: "utf8", env: process.env },
+  );
+  if (linked.stdout) process.stdout.write(linked.stdout);
+  if (linked.stderr) process.stderr.write(linked.stderr);
+  if (linked.status !== 0 || !existsSync(projectConfigPath)) process.exit(linked.status ?? 1);
 }
 const projectConfig = JSON.parse(readFileSync(projectConfigPath, "utf8"));
 if (projectConfig.projectName !== STAGING_PROJECT) {
@@ -50,7 +56,7 @@ writeFileSync(MANIFEST_PATH, `${JSON.stringify({ version, commit, releasedAt: ne
 
 let result;
 try {
-  result = spawnSync("vercel", ["--prod", "--yes", "--scope", STAGING_SCOPE], {
+  result = spawnSync("npx", ["--yes", "vercel", "--prod", "--yes", "--scope", STAGING_SCOPE], {
     cwd: resolve("."),
     encoding: "utf8",
     env: process.env,
