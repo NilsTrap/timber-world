@@ -1,11 +1,19 @@
 import {
   getSession,
   isSuperAdmin,
+  isPlatformAdmin,
   hasMultipleOrganizations,
   getUserEnabledModules,
 } from "@/lib/auth";
 import { Sidebar, type NavItem } from "./Sidebar";
-import { ADMIN_NAV_ITEMS, getOrgUserNavItems, filterNavItemsByModules } from "./navItems";
+import {
+  ADMIN_NAV_ITEMS,
+  getOrgUserNavItems,
+  filterNavItemsByModules,
+  withProjectsNav,
+} from "./navItems";
+import { isTimberProjectsEnabled } from "@/features/projects/config";
+import { PROJECTS_MODULE } from "@/features/projects/gate";
 import { getActiveOrganisations } from "@/features/shipments/actions/getActiveOrganisations";
 import type { OrganizationOption } from "./OrganizationSelector";
 import type { OrganizationSwitcherOption } from "./OrganizationSwitcher";
@@ -31,19 +39,41 @@ export async function SidebarWrapper() {
   // Pending shipment count is loaded client-side to avoid blocking server render
   let navItems: NavItem[];
 
+  const orgId = session?.currentOrganizationId || session?.organisationId || null;
+  const portalUserId = session?.portalUserId;
+  // Effective modules (org ceiling ∩ user groups). Fetched once and reused by
+  // both the nav filter and the Projects gate; getUserEnabledModules is
+  // React-cached, so the extra call in the admin branch costs nothing.
+  let enabledModules: Set<string> | null = null;
+
   if (session?.role === "admin") {
     // Admin users see all items
     navItems = ADMIN_NAV_ITEMS;
   } else {
     // Org users - filter by user's effective modules (intersection of org + user modules)
     const orgUserItems = getOrgUserNavItems(0);
-    const orgId = session?.currentOrganizationId || session?.organisationId || null;
-    const portalUserId = session?.portalUserId;
-    const enabledModules = portalUserId
+    enabledModules = portalUserId
       ? await getUserEnabledModules(portalUserId, orgId)
       : new Set<string>();
     navItems = filterNavItemsByModules(orgUserItems, enabledModules);
   }
+
+  // Timber Projects (staging-gated). The predicate MIRRORS the route gate
+  // (features/projects/gate.ts): platform admin by is_platform_admin, or an
+  // EXACT `orders.view` in the current org — deliberately not the nav's
+  // prefix-matching moduleMatches, which would advertise a link that 404s.
+  let projectsVisible = false;
+  if (isTimberProjectsEnabled() && session) {
+    if (isPlatformAdmin(session)) {
+      projectsVisible = true;
+    } else if (orgId) {
+      const mods =
+        enabledModules ??
+        (portalUserId ? await getUserEnabledModules(portalUserId, orgId) : new Set<string>());
+      projectsVisible = mods.has(PROJECTS_MODULE);
+    }
+  }
+  navItems = withProjectsNav(navItems, projectsVisible);
 
   // Fetch organizations for Super Admin org selector
   let organizations: OrganizationOption[] | undefined;

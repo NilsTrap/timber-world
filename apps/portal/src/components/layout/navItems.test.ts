@@ -12,6 +12,8 @@ import {
   filterNavItemsByModules,
   activeSectionKey,
   LEGACY_ADMIN_CHILDREN,
+  PROJECTS_NAV_ITEM,
+  withProjectsNav,
   type ModuleNavItem,
 } from "./navItems";
 
@@ -41,6 +43,10 @@ const EXPECTED_ADMIN = new Set<string>([
   "/admin/settings/fields", "/admin/settings/gates", "/admin/settings/groups",
   "/admin/settings/document-templates", "/admin/settings/packaging", "/admin/settings/pricing-units",
   "/admin/settings/currencies",
+  // Added after this list was first written: L2 Traders book (admin-only),
+  // Q5.2 Audit log, and the two org-scoped legacy managers demoted into Legacy.
+  "/counterparties/traders", "/admin/settings/audit",
+  "/admin/reference", "/admin/trading-partners",
   "/admin/agents", "/admin/agent-orders", "/admin/agent-manual",
   // Catalogue is now a section: parent link + Products / Categories children
   "/admin/catalog", "/admin/catalog/products", "/admin/catalog/categories",
@@ -55,12 +61,13 @@ ok("admin nav reaches EXACTLY the expected destination set (nothing dropped/adde
    adminSet.size === EXPECTED_ADMIN.size && [...EXPECTED_ADMIN].every((h) => adminSet.has(h)),
    { missing: [...EXPECTED_ADMIN].filter((h) => !adminSet.has(h)), extra: [...adminSet].filter((h) => !EXPECTED_ADMIN.has(h)) });
 
-// ── 2. The Legacy group holds exactly the 8 legacy sections (CRM + Shipments were
-//       demoted here from the top level), and it is collapsible ──
+// ── 2. The Legacy group holds exactly the legacy sections (CRM + Shipments were
+//       demoted here from the top level, later Reference Data + Trading
+//       Partners), and it is collapsible ──
 const legacyItem = ADMIN_NAV_ITEMS.find((i) => i.label === "Legacy");
 ok("a 'Legacy' collapsible group exists", !!legacyItem && legacyItem.collapsible === true);
-ok("Legacy group holds exactly the 8 legacy sections",
-   !!legacyItem && (legacyItem.children ?? []).length === 8 &&
+ok("Legacy group holds exactly the legacy sections",
+   !!legacyItem && (legacyItem.children ?? []).length === LEGACY_ADMIN_CHILDREN.length &&
    (legacyItem.children ?? []).every((c) => LEGACY_HREFS.includes(c.href)));
 ok("Legacy group includes the demoted CRM (old) + Shipments",
    (legacyItem?.children ?? []).some((c) => c.href === "/admin/crm") &&
@@ -140,6 +147,30 @@ for (const [href, group] of [["/dashboard", "dashboard"], ["/orders", "orders"],
   const it = ADMIN_NAV_ITEMS.find((i) => i.href === href);
   ok(`${href} carries a colour group (${group})`, it?.group === group, it?.group);
 }
+
+// ── 9. Timber Projects (staging-gated) is INJECTED, never part of the static nav ──
+// The exact-set assertion in §1 is the reason: /projects must not appear in
+// ADMIN_NAV_ITEMS. SidebarWrapper adds it at request time behind the env flag
+// plus the same access rule the route enforces.
+ok("no static nav list contains /projects",
+   !leafHrefs(ADMIN_NAV_ITEMS).includes("/projects") &&
+   !leafHrefs(getOrgUserNavItems()).includes("/projects"));
+ok("withProjectsNav(disabled) changes nothing",
+   withProjectsNav(ADMIN_NAV_ITEMS, false) === ADMIN_NAV_ITEMS);
+const adminWithProjects = withProjectsNav(ADMIN_NAV_ITEMS, true);
+ok("withProjectsNav(enabled) inserts Projects right after Orders",
+   adminWithProjects.findIndex((i) => i.href === "/projects") ===
+     adminWithProjects.findIndex((i) => i.href === "/orders") + 1);
+ok("withProjectsNav(enabled) adds exactly one entry and drops nothing",
+   adminWithProjects.length === ADMIN_NAV_ITEMS.length + 1 &&
+   leafHrefs(ADMIN_NAV_ITEMS as ModuleNavItem[]).every((h) =>
+     leafHrefs(adminWithProjects as ModuleNavItem[]).includes(h)));
+ok("withProjectsNav does not mutate the static admin nav",
+   !ADMIN_NAV_ITEMS.some((i) => i.href === "/projects"));
+ok("withProjectsNav is idempotent",
+   withProjectsNav(adminWithProjects, true).filter((i) => i.href === "/projects").length === 1);
+ok("the Projects item carries a colour group like every primary area",
+   PROJECTS_NAV_ITEM.group === "deals" && PROJECTS_NAV_ITEM.iconName === "Boxes");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;

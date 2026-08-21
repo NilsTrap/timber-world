@@ -163,6 +163,38 @@ export function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavI
 }
 
 /**
+ * Timber Projects nav entry (staging-gated).
+ *
+ * Deliberately NOT part of ADMIN_NAV_ITEMS / getOrgUserNavItems: those two are
+ * the static nav contract (navItems.test.ts asserts the admin destination set
+ * EXACTLY, so nothing may silently appear there), and Projects must only exist
+ * where TIMBER_PROJECTS_ENABLED is on. SidebarWrapper injects it at request
+ * time via withProjectsNav().
+ */
+export const PROJECTS_NAV_ITEM: ModuleNavItem = {
+  href: "/projects",
+  label: "Projects",
+  iconName: "Boxes",
+  group: "deals",
+};
+
+/**
+ * Insert the Projects item directly after Orders (or first, when Orders is not
+ * in the list). Pure: the caller decides `enabled` — it must combine the env
+ * flag with the SAME access rule the route enforces (platform admin, or an
+ * exact `orders.view`), so the nav can never advertise a page that 404s.
+ * Returns the input untouched when disabled; never mutates the input array.
+ */
+export function withProjectsNav(items: NavItem[], enabled: boolean): NavItem[] {
+  if (!enabled) return items;
+  if (items.some((item) => item.href === PROJECTS_NAV_ITEM.href)) return items;
+  const ordersIndex = items.findIndex((item) => item.href === "/orders");
+  const out = [...items];
+  out.splice(ordersIndex >= 0 ? ordersIndex + 1 : 0, 0, PROJECTS_NAV_ITEM);
+  return out;
+}
+
+/**
  * Whether a nav item is shown given the enabled-module set:
  * - no requirement → shown; exact-module match; OR any module with the same
  *   prefix (e.g. "orders.view" is implied by any "orders.*").
