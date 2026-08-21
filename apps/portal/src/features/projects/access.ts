@@ -36,6 +36,7 @@ import { isTimberProjectsEnabled } from "./config";
 import { evaluateProjectsGate } from "./gate";
 import { personasForOrg, orgRoleFlagsFromRow, type ProjectPersona } from "./personas";
 import type { ProjectsViewer } from "./types";
+import { evaluateProjectCapabilities } from "./capabilities";
 
 export type ProjectsActor =
   | {
@@ -120,10 +121,17 @@ export async function resolveProjectsViewer(
       .maybeSingle();
     personas = personasForOrg(orgRoleFlagsFromRow(data as Record<string, unknown> | null));
   }
+  const capabilities = evaluateProjectCapabilities({
+    isPlatformAdmin: a.isPlatformAdmin,
+    hasDealCreate: a.profile.actions.has("deal:create"),
+    organisationId: a.orgId,
+    personas,
+  });
   return {
     isPlatformAdmin: a.isPlatformAdmin,
     organisationId: a.orgId,
     organisationName: a.organisationName,
     personas,
+    ...capabilities,
   };
 }

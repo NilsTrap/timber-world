@@ -237,6 +237,37 @@ export async function runNegativeSuite(): Promise<ProbeResult[]> {
   const buyLegId = legs?.find((l) => l.code === "IJL-E4-BUY-001")?.id as string | undefined;
 
   if (sellLegId && buyLegId && orgDId) {
+    // Project-workspace canaries make file probes non-vacuous. Metadata only:
+    // no storage object is created, and the rows are removed before return.
+    const probeStamp = Date.now();
+    const { data: projectFileCanaries, error: projectFileCanaryError } = await admin
+      .from("order_files")
+      .insert([
+        {
+          order_id: buyLegId,
+          category: "project",
+          file_name: "hidden-buy-leg.pdf",
+          relative_path: `security/hidden-buy-leg-${probeStamp}.pdf`,
+          storage_path: `${buyLegId}/project/rls-${probeStamp}-buy.pdf`,
+          mime_type: "application/pdf",
+          file_variant: "original",
+          lifecycle_status: "ready",
+        },
+        {
+          order_id: sellLegId,
+          category: "project",
+          file_name: "visible-sell-leg.pdf",
+          relative_path: `security/visible-sell-leg-${probeStamp}.pdf`,
+          storage_path: `${sellLegId}/project/rls-${probeStamp}-sell.pdf`,
+          mime_type: "application/pdf",
+          file_variant: "original",
+          lifecycle_status: "ready",
+        },
+      ])
+      .select("id");
+    if (projectFileCanaryError || (projectFileCanaries?.length ?? 0) !== 2) {
+      throw new Error(`Project file canary setup failed: ${projectFileCanaryError?.message ?? "missing rows"}`);
+    }
     const probeRead = async (
       client: Awaited<ReturnType<typeof userClient>>,
       userKey: string,
@@ -269,6 +300,16 @@ export async function runNegativeSuite(): Promise<ProbeResult[]> {
       "House salesperson reads the buy leg's line items (purchase prices)", "order_line_items", "order_id", buyLegId);
     await probeRead(salesClient, "house-sales", "e4.sales-reads-buy-leg-files",
       "House salesperson reads the buy leg's files (hole closed in E4)", "order_files", "order_id", buyLegId);
+    {
+      const { data, error } = await salesClient.from("order_files").insert({
+        order_id: buyLegId, category: "project", file_name: "forbidden.pdf",
+        relative_path: `security/forbidden-sales-${probeStamp}.pdf`,
+        storage_path: `${buyLegId}/project/forbidden-sales-${probeStamp}.pdf`,
+        file_variant: "original", lifecycle_status: "ready",
+      }).select("id");
+      results.push({ userKey: "house-sales", probeName: "projects.sales-writes-hidden-buy-leg", description: "House salesperson writes a project file onto the hidden buy leg", outcome: (data?.length ?? 0) > 0 ? "leaked" : "blocked", rowsSeen: data?.length ?? 0, errorMessage: error?.message });
+      if (data?.length) await admin.from("order_files").delete().in("id", data.map((row) => row.id));
+    }
     await probeRead(salesClient, "house-sales", "e4.sales-reads-supplier-org",
       "House salesperson reads the supplier org row (walled address book)", "organisations", "id", orgDId);
     await salesClient.auth.signOut();
@@ -288,6 +329,16 @@ export async function runNegativeSuite(): Promise<ProbeResult[]> {
       "Client selects the upstream buy leg (goods' origin hidden)", "orders", "id", buyLegId);
     await probeRead(clientClient, "client-user", "e4.client-reads-supplier-org",
       "Client reads the supplier org row", "organisations", "id", orgDId);
+    {
+      const { data, error } = await clientClient.from("order_files").insert({
+        order_id: sellLegId, category: "project", file_name: "forbidden.pdf",
+        relative_path: `security/forbidden-client-${probeStamp}.pdf`,
+        storage_path: `${sellLegId}/project/forbidden-client-${probeStamp}.pdf`,
+        file_variant: "original", lifecycle_status: "ready",
+      }).select("id");
+      results.push({ userKey: "client-user", probeName: "projects.client-writes-without-capability", description: "Client writes a project file without action/deal/create", outcome: (data?.length ?? 0) > 0 ? "leaked" : "blocked", rowsSeen: data?.length ?? 0, errorMessage: error?.message });
+      if (data?.length) await admin.from("order_files").delete().in("id", data.map((row) => row.id));
+    }
     await clientClient.auth.signOut();
 
     // Supplier (seller org of the buy leg): the sell leg is invisible —
@@ -297,6 +348,10 @@ export async function runNegativeSuite(): Promise<ProbeResult[]> {
     await probeRead(supplierClient, "supplier-user", "e4.supplier-reads-sell-leg",
       "Supplier selects the downstream sell leg", "orders", "id", sellLegId);
     await supplierClient.auth.signOut();
+
+    if (projectFileCanaries?.length) {
+      await admin.from("order_files").delete().in("id", projectFileCanaries.map((row) => row.id));
+    }
   } else {
     console.warn("E4 chain fixture missing — run seed first; skipping E4 probes.");
   }

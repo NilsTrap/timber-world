@@ -17,6 +17,7 @@
  * and Oscar URLs), external refs, and `storage_path` on any file.
  */
 import type { ProjectPersona } from "./personas";
+import type { ProjectCreateRole } from "./capabilities";
 
 /** A party on a project, as shown to this viewer. */
 export interface ProjectPartyRef {
@@ -36,6 +37,9 @@ export interface ProjectsViewer {
   organisationName: string | null;
   /** Personas of the CURRENT organisation. Empty for a platform admin with no org. */
   personas: ProjectPersona[];
+  canCreateProject: boolean;
+  canWriteFiles: boolean;
+  createRoles: ProjectCreateRole[];
 }
 
 /** One visible bilateral deal = one project row. */
@@ -85,22 +89,20 @@ export interface ProjectTerms {
   advancePct: number | null;
 }
 
-/** File metadata only. No storage path, no signed URL, no download action —
- *  the file workspace itself is task #zka6n7. */
+/** Original workspace-file metadata only. Storage/source paths and signed URLs
+ * never enter a loader payload. */
 export interface ProjectFileMeta {
   id: string;
-  category: string;
   fileName: string;
+  relativePath: string;
   mimeType: string | null;
   fileSizeBytes: number | null;
+  lifecycleStatus: "uploading" | "ready" | "failed";
   createdAt: string;
 }
 
 export interface ProjectFileCounts {
   total: number;
-  customer: number;
-  production: number;
-  deal: number;
 }
 
 export interface ProjectDetail extends ProjectListItem {

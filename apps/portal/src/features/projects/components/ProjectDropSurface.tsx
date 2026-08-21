@@ -1,0 +1,76 @@
+"use client";
+
+import { useRef } from "react";
+import { FolderUp, Upload } from "lucide-react";
+import { useDropzone } from "react-dropzone";
+import { Button } from "@timber/ui";
+import { MAX_PROJECT_FILE_BYTES } from "../filePaths";
+
+export function ProjectDropSurface({
+  disabled,
+  onFiles,
+  onError,
+}: {
+  disabled?: boolean;
+  onFiles: (files: File[]) => void;
+  onError: (message: string) => void;
+}) {
+  const folderInput = useRef<HTMLInputElement | null>(null);
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
+    disabled,
+    noClick: true,
+    noKeyboard: true,
+    maxSize: MAX_PROJECT_FILE_BYTES,
+    onDropAccepted: onFiles,
+    onDropRejected: (rejections) => {
+      const tooLarge = rejections.some((rejection) =>
+        rejection.errors.some((error) => error.code === "file-too-large"),
+      );
+      onError(tooLarge ? "Files must be 100 MB or smaller." : "Some files could not be added.");
+    },
+  });
+
+  return (
+    <div
+      {...getRootProps()}
+      className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+        isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/30"
+      } ${disabled ? "opacity-60" : ""}`}
+    >
+      <input {...getInputProps()} />
+      <input
+        ref={(node) => {
+          folderInput.current = node;
+          node?.setAttribute("webkitdirectory", "");
+          node?.setAttribute("directory", "");
+        }}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          onFiles(Array.from(event.currentTarget.files ?? []));
+          event.currentTarget.value = "";
+        }}
+      />
+      <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
+      <p className="mt-2 text-sm font-medium">
+        {isDragActive ? "Drop files and folders here" : "Drop files and folders here"}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">Relative folders are kept · 100 MB per file</p>
+      <div className="mt-4 flex flex-wrap justify-center gap-2">
+        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={open}>
+          <Upload className="mr-1.5 h-4 w-4" /> Choose files
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          onClick={() => folderInput.current?.click()}
+        >
+          <FolderUp className="mr-1.5 h-4 w-4" /> Choose folder
+        </Button>
+      </div>
+    </div>
+  );
+}

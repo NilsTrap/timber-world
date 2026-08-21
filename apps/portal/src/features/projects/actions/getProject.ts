@@ -56,7 +56,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   const project = toProjectDetail(raw, walled, ctx, {
     lines: walled.lineItems ?? [],
     files,
-    fileCounts: fileCounts.get(projectId) ?? { total: 0, customer: 0, production: 0, deal: 0 },
+    fileCounts: fileCounts.get(projectId) ?? { total: 0 },
   });
 
   return { ok: true, project, viewer };

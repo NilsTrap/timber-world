@@ -290,10 +290,11 @@ export function toProjectDetail(
     lines: toProjectLines(parts.lines, ctx),
     files: parts.files.map((f) => ({
       id: f.id,
-      category: f.category,
       fileName: f.fileName,
+      relativePath: f.relativePath,
       mimeType: f.mimeType,
       fileSizeBytes: f.fileSizeBytes,
+      lifecycleStatus: f.lifecycleStatus,
       createdAt: f.createdAt,
     })),
     fileCounts: parts.fileCounts,

@@ -1,4 +1,3 @@
-import { FileText } from "lucide-react";
 import {
   EmptyState,
   PageHeader,
@@ -16,6 +15,7 @@ import { PERSONA_LABEL } from "../personas";
 import type { ProjectDetail, ProjectsViewer } from "../types";
 import { PersonaBadges } from "./PersonaBadges";
 import { ProjectStageBadge } from "./ProjectStageBadge";
+import { ProjectFileWorkspace } from "./ProjectFileWorkspace";
 
 /**
  * Project detail (server component).
@@ -163,23 +163,11 @@ export function ProjectDetailView({
           title="Files"
           subtitle={`${project.fileCounts.total} file(s) on this project`}
         />
-        {project.files.length === 0 ? (
-          <EmptyState message="No files on this project." />
-        ) : (
-          <div className="rounded-lg border bg-card divide-y">
-            {project.files.map((file) => (
-              <div key={file.id} className="flex items-center gap-3 p-3">
-                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{file.fileName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {file.category} · {formatBytes(file.fileSizeBytes)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <ProjectFileWorkspace
+          projectId={project.id}
+          initialFiles={project.files}
+          canWrite={viewer.canWriteFiles}
+        />
       </div>
 
       {project.notes ? (
@@ -232,11 +220,4 @@ function formatCents(cents: number | null | undefined, currency: string): string
   if (cents == null) return "—";
   const amount = (cents / 100).toFixed(2);
   return currency ? `${amount} ${currency}` : amount;
-}
-
-function formatBytes(bytes: number | null): string {
-  if (bytes == null) return "unknown size";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

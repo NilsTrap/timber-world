@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import {
+  Button,
   EmptyState,
   SummaryCard,
   SummaryGrid,
@@ -42,7 +44,12 @@ export function ProjectsListView({
             Every deal you can see, as a project workspace.
           </p>
         </div>
-        <ViewerStrip viewer={viewer} />
+        <div className="flex items-start gap-3">
+          <ViewerStrip viewer={viewer} />
+          {viewer.canCreateProject ? (
+            <Button asChild size="sm"><Link href="/projects/new"><Plus className="mr-1.5 h-4 w-4" /> New project</Link></Button>
+          ) : null}
+        </div>
       </div>
 
       <SummaryGrid columns={4}>
@@ -53,7 +60,7 @@ export function ProjectsListView({
       </SummaryGrid>
 
       {items.length === 0 ? (
-        <EmptyState message="No projects yet. Projects appear here as soon as you are a party to a deal." />
+        <EmptyState message={viewer.canCreateProject ? "No projects yet. Create the first project." : "No projects yet. Projects appear here as soon as you are a party to a deal."} />
       ) : (
         <div className="rounded-lg border bg-card overflow-x-auto">
           <Table dense>

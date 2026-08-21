@@ -123,15 +123,16 @@ const PERSONAS = new Map([
 // selecting it.
 const FILES = [
   {
-    id: "f1", category: "customer", fileName: "drawing.pdf", mimeType: "application/pdf",
+    id: "f1", fileName: "drawing.pdf", relativePath: "drawings/final/drawing.pdf", mimeType: "application/pdf",
     fileSizeBytes: 1024, createdAt: "2026-08-01T10:00:00Z",
+    lifecycleStatus: "ready",
     storagePath: "deal-1/customer/abc_drawing.pdf",
     storage_path: "deal-1/customer/abc_drawing.pdf",
     signedUrl: "https://storage.example/signed?token=xyz",
     uploadedBy: "user-1",
   },
 ] as unknown as ProjectFileMeta[];
-const COUNTS = { total: 1, customer: 1, production: 0, deal: 0 };
+const COUNTS = { total: 1 };
 
 /** Run the real pipeline: field wall → projectors. */
 function render(p: AccessProfile, viewerOrgId: string | null, isPlatformAdmin = false) {
@@ -213,7 +214,7 @@ const buyLegRender = (() => {
   const rawHeader = raw as unknown as DealHeaderLike;
   return {
     item: toProjectListItem(rawHeader, walled, ctx, 0),
-    detail: toProjectDetail(rawHeader, walled, ctx, { lines: walled.lineItems ?? [], files: [], fileCounts: { total: 0, customer: 0, production: 0, deal: 0 } }),
+    detail: toProjectDetail(rawHeader, walled, ctx, { lines: walled.lineItems ?? [], files: [], fileCounts: { total: 0 } }),
   };
 })();
 eq("purchasing on a BUY leg: direction is buy", buyLegRender.item.direction, "buy");
@@ -270,27 +271,25 @@ ok("party refs expose only id/name/code/personas/role",
      ["id", "name", "code", "personas", "role"].includes(k)));
 ok("vatRate is never serialized, not even for an admin",
    !JSON.stringify(admin.detail).includes("vatRate"));
-ok("file metadata exposes only the six safe columns",
+ok("file metadata exposes only the seven safe workspace columns",
    Object.keys(admin.detail.files[0] ?? {}).every((k) =>
-     ["id", "category", "fileName", "mimeType", "fileSizeBytes", "createdAt"].includes(k)));
+     ["id", "fileName", "relativePath", "mimeType", "fileSizeBytes", "lifecycleStatus", "createdAt"].includes(k)));
 
 // ── File counts: a hidden leg's files are never attributed ───────────────────
 const rows = [
   { order_id: "deal-1", category: "customer" },
-  { order_id: "deal-1", category: "deal" },
-  { order_id: "deal-hidden", category: "production" }, // a leg this viewer cannot see
+  { order_id: "deal-1", category: "project" },
+  { order_id: "deal-hidden", category: "project" }, // a leg this viewer cannot see
   { order_id: "deal-hidden", category: "customer" },
 ];
 const counts = summariseFileCounts(rows, ["deal-1"]);
 eq("hidden-leg rows are discarded", counts.get("deal-1"),
-   { total: 2, customer: 1, production: 0, deal: 1 });
+   { total: 1 });
+eq("legacy file categories are not Projects workspace rows", counts.get("deal-1"), { total: 1 });
 ok("the hidden leg gets no entry at all", !counts.has("deal-hidden"));
 eq("a visible deal with no files still gets a zeroed entry",
-   summariseFileCounts([], ["deal-2"]).get("deal-2"), { total: 0, customer: 0, production: 0, deal: 0 });
+   summariseFileCounts([], ["deal-2"]).get("deal-2"), { total: 0 });
 eq("no visible ids → empty map", summariseFileCounts(rows, []).size, 0);
-eq("per-category counts add up to the total",
-   (() => { const c = summariseFileCounts(rows, ["deal-1"]).get("deal-1")!;
-            return c.customer + c.production + c.deal; })(), 2);
 
 console.log(`\nprojects-projection.test.ts: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

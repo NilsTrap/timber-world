@@ -107,6 +107,7 @@
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "19.2.3",
+    "react-dropzone": "^19.1.1",
     "react-hook-form": "^7.70.0",
     "react-lite-youtube-embed": "^3.6.0",
     "react-player": "3.3.1",
