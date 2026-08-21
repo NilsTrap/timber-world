@@ -113,6 +113,18 @@ function partyRef(
   return ref;
 }
 
+/**
+ * Is `orgId` one of the bilateral deal's party slots (seller or buyer)? The
+ * legacy producer slot is deliberately not a party: E8 removed that RLS arm
+ * after splitting producer work into a separate buy leg. The list query already
+ * filters on this for non-admins; detail re-checks so a deal reachable through
+ * ANOTHER membership cannot use the CURRENT organisation's field wall.
+ */
+export function isPartyOrg(deal: DealHeaderLike, orgId: string | null): boolean {
+  if (!orgId) return false;
+  return deal.seller.id === orgId || deal.buyer.id === orgId;
+}
+
 export interface ResolvedProjectParties {
   /** The deal's framing from this viewer's standpoint. */
   direction: "sell" | "buy";
@@ -136,16 +148,32 @@ export function resolveProjectParties(
   raw: DealHeaderLike,
   ctx: ProjectionContext,
 ): ResolvedProjectParties {
-  const rawDirection = dealDirectionFor(raw.seller.id, raw.buyer.id, ctx.viewerOrgId);
   const direction = resolveViewerDirection(raw.seller.id, raw.buyer.id, ctx.viewerOrgId, raw.dealKind);
-
-  let facing: DealPartyLike | null = null;
-  if (rawDirection === "sell") facing = raw.buyer;
-  else if (rawDirection === "buy") facing = raw.seller;
-  else if (ctx.isPlatformAdmin) facing = direction === "buy" ? raw.seller : raw.buyer;
-
+  const facing = facingParty(raw, ctx.viewerOrgId, ctx.isPlatformAdmin);
   const counterparty = facing ? partyRef(facing, ctx) : null;
   return { direction, counterparty, facingOrgId: counterparty?.id ?? null };
+}
+
+/** The party slot the viewer faces, or null when they face none. */
+export function facingParty(
+  raw: DealHeaderLike,
+  viewerOrgId: string | null,
+  isPlatformAdmin: boolean,
+): DealPartyLike | null {
+  const rawDirection = dealDirectionFor(raw.seller.id, raw.buyer.id, viewerOrgId);
+  if (rawDirection === "sell") return raw.buyer;
+  if (rawDirection === "buy") return raw.seller;
+  if (!isPlatformAdmin) return null;
+  return raw.dealKind === "purchase_only" ? raw.seller : raw.buyer;
+}
+
+/** Org id of that party — the ONLY org a list row needs persona labels for. */
+export function facingPartyOrgId(
+  raw: DealHeaderLike,
+  viewerOrgId: string | null,
+  isPlatformAdmin: boolean,
+): string | null {
+  return facingParty(raw, viewerOrgId, isPlatformAdmin)?.id ?? null;
 }
 
 /**

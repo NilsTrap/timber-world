@@ -11,7 +11,7 @@ import { getOrderDeal } from "../../orders/services/orderDeals";
 import { projectDealView } from "../../orders/services/dealFields";
 import { isValidUUID } from "../../orders/types";
 import { resolveProjectsActor, resolveProjectsViewer } from "../access";
-import { toProjectDetail, type ProjectionContext } from "../projection";
+import { isPartyOrg, toProjectDetail, type ProjectionContext } from "../projection";
 import { loadOrgPersonas } from "../services/orgPersonas";
 import { countFilesByDeal, listProjectFiles } from "../services/projectFiles";
 import type { ProjectDetail, ProjectsResult, ProjectsViewer } from "../types";
@@ -30,6 +30,13 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   if (!res.success) return { ok: false, deny: "not_found" };
 
   const raw = res.data;
+  // Same-organisation check as the list: a non-admin may only open a deal their
+  // CURRENT organisation is a party to. Without it, a multi-org user could open
+  // a deal reachable through another membership while this organisation's field
+  // wall — possibly a wider one — is what gets applied. Denial is the shared
+  // not_found, so it is still indistinguishable from an unknown id.
+  if (!a.isPlatformAdmin && !isPartyOrg(raw, a.orgId)) return { ok: false, deny: "not_found" };
+
   const walled = projectDealView(res.data, a.access, a.orgId);
 
   const [personasByOrgId, files, fileCounts, viewer] = await Promise.all([

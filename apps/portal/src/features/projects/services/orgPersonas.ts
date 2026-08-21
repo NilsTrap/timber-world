@@ -12,12 +12,23 @@
 import type { DbClient } from "../../orders/services/dealModel";
 import { orgRoleFlagsFromRow, personasForOrg, type ProjectPersona } from "../personas";
 
-/** org id → personas. Missing key = not readable / no flags. */
+/**
+ * Hard bound on one lookup. The list caps at 200 deals and asks for the viewer's
+ * org plus one counterparty per row, so this never bites in practice — it exists
+ * so a future caller cannot turn this into a 1000-UUID query string (PostgREST
+ * would 414 and every badge would silently vanish).
+ */
+const MAX_PERSONA_LOOKUP = 250;
+
+/** org id → personas. Missing key = not readable / no flags / beyond the cap. */
 export async function loadOrgPersonas(
   db: DbClient,
   orgIds: readonly (string | null | undefined)[],
 ): Promise<Map<string, ProjectPersona[]>> {
-  const ids = Array.from(new Set(orgIds.filter((id): id is string => !!id)));
+  const ids = Array.from(new Set(orgIds.filter((id): id is string => !!id))).slice(
+    0,
+    MAX_PERSONA_LOOKUP,
+  );
   if (ids.length === 0) return new Map();
 
   const { data, error } = await db

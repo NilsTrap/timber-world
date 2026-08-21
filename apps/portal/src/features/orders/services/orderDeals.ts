@@ -200,6 +200,16 @@ export interface ListOrderDealsFilters {
   status?: string;
   productGroup?: string;
   limit?: number;
+  /**
+   * Scope the result to bilateral deals where one organisation is the seller or
+   * buyer. RLS is still the wall; this narrows WHICH of the caller's visible
+   * deals come back, which matters for a MULTI-ORG user: field-domain grants are
+   * resolved per current organisation, so a list mixing another membership's
+   * deals would be projected through the wrong organisation's wall. The legacy
+   * producer slot is intentionally excluded: E8 removed it from deal RLS after
+   * splitting supplier work into its own bilateral buy leg. Omit for admins.
+   */
+  partyOrganisationId?: string;
 }
 
 /** List deals (orders) newest-first, header only. Filter by status / product group. */
@@ -209,10 +219,17 @@ export async function listDeals(db: DbClient, _actor: ActorContext, filters: Lis
   if (filters.status && !(ORDER_STATUSES as readonly string[]).includes(filters.status)) {
     return { success: false, error: `Invalid status "${filters.status}". Valid: ${ORDER_STATUSES.join(", ")}.`, code: "VALIDATION_ERROR" };
   }
+  if (filters.partyOrganisationId && !isValidUUID(filters.partyOrganisationId)) {
+    return { success: false, error: "Invalid party organisation id", code: "VALIDATION_ERROR" };
+  }
   const c = db as DbClient;
   let query = c.from("orders").select(ORDER_SELECT).order("created_at", { ascending: false });
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.productGroup) query = query.eq("product_group", filters.productGroup);
+  if (filters.partyOrganisationId) {
+    const org = filters.partyOrganisationId;
+    query = query.or(`seller_organisation_id.eq.${org},buyer_organisation_id.eq.${org}`);
+  }
   query = query.limit(Math.min(filters.limit ?? 100, 200));
   const { data, error } = await query;
   if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };

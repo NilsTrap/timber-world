@@ -47,7 +47,15 @@ export function summariseFileCounts(
   return out;
 }
 
-/** File counts for the given (already RLS-visible) deal ids. */
+/**
+ * File counts for the given (already RLS-visible) deal ids.
+ *
+ * One row per file, folded in memory. PostgREST applies its server-side
+ * max-rows cap to this query, so on an unusually file-heavy page the counts are
+ * indicative rather than exact — they can only UNDER-report, never over-report,
+ * and they are a badge, not an access decision. The detail page counts a single
+ * deal, where the cap cannot bite.
+ */
 export async function countFilesByDeal(
   db: DbClient,
   dealIds: readonly string[],

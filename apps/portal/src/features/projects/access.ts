@@ -15,10 +15,16 @@
  *    every RLS policy, and the Epic-10 backfill only set the flag for admins
  *    with no organisation — so a legacy org-scoped "admin" is walled by RLS and
  *    must not be handed an in-app bypass either.
- *  - The database handle is ALWAYS the cookie-bound client (`createClient()`).
- *    `createAdminClient` is not imported anywhere under features/projects — RLS
- *    (`can_access_deal_row` / `can_access_order`) stays authoritative, for
- *    admins too (they pass it on their own merits).
+ *  - Every read of USER DATA uses the cookie-bound client (`createClient()`):
+ *    `createAdminClient` is not imported anywhere under features/projects, so
+ *    RLS (`can_access_deal_row` / `can_access_order`) stays authoritative —
+ *    for admins too, who pass it on their own merits.
+ *    The one service-role touch is indirect and deliberate: getUserEnabledModules
+ *    and getAccessProfile read the RIGHTS tables (organization_modules,
+ *    user_access_groups, access_group_rights) with the shared admin client, as
+ *    every gate in this codebase does. Those are the caller's OWN permissions —
+ *    gate logic, never someone else's deal data — and they only ever NARROW what
+ *    follows.
  */
 import { getSession, isPlatformAdmin, getUserEnabledModules } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";

@@ -79,6 +79,14 @@ function line(over: Partial<DealLineLike> = {}): DealLineLike {
   };
 }
 
+/**
+ * The fixture deliberately carries EVERY dangerous field the real `orders` row
+ * carries — spine/chain pointers, the margin-approval stamp, generated
+ * documents with storage paths and an Oscar URL, external refs. If a projector
+ * ever spreads its input instead of building an allow-list, these show up in
+ * the payload and the negative assertions below fail. A fixture without them
+ * would make those assertions vacuous.
+ */
 function deal() {
   return {
     id: "deal-1", code: "ORD-042", dealCode: "TWP-CLI-0007", name: "Staircase batch",
@@ -86,11 +94,20 @@ function deal() {
     incoterms: "FOB", incotermsPlace: "Riga", advancePct: 30, paymentTerms: "30 days",
     deliveryTerms: "DAP site", deliveryDeadline: "2026-09-01", transportBilling: "in_price",
     notes: "Handle with care",
+    sellerSigneeName: "A. Seller", sellerSigneeRole: "Director",
+    buyerSigneeName: "B. Buyer", buyerSigneeRole: "Owner",
     customer: { id: CUSTOMER, code: "CLI", name: "Client Org" },
     seller: { id: SELLER, code: "TWP", name: "Timber World" },
     producer: { id: PRODUCER, code: "WRT", name: "Wood ART" },
     buyer: { id: BUYER, code: "CLI", name: "Client Org" },
-    spineId: "spine-1", upstreamDealId: "deal-0",
+    spineId: "spine-1", spineCode: "SP-014", upstreamDealId: "deal-0",
+    marginApprovedAt: "2026-08-10T09:00:00Z",
+    plTotalValue: 123456, eurPerM3: 420, invoicedWork: 999,
+    externalRefs: [{ id: "ref-1", refType: "client_project", refValue: "CLIENT-PO-88" }],
+    documents: [{
+      id: "doc-1", docType: "invoice", docNumber: "INV-2026-0001",
+      storagePath: "deal-1/invoice/secret.pdf", oscarDocUrl: "https://oscar.example/doc/1",
+    }],
     lineItems: [line(), line({ id: "li-2", side: "buy", lineNo: 2, unitPriceCents: 90000, lineTotalCents: 216000 })],
   };
 }
@@ -101,9 +118,19 @@ const PERSONAS = new Map([
   [PRODUCER, personasForOrg({ isProducer: true, isSupplier: true })],
 ]);
 
-const FILES: ProjectFileMeta[] = [
-  { id: "f1", category: "customer", fileName: "drawing.pdf", mimeType: "application/pdf", fileSizeBytes: 1024, createdAt: "2026-08-01T10:00:00Z" },
-];
+// Extra columns on purpose: the projector must copy the six safe ones and drop
+// the rest, so `storage_path` cannot ride along even if a service starts
+// selecting it.
+const FILES = [
+  {
+    id: "f1", category: "customer", fileName: "drawing.pdf", mimeType: "application/pdf",
+    fileSizeBytes: 1024, createdAt: "2026-08-01T10:00:00Z",
+    storagePath: "deal-1/customer/abc_drawing.pdf",
+    storage_path: "deal-1/customer/abc_drawing.pdf",
+    signedUrl: "https://storage.example/signed?token=xyz",
+    uploadedBy: "user-1",
+  },
+] as unknown as ProjectFileMeta[];
 const COUNTS = { total: 1, customer: 1, production: 0, deal: 0 };
 
 /** Run the real pipeline: field wall → projectors. */
@@ -157,11 +184,43 @@ eq("salesperson: the residual legacy buy line is dropped (supplier pricing)",
 
 // ── House purchasing: supplier_identity, NO customer_identity ────────────────
 const purchasing = render(PURCHASING, SELLER);
-ok("purchasing: NO client identity leaks into otherParties",
-   !purchasing.detail.otherParties.some((p) => p.name === "Client Org" && p.role === "customer"),
-   purchasing.detail.otherParties);
 ok("purchasing: sees the supplier/producer",
    purchasing.detail.otherParties.some((p) => p.id === PRODUCER));
+ok("purchasing: the customer is NOT listed as a third party (no customer_identity)",
+   !purchasing.detail.otherParties.some((p) => p.role === "customer"),
+   purchasing.detail.otherParties);
+// Honest note: this deal is a SELL leg of the purchasing user's own org, so the
+// buyer IS their org's transaction partner and §9.2 shows it as `counterparty`.
+// In practice a purchasing group carries no `side.sell` deal visibility, so RLS
+// never returns such a row to them. The realistic case is the BUY leg below.
+eq("purchasing on a sell leg: the partner is still the deal's own counterparty",
+   purchasing.item.counterparty?.name, "Client Org");
+
+// A realistic purchasing view: the house BUYS from the supplier, so the deal's
+// seller is the supplier and the house is the buyer. No customer exists on it.
+const buyLegRender = (() => {
+  const access = resolveFieldAccess(PURCHASING);
+  const raw = { ...deal(), dealKind: "purchase_only",
+    seller: { id: PRODUCER, code: "WRT", name: "Wood ART" },
+    buyer: { id: SELLER, code: "TWP", name: "Timber World" },
+    customer: { id: null, code: null, name: null } };
+  const walled = projectDealView({ ...raw }, access, SELLER) as unknown as DealHeaderLike & {
+    lineItems: DealLineLike[];
+  };
+  const ctx: ProjectionContext = {
+    access, viewerOrgId: SELLER, isPlatformAdmin: false, personasByOrgId: PERSONAS,
+  };
+  const rawHeader = raw as unknown as DealHeaderLike;
+  return {
+    item: toProjectListItem(rawHeader, walled, ctx, 0),
+    detail: toProjectDetail(rawHeader, walled, ctx, { lines: walled.lineItems ?? [], files: [], fileCounts: { total: 0, customer: 0, production: 0, deal: 0 } }),
+  };
+})();
+eq("purchasing on a BUY leg: direction is buy", buyLegRender.item.direction, "buy");
+eq("purchasing on a BUY leg: the counterparty is the supplier",
+   buyLegRender.item.counterparty?.name, "Wood ART");
+ok("purchasing on a BUY leg: no client name appears anywhere in the payload",
+   !JSON.stringify(buyLegRender).includes("Client Org"), JSON.stringify(buyLegRender).slice(0, 300));
 
 // ── Counterparty (client) login: empty profile, viewer IS the buyer ──────────
 const client = render(CLIENT, BUYER);
@@ -209,6 +268,8 @@ ok("detail keys ⊆ whitelist", Object.keys(admin.detail).every((k) => DETAIL_KE
 ok("party refs expose only id/name/code/personas/role",
    Object.keys(admin.item.counterparty ?? {}).every((k) =>
      ["id", "name", "code", "personas", "role"].includes(k)));
+ok("vatRate is never serialized, not even for an admin",
+   !JSON.stringify(admin.detail).includes("vatRate"));
 ok("file metadata exposes only the six safe columns",
    Object.keys(admin.detail.files[0] ?? {}).every((k) =>
      ["id", "category", "fileName", "mimeType", "fileSizeBytes", "createdAt"].includes(k)));

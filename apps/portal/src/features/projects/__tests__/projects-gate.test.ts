@@ -9,6 +9,9 @@
  * and organisation role flags never grant anything.
  */
 import { evaluateProjectsGate, PROJECTS_MODULE, type ProjectsGateInput } from "../gate";
+import { isTimberProjectsEnabled } from "../config";
+import { personasForOrg, type OrgRoleFlags } from "../personas";
+import { isPartyOrg } from "../projection";
 import { PROJECTS_NAV_ITEM, withProjectsNav, ADMIN_NAV_ITEMS } from "@/components/layout/navItems";
 import type { NavItem } from "@/components/layout/Sidebar";
 
@@ -76,17 +79,61 @@ eq("legacy role-admin (is_platform_admin false) with no modules → not_found",
 eq("legacy role-admin WITH orders.view → allowed as a module user, not as admin",
    gate({ isPlatformAdmin: false }), { ok: true, reason: "module" });
 
-// ── 5. Organisation role flags never appear in the decision ──────────────────
-// The gate input has no place to put them: same modules ⇒ same decision, whether
-// the viewer's org is a buyer, a trader or a supplier.
-const buyerLike = gate();
-const traderLike = gate();
-const supplierLike = gate();
-eq("personas cannot change the decision (buyer vs trader)", buyerLike, traderLike);
-eq("personas cannot change the decision (buyer vs supplier)", buyerLike, supplierLike);
-ok("gate input has no role-flag fields",
-   !Object.keys({ flagEnabled: true, authenticated: true, isPlatformAdmin: true, orgId: "", modules: new Set() })
-     .some((k) => /customer|trader|supplier|manufacturer|producer|persona/i.test(k)));
+// ── 5. Organisation role flags label, they never grant ───────────────────────
+// Compose the two halves the way access.ts does — personas from the org's role
+// flags, the decision from modules — and show the flags move one and not the
+// other. (Not a tautology: personasForOrg really runs, and its output really
+// differs between the three cases.)
+function viewer(flags: OrgRoleFlags, modules: Set<string>) {
+  return {
+    personas: personasForOrg(flags),
+    decision: evaluateProjectsGate({
+      flagEnabled: true, authenticated: true, isPlatformAdmin: false, orgId: ORG, modules,
+    }),
+  };
+}
+const withModule = new Set<string>([PROJECTS_MODULE]);
+const buyerViewer = viewer({ isCustomer: true }, withModule);
+const traderViewer = viewer({ isTrader: true }, withModule);
+const supplierViewer = viewer({ isSupplier: true, isManufacturer: true }, withModule);
+eq("the three personas really are different",
+   [buyerViewer.personas, traderViewer.personas, supplierViewer.personas],
+   [["buyer"], ["trader"], ["supplier"]]);
+eq("…yet the access decision is identical for all three",
+   [buyerViewer.decision, traderViewer.decision, supplierViewer.decision],
+   [{ ok: true, reason: "module" }, { ok: true, reason: "module" }, { ok: true, reason: "module" }]);
+eq("a supplier-flagged organisation without orders.view is still denied",
+   viewer({ isSupplier: true }, new Set()).decision, { ok: false, deny: "not_found" });
+eq("a buyer-flagged organisation without orders.view is still denied",
+   viewer({ isCustomer: true }, new Set()).decision, { ok: false, deny: "not_found" });
+eq("an organisation with NO role flag but WITH orders.view is allowed",
+   viewer({}, withModule).decision, { ok: true, reason: "module" });
+
+// ── 5b. The flag reader itself (clause #1 of the contract) ───────────────────
+const savedFlag = process.env.TIMBER_PROJECTS_ENABLED;
+delete process.env.TIMBER_PROJECTS_ENABLED;
+eq("unset env → disabled", isTimberProjectsEnabled(), false);
+for (const v of ["", "false", "TRUE", "True", "1", "yes", " true"]) {
+  process.env.TIMBER_PROJECTS_ENABLED = v;
+  eq(`env "${v}" → disabled (strict === "true")`, isTimberProjectsEnabled(), false);
+}
+process.env.TIMBER_PROJECTS_ENABLED = "true";
+eq('env "true" → enabled', isTimberProjectsEnabled(), true);
+if (savedFlag === undefined) delete process.env.TIMBER_PROJECTS_ENABLED;
+else process.env.TIMBER_PROJECTS_ENABLED = savedFlag;
+
+// ── 5c. Same-organisation rule for a multi-org viewer ────────────────────────
+const dealOf = (seller: string | null, buyer: string | null, producer: string | null = null) =>
+  ({ seller: { id: seller, code: null, name: null },
+     buyer: { id: buyer, code: null, name: null },
+     producer: { id: producer, code: null, name: null } }) as unknown as Parameters<typeof isPartyOrg>[0];
+ok("the current org as seller counts as a party", isPartyOrg(dealOf(ORG, "other"), ORG));
+ok("the current org as buyer counts as a party", isPartyOrg(dealOf("other", ORG), ORG));
+ok("the deprecated producer slot alone does NOT make the current org a party",
+   !isPartyOrg(dealOf("other", "other2", ORG), ORG));
+ok("a deal of ANOTHER membership is not a party deal here",
+   !isPartyOrg(dealOf("other", "other2"), ORG));
+ok("no current org → never a party", !isPartyOrg(dealOf(ORG, "other"), null));
 
 // ── 6. Nav injection ─────────────────────────────────────────────────────────
 const baseNav: NavItem[] = [

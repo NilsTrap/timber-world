@@ -6,16 +6,16 @@
  * endpoint would add attack surface for nothing. Every call re-runs the full
  * gate through `resolveProjectsActor()` — there is no "already checked" path.
  *
- * One visible bilateral deal = one project. Visibility is decided ONLY by RLS
- * on the authenticated client (`can_access_deal_row`); this code adds no
- * org/party filter of its own (re-deriving visibility in app code is how the
- * two walls drift apart) and never looks at a spine, a sibling leg or an
- * upstream pointer.
+ * One visible bilateral deal = one project. RLS on the authenticated client
+ * (`can_access_deal_row`) is authoritative; the additional seller/buyer filter
+ * binds a multi-org viewer to their CURRENT organisation before its field wall
+ * is applied. The loader never looks at a spine, sibling leg or upstream link.
  */
 import { listDeals, type OrderDealSummary } from "../../orders/services/orderDeals";
 import { projectDealView } from "../../orders/services/dealFields";
+import { isValidUUID } from "../../orders/types";
 import { resolveProjectsActor, resolveProjectsViewer } from "../access";
-import { toProjectListItem, type ProjectionContext } from "../projection";
+import { facingPartyOrgId, toProjectListItem, type ProjectionContext } from "../projection";
 import { loadOrgPersonas } from "../services/orgPersonas";
 import { countFilesByDeal } from "../services/projectFiles";
 import type { ProjectListItem, ProjectsResult, ProjectsViewer } from "../types";
@@ -32,18 +32,29 @@ export async function listProjects(): Promise<ListProjectsResult> {
   const a = await resolveProjectsActor();
   if (!a.ok) return a;
 
-  const res = await listDeals(a.db, a.actor, { limit: LIST_LIMIT });
+  // Scope non-admins to the CURRENT organisation, exactly like the Orders list
+  // (getOrders.ts). RLS alone would also hand back deals from the viewer's OTHER
+  // memberships — and those must not be projected through this organisation's
+  // field-domain grants, which is the wall we resolved above. Admins are not
+  // scoped (they are a party to nothing and may see everything).
+  const partyOrganisationId =
+    !a.isPlatformAdmin && a.orgId && isValidUUID(a.orgId) ? a.orgId : undefined;
+  if (!a.isPlatformAdmin && !partyOrganisationId) return { ok: false, deny: "not_found" };
+
+  const res = await listDeals(a.db, a.actor, { limit: LIST_LIMIT, partyOrganisationId });
   if (!res.success) return { ok: false, deny: "not_found" };
 
   const raws: OrderDealSummary[] = res.data;
   const visibleIds = raws.map((d) => d.id);
 
-  // Persona lookup covers only orgs already present in the payload (the parties
-  // of visible deals) plus the viewer's own org — all RLS-filtered.
+  // Persona lookup covers ONLY the orgs that actually reach the payload — the
+  // viewer's own org and the counterparty of each row — never every party slot
+  // of every deal. Fewer ids in the `.in(...)` and, more to the point, no flag
+  // lookup for an organisation the viewer is not going to be shown.
   const [personasByOrgId, fileCounts, viewer] = await Promise.all([
     loadOrgPersonas(a.db, [
       a.orgId,
-      ...raws.flatMap((d) => [d.seller.id, d.buyer.id, d.customer.id, d.producer.id]),
+      ...raws.map((d) => facingPartyOrgId(d, a.orgId, a.isPlatformAdmin)),
     ]),
     countFilesByDeal(a.db, visibleIds),
     resolveProjectsViewer(a),

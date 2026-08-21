@@ -17,6 +17,12 @@ export const dynamic = "force-dynamic";
  * org → effective `orders.view`) and returns a denial, never a partial payload.
  * With the flag off this route is a 404 for everyone, exactly like a path that
  * does not exist.
+ *
+ * `/projects` is deliberately NOT added to the protected-prefix list in
+ * src/proxy.ts (neither is /orders or /counterparties — page-level gating is the
+ * house pattern here). Adding it would bounce an unauthenticated visitor to
+ * /login even when the flag is OFF, which is exactly the existence oracle the
+ * gate ordering avoids.
  */
 export default async function ProjectsPage() {
   const res = await listProjects();
