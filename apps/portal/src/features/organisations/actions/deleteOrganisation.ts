@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession, isAdmin, isPlatformAdmin, isSuperAdmin } from "@/lib/auth";
 import { isValidUUID } from "../types";
 import type { ActionResult } from "../types";
 import { logAudit } from "@/features/audit/logAudit";
@@ -27,7 +27,7 @@ export async function deleteOrganisation(
   }
 
   // 2. Check admin role
-  if (!isAdmin(session)) {
+  if (!(isAdmin(session) || isPlatformAdmin(session) || isSuperAdmin(session))) {
     return {
       success: false,
       error: "Permission denied",

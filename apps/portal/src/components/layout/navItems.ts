@@ -104,9 +104,8 @@ export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
     { href: "/admin/catalog/products", label: "Products" },
     { href: "/admin/catalog/categories", label: "Categories" },
   ]},
-  // "CRM" = the counterparties relationship hub (clients + suppliers). Renamed from
-  // "Counterparties" — it IS the new CRM (the old contacts CRM is now under Legacy).
-  { href: "/counterparties", label: "CRM", iconName: "Handshake", group: "deals", children: [
+  // Companies = organisation-backed customer/supplier profiles.
+  { href: "/counterparties", label: "Companies", iconName: "Handshake", group: "deals", children: [
     { href: "/counterparties/clients", label: "Clients" },
     { href: "/counterparties/suppliers", label: "Suppliers" },
     // L2 · Traders book is ADMIN-ONLY — only listed in the admin nav.
@@ -141,9 +140,8 @@ export function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavI
       { href: "/admin/catalog/products", label: "Products" },
       { href: "/admin/catalog/categories", label: "Categories" },
     ]},
-    // "CRM" = the counterparties hub (clients + suppliers); the old contacts CRM
-    // is now under Legacy.
-    { href: "/counterparties", label: "CRM", iconName: "Handshake", group: "deals",
+    // Organisation-backed customer/supplier company profiles.
+    { href: "/counterparties", label: "Companies", iconName: "Handshake", group: "deals",
       requiresAnyModule: ["counterparties.clients", "counterparties.suppliers"], children: [
       { href: "/counterparties/clients", label: "Clients", requiresExactModule: "counterparties.clients" },
       { href: "/counterparties/suppliers", label: "Suppliers", requiresExactModule: "counterparties.suppliers" },

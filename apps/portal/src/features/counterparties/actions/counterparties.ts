@@ -1,34 +1,27 @@
 "use server";
 
-/**
- * E4 · Counterparty actions (spec §9.3) — list/create/edit records in the two
- * walled address books (clients / suppliers) over the organisations table.
- *
- * Guard: platform admins pass; everyone else needs the book's action right
- * ("counterparty:clients" / "counterparty:suppliers") in their AccessProfile.
- *
- * DATA ACCESS NOTE: after the right check, reads and writes deliberately go
- * through createAdminClient() (service role, bypasses RLS). Org users cannot
- * see unrelated organisations under RLS BY DESIGN — a counterparty record is
- * an org the caller has no membership in, so the user-scoped client would
- * return nothing. The action-level right check above IS the gate; do not
- * "fix" this by switching to the user client.
- */
-
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPlatformSetting } from "@/features/access/actions/platformSettings";
-import { requireBookAccess } from "../access";
+import { deleteOrganisation } from "@/features/organisations/actions/deleteOrganisation";
+import { crmSyncOrg } from "@/features/organisations/services/oscarCrm";
+import { logAudit } from "@/features/audit/logAudit";
+import {
+  requireBookAccess,
+  requireCounterpartyBookAccess,
+  requireCounterpartyRecordAccess,
+} from "../access";
 import type {
   ActionResult,
   CounterpartyBook,
+  CounterpartyBookContext,
   CounterpartyInput,
+  CounterpartyProfile,
   CounterpartyRow,
 } from "../types";
 
 const COUNTERPARTY_COLUMNS =
-  "id, code, name, registration_number, vat_number, legal_address, country, email, phone, website, bank_name, bank_account_number, bank_swift_code, default_signee_name, default_signee_role, is_active, is_customer, is_supplier, is_producer, is_trader";
+  "id, code, name, registration_number, vat_number, legal_address, country, email, phone, website, bank_name, bank_account_number, bank_swift_code, default_signee_name, default_signee_role, logo_url, crm_org_id, is_active, is_customer, is_supplier, is_producer, is_manufacturer, is_trader";
 
-/** Trim a value; empty → null (blank card fields store as NULL). */
 function nn(v: string | null | undefined): string | null {
   const t = (v ?? "").trim();
   return t === "" ? null : t;
@@ -52,6 +45,7 @@ function mapRow(row: any): CounterpartyRow {
     bankSwiftCode: (row.bank_swift_code as string | null) ?? null,
     defaultSigneeName: (row.default_signee_name as string | null) ?? null,
     defaultSigneeRole: (row.default_signee_role as string | null) ?? null,
+    logoUrl: (row.logo_url as string | null) ?? null,
     isActive: row.is_active === true,
   };
 }
@@ -63,12 +57,32 @@ function isInBook(row: any, book: CounterpartyBook): boolean {
   return row.is_supplier === true || row.is_producer === true;
 }
 
-/**
- * Ensure symmetric organisation_trading_partners links between the caller's
- * org and the counterparty org — this is what makes the record pickable on
- * deals. Insert-ignoring-23505 idiom (same as addTradingPartner). Skips
- * silently when the caller has no org (platform-view admin).
- */
+async function syncCrm(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  row: any,
+): Promise<void> {
+  await crmSyncOrg(admin, {
+    timberOrgId: row.id,
+    code: row.code,
+    name: row.name,
+    legalAddress: row.legal_address ?? null,
+    vatNumber: row.vat_number ?? null,
+    registrationNumber: row.registration_number ?? null,
+    country: row.country ?? null,
+    phone: row.phone ?? null,
+    email: row.email ?? null,
+    website: row.website ?? null,
+    bankName: row.bank_name ?? null,
+    bankAccountNumber: row.bank_account_number ?? null,
+    bankSwiftCode: row.bank_swift_code ?? null,
+    isCustomer: row.is_customer === true,
+    isManufacturer: row.is_manufacturer === true,
+    isProducer: row.is_producer === true,
+    crmOrgId: row.crm_org_id ?? null,
+  });
+}
+
 async function ensureTradingPartnerLinks(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
@@ -77,27 +91,19 @@ async function ensureTradingPartnerLinks(
   createdBy: string,
 ): Promise<void> {
   if (!callerOrgId || callerOrgId === counterpartyOrgId) return;
-  const pairs = [
+  for (const pair of [
     { organisation_id: callerOrgId, partner_organisation_id: counterpartyOrgId },
     { organisation_id: counterpartyOrgId, partner_organisation_id: callerOrgId },
-  ];
-  for (const pair of pairs) {
+  ]) {
     const { error } = await admin
       .from("organisation_trading_partners")
       .insert({ ...pair, created_by: createdBy });
-    // Ignore duplicate key error (23505) — the link already exists.
     if (error && error.code !== "23505") {
       console.error("Failed to link counterparty as trading partner:", error);
     }
   }
 }
 
-/**
- * Q3 · Batched active-user count per org — mutates each row's `userCount`.
- * Mirrors getOrganisations' union logic so a CRM book shows the SAME number as
- * the admin Orgs table: legacy `portal_users.organisation_id` ∪ active
- * `organization_memberships` (deduped). One query per source — no N+1.
- */
 async function attachUserCounts(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
@@ -105,260 +111,220 @@ async function attachUserCounts(
 ): Promise<void> {
   if (rows.length === 0) return;
   const orgIds = rows.map((r) => r.id);
-
-  const { data: legacyUsers } = await admin
-    .from("portal_users")
-    .select("id, organisation_id")
-    .in("organisation_id", orgIds);
-
-  // org_id -> set of legacy user ids (matches getOrganisations: unfiltered by is_active).
-  const legacyByOrg = new Map<string, Set<string>>();
-  for (const u of (legacyUsers ?? []) as Array<{ id: string; organisation_id: string | null }>) {
-    if (!u.organisation_id) continue;
-    if (!legacyByOrg.has(u.organisation_id)) legacyByOrg.set(u.organisation_id, new Set());
-    legacyByOrg.get(u.organisation_id)!.add(u.id);
+  const [{ data: legacyUsers }, { data: memberships }] = await Promise.all([
+    admin.from("portal_users").select("id, organisation_id").in("organisation_id", orgIds),
+    admin.from("organization_memberships").select("organization_id, user_id").eq("is_active", true).in("organization_id", orgIds),
+  ]);
+  const usersByOrg = new Map<string, Set<string>>();
+  for (const user of (legacyUsers ?? []) as Array<{ id: string; organisation_id: string | null }>) {
+    if (!user.organisation_id) continue;
+    if (!usersByOrg.has(user.organisation_id)) usersByOrg.set(user.organisation_id, new Set());
+    usersByOrg.get(user.organisation_id)!.add(user.id);
   }
-
-  const { data: memberships } = await admin
-    .from("organization_memberships")
-    .select("organization_id, user_id")
-    .eq("is_active", true)
-    .in("organization_id", orgIds);
-
-  // org_id -> count of active members NOT already counted via legacy.
-  const extraByOrg = new Map<string, number>();
-  for (const m of (memberships ?? []) as Array<{ organization_id: string; user_id: string }>) {
-    if (legacyByOrg.get(m.organization_id)?.has(m.user_id)) continue;
-    extraByOrg.set(m.organization_id, (extraByOrg.get(m.organization_id) ?? 0) + 1);
+  for (const membership of (memberships ?? []) as Array<{ organization_id: string; user_id: string }>) {
+    if (!usersByOrg.has(membership.organization_id)) usersByOrg.set(membership.organization_id, new Set());
+    usersByOrg.get(membership.organization_id)!.add(membership.user_id);
   }
-
-  for (const r of rows) {
-    r.userCount = (legacyByOrg.get(r.id)?.size ?? 0) + (extraByOrg.get(r.id) ?? 0);
-  }
+  for (const row of rows) row.userCount = usersByOrg.get(row.id)?.size ?? 0;
 }
 
-/** All records of one book, ordered by code. */
+export async function getCounterpartyBookContext(
+  book: CounterpartyBook,
+): Promise<ActionResult<CounterpartyBookContext>> {
+  const access = await requireCounterpartyBookAccess(book);
+  if (!access.ok) return { success: false, error: access.error, code: access.code };
+  return {
+    success: true,
+    data: { accessMode: access.mode, canManage: access.canManage },
+  };
+}
+
+/** Scoped list: all for admin, linked partners for managers, own org for self. */
 export async function listCounterparties(
   book: CounterpartyBook,
 ): Promise<ActionResult<CounterpartyRow[]>> {
-  const g = await requireBookAccess(book);
-  if (!g.ok) return { success: false, error: g.error, code: g.code };
+  const access = await requireCounterpartyBookAccess(book);
+  if (!access.ok) return { success: false, error: access.error, code: access.code };
 
-  // Service-role read AFTER the right check — see DATA ACCESS NOTE above.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  let query = admin
-    .from("organisations")
-    .select(COUNTERPARTY_COLUMNS)
-    .order("code", { ascending: true });
+  let allowedIds: string[] | null = null;
+  if (access.mode === "self") {
+    allowedIds = access.callerOrgId ? [access.callerOrgId] : [];
+  } else if (access.mode === "manager") {
+    const { data: links, error: linkError } = await admin
+      .from("organisation_trading_partners")
+      .select("partner_organisation_id")
+      .eq("organisation_id", access.callerOrgId);
+    if (linkError) {
+      console.error("Failed to load company links:", linkError);
+      return { success: false, error: "Failed to load records", code: "FETCH_FAILED" };
+    }
+    allowedIds = (links ?? []).map((r: { partner_organisation_id: string }) => r.partner_organisation_id);
+  }
+  if (allowedIds && allowedIds.length === 0) return { success: true, data: [] };
+
+  let query = admin.from("organisations").select(COUNTERPARTY_COLUMNS).order("code", { ascending: true });
+  if (allowedIds) query = query.in("id", allowedIds);
   query =
     book === "clients"
       ? query.eq("is_customer", true)
       : book === "traders"
         ? query.eq("is_trader", true)
         : query.or("is_supplier.eq.true,is_producer.eq.true");
-
   const { data, error } = await query;
   if (error) {
     console.error("Failed to list counterparties:", error);
     return { success: false, error: "Failed to load records", code: "FETCH_FAILED" };
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = ((data || []) as any[]).map(mapRow);
+  const rows = ((data ?? []) as any[]).map(mapRow);
   await attachUserCounts(admin, rows);
   return { success: true, data: rows };
 }
 
-/**
- * Create a counterparty record in one book.
- *
- * Code collision rules (spec §9.3):
- * - code already in THIS book → DUPLICATE.
- * - code is a client record and book="suppliers" → allowed to reuse ONLY when
- *   the purchasing_may_reuse_clients platform setting is true (the existing
- *   org just gets is_supplier=true). Clients never absorb suppliers.
- * - any other collision → CODE_TAKEN.
- */
+/** Direct profile read, including contacts and delivery addresses. */
+export async function getCounterpartyProfile(
+  book: CounterpartyBook,
+  id: string,
+): Promise<ActionResult<CounterpartyProfile>> {
+  const access = await requireCounterpartyRecordAccess(book, id, "read");
+  if (!access.ok) return { success: false, error: "Not found", code: "NOT_FOUND" };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const [{ data: org, error }, { data: addresses }, { data: contacts }] = await Promise.all([
+    admin.from("organisations").select(COUNTERPARTY_COLUMNS).eq("id", id).maybeSingle(),
+    admin.from("organisation_delivery_addresses").select("id, label, address, contact_name, contact_phone, contact_hours, is_default").eq("organisation_id", id).order("is_default", { ascending: false }).order("label"),
+    admin.from("org_contacts").select("id, name, role_title, email, phone, is_primary, is_active").eq("organisation_id", id).order("is_primary", { ascending: false }).order("name"),
+  ]);
+  if (error || !org) return { success: false, error: "Not found", code: "NOT_FOUND" };
+  return {
+    success: true,
+    data: {
+      ...mapRow(org),
+      accessMode: access.mode,
+      canManage: access.canManage,
+      deliveryAddresses: (addresses ?? []).map((a: Record<string, unknown>) => ({
+        id: String(a.id), label: String(a.label), address: String(a.address),
+        contactName: (a.contact_name as string | null) ?? null,
+        contactPhone: (a.contact_phone as string | null) ?? null,
+        contactHours: (a.contact_hours as string | null) ?? null,
+        isDefault: a.is_default === true,
+      })),
+      contacts: (contacts ?? []).map((c: Record<string, unknown>) => ({
+        id: String(c.id), name: String(c.name), roleTitle: (c.role_title as string | null) ?? null,
+        email: (c.email as string | null) ?? null, phone: (c.phone as string | null) ?? null,
+        isPrimary: c.is_primary === true, isActive: c.is_active === true,
+      })),
+    },
+  };
+}
+
 export async function createCounterparty(
   book: CounterpartyBook,
   input: CounterpartyInput,
 ): Promise<ActionResult<CounterpartyRow>> {
-  const g = await requireBookAccess(book);
-  if (!g.ok) return { success: false, error: g.error, code: g.code };
-
+  const access = await requireBookAccess(book);
+  if (!access.ok) return { success: false, error: access.error, code: access.code };
+  if (book === "traders" && access.mode !== "admin") {
+    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  }
   const code = (input.code ?? "").trim().toUpperCase();
   if (!/^[A-Z]{3}$/.test(code)) {
-    return {
-      success: false,
-      error: "Code must be exactly 3 letters (A–Z)",
-      code: "VALIDATION_ERROR",
-    };
+    return { success: false, error: "Code must be exactly 3 letters (A–Z)", code: "VALIDATION_ERROR" };
   }
   const name = input.name.trim();
-  if (!name) {
-    return { success: false, error: "Name is required", code: "VALIDATION_ERROR" };
-  }
+  if (!name) return { success: false, error: "Name is required", code: "VALIDATION_ERROR" };
 
-  // Service-role access AFTER the right check — see DATA ACCESS NOTE above.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-
-  const { data: existing, error: lookupError } = await admin
-    .from("organisations")
-    .select(COUNTERPARTY_COLUMNS)
-    .eq("code", code)
-    .maybeSingle();
-  if (lookupError) {
-    console.error("Failed to check counterparty code:", lookupError);
-    return { success: false, error: "Failed to create record", code: "CREATE_FAILED" };
-  }
-
+  const { data: existing, error: lookupError } = await admin.from("organisations").select(COUNTERPARTY_COLUMNS).eq("code", code).maybeSingle();
+  if (lookupError) return { success: false, error: "Failed to create record", code: "CREATE_FAILED" };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let row: any;
-
   if (existing) {
     if (isInBook(existing, book)) {
-      const singular = book === "clients" ? "client" : book === "traders" ? "trader" : "supplier";
-      return {
-        success: false,
-        error: `A ${singular} with code ${code} already exists`,
-        code: "DUPLICATE",
-      };
+      return { success: false, error: `A ${book === "clients" ? "client" : book === "suppliers" ? "supplier" : "trader"} with code ${code} already exists`, code: "DUPLICATE" };
     }
     if (book === "suppliers" && existing.is_customer === true) {
-      // Reuse a client record on the supplier side — only if the platform
-      // setting allows it (spec §9.3 admin toggle).
       const setting = await getPlatformSetting("purchasing_may_reuse_clients");
-      const mayReuse = setting.success && setting.data.value === true;
-      if (!mayReuse) {
-        return {
-          success: false,
-          error: `Code ${code} belongs to a client record. Reusing client records on the supplier side is disabled by the platform settings.`,
-          code: "CODE_TAKEN",
-        };
+      if (!(setting.success && setting.data.value === true)) {
+        return { success: false, error: `Code ${code} belongs to a client record. Reusing it is disabled.`, code: "CODE_TAKEN" };
       }
-      const { data: updated, error: reuseError } = await admin
-        .from("organisations")
-        .update({ is_supplier: true })
-        .eq("id", existing.id)
-        .select(COUNTERPARTY_COLUMNS)
-        .single();
-      if (reuseError || !updated) {
-        console.error("Failed to reuse client record as supplier:", reuseError);
-        return { success: false, error: "Failed to create record", code: "CREATE_FAILED" };
-      }
+      const { data: updated, error } = await admin.from("organisations").update({ is_supplier: true }).eq("id", existing.id).select(COUNTERPARTY_COLUMNS).single();
+      if (error || !updated) return { success: false, error: "Failed to create record", code: "CREATE_FAILED" };
       row = updated;
     } else {
-      // Clients never absorb suppliers; other orgs (e.g. internal) are off-limits.
-      return {
-        success: false,
-        error: `Code ${code} is already taken by another organisation`,
-        code: "CODE_TAKEN",
-      };
+      return { success: false, error: `Code ${code} is already taken by another organisation`, code: "CODE_TAKEN" };
     }
   } else {
-    const { data: created, error: insertError } = await admin
-      .from("organisations")
-      .insert({
-        code,
-        name,
-        // Traders are the house's OWN companies (internal); clients/suppliers
-        // are external counterparties.
-        is_external: book !== "traders",
-        is_active: true,
-        ...(book === "clients"
-          ? { is_customer: true }
-          : book === "traders"
-            ? { is_trader: true }
-            : { is_supplier: true }),
-        registration_number: nn(input.registrationNumber),
-        vat_number: nn(input.vatNumber),
-        legal_address: nn(input.legalAddress),
-        country: nn(input.country)?.toUpperCase() ?? null,
-        email: nn(input.email),
-        phone: nn(input.phone),
-        website: nn(input.website),
-        bank_name: nn(input.bankName),
-        bank_account_number: nn(input.bankAccountNumber),
-        bank_swift_code: nn(input.bankSwiftCode),
-        default_signee_name: nn(input.defaultSigneeName),
-        default_signee_role: nn(input.defaultSigneeRole),
-      })
-      .select(COUNTERPARTY_COLUMNS)
-      .single();
-    if (insertError || !created) {
-      if (insertError?.code === "23505") {
-        return { success: false, error: `Code ${code} is already taken`, code: "CODE_TAKEN" };
-      }
-      console.error("Failed to create counterparty:", insertError);
-      return { success: false, error: "Failed to create record", code: "CREATE_FAILED" };
+    const { data: created, error } = await admin.from("organisations").insert({
+      code, name, is_external: book !== "traders", is_active: true,
+      ...(book === "clients" ? { is_customer: true } : book === "traders" ? { is_trader: true } : { is_supplier: true }),
+      registration_number: nn(input.registrationNumber), vat_number: nn(input.vatNumber),
+      legal_address: nn(input.legalAddress), country: nn(input.country)?.toUpperCase() ?? null,
+      email: nn(input.email), phone: nn(input.phone), website: nn(input.website),
+      bank_name: nn(input.bankName), bank_account_number: nn(input.bankAccountNumber),
+      bank_swift_code: nn(input.bankSwiftCode), default_signee_name: nn(input.defaultSigneeName),
+      default_signee_role: nn(input.defaultSigneeRole),
+    }).select(COUNTERPARTY_COLUMNS).single();
+    if (error || !created) {
+      return { success: false, error: error?.code === "23505" ? `Code ${code} is already taken` : "Failed to create record", code: error?.code === "23505" ? "CODE_TAKEN" : "CREATE_FAILED" };
     }
     row = created;
   }
-
-  // Link the record to the caller's org so it becomes pickable on deals.
-  await ensureTradingPartnerLinks(admin, g.callerOrgId, row.id, g.session.id);
-
+  await ensureTradingPartnerLinks(admin, access.callerOrgId, row.id, access.session.id);
+  await syncCrm(admin, row);
+  await logAudit({ action: "counterparty.create", resourceType: "organisation", resourceId: row.id, organisationId: row.id, metadata: { book, code } });
   return { success: true, data: mapRow(row) };
 }
 
-/**
- * Edit a counterparty record's card fields (never the code) and toggle
- * is_active. Only touches rows that belong to the given book.
- */
 export async function updateCounterparty(
   book: CounterpartyBook,
   id: string,
   input: CounterpartyInput,
 ): Promise<ActionResult<CounterpartyRow>> {
-  const g = await requireBookAccess(book);
-  if (!g.ok) return { success: false, error: g.error, code: g.code };
-
+  const access = await requireCounterpartyRecordAccess(book, id, "manage");
+  if (!access.ok) return { success: false, error: "Not found", code: "NOT_FOUND" };
   const name = input.name.trim();
-  if (!name) {
-    return { success: false, error: "Name is required", code: "VALIDATION_ERROR" };
-  }
-
-  // Service-role access AFTER the right check — see DATA ACCESS NOTE above.
+  if (!name) return { success: false, error: "Name is required", code: "VALIDATION_ERROR" };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-
-  const { data: existing } = await admin
-    .from("organisations")
-    .select(COUNTERPARTY_COLUMNS)
-    .eq("id", id)
-    .maybeSingle();
-  // The book flag check keeps each book walled: a clients-right holder can
-  // never edit a supplier row through this action (and vice versa).
-  if (!existing || !isInBook(existing, book)) {
-    return { success: false, error: "Record not found", code: "NOT_FOUND" };
-  }
-
-  const { data: updated, error } = await admin
-    .from("organisations")
-    .update({
-      name,
-      registration_number: nn(input.registrationNumber),
-      vat_number: nn(input.vatNumber),
-      legal_address: nn(input.legalAddress),
-      country: nn(input.country)?.toUpperCase() ?? null,
-      email: nn(input.email),
-      phone: nn(input.phone),
-      website: nn(input.website),
-      bank_name: nn(input.bankName),
-      bank_account_number: nn(input.bankAccountNumber),
-      bank_swift_code: nn(input.bankSwiftCode),
-      default_signee_name: nn(input.defaultSigneeName),
-      default_signee_role: nn(input.defaultSigneeRole),
-      ...(typeof input.isActive === "boolean" ? { is_active: input.isActive } : {}),
-    })
-    .eq("id", id)
-    .select(COUNTERPARTY_COLUMNS)
-    .single();
-  if (error || !updated) {
-    console.error("Failed to update counterparty:", error);
-    return { success: false, error: "Failed to update record", code: "UPDATE_FAILED" };
-  }
-
+  const { data: updated, error } = await admin.from("organisations").update({
+    name, registration_number: nn(input.registrationNumber), vat_number: nn(input.vatNumber),
+    legal_address: nn(input.legalAddress), country: nn(input.country)?.toUpperCase() ?? null,
+    email: nn(input.email), phone: nn(input.phone), website: nn(input.website),
+    bank_name: nn(input.bankName), bank_account_number: nn(input.bankAccountNumber),
+    bank_swift_code: nn(input.bankSwiftCode), default_signee_name: nn(input.defaultSigneeName),
+    default_signee_role: nn(input.defaultSigneeRole),
+    ...(typeof input.isActive === "boolean" ? { is_active: input.isActive } : {}),
+  }).eq("id", id).select(COUNTERPARTY_COLUMNS).single();
+  if (error || !updated) return { success: false, error: "Failed to update record", code: "UPDATE_FAILED" };
+  await syncCrm(admin, updated);
+  await logAudit({ action: "counterparty.update", resourceType: "organisation", resourceId: id, organisationId: id, metadata: { book } });
   return { success: true, data: mapRow(updated) };
+}
+
+/** Admins hard-delete through the existing blocker-aware action; managers only unlink. */
+export async function removeCounterparty(
+  book: CounterpartyBook,
+  id: string,
+): Promise<ActionResult<{ id: string; removed: "deleted" | "unlinked" }>> {
+  const access = await requireCounterpartyRecordAccess(book, id, "manage");
+  if (!access.ok) return { success: false, error: "Not found", code: "NOT_FOUND" };
+  if (access.mode === "admin") {
+    const deleted = await deleteOrganisation(id);
+    return deleted.success
+      ? { success: true, data: { id, removed: "deleted" } }
+      : { success: false, error: deleted.error, code: deleted.code };
+  }
+  if (!access.callerOrgId) return { success: false, error: "Not found", code: "NOT_FOUND" };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { error } = await admin.from("organisation_trading_partners").delete().or(
+    `and(organisation_id.eq.${access.callerOrgId},partner_organisation_id.eq.${id}),and(organisation_id.eq.${id},partner_organisation_id.eq.${access.callerOrgId})`,
+  );
+  if (error) return { success: false, error: "Failed to remove company", code: "REMOVE_FAILED" };
+  await logAudit({ action: "counterparty.unlink", resourceType: "organisation", resourceId: id, organisationId: access.callerOrgId, metadata: { book } });
+  return { success: true, data: { id, removed: "unlinked" } };
 }

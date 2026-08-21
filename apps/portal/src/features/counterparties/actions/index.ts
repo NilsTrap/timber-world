@@ -1,7 +1,10 @@
 export {
   listCounterparties,
+  getCounterpartyBookContext,
+  getCounterpartyProfile,
   createCounterparty,
   updateCounterparty,
+  removeCounterparty,
 } from "./counterparties";
 
 export {

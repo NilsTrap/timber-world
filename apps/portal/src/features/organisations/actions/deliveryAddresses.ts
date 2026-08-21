@@ -1,7 +1,10 @@
 "use server";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin } from "@/lib/auth";
+import { requireCounterpartyRecordAccess } from "@/features/counterparties/access";
+import type { CounterpartyBook } from "@/features/counterparties/types";
 import { isValidUUID } from "../types";
 import type { DeliveryAddress, ActionResult } from "../types";
 
@@ -12,18 +15,22 @@ import type { DeliveryAddress, ActionResult } from "../types";
  * Admin only endpoint.
  */
 export async function getDeliveryAddresses(
-  organisationId: string
+  organisationId: string,
+  book?: CounterpartyBook,
 ): Promise<ActionResult<DeliveryAddress[]>> {
-  const session = await getSession();
-  if (!session || !isAdmin(session)) {
-    return { success: false, error: "Permission denied" };
+  if (book) {
+    const access = await requireCounterpartyRecordAccess(book, organisationId, "read");
+    if (!access.ok) return { success: false, error: "Not found", code: "NOT_FOUND" };
+  } else {
+    const session = await getSession();
+    if (!session || !isAdmin(session)) return { success: false, error: "Permission denied" };
   }
 
   if (!isValidUUID(organisationId)) {
     return { success: false, error: "Invalid organisation ID" };
   }
 
-  const supabase = await createClient();
+  const supabase = book ? createAdminClient() : await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("organisation_delivery_addresses")
@@ -58,11 +65,15 @@ export async function saveDeliveryAddress(
     contactPhone?: string | null;
     contactHours?: string | null;
     isDefault: boolean;
-  }
+  },
+  book?: CounterpartyBook,
 ): Promise<ActionResult<DeliveryAddress>> {
-  const session = await getSession();
-  if (!session || !isAdmin(session)) {
-    return { success: false, error: "Permission denied" };
+  if (book) {
+    const access = await requireCounterpartyRecordAccess(book, organisationId, "manage");
+    if (!access.ok) return { success: false, error: "Not found", code: "NOT_FOUND" };
+  } else {
+    const session = await getSession();
+    if (!session || !isAdmin(session)) return { success: false, error: "Permission denied" };
   }
 
   if (!isValidUUID(organisationId)) {
@@ -76,7 +87,7 @@ export async function saveDeliveryAddress(
     return { success: false, error: "Address is required" };
   }
 
-  const supabase = await createClient();
+  const supabase = book ? createAdminClient() : await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = supabase as any;
 
@@ -145,18 +156,22 @@ export async function saveDeliveryAddress(
  */
 export async function deleteDeliveryAddress(
   organisationId: string,
-  addressId: string
+  addressId: string,
+  book?: CounterpartyBook,
 ): Promise<ActionResult<{ deleted: true }>> {
-  const session = await getSession();
-  if (!session || !isAdmin(session)) {
-    return { success: false, error: "Permission denied" };
+  if (book) {
+    const access = await requireCounterpartyRecordAccess(book, organisationId, "manage");
+    if (!access.ok) return { success: false, error: "Not found", code: "NOT_FOUND" };
+  } else {
+    const session = await getSession();
+    if (!session || !isAdmin(session)) return { success: false, error: "Permission denied" };
   }
 
   if (!isValidUUID(organisationId) || !isValidUUID(addressId)) {
     return { success: false, error: "Invalid ID" };
   }
 
-  const supabase = await createClient();
+  const supabase = book ? createAdminClient() : await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("organisation_delivery_addresses")

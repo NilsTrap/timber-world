@@ -38,11 +38,44 @@ export interface CounterpartyRow {
   // G3: default signature block for this counterparty's documents.
   defaultSigneeName: string | null;
   defaultSigneeRole: string | null;
+  logoUrl: string | null;
   isActive: boolean;
   /** Q3: active portal-user count for this org (list view only — batched into
    *  listCounterparties, mirrors the admin OrganisationsTable "Users" column).
    *  Undefined on create/update returns, which never render the count. */
   userCount?: number;
+}
+
+export interface CounterpartyDeliveryAddress {
+  id: string;
+  label: string;
+  address: string;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactHours: string | null;
+  isDefault: boolean;
+}
+
+export interface CounterpartyContact {
+  id: string;
+  name: string;
+  roleTitle: string | null;
+  email: string | null;
+  phone: string | null;
+  isPrimary: boolean;
+  isActive: boolean;
+}
+
+export interface CounterpartyProfile extends CounterpartyRow {
+  accessMode: "admin" | "manager" | "self";
+  canManage: boolean;
+  deliveryAddresses: CounterpartyDeliveryAddress[];
+  contacts: CounterpartyContact[];
+}
+
+export interface CounterpartyBookContext {
+  accessMode: "admin" | "manager" | "self";
+  canManage: boolean;
 }
 
 export interface CounterpartyInput {

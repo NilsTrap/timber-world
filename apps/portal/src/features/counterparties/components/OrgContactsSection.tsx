@@ -26,6 +26,7 @@ import {
   useContactAsSignee,
 } from "../actions";
 import type { OrgContactRow } from "../contactTypes";
+import type { CounterpartyBook } from "../types";
 
 interface FormState {
   /** Null when adding a new contact. */
@@ -61,10 +62,12 @@ const EMPTY_FORM: FormState = {
 export function OrgContactsSection({
   organisationId,
   readOnly = false,
+  book,
   onSigneeUpdated,
 }: {
   organisationId: string;
   readOnly?: boolean;
+  book?: CounterpartyBook;
   onSigneeUpdated?: (name: string, role: string | null) => void;
 }) {
   const [rows, setRows] = useState<OrgContactRow[]>([]);
@@ -75,11 +78,11 @@ export function OrgContactsSection({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await listOrgContacts(organisationId);
+    const res = await listOrgContacts(organisationId, { book });
     if (res.success) setRows(res.data);
     else toast.error(res.error);
     setLoading(false);
-  }, [organisationId]);
+  }, [book, organisationId]);
 
   useEffect(() => {
     load();
@@ -114,8 +117,8 @@ export function OrgContactsSection({
       notes: form.notes,
     };
     const res = form.id
-      ? await updateOrgContact(form.id, { ...card, isActive: form.isActive })
-      : await createOrgContact(organisationId, { ...card, isPrimary: form.isPrimary });
+      ? await updateOrgContact(form.id, { ...card, isActive: form.isActive }, book)
+      : await createOrgContact(organisationId, { ...card, isPrimary: form.isPrimary }, book);
     setSaving(false);
     if (!res.success) {
       toast.error(res.error);
@@ -128,7 +131,7 @@ export function OrgContactsSection({
 
   const makePrimary = async (c: OrgContactRow) => {
     setBusyId(c.id);
-    const res = await setPrimaryContact(c.id);
+    const res = await setPrimaryContact(c.id, book);
     setBusyId(null);
     if (!res.success) {
       toast.error(res.error);
@@ -140,7 +143,7 @@ export function OrgContactsSection({
 
   const asSignee = async (c: OrgContactRow) => {
     setBusyId(c.id);
-    const res = await useContactAsSignee(organisationId, c.id);
+    const res = await useContactAsSignee(organisationId, c.id, book);
     setBusyId(null);
     if (!res.success) {
       toast.error(res.error);
@@ -153,7 +156,7 @@ export function OrgContactsSection({
   const remove = async (c: OrgContactRow) => {
     if (!window.confirm(`Delete contact "${c.name}"? This cannot be undone.`)) return;
     setBusyId(c.id);
-    const res = await deleteOrgContact(c.id);
+    const res = await deleteOrgContact(c.id, book);
     setBusyId(null);
     if (!res.success) {
       toast.error(res.error);

@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { CounterpartyManager } from "@/features/counterparties/components";
+import { getCounterpartyBookContext } from "@/features/counterparties/actions";
 import { Card, CardContent } from "@timber/ui";
 
-export const metadata: Metadata = { title: "Clients" };
+export const metadata: Metadata = { title: "Customers" };
 export const dynamic = "force-dynamic";
 
 /**
@@ -17,24 +18,21 @@ export default async function CounterpartyClientsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  if (!isAdmin(session)) {
-    const orgId = session.currentOrganizationId || session.organisationId;
-    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("counterparties.clients")) notFound();
-  }
+  const context = await getCounterpartyBookContext("clients");
+  if (!context.success) notFound();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Clients</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Customers</h1>
         <p className="text-muted-foreground">
-          The Customer address book — records here are kept separate from the supplier side.
+          Company profiles available in your customer book.
         </p>
       </div>
 
       <Card>
         <CardContent className="pt-6">
-          <CounterpartyManager book="clients" isAdmin={isAdmin(session)} />
+          <CounterpartyManager book="clients" canManage={context.data.canManage} />
         </CardContent>
       </Card>
     </div>

@@ -1,7 +1,10 @@
 "use server";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isAdmin } from "@/lib/auth";
+import { requireCounterpartyRecordAccess } from "@/features/counterparties/access";
+import type { CounterpartyBook } from "@/features/counterparties/types";
 import type { ActionResult } from "../types";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
@@ -15,14 +18,16 @@ const MAX_SIZE = 5 * 1024 * 1024; // 5MB
  */
 export async function uploadOrgLogo(
   organisationId: string,
-  formData: FormData
+  formData: FormData,
+  book?: CounterpartyBook,
 ): Promise<ActionResult<{ logoUrl: string }>> {
-  const session = await getSession();
-  if (!session) {
-    return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  }
-  if (!isAdmin(session)) {
-    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (book) {
+    const access = await requireCounterpartyRecordAccess(book, organisationId, "manage");
+    if (!access.ok) return { success: false, error: "Not found", code: "NOT_FOUND" };
+  } else {
+    const session = await getSession();
+    if (!session) return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
+    if (!isAdmin(session)) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
 
   const file = formData.get("file") as File | null;
@@ -42,7 +47,7 @@ export async function uploadOrgLogo(
     return { success: false, error: "File too large. Maximum 5MB.", code: "FILE_TOO_LARGE" };
   }
 
-  const supabase = await createClient();
+  const supabase = book ? createAdminClient() : await createClient();
 
   // Build storage path
   const fileExt = file.name.split(".").pop() || "png";

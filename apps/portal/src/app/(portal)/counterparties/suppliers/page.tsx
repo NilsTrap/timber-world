@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { CounterpartyManager } from "@/features/counterparties/components";
+import { getCounterpartyBookContext } from "@/features/counterparties/actions";
 import { Card, CardContent } from "@timber/ui";
 
 export const metadata: Metadata = { title: "Suppliers" };
@@ -17,24 +18,21 @@ export default async function CounterpartySuppliersPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  if (!isAdmin(session)) {
-    const orgId = session.currentOrganizationId || session.organisationId;
-    const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
-    if (!mods.has("counterparties.suppliers")) notFound();
-  }
+  const context = await getCounterpartyBookContext("suppliers");
+  if (!context.success) notFound();
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Suppliers</h1>
         <p className="text-muted-foreground">
-          The supplier and Producer address book — records here are kept separate from the client side.
+          Company profiles available in your supplier book.
         </p>
       </div>
 
       <Card>
         <CardContent className="pt-6">
-          <CounterpartyManager book="suppliers" isAdmin={isAdmin(session)} />
+          <CounterpartyManager book="suppliers" canManage={context.data.canManage} />
         </CardContent>
       </Card>
     </div>

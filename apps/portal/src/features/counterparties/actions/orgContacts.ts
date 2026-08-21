@@ -20,7 +20,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession, isAdmin } from "@/lib/auth";
-import { requireBookAccess, type BookAccess } from "../access";
+import { requireBookAccess, requireCounterpartyRecordAccess, type BookAccess } from "../access";
 import type { ActionResult, CounterpartyBook } from "../types";
 import type { OrgContactRow, OrgContactInput } from "../contactTypes";
 
@@ -52,7 +52,16 @@ function mapContact(row: any): OrgContactRow {
  * Gate contact access by the org's address book(s). Admins pass for any org;
  * others must hold access to at least one book the org belongs to.
  */
-async function requireContactAccessForOrg(organisationId: string): Promise<BookAccess> {
+async function requireContactAccessForOrg(
+  organisationId: string,
+  intent: "read" | "manage",
+  exactBook?: CounterpartyBook,
+): Promise<BookAccess> {
+  // Company profile callers always supply the route's exact book. This prevents
+  // a dual-role org being reached through a book the caller was not granted.
+  if (exactBook) {
+    return requireCounterpartyRecordAccess(exactBook, organisationId, intent);
+  }
   const session = await getSession();
   if (!session) return { ok: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
 
@@ -78,6 +87,8 @@ async function requireContactAccessForOrg(organisationId: string): Promise<BookA
       ok: true,
       session,
       callerOrgId: session.currentOrganizationId || session.organisationId,
+      mode: "admin",
+      canManage: true,
     };
   }
 
@@ -109,9 +120,9 @@ async function requireContactAccessForOrg(organisationId: string): Promise<BookA
  */
 export async function listOrgContacts(
   organisationId: string,
-  opts?: { includeInactive?: boolean },
+  opts?: { includeInactive?: boolean; book?: CounterpartyBook },
 ): Promise<ActionResult<OrgContactRow[]>> {
-  const g = await requireContactAccessForOrg(organisationId);
+  const g = await requireContactAccessForOrg(organisationId, "read", opts?.book);
   if (!g.ok) return { success: false, error: g.error, code: g.code };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -141,8 +152,9 @@ export async function listOrgContacts(
 export async function createOrgContact(
   organisationId: string,
   input: OrgContactInput,
+  book?: CounterpartyBook,
 ): Promise<ActionResult<OrgContactRow>> {
-  const g = await requireContactAccessForOrg(organisationId);
+  const g = await requireContactAccessForOrg(organisationId, "manage", book);
   if (!g.ok) return { success: false, error: g.error, code: g.code };
 
   const name = (input.name ?? "").trim();
@@ -187,6 +199,7 @@ export async function createOrgContact(
 export async function updateOrgContact(
   id: string,
   patch: OrgContactInput,
+  book?: CounterpartyBook,
 ): Promise<ActionResult<OrgContactRow>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
@@ -201,7 +214,7 @@ export async function updateOrgContact(
   }
   if (!existing) return { success: false, error: "Contact not found", code: "NOT_FOUND" };
 
-  const g = await requireContactAccessForOrg(existing.organisation_id);
+  const g = await requireContactAccessForOrg(existing.organisation_id, "manage", book);
   if (!g.ok) return { success: false, error: g.error, code: g.code };
 
   const name = (patch.name ?? "").trim();
@@ -229,7 +242,7 @@ export async function updateOrgContact(
 }
 
 /** Hard-delete a contact (confirm in the UI). Gated by the contact's org. */
-export async function deleteOrgContact(id: string): Promise<ActionResult<{ id: string }>> {
+export async function deleteOrgContact(id: string, book?: CounterpartyBook): Promise<ActionResult<{ id: string }>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data: existing } = await admin
@@ -239,7 +252,7 @@ export async function deleteOrgContact(id: string): Promise<ActionResult<{ id: s
     .maybeSingle();
   if (!existing) return { success: false, error: "Contact not found", code: "NOT_FOUND" };
 
-  const g = await requireContactAccessForOrg(existing.organisation_id);
+  const g = await requireContactAccessForOrg(existing.organisation_id, "manage", book);
   if (!g.ok) return { success: false, error: g.error, code: g.code };
 
   const { error } = await admin.from("org_contacts").delete().eq("id", id);
@@ -255,7 +268,7 @@ export async function deleteOrgContact(id: string): Promise<ActionResult<{ id: s
  * sets this one (the first-wins trigger needs no other primary present for the
  * set to stick). Gated by the contact's org.
  */
-export async function setPrimaryContact(id: string): Promise<ActionResult<OrgContactRow>> {
+export async function setPrimaryContact(id: string, book?: CounterpartyBook): Promise<ActionResult<OrgContactRow>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data: existing } = await admin
@@ -265,7 +278,7 @@ export async function setPrimaryContact(id: string): Promise<ActionResult<OrgCon
     .maybeSingle();
   if (!existing) return { success: false, error: "Contact not found", code: "NOT_FOUND" };
 
-  const g = await requireContactAccessForOrg(existing.organisation_id);
+  const g = await requireContactAccessForOrg(existing.organisation_id, "manage", book);
   if (!g.ok) return { success: false, error: g.error, code: g.code };
 
   await admin
@@ -295,8 +308,9 @@ export async function setPrimaryContact(id: string): Promise<ActionResult<OrgCon
 export async function useContactAsSignee(
   organisationId: string,
   contactId: string,
+  book?: CounterpartyBook,
 ): Promise<ActionResult<{ signeeName: string; signeeRole: string | null }>> {
-  const g = await requireContactAccessForOrg(organisationId);
+  const g = await requireContactAccessForOrg(organisationId, "manage", book);
   if (!g.ok) return { success: false, error: g.error, code: g.code };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

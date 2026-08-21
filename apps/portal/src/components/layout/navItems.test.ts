@@ -133,14 +133,14 @@ for (const path of ["/admin/settings/fields", "/admin/agents", "/production", "/
   ok(`exactly ≤1 section matches "${path}" (accordion is single-open)`, matches <= 1, matches);
 }
 
-// ── 8. Nav cleanup (2026-07-04): Counterparties→"CRM"; CRM+Shipments→Legacy;
+// ── 8. Company profiles nav; old CRM+Shipments remain under Legacy;
 //       every primary area carries a colour `group` ──
 const crmItem = ADMIN_NAV_ITEMS.find((i) => i.href === "/counterparties");
-ok("the counterparties hub is now labelled 'CRM'", crmItem?.label === "CRM");
+ok("the counterparties hub is labelled 'Companies'", crmItem?.label === "Companies");
 ok("no TOP-LEVEL CRM or Shipments item remains (they moved under Legacy)",
    !ADMIN_NAV_ITEMS.some((i) => i.href === "/admin/crm" || i.href === "/admin/shipments"));
 const orgCrm = getOrgUserNavItems().find((i) => i.href === "/counterparties");
-ok("org-user counterparties hub is also labelled 'CRM'", orgCrm?.label === "CRM");
+ok("org-user counterparties hub is also labelled 'Companies'", orgCrm?.label === "Companies");
 ok("org-user nav has no top-level CRM/Shipments",
    !getOrgUserNavItems().some((i) => i.href === "/admin/crm" || i.href === "/shipments"));
 for (const [href, group] of [["/dashboard", "dashboard"], ["/orders", "orders"], ["/counterparties", "deals"], ["/admin/organisations", "orgs"]] as const) {
