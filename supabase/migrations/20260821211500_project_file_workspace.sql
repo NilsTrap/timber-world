@@ -70,6 +70,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS order_files_project_path_unique
   ON public.order_files(order_id, file_variant, lower(relative_path))
   WHERE category = 'project';
 
+-- The application verifies object metadata again before marking an upload
+-- ready. This bucket-level limit also rejects oversized objects whose caller
+-- never invokes application finalisation.
+UPDATE storage.buckets
+SET file_size_limit = LEAST(COALESCE(file_size_limit, 104857600), 104857600)
+WHERE id = 'orders';
+
 -- A project-file writer must be able to access this exact bilateral deal and
 -- hold action/deal/create in the party organisation through which they access
 -- it. A right in an unrelated membership grants nothing.

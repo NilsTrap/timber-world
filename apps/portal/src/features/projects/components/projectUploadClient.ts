@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  cancelProjectFileUpload,
   finaliseProjectFileUpload,
   prepareProjectFileUpload,
 } from "../actions/projectFileActions";
@@ -44,10 +45,15 @@ export async function uploadProjectBrowserFile(
     fileSizeBytes: file.size,
   });
   if (!prepared.success) throw new Error(prepared.error);
-  await putSignedFile(prepared.data.signedUrl, file, onProgress);
-  onProgress(97);
-  const finalised = await finaliseProjectFileUpload(projectId, prepared.data);
-  if (!finalised.success) throw new Error(finalised.error);
-  onProgress(100);
-  return finalised.data;
+  try {
+    await putSignedFile(prepared.data.signedUrl, file, onProgress);
+    onProgress(97);
+    const finalised = await finaliseProjectFileUpload(projectId, prepared.data.uploadId);
+    if (!finalised.success) throw new Error(finalised.error);
+    onProgress(100);
+    return finalised.data;
+  } catch (error) {
+    await cancelProjectFileUpload(projectId, prepared.data.uploadId);
+    throw error;
+  }
 }

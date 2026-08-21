@@ -9,6 +9,7 @@ import {
   normaliseProjectPath,
   projectPathKey,
   replacePathPrefix,
+  validateStoredProjectUploadSize,
 } from "../filePaths";
 
 let passed = 0;
@@ -39,6 +40,10 @@ eq("case-insensitive duplicate key", projectPathKey("Drawings/A.PDF"), projectPa
 eq("reject blank file name", normaliseProjectName("  "), null);
 eq("reject separators in a rename", normaliseProjectName("folder/name"), null);
 eq("100 MB is accepted by the contract", MAX_PROJECT_FILE_BYTES, 104857600);
+eq("stored upload accepts the exact prepared byte count", validateStoredProjectUploadSize({ metadata: { size: "42" } }, 42), { ok: true, size: 42 });
+eq("stored upload rejects a caller size mismatch", validateStoredProjectUploadSize({ metadata: { size: 43 } }, 42), { ok: false, reason: "mismatch" });
+eq("stored upload rejects an actual object over 100 MB", validateStoredProjectUploadSize({ metadata: { size: MAX_PROJECT_FILE_BYTES + 1 } }, 1), { ok: false, reason: "too_large" });
+eq("stored upload fails closed without size metadata", validateStoredProjectUploadSize({ metadata: {} }, 0), { ok: false, reason: "missing" });
 eq("recursive folder rename keeps descendants", replacePathPrefix("a/b/c.pdf", "a", "renamed"), "renamed/b/c.pdf");
 eq("unrelated prefix is untouched", replacePathPrefix("ab/c.pdf", "a", "renamed"), "ab/c.pdf");
 
@@ -60,12 +65,19 @@ ok("office/archive preview is unavailable", !isPreviewableProjectMimeType("appli
 const service = readFileSync("src/features/projects/services/projectFiles.ts", "utf8");
 const actions = readFileSync("src/features/projects/actions/projectFileActions.ts", "utf8");
 const create = readFileSync("src/features/projects/actions/createProject.ts", "utf8");
+const migration = readFileSync("../../supabase/migrations/20260821211500_project_file_workspace.sql", "utf8");
 ok("metadata loader select excludes storage_path", /const SAFE_FILE_SELECT\s*=\s*[\s\S]*?;/.test(service) && !service.match(/const SAFE_FILE_SELECT\s*=\s*([\s\S]*?);/)?.[1]?.includes("storage_path"));
 ok("workspace reads only category=project", service.includes('.eq("category", PROJECT_CATEGORY)'));
 ok("workspace reads originals only", service.includes('.eq("file_variant", ORIGINAL_VARIANT)'));
 ok("file-id actions collapse denial to File unavailable", actions.includes('error: "File unavailable"'));
 ok("creation delegates idempotency to createDeal", create.includes("idempotencyKey: `project-${input.idempotencyKey}`"));
 ok("download asks storage for the persisted filename", actions.includes('{ download: found.file.file_name }'));
+ok("prepared upload response never exposes a storage path", /interface PreparedProjectUpload\s*{[^}]*signedUrl: string;[^}]*uploadId: string;[^}]*}/.test(actions));
+ok("preparation persists an uploading row before signing", actions.indexOf('lifecycle_status: "uploading"') < actions.indexOf(".createSignedUploadUrl(storagePath"));
+ok("finalisation is bound to project and upload IDs", actions.includes('.eq("id", uploadId)') && actions.includes('.eq("order_id", projectId)'));
+ok("finalisation reads actual storage metadata size", actions.includes("validateStoredProjectUploadSize(object, expectedSize)"));
+ok("invalid stored objects are removed before retry", actions.includes("if (!storedSize.ok)") && actions.includes('.remove([storagePath])'));
+ok("orders bucket rejects uploads over 100 MB", migration.includes("file_size_limit = LEAST(COALESCE(file_size_limit, 104857600), 104857600)"));
 
 console.log(`\nprojects-workspace.test.ts: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

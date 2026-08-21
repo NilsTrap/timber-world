@@ -16,6 +16,7 @@ import {
   isPreviewableProjectMimeType,
   normaliseProjectPath,
   projectPathKey,
+  validateStoredProjectUploadSize,
 } from "../filePaths";
 import type { ProjectFileMeta } from "../types";
 import { requireVisibleProject } from "./_projectAccess";
@@ -23,10 +24,22 @@ import { resolveProjectsActor } from "../access";
 
 export interface PreparedProjectUpload {
   signedUrl: string;
-  storagePath: string;
-  relativePath: string;
-  mimeType: string | null;
-  fileSizeBytes: number;
+  uploadId: string;
+}
+
+const PREPARED_FILE_SELECT =
+  "id, order_id, file_name, relative_path, mime_type, file_size_bytes, storage_path, lifecycle_status, created_at";
+
+function publicFile(row: Record<string, unknown>): ProjectFileMeta {
+  return {
+    id: row.id as string,
+    fileName: row.file_name as string,
+    relativePath: row.relative_path as string,
+    mimeType: (row.mime_type as string) ?? null,
+    fileSizeBytes: (row.file_size_bytes as number) ?? null,
+    lifecycleStatus: row.lifecycle_status === "uploading" ? "uploading" : "ready",
+    createdAt: row.created_at as string,
+  };
 }
 
 export async function prepareProjectFileUpload(input: {
@@ -47,111 +60,138 @@ export async function prepareProjectFileUpload(input: {
     return { success: false, error: "A file already exists at this path", code: "DUPLICATE_PATH" };
   }
   const storagePath = `${input.projectId}/project/${crypto.randomUUID()}_${sanitizeStorageFileName(path.segments.at(-1)!)}`;
+  const fileName = path.segments.at(-1)!;
+  const { data: prepared, error: prepareError } = await access.actor.db
+    .from("order_files")
+    .insert({
+      order_id: input.projectId,
+      category: "project",
+      file_name: fileName,
+      relative_path: path.path,
+      storage_path: storagePath,
+      mime_type: input.mimeType || null,
+      file_size_bytes: input.fileSizeBytes,
+      uploaded_by: access.actor.portalUserId,
+      file_variant: "original",
+      source_file_id: null,
+      lifecycle_status: "uploading",
+    })
+    .select("id")
+    .single();
+  if (prepareError || !prepared) {
+    return {
+      success: false,
+      error: prepareError?.code === "23505" ? "A file already exists at this path" : "Upload could not start",
+      code: prepareError?.code === "23505" ? "DUPLICATE_PATH" : "UPLOAD_FAILED",
+    };
+  }
   const { data, error } = await access.actor.db.storage
     .from("orders")
     .createSignedUploadUrl(storagePath, { upsert: false });
-  if (error || !data) return { success: false, error: "Upload could not start", code: "UPLOAD_FAILED" };
+  if (error || !data) {
+    await access.actor.db.from("order_files").delete().eq("id", prepared.id);
+    return { success: false, error: "Upload could not start", code: "UPLOAD_FAILED" };
+  }
   return {
     success: true,
     data: {
       signedUrl: data.signedUrl,
-      storagePath,
-      relativePath: path.path,
-      mimeType: input.mimeType || null,
-      fileSizeBytes: input.fileSizeBytes,
+      uploadId: prepared.id as string,
     },
   };
 }
 
 export async function finaliseProjectFileUpload(
   projectId: string,
-  prepared: PreparedProjectUpload,
+  uploadId: string,
 ): Promise<ActionResult<ProjectFileMeta>> {
+  if (!isValidUUID(projectId) || !isValidUUID(uploadId)) {
+    return { success: false, error: "Upload unavailable", code: "NOT_FOUND" };
+  }
   const access = await requireVisibleProject(projectId, true);
   if (!access.ok) return { success: false, error: access.error, code: access.code };
-  const path = normaliseProjectPath(prepared.relativePath);
+  const db = access.actor.db;
+  const { data: prepared, error: preparedError } = await db
+    .from("order_files")
+    .select(PREPARED_FILE_SELECT)
+    .eq("id", uploadId)
+    .eq("order_id", projectId)
+    .eq("category", "project")
+    .eq("file_variant", "original")
+    .maybeSingle();
+  if (preparedError || !prepared) {
+    return { success: false, error: "Upload unavailable", code: "NOT_FOUND" };
+  }
+  const row = prepared as Record<string, unknown>;
+  if (row.lifecycle_status === "ready") return { success: true, data: publicFile(row) };
+  const storagePath = row.storage_path as string;
+  const expectedSize = Number(row.file_size_bytes);
   if (
-    !path.ok ||
-    prepared.fileSizeBytes < 0 ||
-    prepared.fileSizeBytes > MAX_PROJECT_FILE_BYTES ||
-    !prepared.storagePath.startsWith(`${projectId}/project/`) ||
-    prepared.storagePath.split("/").length !== 3
+    row.lifecycle_status !== "uploading" ||
+    !Number.isSafeInteger(expectedSize) ||
+    expectedSize < 0 ||
+    expectedSize > MAX_PROJECT_FILE_BYTES ||
+    !storagePath.startsWith(`${projectId}/project/`) ||
+    storagePath.split("/").length !== 3
   ) {
     return { success: false, error: "Upload unavailable", code: "NOT_FOUND" };
   }
-  const db = access.actor.db;
-  const storageName = prepared.storagePath.slice(prepared.storagePath.lastIndexOf("/") + 1);
+  const storageName = storagePath.slice(storagePath.lastIndexOf("/") + 1);
   const { data: stored, error: storageError } = await db.storage
     .from("orders")
     .list(`${projectId}/project`, { limit: 2, search: storageName });
-  if (storageError || !stored?.some((item: { name: string }) => item.name === storageName)) {
+  const object = stored?.find((item: { name: string }) => item.name === storageName);
+  if (storageError || !object) {
     return { success: false, error: "Upload did not reach storage. Please retry.", code: "UPLOAD_FAILED" };
   }
-  const current = await listInternalProjectFiles(db, projectId);
-  const duplicate = current.find(
-    (file) => projectPathKey(file.relative_path) === projectPathKey(path.path),
-  );
-  if (duplicate) {
-    if (duplicate.storage_path !== prepared.storagePath) {
-      await db.storage.from("orders").remove([prepared.storagePath]);
-    }
-    const safe = await db
-      .from("order_files")
-      .select("id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at")
-      .eq("id", duplicate.id)
-      .single();
-    if (safe.data) {
-      const row = safe.data as Record<string, unknown>;
-      return {
-        success: true,
-        data: {
-          id: row.id as string,
-          fileName: row.file_name as string,
-          relativePath: row.relative_path as string,
-          mimeType: (row.mime_type as string) ?? null,
-          fileSizeBytes: (row.file_size_bytes as number) ?? null,
-          lifecycleStatus: "ready",
-          createdAt: row.created_at as string,
-        },
-      };
-    }
+  const storedSize = validateStoredProjectUploadSize(object, expectedSize);
+  if (!storedSize.ok) {
+    await db.storage.from("orders").remove([storagePath]);
+    await db.from("order_files").delete().eq("id", uploadId).eq("lifecycle_status", "uploading");
+    return {
+      success: false,
+      error: storedSize.reason === "too_large"
+        ? "File too large. Maximum size: 100MB"
+        : "Stored file size did not match the prepared upload. Please retry.",
+      code: storedSize.reason === "too_large" ? "FILE_TOO_LARGE" : "UPLOAD_FAILED",
+    };
   }
-  const fileName = path.segments.at(-1)!;
+  const actualSize = storedSize.size;
   const { data, error } = await db
     .from("order_files")
-    .insert({
-      order_id: projectId,
-      category: "project",
-      file_name: fileName,
-      relative_path: path.path,
-      storage_path: prepared.storagePath,
-      mime_type: prepared.mimeType || null,
-      file_size_bytes: prepared.fileSizeBytes,
-      uploaded_by: access.actor.portalUserId,
-      file_variant: "original",
-      source_file_id: null,
+    .update({
+      file_size_bytes: actualSize,
       lifecycle_status: "ready",
     })
+    .eq("id", uploadId)
+    .eq("order_id", projectId)
+    .eq("category", "project")
+    .eq("lifecycle_status", "uploading")
     .select("id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at")
     .single();
   if (error || !data) {
-    await db.storage.from("orders").remove([prepared.storagePath]);
-    return { success: false, error: error?.code === "23505" ? "A file already exists at this path" : "Upload failed", code: error?.code === "23505" ? "DUPLICATE_PATH" : "INSERT_FAILED" };
+    return { success: false, error: "Upload failed", code: "UPDATE_FAILED" };
   }
   revalidatePath(`/projects/${projectId}`);
-  const row = data as Record<string, unknown>;
-  return {
-    success: true,
-    data: {
-      id: row.id as string,
-      fileName: row.file_name as string,
-      relativePath: row.relative_path as string,
-      mimeType: (row.mime_type as string) ?? null,
-      fileSizeBytes: (row.file_size_bytes as number) ?? null,
-      lifecycleStatus: "ready",
-      createdAt: row.created_at as string,
-    },
-  };
+  return { success: true, data: publicFile(data as Record<string, unknown>) };
+}
+
+export async function cancelProjectFileUpload(projectId: string, uploadId: string): Promise<void> {
+  if (!isValidUUID(projectId) || !isValidUUID(uploadId)) return;
+  const access = await requireVisibleProject(projectId, true);
+  if (!access.ok) return;
+  const { data } = await access.actor.db
+    .from("order_files")
+    .select("storage_path")
+    .eq("id", uploadId)
+    .eq("order_id", projectId)
+    .eq("category", "project")
+    .eq("file_variant", "original")
+    .eq("lifecycle_status", "uploading")
+    .maybeSingle();
+  if (!data) return;
+  await access.actor.db.from("order_files").delete().eq("id", uploadId).eq("lifecycle_status", "uploading");
+  await access.actor.db.storage.from("orders").remove([(data as { storage_path: string }).storage_path]);
 }
 
 async function authorisedFile(fileId: string, write: boolean) {

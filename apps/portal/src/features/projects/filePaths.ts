@@ -12,6 +12,28 @@ export function isPreviewableProjectMimeType(mimeType: string | null): boolean {
   return !!mimeType && PROJECT_PREVIEW_MIME_TYPES.has(mimeType.toLowerCase());
 }
 
+export type StoredUploadSizeValidation =
+  | { ok: true; size: number }
+  | { ok: false; reason: "missing" | "mismatch" | "too_large" };
+
+/** Validate Storage's persisted object metadata, never caller-supplied bytes. */
+export function validateStoredProjectUploadSize(
+  storedObject: unknown,
+  expectedSize: number,
+): StoredUploadSizeValidation {
+  if (!storedObject || typeof storedObject !== "object") return { ok: false, reason: "missing" };
+  const metadata = (storedObject as { metadata?: unknown }).metadata;
+  if (!metadata || typeof metadata !== "object") return { ok: false, reason: "missing" };
+  const raw = (metadata as { size?: unknown }).size;
+  const size = typeof raw === "string" && raw.trim() !== "" ? Number(raw) : raw;
+  if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 0) {
+    return { ok: false, reason: "missing" };
+  }
+  if (size > MAX_PROJECT_FILE_BYTES) return { ok: false, reason: "too_large" };
+  if (size !== expectedSize) return { ok: false, reason: "mismatch" };
+  return { ok: true, size };
+}
+
 export type PathValidation =
   | { ok: true; path: string; segments: string[] }
   | { ok: false; error: string };
