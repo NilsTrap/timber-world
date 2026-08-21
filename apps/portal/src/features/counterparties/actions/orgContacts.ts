@@ -8,10 +8,10 @@
  * GATING: contacts inherit the org's address-book wall. We derive which book(s)
  * an org belongs to from its role flags (clients=is_customer,
  * suppliers=is_supplier OR is_producer, traders=is_trader) and require the
- * caller to pass requireBookAccess for at least one of them. Platform admins
- * pass for ANY org (incl. trader orgs and orgs in no book) — needed for the
- * admin org-detail read-only contacts view. A salesperson (clients access) is
- * therefore refused on a supplier-only org (its only book is "suppliers").
+ * caller to pass the exact record guard for at least one of them. Company
+ * profile actions require the route's exact book; legacy order/organisation
+ * callers use server-derived books. Platform admins pass for ANY org (incl.
+ * trader orgs and orgs in no book) for the admin org-detail contacts view.
  *
  * DATA ACCESS NOTE: after the gate, reads/writes go through createAdminClient()
  * (service role, bypasses RLS) — the SAME deliberate pattern as counterparties.ts.
@@ -19,8 +19,8 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getSession, isAdmin } from "@/lib/auth";
-import { requireBookAccess, requireCounterpartyRecordAccess, type BookAccess } from "../access";
+import { getSession, isPlatformAdmin, isSuperAdmin } from "@/lib/auth";
+import { requireCounterpartyRecordAccess, isValidCounterpartyId, type BookAccess } from "../access";
 import type { ActionResult, CounterpartyBook } from "../types";
 import type { OrgContactRow, OrgContactInput } from "../contactTypes";
 
@@ -62,6 +62,9 @@ async function requireContactAccessForOrg(
   if (exactBook) {
     return requireCounterpartyRecordAccess(exactBook, organisationId, intent);
   }
+  if (!isValidCounterpartyId(organisationId)) {
+    return { ok: false, error: "Not found", code: "NOT_FOUND" };
+  }
   const session = await getSession();
   if (!session) return { ok: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
 
@@ -82,7 +85,7 @@ async function requireContactAccessForOrg(
   if (!org) return { ok: false, error: "Organisation not found", code: "NOT_FOUND" };
 
   // Admins pass for any org — incl. trader orgs and orgs in no book.
-  if (isAdmin(session)) {
+  if (isPlatformAdmin(session) || isSuperAdmin(session)) {
     return {
       ok: true,
       session,
@@ -92,25 +95,25 @@ async function requireContactAccessForOrg(
     };
   }
 
-  // Trader orgs are admin-only for contacts too — parity with add-person's
-  // absolute is_trader block (a non-admin must not reach a trader org's contacts
-  // even if it also carries a customer/supplier flag). requireBookAccess("traders")
-  // is admin-only, so this returns FORBIDDEN for non-admins.
+  // Trader orgs are admin-only for contacts too, even when they also carry a
+  // customer/supplier flag.
   if (org.is_trader === true) {
-    return await requireBookAccess("traders");
+    return { ok: false, error: "Not found", code: "NOT_FOUND" };
   }
 
-  // Derive the books this org belongs to (same predicate as counterparties'
-  // isInBook) and require access to at least one.
+  // Legacy order/organisation callers do not have a route book. Preserve that
+  // API, but apply the same record wall against every server-derived book. A
+  // module/action grant alone is never enough: managers also need the caller ↔
+  // target partner edge, and self viewers cannot mutate.
   const books: CounterpartyBook[] = [];
   if (org.is_customer === true) books.push("clients");
   if (org.is_supplier === true || org.is_producer === true) books.push("suppliers");
 
   for (const book of books) {
-    const g = await requireBookAccess(book);
+    const g = await requireCounterpartyRecordAccess(book, organisationId, intent);
     if (g.ok) return g;
   }
-  return { ok: false, error: "Permission denied", code: "FORBIDDEN" };
+  return { ok: false, error: "Not found", code: "NOT_FOUND" };
 }
 
 /**
@@ -118,11 +121,12 @@ async function requireContactAccessForOrg(
  * default; pass includeInactive to also return archived contacts.
  * (R9 reuses this — keep the signature stable.)
  */
-export async function listOrgContacts(
+async function listOrgContactsForScope(
   organisationId: string,
-  opts?: { includeInactive?: boolean; book?: CounterpartyBook },
+  includeInactive: boolean,
+  exactBook?: CounterpartyBook,
 ): Promise<ActionResult<OrgContactRow[]>> {
-  const g = await requireContactAccessForOrg(organisationId, "read", opts?.book);
+  const g = await requireContactAccessForOrg(organisationId, "read", exactBook);
   if (!g.ok) return { success: false, error: g.error, code: g.code };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -133,7 +137,7 @@ export async function listOrgContacts(
     .eq("organisation_id", organisationId)
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: false });
-  if (!opts?.includeInactive) query = query.eq("is_active", true);
+  if (!includeInactive) query = query.eq("is_active", true);
 
   const { data, error } = await query;
   if (error) {
@@ -144,17 +148,34 @@ export async function listOrgContacts(
   return { success: true, data: ((data || []) as any[]).map(mapContact) };
 }
 
+/** Legacy order/organisation contact read, scoped by server-derived books. */
+export async function listOrgContacts(
+  organisationId: string,
+  opts?: { includeInactive?: boolean },
+): Promise<ActionResult<OrgContactRow[]>> {
+  return listOrgContactsForScope(organisationId, opts?.includeInactive === true);
+}
+
+/** Company-profile contact read. The exact route book is mandatory. */
+export async function listCompanyOrgContacts(
+  book: CounterpartyBook,
+  organisationId: string,
+  opts?: { includeInactive?: boolean },
+): Promise<ActionResult<OrgContactRow[]>> {
+  return listOrgContactsForScope(organisationId, opts?.includeInactive === true, book);
+}
+
 /**
  * Create a contact under an org. (R9 quick-add reuses this.) An explicit
  * isPrimary clears the current primary first so the new row wins (the DB
  * trigger would otherwise force a 2nd primary to false).
  */
-export async function createOrgContact(
+async function createOrgContactForScope(
   organisationId: string,
   input: OrgContactInput,
-  book?: CounterpartyBook,
+  exactBook?: CounterpartyBook,
 ): Promise<ActionResult<OrgContactRow>> {
-  const g = await requireContactAccessForOrg(organisationId, "manage", book);
+  const g = await requireContactAccessForOrg(organisationId, "manage", exactBook);
   if (!g.ok) return { success: false, error: g.error, code: g.code };
 
   const name = (input.name ?? "").trim();
@@ -192,14 +213,31 @@ export async function createOrgContact(
   return { success: true, data: mapContact(data) };
 }
 
+/** Legacy order quick-add, scoped by server-derived books and partner edges. */
+export async function createOrgContact(
+  organisationId: string,
+  input: OrgContactInput,
+): Promise<ActionResult<OrgContactRow>> {
+  return createOrgContactForScope(organisationId, input);
+}
+
+/** Company-profile contact create. The exact route book is mandatory. */
+export async function createCompanyOrgContact(
+  book: CounterpartyBook,
+  organisationId: string,
+  input: OrgContactInput,
+): Promise<ActionResult<OrgContactRow>> {
+  return createOrgContactForScope(organisationId, input, book);
+}
+
 /**
  * Edit a contact's card fields and toggle is_active. Does NOT touch is_primary
  * (that is managed by setPrimaryContact). Gated by the contact's org.
  */
-export async function updateOrgContact(
+async function updateOrgContactForScope(
   id: string,
   patch: OrgContactInput,
-  book?: CounterpartyBook,
+  exactBook?: CounterpartyBook,
 ): Promise<ActionResult<OrgContactRow>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
@@ -214,7 +252,7 @@ export async function updateOrgContact(
   }
   if (!existing) return { success: false, error: "Contact not found", code: "NOT_FOUND" };
 
-  const g = await requireContactAccessForOrg(existing.organisation_id, "manage", book);
+  const g = await requireContactAccessForOrg(existing.organisation_id, "manage", exactBook);
   if (!g.ok) return { success: false, error: g.error, code: g.code };
 
   const name = (patch.name ?? "").trim();
@@ -241,8 +279,25 @@ export async function updateOrgContact(
   return { success: true, data: mapContact(data) };
 }
 
+/** Legacy contact update, scoped by server-derived books and partner edges. */
+export async function updateOrgContact(
+  id: string,
+  patch: OrgContactInput,
+): Promise<ActionResult<OrgContactRow>> {
+  return updateOrgContactForScope(id, patch);
+}
+
+/** Company-profile contact update. The exact route book is mandatory. */
+export async function updateCompanyOrgContact(
+  book: CounterpartyBook,
+  id: string,
+  patch: OrgContactInput,
+): Promise<ActionResult<OrgContactRow>> {
+  return updateOrgContactForScope(id, patch, book);
+}
+
 /** Hard-delete a contact (confirm in the UI). Gated by the contact's org. */
-export async function deleteOrgContact(id: string, book?: CounterpartyBook): Promise<ActionResult<{ id: string }>> {
+async function deleteOrgContactForScope(id: string, exactBook?: CounterpartyBook): Promise<ActionResult<{ id: string }>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data: existing } = await admin
@@ -252,7 +307,7 @@ export async function deleteOrgContact(id: string, book?: CounterpartyBook): Pro
     .maybeSingle();
   if (!existing) return { success: false, error: "Contact not found", code: "NOT_FOUND" };
 
-  const g = await requireContactAccessForOrg(existing.organisation_id, "manage", book);
+  const g = await requireContactAccessForOrg(existing.organisation_id, "manage", exactBook);
   if (!g.ok) return { success: false, error: g.error, code: g.code };
 
   const { error } = await admin.from("org_contacts").delete().eq("id", id);
@@ -263,12 +318,25 @@ export async function deleteOrgContact(id: string, book?: CounterpartyBook): Pro
   return { success: true, data: { id } };
 }
 
+/** Legacy contact delete, scoped by server-derived books and partner edges. */
+export async function deleteOrgContact(id: string): Promise<ActionResult<{ id: string }>> {
+  return deleteOrgContactForScope(id);
+}
+
+/** Company-profile contact delete. The exact route book is mandatory. */
+export async function deleteCompanyOrgContact(
+  book: CounterpartyBook,
+  id: string,
+): Promise<ActionResult<{ id: string }>> {
+  return deleteOrgContactForScope(id, book);
+}
+
 /**
  * Promote a contact to primary. Clears the org's current primary first, then
  * sets this one (the first-wins trigger needs no other primary present for the
  * set to stick). Gated by the contact's org.
  */
-export async function setPrimaryContact(id: string, book?: CounterpartyBook): Promise<ActionResult<OrgContactRow>> {
+async function setPrimaryContactForScope(id: string, exactBook?: CounterpartyBook): Promise<ActionResult<OrgContactRow>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data: existing } = await admin
@@ -278,7 +346,7 @@ export async function setPrimaryContact(id: string, book?: CounterpartyBook): Pr
     .maybeSingle();
   if (!existing) return { success: false, error: "Contact not found", code: "NOT_FOUND" };
 
-  const g = await requireContactAccessForOrg(existing.organisation_id, "manage", book);
+  const g = await requireContactAccessForOrg(existing.organisation_id, "manage", exactBook);
   if (!g.ok) return { success: false, error: g.error, code: g.code };
 
   await admin
@@ -301,16 +369,29 @@ export async function setPrimaryContact(id: string, book?: CounterpartyBook): Pr
   return { success: true, data: mapContact(data) };
 }
 
+/** Legacy primary-contact mutation, scoped by server-derived books. */
+export async function setPrimaryContact(id: string): Promise<ActionResult<OrgContactRow>> {
+  return setPrimaryContactForScope(id);
+}
+
+/** Company-profile primary-contact mutation. The route book is mandatory. */
+export async function setCompanyPrimaryContact(
+  book: CounterpartyBook,
+  id: string,
+): Promise<ActionResult<OrgContactRow>> {
+  return setPrimaryContactForScope(id, book);
+}
+
 /**
  * Copy a contact's name/role into organisations.default_signee_* (G3) so
  * generated documents default to this signee. Gated by the org.
  */
-export async function useContactAsSignee(
+async function useContactAsSigneeForScope(
   organisationId: string,
   contactId: string,
-  book?: CounterpartyBook,
+  exactBook?: CounterpartyBook,
 ): Promise<ActionResult<{ signeeName: string; signeeRole: string | null }>> {
-  const g = await requireContactAccessForOrg(organisationId, "manage", book);
+  const g = await requireContactAccessForOrg(organisationId, "manage", exactBook);
   if (!g.ok) return { success: false, error: g.error, code: g.code };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -334,4 +415,21 @@ export async function useContactAsSignee(
     return { success: false, error: "Failed to set signee", code: "UPDATE_FAILED" };
   }
   return { success: true, data: { signeeName: contact.name as string, signeeRole } };
+}
+
+/** Legacy signee mutation, scoped by server-derived books and partner edges. */
+export async function useContactAsSignee(
+  organisationId: string,
+  contactId: string,
+): Promise<ActionResult<{ signeeName: string; signeeRole: string | null }>> {
+  return useContactAsSigneeForScope(organisationId, contactId);
+}
+
+/** Company-profile signee mutation. The exact route book is mandatory. */
+export async function useCompanyContactAsSignee(
+  book: CounterpartyBook,
+  organisationId: string,
+  contactId: string,
+): Promise<ActionResult<{ signeeName: string; signeeRole: string | null }>> {
+  return useContactAsSigneeForScope(organisationId, contactId, book);
 }

@@ -14,4 +14,10 @@ export {
   deleteOrgContact,
   setPrimaryContact,
   useContactAsSignee,
+  listCompanyOrgContacts,
+  createCompanyOrgContact,
+  updateCompanyOrgContact,
+  deleteCompanyOrgContact,
+  setCompanyPrimaryContact,
+  useCompanyContactAsSignee,
 } from "./orgContacts";

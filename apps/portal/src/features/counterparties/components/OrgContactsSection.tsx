@@ -19,11 +19,12 @@ import {
 } from "@timber/ui";
 import {
   listOrgContacts,
-  createOrgContact,
-  updateOrgContact,
-  deleteOrgContact,
-  setPrimaryContact,
-  useContactAsSignee,
+  listCompanyOrgContacts,
+  createCompanyOrgContact,
+  updateCompanyOrgContact,
+  deleteCompanyOrgContact,
+  setCompanyPrimaryContact,
+  useCompanyContactAsSignee,
 } from "../actions";
 import type { OrgContactRow } from "../contactTypes";
 import type { CounterpartyBook } from "../types";
@@ -78,7 +79,9 @@ export function OrgContactsSection({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await listOrgContacts(organisationId, { book });
+    const res = book
+      ? await listCompanyOrgContacts(book, organisationId)
+      : await listOrgContacts(organisationId);
     if (res.success) setRows(res.data);
     else toast.error(res.error);
     setLoading(false);
@@ -116,9 +119,14 @@ export function OrgContactsSection({
       phone: form.phone,
       notes: form.notes,
     };
+    if (!book) {
+      setSaving(false);
+      toast.error("Company book is required to manage contacts");
+      return;
+    }
     const res = form.id
-      ? await updateOrgContact(form.id, { ...card, isActive: form.isActive }, book)
-      : await createOrgContact(organisationId, { ...card, isPrimary: form.isPrimary }, book);
+      ? await updateCompanyOrgContact(book, form.id, { ...card, isActive: form.isActive })
+      : await createCompanyOrgContact(book, organisationId, { ...card, isPrimary: form.isPrimary });
     setSaving(false);
     if (!res.success) {
       toast.error(res.error);
@@ -130,8 +138,9 @@ export function OrgContactsSection({
   };
 
   const makePrimary = async (c: OrgContactRow) => {
+    if (!book) return;
     setBusyId(c.id);
-    const res = await setPrimaryContact(c.id, book);
+    const res = await setCompanyPrimaryContact(book, c.id);
     setBusyId(null);
     if (!res.success) {
       toast.error(res.error);
@@ -142,8 +151,9 @@ export function OrgContactsSection({
   };
 
   const asSignee = async (c: OrgContactRow) => {
+    if (!book) return;
     setBusyId(c.id);
-    const res = await useContactAsSignee(organisationId, c.id, book);
+    const res = await useCompanyContactAsSignee(book, organisationId, c.id);
     setBusyId(null);
     if (!res.success) {
       toast.error(res.error);
@@ -154,9 +164,10 @@ export function OrgContactsSection({
   };
 
   const remove = async (c: OrgContactRow) => {
+    if (!book) return;
     if (!window.confirm(`Delete contact "${c.name}"? This cannot be undone.`)) return;
     setBusyId(c.id);
-    const res = await deleteOrgContact(c.id, book);
+    const res = await deleteCompanyOrgContact(book, c.id);
     setBusyId(null);
     if (!res.success) {
       toast.error(res.error);
