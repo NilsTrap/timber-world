@@ -15,10 +15,11 @@ import { runInventorySuite } from "./suites/inventory.js";
 import { runProductionSuite } from "./suites/production.js";
 import { runShipmentsSuite } from "./suites/shipments.js";
 import { runNegativeSuite, type ProbeResult } from "./suites/cross-tenant-negative.js";
+import { runSuperAdminOnboardingCanary } from "./suites/super-admin-onboarding.js";
 import { diffSnapshot, type SnapshotPath } from "./lib/snapshot.js";
 import { assertKnownStagingTarget } from "./lib/targetSafety.js";
 
-type Mode = "snapshot" | "baseline" | "diff" | "negative" | "all";
+type Mode = "snapshot" | "baseline" | "diff" | "negative" | "onboarding" | "all";
 
 const SUITES = ["orders", "inventory", "production", "shipments"] as const;
 const SUITE_CASES: Record<(typeof SUITES)[number], string[]> = {
@@ -31,7 +32,7 @@ const SUITE_CASES: Record<(typeof SUITES)[number], string[]> = {
 function parseMode(): Mode {
   const arg = process.argv.find((a) => a.startsWith("--mode="));
   const m = arg?.split("=")[1] ?? "all";
-  if (!["snapshot", "baseline", "diff", "negative", "all"].includes(m)) {
+  if (!["snapshot", "baseline", "diff", "negative", "onboarding", "all"].includes(m)) {
     throw new Error(`Unknown mode: ${m}`);
   }
   return m as Mode;
@@ -104,7 +105,7 @@ async function main(): Promise<void> {
   // Negative probes create and clean staging-owned canaries. Assert before
   // any work in both mutating modes; a production or lookalike URL must never
   // reach the suite, even when fail-on-leak is disabled.
-  if (mode === "negative" || mode === "all") {
+  if (mode === "negative" || mode === "onboarding" || mode === "all") {
     assertKnownStagingTarget(config.supabaseUrl);
   }
 
@@ -130,9 +131,19 @@ async function main(): Promise<void> {
     const results = await runNegative();
     const { leaks, report } = summarizeNegative(results);
     console.log(report);
+    const onboardingChecks = await runSuperAdminOnboardingCanary();
+    console.log(`Onboarding canary: ${onboardingChecks.length} executable checks passed`);
+    for (const check of onboardingChecks) console.log(`  ✓ ${check}`);
     if (leaks > 0 && process.env.NEGATIVE_TESTS_FAIL_ON_LEAK === "true") {
       process.exit(1);
     }
+    return;
+  }
+
+  if (mode === "onboarding") {
+    const onboardingChecks = await runSuperAdminOnboardingCanary();
+    console.log(`Onboarding canary: ${onboardingChecks.length} executable checks passed`);
+    for (const check of onboardingChecks) console.log(`  ✓ ${check}`);
     return;
   }
 
@@ -145,6 +156,9 @@ async function main(): Promise<void> {
   const results = await runNegative();
   const { leaks, report } = summarizeNegative(results);
   console.log(report);
+  const onboardingChecks = await runSuperAdminOnboardingCanary();
+  console.log(`Onboarding canary: ${onboardingChecks.length} executable checks passed`);
+  for (const check of onboardingChecks) console.log(`  ✓ ${check}`);
 
   const failOnLeak = process.env.NEGATIVE_TESTS_FAIL_ON_LEAK === "true";
   if (differences > 0) process.exit(1);

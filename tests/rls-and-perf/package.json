@@ -8,6 +8,7 @@
     "diff": "tsx src/run.ts --mode=diff",
     "baseline": "tsx src/run.ts --mode=baseline",
     "negative": "tsx src/run.ts --mode=negative",
+    "onboarding": "tsx src/run.ts --mode=onboarding",
     "test:target-safety": "tsx src/lib/targetSafety.test.ts"
   },
   "dependencies": {
