@@ -1,8 +1,9 @@
 "use server";
 
-import { createClient } from "@timber/database/server";
-import { getSession, isSuperAdmin } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionResult } from "../types";
+import { isValidUUID } from "../types";
+import { ADMIN_DENIED, requirePlatformAdmin } from "./_platformAdmin";
 
 export interface PersonDetail {
   id: string;
@@ -28,16 +29,9 @@ export interface PersonDetail {
 export async function getPersonById(
   personId: string
 ): Promise<ActionResult<PersonDetail>> {
-  const session = await getSession();
-  if (!session) {
-    return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  }
-
-  if (!isSuperAdmin(session)) {
-    return { success: false, error: "Permission denied", code: "FORBIDDEN" };
-  }
-
-  const supabase = await createClient();
+  const guard = await requirePlatformAdmin();
+  if (!guard.ok || !isValidUUID(personId)) return ADMIN_DENIED;
+  const supabase = createAdminClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
@@ -61,11 +55,7 @@ export async function getPersonById(
     .single();
 
   if (error || !data) {
-    if (error?.code === "PGRST116") {
-      return { success: false, error: "Person not found", code: "NOT_FOUND" };
-    }
-    console.error("Error fetching person:", error);
-    return { success: false, error: "Failed to fetch person", code: "QUERY_FAILED" };
+    return ADMIN_DENIED;
   }
 
   // Fetch organisation info

@@ -67,6 +67,8 @@ export function AddUserDialog({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [sendInvite, setSendInvite] = useState(true);
+  const [makePrimary, setMakePrimary] = useState(false);
 
   const groupIdsForSubmit = () =>
     ctx?.mode === "admin" ? Array.from(selectedGroups) : undefined;
@@ -81,6 +83,8 @@ export function AddUserDialog({
     setResults([]);
     setName("");
     setEmail("");
+    setSendInvite(true);
+    setMakePrimary(false);
     getAddPersonContext(organisationId).then((r) => {
       if (r.success) setCtx(r.data);
       else toast.error(r.error);
@@ -117,10 +121,11 @@ export function AddUserDialog({
   const handleAddExisting = useCallback(
     async (person: AddablePerson) => {
       setAddingId(person.id);
-      const r = await addExistingUserToOrganisation(person.id, organisationId, groupIdsForSubmit());
+      const r = await addExistingUserToOrganisation(person.id, organisationId, groupIdsForSubmit(), { makePrimary, sendInvite });
       setAddingId(null);
       if (r.success) {
-        toast.success(`${person.name} added to organisation`);
+        if (r.data.inviteError) toast.warning(r.data.inviteError);
+        else toast.success(`${person.name} added to organisation${r.data.inviteSent ? " and invited" : ""}`);
         onOpenChange(false);
         onSuccess();
       } else if (r.code === "ALREADY_MEMBER") {
@@ -130,7 +135,7 @@ export function AddUserDialog({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [organisationId, selectedGroups, ctx],
+    [organisationId, selectedGroups, ctx, makePrimary, sendInvite],
   );
 
   const handleCreate = async () => {
@@ -148,10 +153,12 @@ export function AddUserDialog({
       organisationId,
       { name: trimmedName, email: email.trim().toLowerCase() },
       groupIdsForSubmit(),
+      { sendInvite },
     );
     setIsCreating(false);
     if (r.success) {
-      toast.success("User created");
+      if (r.data.inviteError) toast.warning(r.data.inviteError);
+      else toast.success(r.data.inviteSent ? "User created and invited" : "User created");
       onOpenChange(false);
       onSuccess();
     } else if (r.code === "DUPLICATE_EMAIL") {
@@ -200,11 +207,16 @@ export function AddUserDialog({
                           id={`grp-${g.id}`}
                           checked={selectedGroups.has(g.id)}
                           onCheckedChange={() => toggleGroup(g.id)}
-                          disabled={busy}
+                          disabled={busy || g.disabled}
                         />
                         <label htmlFor={`grp-${g.id}`} className="flex-1 text-sm cursor-pointer">
                           {g.name}
                           <span className="ml-2 font-mono text-xs text-muted-foreground">{g.key}</span>
+                          <span className="block text-[11px] font-normal text-muted-foreground">
+                            {g.disabled
+                              ? "Unavailable under this organisation's module ceiling"
+                              : `${g.effectiveModules.length} effective module${g.effectiveModules.length === 1 ? "" : "s"}${g.unavailableModules.length ? ` · ${g.unavailableModules.length} capped` : ""}`}
+                          </span>
                         </label>
                         {g.isSystem && (
                           <Badge variant="secondary" className="text-[10px]">System</Badge>
@@ -276,6 +288,17 @@ export function AddUserDialog({
               )}
             </div>
 
+            <div className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Checkbox id="send-passwordless-invite" checked={sendInvite} onCheckedChange={(v) => setSendInvite(v === true)} disabled={busy} />
+                <label htmlFor="send-passwordless-invite" className="text-sm cursor-pointer">Send passwordless invite now</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox id="make-primary-membership" checked={makePrimary} onCheckedChange={(v) => setMakePrimary(v === true)} disabled={busy} />
+                <label htmlFor="make-primary-membership" className="text-sm cursor-pointer">Make primary when attaching an existing person</label>
+              </div>
+            </div>
+
             {/* Divider */}
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -314,7 +337,7 @@ export function AddUserDialog({
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Created with &quot;Created&quot; status. Login credentials can be generated separately.
+                The membership is active immediately. The optional invite contains no password.
               </p>
             </div>
 

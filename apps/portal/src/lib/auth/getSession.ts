@@ -92,6 +92,7 @@ async function _getSessionImpl(): Promise<SessionUser | null> {
       id,
       role,
       organisation_id,
+      is_active,
       is_platform_admin,
       organisations!portal_users_party_id_fkey(code, name)
     `)
@@ -103,23 +104,14 @@ async function _getSessionImpl(): Promise<SessionUser | null> {
   }
 
   if (!portalUser) {
-    // Legacy auth-only user - return minimal session
-    return {
-      id: user.id,
-      email: user.email || "",
-      name,
-      role,
-      isPlatformAdmin: false,
-      portalUserId: null,
-      currentOrganizationId: null,
-      currentOrganizationCode: null,
-      currentOrganizationName: null,
-      memberships: [],
-      organisationId: null,
-      organisationCode: null,
-      organisationName: null,
-    };
+    // Protected portal access requires an active portal_users identity. Fail
+    // closed on a missing/hidden row instead of trusting auth metadata alone.
+    return null;
   }
+
+  // Account deactivation is authoritative on every protected request. Do not
+  // create a partial session from auth metadata for an inactive portal user.
+  if (portalUser.is_active !== true) return null;
 
   // Use role from portal_users table (source of truth) over auth metadata
   const dbRole = (portalUser.role as UserRole) || role;
@@ -148,20 +140,9 @@ async function _getSessionImpl(): Promise<SessionUser | null> {
     })
   );
 
-  // Add legacy organisation_id to memberships if not already present
-  // This ensures the user can switch to their primary org even without a membership row
-  if (
-    portalUser.organisation_id &&
-    portalUser.organisations &&
-    !memberships.some((m) => m.organizationId === portalUser.organisation_id)
-  ) {
-    memberships.unshift({
-      organizationId: portalUser.organisation_id,
-      organizationCode: portalUser.organisations.code || "",
-      organizationName: portalUser.organisations.name || "",
-      isPrimary: true, // Legacy org is treated as primary
-    });
-  }
+  // Never revive a deactivated membership through the legacy organisation_id.
+  // The onboarding migration guarantees a real membership row and synchronises
+  // organisation_id whenever the active primary changes.
 
   // Determine current organization
   // Priority: 1) cookie (from switcher), 2) primary membership, 3) first membership

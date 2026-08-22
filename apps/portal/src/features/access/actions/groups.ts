@@ -14,7 +14,7 @@
 
 import { updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isSuperAdmin } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import type {
   AccessGroupDetail,
   AccessGroupSummary,
@@ -42,8 +42,7 @@ async function requireSuperAdmin(): Promise<
   { ok: true; client: any } | { ok: false; error: string; code: string }
 > {
   const session = await getSession();
-  if (!session) return { ok: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  if (!isSuperAdmin(session)) return { ok: false, error: "Permission denied", code: "FORBIDDEN" };
+  if (!session || session.isPlatformAdmin !== true) return { ok: false, error: "Permission denied", code: "FORBIDDEN" };
   const supabase = await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return { ok: true, client: supabase as any };

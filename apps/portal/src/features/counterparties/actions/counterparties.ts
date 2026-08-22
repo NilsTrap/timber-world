@@ -204,6 +204,7 @@ export async function getCounterpartyProfile(
       ...mapRow(org),
       accessMode: access.mode,
       canManage: access.canManage,
+      canOnboardPeople: access.session.isPlatformAdmin === true,
       deliveryAddresses: (addresses ?? []).map((a: Record<string, unknown>) => ({
         id: String(a.id), label: String(a.label), address: String(a.address),
         contactName: (a.contact_name as string | null) ?? null,

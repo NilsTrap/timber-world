@@ -1,10 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { getSession, isSuperAdmin } from "@/lib/auth";
+import { siteConfig } from "@timber/config";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
 import { logAudit } from "@/features/audit/logAudit";
+import { ADMIN_DENIED, requirePlatformAdmin } from "./_platformAdmin";
 
 /**
  * Reset User Password
@@ -23,39 +24,16 @@ export async function resetUserPassword(
   organisationId: string
 ): Promise<ActionResult<{ email: string }>> {
   // 1. Check authentication
-  const session = await getSession();
-  if (!session) {
-    return {
-      success: false,
-      error: "Not authenticated",
-      code: "UNAUTHENTICATED",
-    };
-  }
-
-  // 2. Check Super Admin role
-  if (!isSuperAdmin(session)) {
-    return {
-      success: false,
-      error: "Permission denied",
-      code: "FORBIDDEN",
-    };
-  }
+  const guard = await requirePlatformAdmin();
+  if (!guard.ok) return ADMIN_DENIED;
 
   // 3. Validate IDs
   if (!isValidUUID(userId)) {
-    return {
-      success: false,
-      error: "Invalid user ID",
-      code: "INVALID_ID",
-    };
+    return ADMIN_DENIED;
   }
 
   if (!isValidUUID(organisationId)) {
-    return {
-      success: false,
-      error: "Invalid organisation ID",
-      code: "INVALID_ID",
-    };
+    return ADMIN_DENIED;
   }
 
   const supabase = await createClient();
@@ -91,26 +69,12 @@ export async function resetUserPassword(
   const { error: resetError } = await supabase.auth.resetPasswordForEmail(
     portalUser.email as string,
     {
-      redirectTo: "https://timber-world-portal.vercel.app/accept-invite",
+      redirectTo: `${siteConfig.url.replace(/\/$/, "")}/accept-invite`,
     }
   );
 
   if (resetError) {
-    console.error("Failed to send password reset:", resetError);
-
-    if (resetError.message?.includes("rate limit") || resetError.message?.includes("exceeded")) {
-      return {
-        success: false,
-        error: "Email rate limit reached. Supabase allows 4 emails per hour. Please try again later.",
-        code: "RATE_LIMITED",
-      };
-    }
-
-    return {
-      success: false,
-      error: resetError.message || "Failed to send password reset email",
-      code: "RESET_FAILED",
-    };
+    return { success: false, error: "Passwordless reset email could not be sent; try again", code: "RESET_FAILED" };
   }
 
   // 7. Update updated_at timestamp in portal_users

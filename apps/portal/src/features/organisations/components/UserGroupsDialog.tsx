@@ -14,8 +14,8 @@ import {
   Checkbox,
   Badge,
 } from "@timber/ui";
-import { getUserAccessGroups, updateUserAccessGroups } from "@/features/access/actions";
-import type { UserGroupAssignment } from "@/features/access/types";
+import { getMembershipGroupOptions, updateMembershipGroups } from "../actions";
+import type { OnboardingGroupOption } from "../services/personOnboarding";
 import type { OrganisationUser } from "../types";
 
 interface UserGroupsDialogProps {
@@ -41,7 +41,7 @@ export function UserGroupsDialog({
   onOpenChange,
   onSuccess,
 }: UserGroupsDialogProps) {
-  const [groups, setGroups] = useState<UserGroupAssignment[]>([]);
+  const [groups, setGroups] = useState<Array<OnboardingGroupOption & { assigned: boolean }>>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -54,11 +54,11 @@ export function UserGroupsDialog({
     // can never leave user A's checkboxes renderable (and savable) under user B.
     setGroups([]);
     setSelected(new Set());
-    const result = await getUserAccessGroups(user.id, organisationId);
+    const result = await getMembershipGroupOptions(user.id, organisationId);
 
     if (result.success) {
       setGroups(result.data);
-      setSelected(new Set(result.data.filter((g) => g.assigned).map((g) => g.groupId)));
+      setSelected(new Set(result.data.filter((g) => g.assigned).map((g) => g.id)));
     } else {
       toast.error(result.error || "Failed to load groups");
     }
@@ -82,7 +82,7 @@ export function UserGroupsDialog({
   };
 
   const hasChanges = () => {
-    const original = new Set(groups.filter((g) => g.assigned).map((g) => g.groupId));
+    const original = new Set(groups.filter((g) => g.assigned).map((g) => g.id));
     if (original.size !== selected.size) return true;
     for (const id of selected) {
       if (!original.has(id)) return true;
@@ -94,7 +94,7 @@ export function UserGroupsDialog({
     if (!user) return;
 
     setIsSaving(true);
-    const result = await updateUserAccessGroups(user.id, organisationId, Array.from(selected));
+    const result = await updateMembershipGroups(user.id, organisationId, Array.from(selected));
 
     if (result.success) {
       toast.success("User groups updated");
@@ -131,21 +131,26 @@ export function UserGroupsDialog({
           <div className="flex-1 overflow-y-auto space-y-1 py-2">
             {groups.map((g) => (
               <div
-                key={g.groupId}
+                key={g.id}
                 className="flex items-center gap-2 rounded-lg border p-2 hover:bg-accent/30 transition-colors"
               >
                 <Checkbox
-                  id={`user-group-${g.groupId}`}
-                  checked={selected.has(g.groupId)}
-                  onCheckedChange={() => toggleGroup(g.groupId)}
-                  disabled={isSaving}
+                  id={`user-group-${g.id}`}
+                  checked={selected.has(g.id)}
+                  onCheckedChange={() => toggleGroup(g.id)}
+                  disabled={isSaving || (g.disabled && !selected.has(g.id))}
                 />
                 <label
-                  htmlFor={`user-group-${g.groupId}`}
+                  htmlFor={`user-group-${g.id}`}
                   className="flex-1 text-sm font-medium cursor-pointer"
                 >
-                  {g.groupName}
-                  <span className="ml-2 font-mono text-xs text-muted-foreground">{g.groupKey}</span>
+                  {g.name}
+                  <span className="ml-2 font-mono text-xs text-muted-foreground">{g.key}</span>
+                  <span className="block text-[11px] font-normal text-muted-foreground">
+                    {g.disabled
+                      ? "Unavailable under this organisation's module ceiling"
+                      : `${g.effectiveModules.length} effective module${g.effectiveModules.length === 1 ? "" : "s"}${g.unavailableModules.length ? ` · ${g.unavailableModules.length} capped` : ""}`}
+                  </span>
                 </label>
                 {g.isSystem && (
                   <Badge variant="secondary" className="text-[10px]">

@@ -12,7 +12,15 @@ import { createAccessGroup, updateAccessGroup, deleteAccessGroup, saveGroupRight
 import type { GroupRightsInput } from "@/features/access/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkContactAccessForOrgByProfile } from "@/features/counterparties/access";
-import { resolveAddPersonScopeByProfile, resolveSystemGroupIdByKey, type AddPersonScope } from "@/features/organisations/actions/_addPersonScope";
+import {
+  attachPersonMembership,
+  createPersonWithPrimaryMembership,
+  listPeopleWithMemberships,
+  setMembershipActive,
+  setMembershipGroups,
+  setPersonAccountActive,
+} from "@/features/organisations/services/personOnboarding";
+import { sendPasswordlessInvite } from "@/features/organisations/services/passwordlessInvite";
 import type { ToolDef, ToolHandler, UserWriteCapability, AuthCtx } from "../types";
 import { toolOk, toolErr, UUID_RE } from "../types";
 
@@ -287,7 +295,7 @@ export const crmTools: ToolDef[] = [
   {
     name: "timber_create_person",
     description:
-      "Create a new person (portal user) under an organisation (role=user, status=created, no credentials yet). Book-scoped Q2: admins may create for ANY org with an optional group_ids picker; a per-user salesperson/purchasing key may create ONLY for an org in its clients/suppliers book and the access group is FORCED server-side (client / producer) — any group_ids are ignored. Trader orgs are admin-only. No credentials are sent by this tool.",
+      "Create a new person with one active primary organisation membership and ceiling-capped access groups. Platform-admin only. No credentials are returned or sent by this tool.",
     readOnly: false,
     lifecycle: "access",
     inputSchema: {
@@ -304,7 +312,7 @@ export const crmTools: ToolDef[] = [
   {
     name: "timber_add_person_to_org",
     description:
-      "Add an EXISTING person to an organisation (reactivates an inactive membership if present) and assigns their access groups inline. Same Q2 book scope as create_person (admin=any org + group picker; scoped key=own book with a forced group; trader orgs admin-only).",
+      "Add an existing person to an organisation (or reactivate without restoring old rights) and assign ceiling-capped access groups. Platform-admin only.",
     readOnly: false,
     lifecycle: "access",
     inputSchema: {
@@ -320,7 +328,7 @@ export const crmTools: ToolDef[] = [
   {
     name: "timber_remove_person_from_org",
     description:
-      "Remove a person from an organisation: deactivates the membership and strips their access groups there. REFUSES to remove the person's only or PRIMARY organisation (set a different primary first). Same Q2 book scope as add/create.",
+      "Deactivate one organisation membership and strip only that organisation's access. Refuses the only/primary membership. Platform-admin only.",
     readOnly: false,
     lifecycle: "access",
     inputSchema: {
@@ -367,7 +375,7 @@ export const crmTools: ToolDef[] = [
   {
     name: "timber_resend_person_invite",
     description:
-      "Resend the invite email to a person in 'invited' status who already has an auth identity (rotates their pending auth user and re-sends a magic link to set their password). No secret is transmitted through this tool. ADMIN-ONLY. Reset/set-password and send-credentials are intentionally NOT exposed over MCP.",
+      "Resend a passwordless invite without deleting/recreating the auth identity. No link, password, or token is returned. Platform-admin only.",
     readOnly: false,
     lifecycle: "access",
     inputSchema: {
@@ -411,14 +419,8 @@ export const crmTools: ToolDef[] = [
  *  writes are "admin" — a per-user key writes them only if its owner is a REAL
  *  platform admin (route.authorizeUserWrite), else FORBIDDEN.
  *
- *  T5 book-scoped person/contact WRITES (upsert/delete contact, create/add/remove
- *  person) are capped "counterparty" — a COARSE gate (the owner holds the clients OR
- *  suppliers book; wired in route.ts userHasCapability + types.ts + tools-coverage).
- *  The FINE Q2 per-org book check runs in each handler (contactGate /
- *  resolveAddPersonScopeByProfile against the TARGET org): a salesperson key
- *  (counterparty:clients) is REFUSED on supplier/trader orgs, purchasing on clients,
- *  trader-org people are admin-only — the coarse cap alone never authorizes. READS
- *  (list_org_contacts / people) apply the same fine book scope to per-user keys. */
+ *  Org-contact writes remain book-scoped. Login-person onboarding is platform-
+ *  admin only and delegates to the same membership services as the portal UI. */
 export const crmCaps: Record<string, UserWriteCapability> = {
   timber_create_org: "admin",
   timber_update_org: "admin",
@@ -429,11 +431,10 @@ export const crmCaps: Record<string, UserWriteCapability> = {
   // book check runs in the handler — contactGate/checkContactAccessForOrgByProfile).
   timber_upsert_org_contact: "counterparty",
   timber_delete_org_contact: "counterparty",
-  // T5 people (create/add/remove are book-scoped Q2 → coarse `counterparty` + the fine
-  // resolveAddPersonScopeByProfile check in the handler; update/toggle/invite are admin)
-  timber_create_person: "counterparty",
-  timber_add_person_to_org: "counterparty",
-  timber_remove_person_from_org: "counterparty",
+  // Login-person and membership mutations are platform-admin only.
+  timber_create_person: "admin",
+  timber_add_person_to_org: "admin",
+  timber_remove_person_from_org: "admin",
   timber_update_person: "admin",
   timber_toggle_person_active: "admin",
   timber_resend_person_invite: "admin",
@@ -473,114 +474,6 @@ async function contactGate(ctx: AuthCtx, orgId: string) {
 async function setPrimaryContactInline(admin: any, orgId: string, id: string) {
   await admin.from("org_contacts").update({ is_primary: false }).eq("organisation_id", orgId).eq("is_primary", true).neq("id", id);
   await admin.from("org_contacts").update({ is_primary: true, updated_at: new Date().toISOString() }).eq("id", id);
-}
-
-/**
- * Q2 access-group assignment for a just-created/added person — the cache-free twin
- * of _addPersonScope.applyAddPersonGroups (the MCP route can't bust the portal's
- * per-member next/cache tags, exactly like the existing timber_set_user_groups
- * write; affected users' cached perms refresh on their next revalidation). Scoped
- * caller ⇒ EXACTLY the forced book group (client-supplied ids ignored); admin ⇒ the
- * requested ids, validated against real groups.
- */
-async function applyPersonGroupsNoCache(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  admin: any,
-  scope: Extract<AddPersonScope, { ok: true }>,
-  userId: string,
-  orgId: string,
-  requestedGroupIds: string[] | undefined,
-): Promise<{ success: true } | { success: false; error: string }> {
-  let groupIds: string[];
-  if (scope.mode === "scoped") {
-    const forcedId = await resolveSystemGroupIdByKey(admin, scope.forcedGroupKey);
-    if (!forcedId) return { success: false, error: `The '${scope.forcedGroupKey}' access group is missing` };
-    groupIds = [forcedId]; // forced — requestedGroupIds deliberately ignored
-  } else {
-    const requested = Array.from(new Set(requestedGroupIds ?? []));
-    if (requested.length === 0) {
-      groupIds = [];
-    } else {
-      const { data: valid } = await admin.from("access_groups").select("id").in("id", requested);
-      const validIds = new Set(((valid ?? []) as Array<{ id: string }>).map((r) => r.id));
-      groupIds = requested.filter((id) => validIds.has(id));
-    }
-  }
-  const res = await updateUserAccessGroups(admin, userId, orgId, groupIds);
-  if (!res.success) return { success: false, error: res.error };
-  return { success: true };
-}
-
-interface DirPersonOrg { id: string; name: string; code: string; isPrimary: boolean }
-interface DirPersonGroup { orgId: string; groupId: string; groupName: string }
-interface DirPerson {
-  id: string; email: string; name: string; phone: string | null;
-  role: "admin" | "user"; isActive: boolean; status: string; lastLoginAt: string | null;
-  authUserId: string | null; primaryOrgId: string | null; orgs: DirPersonOrg[]; groups: DirPersonGroup[];
-}
-
-/** Person-centric People directory (admin surface), batched (one query per
- *  dimension) then mapped in memory — the (db,…) twin of getPeopleDirectory. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildPeopleDirectory(admin: any): Promise<DirPerson[]> {
-  const [usersRes, memsRes, orgsRes, uagRes] = await Promise.all([
-    admin.from("portal_users").select("id, email, name, phone, role, organisation_id, auth_user_id, is_active, status, last_login_at").order("name", { ascending: true }),
-    admin.from("organization_memberships").select("user_id, organization_id, is_primary").eq("is_active", true),
-    admin.from("organisations").select("id, name, code"),
-    admin.from("user_access_groups").select("user_id, group_id, organization_id"),
-  ]);
-  if (usersRes.error) throw new Error("Failed to load people");
-
-  const users = (usersRes.data ?? []) as Array<{ id: string; email: string; name: string; phone: string | null; role: "admin" | "user"; organisation_id: string | null; auth_user_id: string | null; is_active: boolean; status: string; last_login_at: string | null }>;
-  const mems = (memsRes.data ?? []) as Array<{ user_id: string; organization_id: string; is_primary: boolean }>;
-  const orgs = (orgsRes.data ?? []) as Array<{ id: string; name: string; code: string }>;
-  const uag = (uagRes.data ?? []) as Array<{ user_id: string; group_id: string; organization_id: string }>;
-
-  const groupIds = Array.from(new Set(uag.map((r) => r.group_id)));
-  const groupNames = new Map<string, string>();
-  if (groupIds.length) {
-    const { data: groups } = await admin.from("access_groups").select("id, name").in("id", groupIds);
-    for (const g of (groups ?? []) as Array<{ id: string; name: string }>) groupNames.set(g.id, g.name);
-  }
-
-  const orgMap = new Map<string, { name: string; code: string }>();
-  for (const o of orgs) orgMap.set(o.id, { name: o.name, code: o.code });
-
-  const memsByUser = new Map<string, Array<{ orgId: string; isPrimary: boolean }>>();
-  for (const m of mems) {
-    const list = memsByUser.get(m.user_id) ?? [];
-    list.push({ orgId: m.organization_id, isPrimary: m.is_primary === true });
-    memsByUser.set(m.user_id, list);
-  }
-  const groupsByUser = new Map<string, DirPersonGroup[]>();
-  for (const r of uag) {
-    const list = groupsByUser.get(r.user_id) ?? [];
-    list.push({ orgId: r.organization_id, groupId: r.group_id, groupName: groupNames.get(r.group_id) ?? "?" });
-    groupsByUser.set(r.user_id, list);
-  }
-
-  return users.map((u) => {
-    const legacy = u.organisation_id && orgMap.has(u.organisation_id) ? u.organisation_id : null;
-    const orgRefs: DirPersonOrg[] = [];
-    const seen = new Set<string>();
-    if (legacy) { orgRefs.push({ id: legacy, ...orgMap.get(legacy)!, isPrimary: false }); seen.add(legacy); }
-    for (const m of memsByUser.get(u.id) ?? []) {
-      if (seen.has(m.orgId) || !orgMap.has(m.orgId)) continue;
-      orgRefs.push({ id: m.orgId, ...orgMap.get(m.orgId)!, isPrimary: false });
-      seen.add(m.orgId);
-    }
-    let primaryOrgId: string | null = legacy;
-    if (!primaryOrgId) {
-      const primMem = (memsByUser.get(u.id) ?? []).find((m) => m.isPrimary && orgMap.has(m.orgId));
-      primaryOrgId = primMem?.orgId ?? orgRefs[0]?.id ?? null;
-    }
-    for (const r of orgRefs) r.isPrimary = r.id === primaryOrgId;
-    return {
-      id: u.id, email: u.email, name: u.name, phone: u.phone ?? null, role: u.role,
-      isActive: u.is_active, status: u.status, lastLoginAt: u.last_login_at, authUserId: u.auth_user_id ?? null,
-      primaryOrgId, orgs: orgRefs, groups: groupsByUser.get(u.id) ?? [],
-    };
-  });
 }
 
 /**
@@ -831,7 +724,7 @@ export const crmHandlers: Record<string, ToolHandler> = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     try {
-      return toolOk(await buildPeopleDirectory(admin));
+      return toolOk(await listPeopleWithMemberships(admin));
     } catch {
       return toolErr("Failed to load people");
     }
@@ -842,7 +735,7 @@ export const crmHandlers: Record<string, ToolHandler> = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     try {
-      const people = await buildPeopleDirectory(admin);
+      const people = await listPeopleWithMemberships(admin);
       const person = people.find((p) => p.id === args.user_id);
       if (!person) return toolErr("Person not found");
       return toolOk(person);
@@ -851,82 +744,40 @@ export const crmHandlers: Record<string, ToolHandler> = {
     }
   },
   timber_create_person: async (args, ctx) => {
+    const denied = requireAdmin(ctx); if (denied) return toolErr(denied);
     if (!args?.org_id || !UUID_RE.test(args.org_id)) return toolErr("org_id (UUID) is required");
-    // Q2 wall — admin | scoped (forced book group) | no.
-    const scope = await resolveAddPersonScopeByProfile(ctx.actor.portalUserId, ctx.orgId, ctx.actor.isPlatformAdmin, args.org_id);
-    if (!scope.ok) return toolErr(scope.error);
     const name = (args?.name ?? "").trim();
     const email = (args?.email ?? "").trim().toLowerCase();
     if (!name) return toolErr("name is required");
     if (!email) return toolErr("email is required");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-    const { data: dup } = await admin.from("portal_users").select("id").eq("email", email).maybeSingle();
-    if (dup) return toolErr("Email already registered");
-    const { data: org } = await admin.from("organisations").select("id").eq("id", args.org_id).maybeSingle();
-    if (!org) return toolErr("Organisation not found");
-    const { data, error } = await admin
-      .from("portal_users")
-      .insert({ email, name, role: "user", organisation_id: args.org_id, is_active: true, status: "created" })
-      .select("id, email, name, role, organisation_id, auth_user_id, is_active, status, created_at, updated_at")
-      .single();
-    if (error || !data) return toolErr("Failed to create user");
-    const groupRes = await applyPersonGroupsNoCache(admin, scope, data.id as string, args.org_id, args?.group_ids);
-    if (!groupRes.success) return toolErr(`User created but group assignment failed: ${groupRes.error}`);
-    return toolOk(data);
+    const created = await createPersonWithPrimaryMembership(admin, { email, name, organisationId: args.org_id, invitedBy: ctx.actor.portalUserId });
+    if (!created.ok) return toolErr(created.code === "DUPLICATE_EMAIL" ? "Email already registered" : "Permission denied");
+    const groupRes = await setMembershipGroups(admin, created.userId, args.org_id, Array.isArray(args?.group_ids) ? args.group_ids : []);
+    if (!groupRes.ok) return toolErr("Selected access is unavailable for this organisation");
+    return toolOk({ id: created.userId, organisation_id: args.org_id, status: "created", is_active: true, is_primary: true });
   },
   timber_add_person_to_org: async (args, ctx) => {
+    const denied = requireAdmin(ctx); if (denied) return toolErr(denied);
     if (!args?.user_id || !UUID_RE.test(args.user_id)) return toolErr("user_id (UUID) is required");
     if (!args?.org_id || !UUID_RE.test(args.org_id)) return toolErr("org_id (UUID) is required");
-    const scope = await resolveAddPersonScopeByProfile(ctx.actor.portalUserId, ctx.orgId, ctx.actor.isPlatformAdmin, args.org_id);
-    if (!scope.ok) return toolErr(scope.error);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-    const { data: user } = await admin.from("portal_users").select("id, organisation_id").eq("id", args.user_id).maybeSingle();
-    if (!user) return toolErr("User not found");
-    const { data: org } = await admin.from("organisations").select("id").eq("id", args.org_id).maybeSingle();
-    if (!org) return toolErr("Organisation not found");
-    const { data: existingMem } = await admin.from("organization_memberships").select("id, is_active").eq("user_id", args.user_id).eq("organization_id", args.org_id).maybeSingle();
-    if (existingMem) {
-      if (existingMem.is_active) return toolErr("User is already a member of this organisation");
-      const { error } = await admin.from("organization_memberships").update({ is_active: true }).eq("id", existingMem.id);
-      if (error) return toolErr("Failed to add user to organisation");
-    } else if (user.organisation_id === args.org_id) {
-      return toolErr("User is already a member of this organisation");
-    } else {
-      const { error } = await admin.from("organization_memberships").insert({
-        user_id: args.user_id, organization_id: args.org_id, is_active: true, is_primary: false, invited_at: new Date().toISOString(),
-      });
-      if (error) return toolErr("Failed to add user to organisation");
-    }
-    const groupRes = await applyPersonGroupsNoCache(admin, scope, args.user_id, args.org_id, args?.group_ids);
-    if (!groupRes.success) return toolErr(`User added but group assignment failed: ${groupRes.error}`);
+    const attached = await attachPersonMembership(admin, { userId: args.user_id, organisationId: args.org_id, makePrimary: false, invitedBy: ctx.actor.portalUserId });
+    if (!attached.ok) return toolErr(attached.code === "ALREADY_MEMBER" ? "User is already a member of this organisation" : "Permission denied");
+    const groupRes = await setMembershipGroups(admin, args.user_id, args.org_id, Array.isArray(args?.group_ids) ? args.group_ids : []);
+    if (!groupRes.ok) return toolErr("Selected access is unavailable for this organisation");
     return toolOk({ user_id: args.user_id, organisation_id: args.org_id });
   },
   timber_remove_person_from_org: async (args, ctx) => {
+    const denied = requireAdmin(ctx); if (denied) return toolErr(denied);
     if (!args?.user_id || !UUID_RE.test(args.user_id)) return toolErr("user_id (UUID) is required");
     if (!args?.org_id || !UUID_RE.test(args.org_id)) return toolErr("org_id (UUID) is required");
-    const scope = await resolveAddPersonScopeByProfile(ctx.actor.portalUserId, ctx.orgId, ctx.actor.isPlatformAdmin, args.org_id);
-    if (!scope.ok) return toolErr(scope.error);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-    const { data: memsData, error: memErr } = await admin.from("organization_memberships").select("id, organization_id, is_primary").eq("user_id", args.user_id).eq("is_active", true);
-    if (memErr) return toolErr("Failed to load memberships");
-    const active = (memsData ?? []) as Array<{ id: string; organization_id: string; is_primary: boolean }>;
-    const { data: pu } = await admin.from("portal_users").select("organisation_id").eq("id", args.user_id).maybeSingle();
-    const legacyOrgId = (pu?.organisation_id as string | null) ?? null;
-    const target = active.find((m) => m.organization_id === args.org_id) ?? null;
-    if (!target) {
-      if (legacyOrgId === args.org_id) return toolErr("This is the user's home organisation and cannot be removed. Set a different primary organisation first.");
-      return toolErr("User is not a member of this organisation");
-    }
-    const orgSet = new Set(active.map((m) => m.organization_id));
-    if (legacyOrgId) orgSet.add(legacyOrgId);
-    if (orgSet.size <= 1) return toolErr("Cannot remove the user's only organisation — deactivate or delete the user instead.");
-    if (target.is_primary || legacyOrgId === args.org_id) return toolErr("This is the user's primary organisation. Set a different primary first, then remove.");
-    const { error: updErr } = await admin.from("organization_memberships").update({ is_active: false }).eq("id", target.id);
-    if (updErr) return toolErr("Failed to remove user from organisation");
-    await updateUserAccessGroups(admin, args.user_id, args.org_id, []);
+    const changed = await setMembershipActive(admin, args.user_id, args.org_id, false);
+    if (!changed.ok) return toolErr(changed.code === "PRIMARY_OR_ONLY_MEMBERSHIP" ? "Choose another primary organisation first" : "Permission denied");
     return toolOk({ user_id: args.user_id, organisation_id: args.org_id });
   },
   timber_update_person: async (args, ctx) => {
@@ -963,37 +814,19 @@ export const crmHandlers: Record<string, ToolHandler> = {
     if (typeof args?.is_active !== "boolean") return toolErr("is_active (boolean) is required");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-    const { data: existing } = await admin.from("portal_users").select("id").eq("id", args.user_id).maybeSingle();
-    if (!existing) return toolErr("User not found");
-    const { data, error } = await admin.from("portal_users").update({ is_active: args.is_active }).eq("id", args.user_id)
-      .select("id, email, name, is_active, status").single();
-    if (error || !data) return toolErr("Failed to update user status");
-    return toolOk(data);
+    const changed = await setPersonAccountActive(admin, args.user_id, args.is_active);
+    return changed.ok ? toolOk(changed.user) : toolErr("Permission denied");
   },
   timber_resend_person_invite: async (args, ctx) => {
     const denied = requireAdmin(ctx); if (denied) return toolErr(denied);
     if (!args?.user_id || !UUID_RE.test(args.user_id)) return toolErr("user_id (UUID) is required");
     const admin = createAdminClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const db = admin as any;
-    const { data: pu } = await db.from("portal_users").select("id, email, name, role, auth_user_id, status").eq("id", args.user_id).maybeSingle();
-    if (!pu) return toolErr("User not found");
-    if (pu.status !== "invited") return toolErr("User is not in invited status. Reset/set-password is not available over MCP.");
-    if (!pu.auth_user_id) return toolErr("User does not have login credentials yet (send-credentials is not available over MCP).");
-    const del = await admin.auth.admin.deleteUser(pu.auth_user_id as string);
-    if (del.error) return toolErr("Failed to reset user credentials. Please try again.");
-    const { data: authData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(pu.email as string, {
-      data: { name: pu.name as string, role: pu.role as string },
-      redirectTo: "https://timber-world-portal.vercel.app/accept-invite",
-    });
-    if (inviteError || !authData?.user) {
-      if (inviteError?.message?.includes("rate limit") || inviteError?.message?.includes("exceeded")) {
-        return toolErr("Email rate limit reached (4 invites/hour). Please try again later.");
-      }
-      return toolErr(inviteError?.message || "Failed to resend invite email");
-    }
-    await db.from("portal_users").update({ auth_user_id: authData.user.id, invited_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", args.user_id);
-    return toolOk({ email: pu.email });
+    const people = await listPeopleWithMemberships(admin);
+    const person = people.find((p) => p.id === args.user_id);
+    const orgId = person?.memberships.find((m) => m.isPrimary && m.isActive)?.orgId;
+    if (!orgId) return toolErr("Permission denied");
+    const result = await sendPasswordlessInvite(admin, admin, args.user_id, orgId, ctx.actor.portalUserId);
+    return result.ok ? toolOk({ email: result.email }) : toolErr("Invitation email could not be sent; try again");
   },
 
   // ── T5 · Platform settings (E4) — admin-only ────────────────────────────────

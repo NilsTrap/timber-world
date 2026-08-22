@@ -188,12 +188,11 @@ async function main() {
     "timber_list_org_contacts", "timber_get_people_directory", "timber_get_person",
     "timber_get_platform_setting",
   ]) ok(`T-crm read ${r} is a read`, isRead(r));
-  // The counterparty-gated book-writes carry the FINE per-org capability, not admin —
-  // this is what lets a salesperson/purchasing key manage its own trading partners.
-  for (const c of [
-    "timber_upsert_org_contact", "timber_delete_org_contact", "timber_create_person",
-    "timber_add_person_to_org", "timber_remove_person_from_org",
-  ]) ok(`T: ${c} is counterparty-capability gated`, cap(c) === "counterparty");
+  // Contact cards remain book-scoped; login-person onboarding is platform-admin only.
+  for (const c of ["timber_upsert_org_contact", "timber_delete_org_contact"])
+    ok(`T: ${c} is counterparty-capability gated`, cap(c) === "counterparty");
+  for (const c of ["timber_create_person", "timber_add_person_to_org", "timber_remove_person_from_org"])
+    ok(`T: ${c} is platform-admin gated`, cap(c) === "admin");
   ok("T: create_person requires + exposes org_id",
     req("timber_create_person").includes("org_id") && "org_id" in props("timber_create_person"));
   ok("T: upsert_org_contact requires org_id", req("timber_upsert_org_contact").includes("org_id"));
@@ -201,8 +200,13 @@ async function main() {
     "key" in props("timber_set_platform_setting") && "value" in props("timber_set_platform_setting"));
   ok("T: set_platform_setting is admin-capability gated", cap("timber_set_platform_setting") === "admin");
   ok("T: person-management writes are admin-gated",
-    cap("timber_update_person") === "admin" && cap("timber_toggle_person_active") === "admin" &&
+    cap("timber_create_person") === "admin" && cap("timber_add_person_to_org") === "admin" &&
+    cap("timber_remove_person_from_org") === "admin" && cap("timber_update_person") === "admin" && cap("timber_toggle_person_active") === "admin" &&
     cap("timber_resend_person_invite") === "admin");
+  for (const n of ["timber_create_person", "timber_add_person_to_org", "timber_resend_person_invite"]) {
+    const schema = JSON.stringify(byName.get(n)?.inputSchema ?? {});
+    ok(`T: ${n} exposes no password/token/link field`, !/(password|token|magic_link|action_link)/i.test(schema));
+  }
 
   // T-catalog (+28) — category / field / field-option / assignment / product /
   // variant / packaging / currency CRUD + bulk action + stock delete. All are

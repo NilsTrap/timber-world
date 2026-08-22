@@ -1,11 +1,11 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { getSession, isSuperAdmin } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { z } from "zod";
 import type { OrganisationUser, ActionResult } from "../types";
 import { isValidUUID } from "../types";
 import { logAudit } from "@/features/audit/logAudit";
+import { ADMIN_DENIED, requirePlatformAdmin } from "./_platformAdmin";
 
 /**
  * Update Organisation User Schema (Q4 · name / email / phone).
@@ -57,40 +57,17 @@ export async function updateOrganisationUser(
   input: UpdateUserInput
 ): Promise<ActionResult<OrganisationUser>> {
   // 1. Check authentication
-  const session = await getSession();
-  if (!session) {
-    return {
-      success: false,
-      error: "Not authenticated",
-      code: "UNAUTHENTICATED",
-    };
-  }
-
-  // 2. Check Super Admin role
-  if (!isSuperAdmin(session)) {
-    return {
-      success: false,
-      error: "Permission denied",
-      code: "FORBIDDEN",
-    };
-  }
+  const guard = await requirePlatformAdmin();
+  if (!guard.ok) return ADMIN_DENIED;
 
   // 3. Validate IDs
   if (!isValidUUID(userId)) {
-    return {
-      success: false,
-      error: "Invalid user ID",
-      code: "INVALID_USER_ID",
-    };
+    return ADMIN_DENIED;
   }
 
   // organisationId is advisory here (person-level edit) — validate only if given.
   if (organisationId && !isValidUUID(organisationId)) {
-    return {
-      success: false,
-      error: "Invalid organisation ID",
-      code: "INVALID_ORG_ID",
-    };
+    return ADMIN_DENIED;
   }
 
   // 4. Validate input with Zod
@@ -104,7 +81,7 @@ export async function updateOrganisationUser(
   }
 
   const { name, email, phone } = parsed.data;
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // 5. Verify the user exists (person-level edit — not bound to one org).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

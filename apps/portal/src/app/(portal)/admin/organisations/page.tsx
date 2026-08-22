@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, isSuperAdmin, getUserEnabledModules } from "@/lib/auth";
+import { getSession, isAdmin, isPlatformAdmin, getUserEnabledModules } from "@/lib/auth";
 import { UsersPageTabs } from "@/features/organisations/components/UsersPageTabs";
 
 export const metadata: Metadata = {
@@ -38,7 +38,7 @@ export default async function UsersPage() {
 
       {/* People directory is cross-org → admin-only. Org-scoped viewers with the
           organizations.view module still see the Organisations tab only. */}
-      <UsersPageTabs canManagePeople={isSuperAdmin(session)} />
+      <UsersPageTabs canManagePeople={isPlatformAdmin(session)} />
     </div>
   );
 }

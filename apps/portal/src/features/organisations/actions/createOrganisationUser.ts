@@ -1,166 +1,88 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getSession } from "@/lib/auth";
 import { z } from "zod";
+import { updateTag } from "next/cache";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { logAudit } from "@/features/audit/logAudit";
 import type { OrganisationUser, ActionResult } from "../types";
 import { isValidUUID } from "../types";
-import { resolveAddPersonScope, applyAddPersonGroups } from "./_addPersonScope";
-import { logAudit } from "@/features/audit/logAudit";
+import { createPersonWithPrimaryMembership, listAssignableGroups, setMembershipGroups } from "../services/personOnboarding";
+import { sendPasswordlessInvite } from "../services/passwordlessInvite";
+import { ADMIN_DENIED, requirePlatformAdmin } from "./_platformAdmin";
 
-/**
- * Create Organisation User Schema
- */
 const createUserSchema = z.object({
-  name: z
-    .string()
-    .min(1, "Name is required")
-    .max(100, "Name must be 100 characters or less")
-    .trim(),
-  email: z
-    .string()
-    .email("Invalid email address")
-    .max(255, "Email must be 255 characters or less")
-    .trim()
-    .toLowerCase(),
+  name: z.string().min(1, "Name is required").max(100).trim(),
+  email: z.string().email("Invalid email address").max(255).trim().toLowerCase(),
 });
-
 export type CreateUserInput = z.infer<typeof createUserSchema>;
+export type CreatedOrganisationUser = OrganisationUser & { inviteSent: boolean; inviteError: string | null };
 
-/**
- * Create Organisation User (K3 · Q2 book-scoped)
- *
- * Creates a new user within an organisation:
- * - role = 'user', status = 'created' (no auth credentials yet), is_active = true
- * Status flow: created → invited (after credentials sent) → active (after first login)
- *
- * AUTHORISATION (Q2): admins may create for ANY org and pass `groupIds` (full
- * picker). A book-scoped non-admin (salesperson/purchasing) may create ONLY for
- * an org in their clients/suppliers book — enforced by resolveAddPersonScope —
- * and the access group is FORCED server-side (client group / producer group);
- * any `groupIds` they pass are ignored. Trader orgs are admin-only.
- *
- * The gate is the wall: after it passes, writes run on the service-role client
- * (bypassing RLS) — the same deliberate pattern as counterparties' orgContacts.
- */
 export async function createOrganisationUser(
   organisationId: string,
   input: CreateUserInput,
-  groupIds?: string[],
-): Promise<ActionResult<OrganisationUser>> {
-  // 1. Authentication
-  const session = await getSession();
-  if (!session) {
-    return { success: false, error: "Not authenticated", code: "UNAUTHENTICATED" };
-  }
-
-  // 2. Validate organisation ID
-  if (!isValidUUID(organisationId)) {
-    return { success: false, error: "Invalid organisation ID", code: "INVALID_ID" };
-  }
-
-  // 3. Q2 wall — may this caller create a user for this org? (admin | scoped | no)
-  const scope = await resolveAddPersonScope(session, organisationId);
-  if (!scope.ok) {
-    return { success: false, error: scope.error, code: scope.code };
-  }
-
-  // 4. Validate input with Zod
+  groupIds: string[] = [],
+  options: { sendInvite?: boolean } = {},
+): Promise<ActionResult<CreatedOrganisationUser>> {
+  const guard = await requirePlatformAdmin();
+  if (!guard.ok || !isValidUUID(organisationId)) return ADMIN_DENIED;
   const parsed = createUserSchema.safeParse(input);
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.errors[0]?.message ?? "Invalid input",
-      code: "VALIDATION_ERROR",
-    };
-  }
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid input", code: "VALIDATION_ERROR" };
+  if (!Array.isArray(groupIds) || groupIds.some((id) => !isValidUUID(id))) return ADMIN_DENIED;
 
-  const { name, email } = parsed.data;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = createAdminClient() as any;
-
-  // 5. Duplicate email (globally unique across all portal_users)
-  const { data: existingUser } = await supabase
-    .from("portal_users")
-    .select("id")
-    .eq("email", email)
-    .maybeSingle();
-
-  if (existingUser) {
-    return { success: false, error: "Email already registered", code: "DUPLICATE_EMAIL" };
+  const admin = createAdminClient() as any;
+  const optionsById = new Map((await listAssignableGroups(admin, organisationId)).map((g) => [g.id, g]));
+  if (groupIds.some((id) => !optionsById.has(id) || optionsById.get(id)?.disabled)) {
+    return { success: false, error: "Selected access is unavailable for this organisation", code: "ACCESS_ABOVE_ORG_CEILING" };
   }
 
-  // 6. Verify organisation exists
-  const { data: org } = await supabase
-    .from("organisations")
-    .select("id")
-    .eq("id", organisationId)
-    .maybeSingle();
-
-  if (!org) {
-    return { success: false, error: "Organisation not found", code: "ORG_NOT_FOUND" };
-  }
-
-  // 7. Insert new user (invited_at/invited_by are set later, when credentials
-  //    are sent; auth_user_id stays NULL until then).
-  const { data, error } = await supabase
-    .from("portal_users")
-    .insert({
-      email,
-      name,
-      role: "user",
-      organisation_id: organisationId,
-      is_active: true,
-      status: "created",
-    })
-    .select("id, email, name, role, organisation_id, auth_user_id, is_active, status, invited_at, invited_by, last_login_at, created_at, updated_at")
-    .single();
-
-  if (error) {
-    console.error("Failed to create organisation user:", error);
-    return { success: false, error: "Failed to create user", code: "CREATE_FAILED" };
-  }
-
-  // 8. Inline access-group assignment (Q2: forced group for scoped callers;
-  //    validated picker for admins) + cache-tag bust.
-  const groupRes = await applyAddPersonGroups(
-    supabase,
-    scope,
-    data.id as string,
+  const created = await createPersonWithPrimaryMembership(admin, {
+    email: parsed.data.email,
+    name: parsed.data.name,
     organisationId,
-    groupIds,
-  );
-  if (!groupRes.success) {
-    // The user row exists; surface the group failure so the admin can retry via
-    // the Groups action rather than silently leaving them un-grouped.
-    return { success: false, error: `User created but group assignment failed: ${groupRes.error}`, code: "GROUP_ASSIGN_FAILED" };
-  }
-
-  // 9. Transform and return
-  const user: OrganisationUser = {
-    id: data.id as string,
-    email: data.email as string,
-    name: data.name as string,
-    role: data.role as "admin" | "user",
-    organisationId: data.organisation_id as string,
-    authUserId: data.auth_user_id as string | null,
-    isActive: data.is_active as boolean,
-    status: data.status as "created" | "invited" | "active",
-    invitedAt: data.invited_at as string | null,
-    invitedBy: data.invited_by as string | null,
-    invitedByName: null,
-    lastLoginAt: data.last_login_at as string | null,
-    createdAt: data.created_at as string,
-    updatedAt: data.updated_at as string,
-  };
-
-  await logAudit({
-    action: "portal_user.create",
-    resourceType: "portal_user",
-    resourceId: user.id,
-    organisationId,
-    metadata: { email: user.email, name: user.name },
+    invitedBy: guard.session.portalUserId,
   });
+  if (!created.ok) {
+    return created.code === "DUPLICATE_EMAIL"
+      ? { success: false, error: "Email already registered", code: created.code }
+      : ADMIN_DENIED;
+  }
 
+  const groups = await setMembershipGroups(admin, created.userId, organisationId, groupIds);
+  if (!groups.ok) return { success: false, error: "User created but access could not be assigned", code: groups.code };
+  updateTag(`user-modules:${created.userId}:${organisationId}`);
+  updateTag(`access-profile:${created.userId}:${organisationId}`);
+
+  let inviteSent = false;
+  let inviteError: string | null = null;
+  if (options.sendInvite) {
+    const invite = await sendPasswordlessInvite(admin, admin, created.userId, organisationId, guard.session.portalUserId);
+    inviteSent = invite.ok;
+    inviteError = invite.ok ? null : "User created; invitation email can be retried";
+  }
+
+  const { data } = await admin.from("portal_users")
+    .select("id, email, name, role, organisation_id, auth_user_id, is_active, status, invited_at, invited_by, last_login_at, created_at, updated_at")
+    .eq("id", created.userId).single();
+  if (!data) return { success: false, error: "Failed to load created user", code: "FETCH_FAILED" };
+  const user: CreatedOrganisationUser = {
+    id: data.id,
+    email: data.email,
+    name: data.name,
+    role: data.role,
+    organisationId: data.organisation_id,
+    authUserId: data.auth_user_id,
+    isActive: data.is_active,
+    status: data.status,
+    invitedAt: data.invited_at,
+    invitedBy: data.invited_by,
+    invitedByName: null,
+    lastLoginAt: data.last_login_at,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+    inviteSent,
+    inviteError,
+  };
+  await logAudit({ action: "portal_user.create", resourceType: "portal_user", resourceId: user.id, organisationId, metadata: { groupCount: groupIds.length, inviteSent } });
   return { success: true, data: user };
 }

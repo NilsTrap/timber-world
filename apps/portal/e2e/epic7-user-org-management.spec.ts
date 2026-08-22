@@ -97,6 +97,18 @@ test.describe("Epic 7: User & Organization Management", () => {
   // =========================================
 
   test.describe("Story 7.2: User Management within Organization", () => {
+    test("People directory shows persona and membership-aware organisations", async ({ superAdminPage }) => {
+      await superAdminPage.goto("/admin/organisations");
+      await superAdminPage.getByRole("tab", { name: /people/i }).click();
+      await expect(superAdminPage.getByRole("columnheader", { name: /persona/i })).toBeVisible();
+      await expect(superAdminPage.getByRole("columnheader", { name: /organisations/i })).toBeVisible();
+    });
+
+    test("Non-admin cannot see the cross-org People entry point", async ({ orgUserPage }) => {
+      await orgUserPage.goto("/admin/organisations");
+      await expect(orgUserPage.getByRole("tab", { name: /people/i })).toHaveCount(0);
+    });
+
     test("Users tab shows user management table", async ({ superAdminPage }) => {
       await superAdminPage.goto("/admin/organisations");
 
@@ -160,6 +172,8 @@ test.describe("Epic 7: User & Organization Management", () => {
 
       await expect(nameInput).toBeVisible();
       await expect(emailInput).toBeVisible();
+      await expect(dialog.getByLabel(/send passwordless invite now/i)).toBeVisible();
+      await expect(dialog.getByLabel(/make primary when attaching/i)).toBeVisible();
     });
 
     test("Add User form validation requires name and email", async ({ superAdminPage }) => {

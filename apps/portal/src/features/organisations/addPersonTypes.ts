@@ -20,6 +20,9 @@ export interface AddPersonGroupOption {
   key: string;
   name: string;
   isSystem: boolean;
+  effectiveModules: string[];
+  unavailableModules: string[];
+  disabled: boolean;
 }
 
 /** Dialog bootstrap: who the caller is for THIS org + the group choices.

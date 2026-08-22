@@ -13,7 +13,6 @@ export { getOrganisationUsers } from "./getOrganisationUsers";
 export { createOrganisationUser } from "./createOrganisationUser";
 export { updateOrganisationUser } from "./updateOrganisationUser";
 export { toggleUserActive } from "./toggleUserActive";
-export { deleteOrganisationUser } from "./deleteOrganisationUser";
 
 // Add existing user to organisation
 export { searchUserByEmail, addExistingUserToOrganisation } from "./addExistingUserToOrganisation";
@@ -22,6 +21,7 @@ export type { ExistingUserInfo } from "./addExistingUserToOrganisation";
 // K3/Q2 · Add-person flow (typeahead + create + inline groups) & membership removal
 export { getAddPersonContext, searchAddablePeople } from "./addPersonSupport";
 export { removeUserFromOrganisation } from "./removeUserFromOrganisation";
+export { getMembershipGroupOptions, updateMembershipGroups, setPrimaryMembership, setMembershipActive } from "./personMembershipAdmin";
 
 // User credential actions (Story 7.3)
 export { sendUserCredentials } from "./sendUserCredentials";
@@ -65,9 +65,6 @@ export { getPersonById } from "./getPersonById";
 export type { PersonDetail } from "./getPersonById";
 export { getPersonMemberships, getAddableOrganisationsForPerson } from "./getPersonMemberships";
 export type { PersonMembership, AddableOrg } from "./getPersonMemberships";
-
-// Q4 · admin manual set-password
-export { setUserPasswordAdmin } from "./setUserPasswordAdmin";
 
 // Epic T / T1 · per-user MCP API keys (super-admin only)
 export { issueMcpApiKey, listMcpApiKeys, revokeMcpApiKey } from "./mcpApiKeys";

@@ -211,7 +211,7 @@ function userHasCapability(profile: AccessProfile, capability: UserWriteCapabili
       // Coarse gate: the owner holds SOME CRM book (clients or suppliers). The FINE
       // per-org book scope (salesperson→clients / purchasing→suppliers, trader orgs
       // admin-only) is enforced inside the CRM tool handlers (contactGate /
-      // resolveAddPersonScopeByProfile) with the target org.
+      // each domain's target-org service guard.
       return (profile.actions.has("counterparty:clients") && profile.modules.has("counterparties.clients"))
         || (profile.actions.has("counterparty:suppliers") && profile.modules.has("counterparties.suppliers"));
     case "catalogue":

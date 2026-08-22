@@ -14,9 +14,9 @@ import {
   Send,
   RefreshCw,
   KeyRound,
-  Trash2,
   Settings2,
   UserMinus,
+  Star,
 } from "lucide-react";
 import {
   Button,
@@ -42,8 +42,9 @@ import {
   sendUserCredentials,
   resendUserCredentials,
   resetUserPassword,
-  deleteOrganisationUser,
   removeUserFromOrganisation,
+  setMembershipActive,
+  setPrimaryMembership,
 } from "../actions";
 import dynamic from "next/dynamic";
 import { getOrgUsersGroups } from "@/features/access/actions/groups";
@@ -92,8 +93,9 @@ function getDisplayStatus(user: OrganisationUser): {
   variant: "default" | "secondary" | "success" | "warning" | "destructive";
 } {
   if (!user.isActive) {
-    return { label: "Inactive", variant: "secondary" };
+    return { label: "Inactive account", variant: "secondary" };
   }
+  if (user.membershipActive === false) return { label: "Inactive membership", variant: "secondary" };
   if (user.status === "created") {
     return { label: "Created", variant: "default" };
   }
@@ -145,8 +147,6 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
   const [isToggling, setIsToggling] = useState(false);
 
   // Delete confirmation state
-  const [deleteUser, setDeleteUser] = useState<OrganisationUser | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   // Remove-from-organisation confirmation state (K3)
   const [removeUser, setRemoveUser] = useState<OrganisationUser | null>(null);
@@ -301,29 +301,6 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
     setResettingPasswordFor(null);
   };
 
-  // Handle delete user
-  const handleDeleteUser = (user: OrganisationUser) => {
-    setDeleteUser(user);
-  };
-
-  // Confirm delete user
-  const confirmDeleteUser = async () => {
-    if (!deleteUser) return;
-
-    setIsDeleting(true);
-    const result = await deleteOrganisationUser(deleteUser.id, organisationId);
-
-    if (result.success) {
-      toast.success(`User "${deleteUser.name}" deleted`);
-      loadUsers();
-    } else {
-      toast.error(result.error);
-    }
-
-    setIsDeleting(false);
-    setDeleteUser(null);
-  };
-
   // Confirm remove-from-organisation (deactivates the membership; refuses the
   // user's last/primary org — the server is the wall).
   const confirmRemoveUser = async () => {
@@ -343,6 +320,24 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
     }
 
     setIsRemoving(false);
+  };
+
+  const reactivateMembership = async (user: OrganisationUser) => {
+    setIsRemoving(true);
+    const result = await setMembershipActive(user.id, organisationId, true);
+    setIsRemoving(false);
+    if (result.success) {
+      toast.success(`"${user.name}" reactivated without restoring old access`);
+      loadUsers();
+    } else toast.error(result.error);
+  };
+
+  const makePrimaryMembership = async (user: OrganisationUser) => {
+    const result = await setPrimaryMembership(user.id, organisationId);
+    if (result.success) {
+      toast.success(`${organisationId === user.organisationId ? "This organisation" : "Organisation"} is now primary for ${user.name}`);
+      loadUsers();
+    } else toast.error(result.error);
   };
 
   const handleSuccess = () => {
@@ -429,7 +424,7 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                 return (
                   <TableRow
                     key={user.id}
-                    className={!user.isActive ? "opacity-50" : ""}
+                    className={!user.isActive || user.membershipActive === false ? "opacity-50" : ""}
                   >
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell className="text-muted-foreground">{user.email}</TableCell>
@@ -456,12 +451,18 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {user.membershipActive !== false && !user.isPrimaryMembership && (
+                          <Button variant="ghost" size="icon-sm" onClick={() => makePrimaryMembership(user)} aria-label={`Make this organisation primary for ${user.name}`} title="Make primary">
+                            <Star className="h-4 w-4" />
+                          </Button>
+                        )}
                         {/* I2 · make group management discoverable — a labelled action,
                             not a bare icon (Edgars "couldn't find it"). */}
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => setGroupsUser(user)}
+                          disabled={user.membershipActive === false}
                           aria-label={`Manage groups for ${user.name}`}
                           title="Manage access groups"
                         >
@@ -547,20 +548,11 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => setRemoveUser(user)}
-                          aria-label={`Remove ${user.name} from this organisation`}
-                          title="Remove from this organisation"
+                          onClick={() => user.membershipActive === false ? reactivateMembership(user) : setRemoveUser(user)}
+                          aria-label={`${user.membershipActive === false ? "Reactivate" : "Deactivate"} ${user.name}'s membership`}
+                          title={user.membershipActive === false ? "Reactivate membership" : "Deactivate membership"}
                         >
-                          <UserMinus className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleDeleteUser(user)}
-                          aria-label={`Delete ${user.name}`}
-                          title="Delete user"
-                        >
-                          <Trash2 className="h-4 w-4" />
+                          {user.membershipActive === false ? <Power className="h-4 w-4" /> : <UserMinus className="h-4 w-4" />}
                         </Button>
                       </div>
                     </TableCell>
@@ -631,45 +623,6 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                 </>
               ) : (
                 toggleUser?.isActive ? "Deactivate" : "Activate"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Delete User Confirmation Dialog */}
-      <AlertDialog
-        open={!!deleteUser}
-        onOpenChange={(open) => {
-          if (!open && !isDeleting) {
-            setDeleteUser(null);
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete User</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to permanently delete <strong>{deleteUser?.name}</strong>?
-              <br />
-              <br />
-              This action cannot be undone. The user will lose all access and their account will be removed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDeleteUser}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                "Delete"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

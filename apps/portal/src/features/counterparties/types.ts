@@ -69,6 +69,7 @@ export interface CounterpartyContact {
 export interface CounterpartyProfile extends CounterpartyRow {
   accessMode: "admin" | "manager" | "self";
   canManage: boolean;
+  canOnboardPeople: boolean;
   deliveryAddresses: CounterpartyDeliveryAddress[];
   contacts: CounterpartyContact[];
 }

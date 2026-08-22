@@ -80,6 +80,11 @@ export interface OrganisationUser {
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Membership lifecycle is independent from the account lifecycle. */
+  membershipActive?: boolean;
+  isPrimaryMembership?: boolean;
+  personas?: Array<"Customer" | "Trader" | "Manufacturer/Supplier">;
+  effectiveModules?: string[];
 }
 
 /**

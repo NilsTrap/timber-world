@@ -27,14 +27,12 @@ import {
 import {
   User,
   Pencil,
-  KeyRound,
   Power,
   PowerOff,
   Send,
   RefreshCw,
   Building2,
   Plus,
-  UserMinus,
   Settings2,
   Star,
   Loader2,
@@ -47,12 +45,13 @@ import {
   resendUserCredentials,
   resetUserPassword,
   removeUserFromOrganisation,
+  setMembershipActive,
+  setPrimaryMembership,
   type PersonDetail,
   type PersonMembership,
 } from "../actions";
 import type { OrganisationUser } from "../types";
 import { PersonEditDialog, type EditablePerson } from "./PersonEditDialog";
-import { PersonSetPasswordDialog } from "./PersonSetPasswordDialog";
 import { AddPersonToOrgDialog } from "./AddPersonToOrgDialog";
 import { UserGroupsDialog } from "./UserGroupsDialog";
 import { PersonApiKeysSection } from "./PersonApiKeysSection";
@@ -76,7 +75,7 @@ function formatDateTime(value: string | null): string {
  * K2 + Q4 · Editable person detail.
  *
  * One place to manage a person: profile (name/email/phone), credentials
- * (send/resend/reset + admin set-password), activate/deactivate, and their org
+ * (send/resend/reset), activate/deactivate, and their org
  * memberships (add/remove + per-org access groups). Cross-org, so the page is
  * admin-only; membership mutations additionally re-run the K3 scope wall.
  */
@@ -87,11 +86,11 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
 
   // Dialog / confirm state
   const [editOpen, setEditOpen] = useState(false);
-  const [setPwOpen, setSetPwOpen] = useState(false);
   const [addOrgOpen, setAddOrgOpen] = useState(false);
   const [groupsOrg, setGroupsOrg] = useState<{ id: string; name: string } | null>(null);
   const [removeOrg, setRemoveOrg] = useState<PersonMembership | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [membershipBusy, setMembershipBusy] = useState<string | null>(null);
   const [toggleOpen, setToggleOpen] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [credBusy, setCredBusy] = useState(false);
@@ -206,6 +205,26 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
     }
   };
 
+  const activateMembership = async (membership: PersonMembership) => {
+    setMembershipBusy(membership.orgId);
+    const r = await setMembershipActive(person.id, membership.orgId, true);
+    setMembershipBusy(null);
+    if (r.success) {
+      toast.success(`Membership reactivated without restoring old access`);
+      loadMemberships();
+    } else toast.error(r.error);
+  };
+
+  const makePrimary = async (membership: PersonMembership) => {
+    setMembershipBusy(membership.orgId);
+    const r = await setPrimaryMembership(person.id, membership.orgId);
+    setMembershipBusy(null);
+    if (r.success) {
+      toast.success(`${membership.orgName} is now primary`);
+      await Promise.all([loadMemberships(), refreshPerson()]);
+    } else toast.error(r.error);
+  };
+
   const statusBadge = (
     <div className="flex items-center gap-2">
       <Badge
@@ -259,9 +278,6 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
                     {credentialLabel}
                   </Button>
                 )}
-                <Button variant="outline" size="sm" onClick={() => setSetPwOpen(true)}>
-                  <KeyRound className="h-4 w-4 mr-1" /> Set password
-                </Button>
                 <Button variant="outline" size="sm" onClick={() => setToggleOpen(true)}>
                   {person.isActive ? <PowerOff className="h-4 w-4 mr-1" /> : <Power className="h-4 w-4 mr-1" />}
                   {person.isActive ? "Deactivate" : "Activate"}
@@ -312,7 +328,7 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
               ) : (
                 <div className="space-y-2">
                   {memberships.map((m) => (
-                    <div key={m.orgId} className="flex items-center gap-3 rounded-lg border p-3">
+                    <div key={m.orgId} className={`flex items-center gap-3 rounded-lg border p-3 ${m.isActive ? "" : "opacity-60"}`}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <Link
@@ -327,6 +343,9 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
                               <Star className="h-3 w-3" /> Primary
                             </Badge>
                           )}
+                          <Badge variant={m.isActive ? "success" : "secondary"} className="text-[10px]">
+                            {m.isActive ? "Membership active" : "Membership inactive"}
+                          </Badge>
                         </div>
                         <div className="mt-1 flex flex-wrap gap-1">
                           {m.groups.length > 0 ? (
@@ -338,12 +357,22 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
                           ) : (
                             <span className="text-xs text-muted-foreground">No access groups</span>
                           )}
+                          {m.personas.map((persona) => (
+                            <Badge key={persona} variant="outline" className="text-[10px]">{persona}</Badge>
+                          ))}
+                          <span className="text-xs text-muted-foreground">{m.effectiveModules.length} effective modules</span>
                         </div>
                       </div>
+                      {m.isActive && !m.isPrimary && (
+                        <Button variant="ghost" size="sm" onClick={() => makePrimary(m)} disabled={membershipBusy !== null}>
+                          <Star className="h-4 w-4 mr-1" /> Make primary
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setGroupsOrg({ id: m.orgId, name: m.orgName })}
+                        disabled={!m.isActive || membershipBusy !== null}
                         title="Manage access groups"
                       >
                         <Settings2 className="h-4 w-4 mr-1" /> Groups
@@ -351,11 +380,12 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        onClick={() => setRemoveOrg(m)}
-                        title="Remove from this organisation"
-                        aria-label={`Remove from ${m.orgName}`}
+                        onClick={() => m.isActive ? setRemoveOrg(m) : activateMembership(m)}
+                        disabled={membershipBusy !== null}
+                        title={m.isActive ? "Deactivate membership" : "Reactivate membership"}
+                        aria-label={`${m.isActive ? "Deactivate" : "Reactivate"} membership in ${m.orgName}`}
                       >
-                        <UserMinus className="h-4 w-4" />
+                        {membershipBusy === m.orgId ? <Loader2 className="h-4 w-4 animate-spin" /> : m.isActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
                       </Button>
                     </div>
                   ))}
@@ -392,14 +422,6 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
         open={editOpen}
         onOpenChange={setEditOpen}
         onSuccess={refreshPerson}
-      />
-
-      <PersonSetPasswordDialog
-        personId={person.id}
-        personName={person.name}
-        hasAuthUser={!!person.authUserId}
-        open={setPwOpen}
-        onOpenChange={setSetPwOpen}
       />
 
       <AddPersonToOrgDialog
@@ -446,17 +468,16 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
       <AlertDialog open={!!removeOrg} onOpenChange={(o) => !isRemoving && !o && setRemoveOrg(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove from organisation</AlertDialogTitle>
+            <AlertDialogTitle>Deactivate membership</AlertDialogTitle>
             <AlertDialogDescription>
-              Remove <strong>{person.name}</strong> from <strong>{removeOrg?.orgName}</strong>? Their
-              membership and access groups there are revoked. Their primary or only organisation cannot
-              be removed.
+              Deactivate <strong>{person.name}</strong>&apos;s membership in <strong>{removeOrg?.orgName}</strong>? Their
+              access there is revoked. A primary or only membership cannot be deactivated.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isRemoving}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmRemove} disabled={isRemoving}>
-              {isRemoving ? "Removing..." : "Remove"}
+              {isRemoving ? "Deactivating..." : "Deactivate"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

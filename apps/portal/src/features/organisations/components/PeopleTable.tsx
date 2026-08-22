@@ -58,8 +58,8 @@ const selectClass =
  * and their access groups. Search (name/email/phone) + filters (organisation,
  * access group, status). Row actions edit the profile, send/resend/reset
  * credentials, and activate/deactivate — person-level ops using the person's
- * primary org where an org is needed. Admin-only (getPeopleDirectory guards
- * isSuperAdmin); a scoped viewer never reaches this component.
+ * primary org where an org is needed. Exact platform-admin only; a scoped
+ * viewer never reaches this component.
  */
 export function PeopleTable() {
   const [people, setPeople] = useState<DirectoryPerson[]>([]);
@@ -223,6 +223,7 @@ export function PeopleTable() {
                 <TableHead>Phone</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Organisations</TableHead>
+                <TableHead>Persona</TableHead>
                 <TableHead>Access groups</TableHead>
                 <TableHead>Last login</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -252,7 +253,7 @@ export function PeopleTable() {
                       ) : (
                         <span className="flex flex-wrap gap-1">
                           {p.orgs.slice(0, 3).map((o) => (
-                            <Badge key={o.id} variant={o.isPrimary ? "default" : "secondary"} className="gap-1 text-[10px]">
+                            <Badge key={o.id} variant={o.isPrimary ? "default" : "secondary"} className={`gap-1 text-[10px] ${o.isActive ? "" : "line-through"}`} title={o.isActive ? "Active membership" : "Inactive membership"}>
                               {o.isPrimary && <Star className="h-2.5 w-2.5" />}
                               {o.code}
                             </Badge>
@@ -262,6 +263,13 @@ export function PeopleTable() {
                           )}
                         </span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <span className="flex flex-wrap gap-1">
+                        {Array.from(new Set(p.orgs.flatMap((o) => o.personas))).map((persona) => (
+                          <Badge key={persona} variant="outline" className="text-[10px]">{persona}</Badge>
+                        ))}
+                      </span>
                     </TableCell>
                     <TableCell>
                       {groupNames.length === 0 ? (

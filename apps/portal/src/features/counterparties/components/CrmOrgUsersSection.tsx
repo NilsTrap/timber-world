@@ -24,7 +24,8 @@ const AddUserDialog = dynamic(
 );
 
 function statusBadge(u: OrganisationUser): { label: string; variant: "success" | "warning" | "draft" | "info" } {
-  if (!u.isActive) return { label: "Inactive", variant: "draft" };
+  if (!u.isActive) return { label: "Inactive account", variant: "draft" };
+  if (u.membershipActive === false) return { label: "Inactive membership", variant: "draft" };
   if (u.status === "invited") return { label: "Invited", variant: "warning" };
   if (u.status === "active") return { label: "Active", variant: "success" };
   return { label: "Created", variant: "info" };
@@ -115,6 +116,7 @@ export function CrmOrgUsersSection({
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead className="w-24">Status</TableHead>
+                <TableHead>Persona</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -122,10 +124,17 @@ export function CrmOrgUsersSection({
                 const s = statusBadge(u);
                 return (
                   <TableRow key={u.id} className={u.isActive ? "" : "opacity-50"}>
-                    <TableCell className="font-medium">{u.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <span className="flex items-center gap-1">{u.name}{u.isPrimaryMembership && <StatusBadge variant="info">Primary</StatusBadge>}</span>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{u.email}</TableCell>
                     <TableCell>
                       <StatusBadge variant={s.variant}>{s.label}</StatusBadge>
+                    </TableCell>
+                    <TableCell>
+                      <span className="flex flex-wrap gap-1">
+                        {(u.personas ?? []).map((persona) => <StatusBadge key={persona} variant="info">{persona}</StatusBadge>)}
+                      </span>
                     </TableCell>
                   </TableRow>
                 );

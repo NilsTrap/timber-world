@@ -1,10 +1,11 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { getSession, isSuperAdmin } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { OrganisationUser, ActionResult } from "../types";
 import { isValidUUID } from "../types";
 import { logAudit } from "@/features/audit/logAudit";
+import { ADMIN_DENIED, requirePlatformAdmin } from "./_platformAdmin";
+import { setPersonAccountActive } from "../services/personOnboarding";
 
 /**
  * Toggle User Active Status
@@ -20,43 +21,20 @@ export async function toggleUserActive(
   isActive: boolean
 ): Promise<ActionResult<OrganisationUser>> {
   // 1. Check authentication
-  const session = await getSession();
-  if (!session) {
-    return {
-      success: false,
-      error: "Not authenticated",
-      code: "UNAUTHENTICATED",
-    };
-  }
-
-  // 2. Check Super Admin role
-  if (!isSuperAdmin(session)) {
-    return {
-      success: false,
-      error: "Permission denied",
-      code: "FORBIDDEN",
-    };
-  }
+  const guard = await requirePlatformAdmin();
+  if (!guard.ok) return ADMIN_DENIED;
 
   // 3. Validate IDs
   if (!isValidUUID(userId)) {
-    return {
-      success: false,
-      error: "Invalid user ID",
-      code: "INVALID_USER_ID",
-    };
+    return ADMIN_DENIED;
   }
 
   // organisationId is advisory (is_active is person-level) — validate only if given.
   if (organisationId && !isValidUUID(organisationId)) {
-    return {
-      success: false,
-      error: "Invalid organisation ID",
-      code: "INVALID_ORG_ID",
-    };
+    return ADMIN_DENIED;
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // 4. Verify the user exists. is_active is a person-level flag (not per-org), so
   //    this is not bound to one org — the person-centric view toggles a user who
@@ -69,30 +47,20 @@ export async function toggleUserActive(
     .single();
 
   if (!existingUser) {
-    return {
-      success: false,
-      error: "User not found",
-      code: "USER_NOT_FOUND",
-    };
+    return ADMIN_DENIED;
   }
 
   // 5. Update is_active status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from("portal_users")
-    .update({ is_active: isActive })
-    .eq("id", userId)
-    .select("id, email, name, role, organisation_id, auth_user_id, is_active, status, invited_at, invited_by, last_login_at, created_at, updated_at")
-    .single();
-
-  if (error) {
-    console.error("Failed to toggle user active status:", error);
+  const changed = await setPersonAccountActive(supabase, userId, isActive);
+  if (!changed.ok) {
     return {
       success: false,
       error: "Failed to update user status",
       code: "UPDATE_FAILED",
     };
   }
+  const data = changed.user;
 
   // 6. Transform and return
   const user: OrganisationUser = {
