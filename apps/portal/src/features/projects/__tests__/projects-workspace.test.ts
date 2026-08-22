@@ -65,6 +65,7 @@ ok("office/archive preview is unavailable", !isPreviewableProjectMimeType("appli
 const service = readFileSync("src/features/projects/services/projectFiles.ts", "utf8");
 const actions = readFileSync("src/features/projects/actions/projectFileActions.ts", "utf8");
 const create = readFileSync("src/features/projects/actions/createProject.ts", "utf8");
+const workspace = readFileSync("src/features/projects/components/ProjectFileWorkspace.tsx", "utf8");
 const migration = readFileSync("../../supabase/migrations/20260821211500_project_file_workspace.sql", "utf8");
 ok("metadata loader select excludes storage_path", /const SAFE_FILE_SELECT\s*=\s*[\s\S]*?;/.test(service) && !service.match(/const SAFE_FILE_SELECT\s*=\s*([\s\S]*?);/)?.[1]?.includes("storage_path"));
 ok("workspace reads only category=project", service.includes('.eq("category", PROJECT_CATEGORY)'));
@@ -78,6 +79,8 @@ ok("finalisation is bound to project and upload IDs", actions.includes('.eq("id"
 ok("finalisation reads actual storage metadata size", actions.includes("validateStoredProjectUploadSize(object, expectedSize)"));
 ok("invalid stored objects are removed before retry", actions.includes("if (!storedSize.ok)") && actions.includes('.remove([storagePath])'));
 ok("orders bucket rejects uploads over 100 MB", migration.includes("file_size_limit = LEAST(COALESCE(file_size_limit, 104857600), 104857600)"));
+ok("narrow workspace renders folders", workspace.includes('<MobileFolderRows nodes={tree}'));
+ok("mobile folder actions stay visible and touch-safe", workspace.includes('aria-label={`Rename folder ${node.path}`}') && workspace.includes('aria-label={`Delete folder ${node.path}`}') && workspace.includes('className="h-11 w-11"'));
 
 console.log(`\nprojects-workspace.test.ts: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

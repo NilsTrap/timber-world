@@ -213,6 +213,7 @@ export function ProjectFileWorkspace({
             </Table>
           </div>
           <div className="rounded-lg border bg-card divide-y md:hidden">
+            <MobileFolderRows nodes={tree} canWrite={canWrite} onRename={renameFolder} onDelete={deleteFolder} />
             {files.map((file) => (
               <div key={file.id} className="flex items-center gap-3 p-3">
                 <FileTypeIcon file={file} />
@@ -232,6 +233,10 @@ export function ProjectFileWorkspace({
       </Dialog>
     </div>
   );
+}
+
+function MobileFolderRows({ nodes, canWrite, onRename, onDelete, depth = 0 }: { nodes: ProjectTreeNode[]; canWrite: boolean; onRename: (path: string) => void; onDelete: (path: string) => void; depth?: number }) {
+  return <>{nodes.filter((node) => node.kind === "folder").map((node) => <div key={node.path}><div className="flex min-h-12 items-center gap-2 p-2" style={{ paddingLeft: `${8 + depth * 12}px` }}><Folder className="h-4 w-4 shrink-0 text-amber-600" /><p className="min-w-0 flex-1 truncate text-sm font-medium" title={node.path}>{node.name}</p>{canWrite ? <div className="flex shrink-0"><Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={`Rename folder ${node.path}`} onClick={() => onRename(node.path)}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={`Delete folder ${node.path}`} onClick={() => onDelete(node.path)}><Trash2 className="h-4 w-4" /></Button></div> : null}</div><MobileFolderRows nodes={node.children} canWrite={canWrite} onRename={onRename} onDelete={onDelete} depth={depth + 1} /></div>)}</>;
 }
 
 function TreeNodes({ nodes, selected, onSelect, canWrite, onRename, onDelete, depth = 0 }: { nodes: ProjectTreeNode[]; selected: string | null; onSelect: (path: string) => void; canWrite: boolean; onRename: (path: string) => void; onDelete: (path: string) => void; depth?: number }) {
