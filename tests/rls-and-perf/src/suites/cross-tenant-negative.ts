@@ -229,14 +229,20 @@ export async function runNegativeSuite(): Promise<ProbeResult[]> {
   // buy leg JLD→JLA (IJL-E4-BUY-001). org-a (JLA) is the house.
   const admin = adminClient();
   const orgDId = orgIdByKey["org-d-supplier"];
-  const { data: legs } = await admin
+  const { data: legs, error: legsError } = await admin
     .from("orders")
     .select("id, code")
     .in("code", ["IJL-E4-SELL-001", "IJL-E4-BUY-001"]);
   const sellLegId = legs?.find((l) => l.code === "IJL-E4-SELL-001")?.id as string | undefined;
   const buyLegId = legs?.find((l) => l.code === "IJL-E4-BUY-001")?.id as string | undefined;
 
-  if (sellLegId && buyLegId && orgDId) {
+  if (legsError || !sellLegId || !buyLegId || !orgDId) {
+    throw new Error(
+      `E4 project fixtures are incomplete: ${legsError?.message ?? "expected both seeded legs and supplier org"}`,
+    );
+  }
+
+  {
     // Project-workspace canaries make file probes non-vacuous. Metadata only:
     // no storage object is created, and the rows are removed before return.
     const probeStamp = Date.now();
@@ -288,72 +294,87 @@ export async function runNegativeSuite(): Promise<ProbeResult[]> {
       });
     };
 
-    // Salesperson (house org, side.sell only): the buy leg, the supplier's
-    // identity, and the buy leg's files must all be invisible — even though
-    // their own org IS a party on the buy leg. This is the wall RLS
-    // membership alone could never build.
-    const salesUser = TEST_USERS.find((u) => u.userKey === "house-sales")!;
-    const salesClient = await userClient(salesUser);
-    await probeRead(salesClient, "house-sales", "e4.sales-reads-buy-leg",
-      "House salesperson (side.sell) selects the upstream buy leg", "orders", "id", buyLegId);
-    await probeRead(salesClient, "house-sales", "e4.sales-reads-buy-leg-lines",
-      "House salesperson reads the buy leg's line items (purchase prices)", "order_line_items", "order_id", buyLegId);
-    await probeRead(salesClient, "house-sales", "e4.sales-reads-buy-leg-files",
-      "House salesperson reads the buy leg's files (hole closed in E4)", "order_files", "order_id", buyLegId);
-    {
-      const { data, error } = await salesClient.from("order_files").insert({
-        order_id: buyLegId, category: "project", file_name: "forbidden.pdf",
-        relative_path: `security/forbidden-sales-${probeStamp}.pdf`,
-        storage_path: `${buyLegId}/project/forbidden-sales-${probeStamp}.pdf`,
-        file_variant: "original", lifecycle_status: "ready",
-      }).select("id");
-      results.push({ userKey: "house-sales", probeName: "projects.sales-writes-hidden-buy-leg", description: "House salesperson writes a project file onto the hidden buy leg", outcome: (data?.length ?? 0) > 0 ? "leaked" : "blocked", rowsSeen: data?.length ?? 0, errorMessage: error?.message });
-      if (data?.length) await admin.from("order_files").delete().in("id", data.map((row) => row.id));
-    }
-    await probeRead(salesClient, "house-sales", "e4.sales-reads-supplier-org",
-      "House salesperson reads the supplier org row (walled address book)", "organisations", "id", orgDId);
-    await salesClient.auth.signOut();
+    const assertVisible = async (
+      client: Awaited<ReturnType<typeof userClient>>,
+      userKey: string,
+      table: string,
+      column: string,
+      value: string,
+      fixture: string,
+    ) => {
+      const { data, error } = await client.from(table).select("id").eq(column, value);
+      if (error || (data?.length ?? 0) === 0) {
+        throw new Error(
+          `${userKey} cannot see required ${fixture} fixture: ${error?.message ?? "zero rows"}`,
+        );
+      }
+    };
 
-    // Purchasing (house org, side.buy only): the sell leg is invisible.
-    const purchUser = TEST_USERS.find((u) => u.userKey === "house-purchasing")!;
-    const purchClient = await userClient(purchUser);
-    await probeRead(purchClient, "house-purchasing", "e4.purchasing-reads-sell-leg",
-      "House purchasing (side.buy) selects the downstream sell leg", "orders", "id", sellLegId);
-    await purchClient.auth.signOut();
+    try {
+      // Every denial is paired with a visible row/file assertion. A broken or
+      // empty fixture can therefore never make the negative probe pass.
+      const salesUser = TEST_USERS.find((u) => u.userKey === "house-sales")!;
+      const salesClient = await userClient(salesUser);
+      await assertVisible(salesClient, "house-sales", "orders", "id", sellLegId, "sell-leg project");
+      await assertVisible(salesClient, "house-sales", "order_files", "order_id", sellLegId, "sell-leg project file");
+      await probeRead(salesClient, "house-sales", "e4.sales-reads-buy-leg",
+        "House salesperson (side.sell) selects the upstream buy leg", "orders", "id", buyLegId);
+      await probeRead(salesClient, "house-sales", "e4.sales-reads-buy-leg-lines",
+        "House salesperson reads the buy leg's line items (purchase prices)", "order_line_items", "order_id", buyLegId);
+      await probeRead(salesClient, "house-sales", "e4.sales-reads-buy-leg-files",
+        "House salesperson reads the buy leg's files (hole closed in E4)", "order_files", "order_id", buyLegId);
+      {
+        const { data, error } = await salesClient.from("order_files").insert({
+          order_id: buyLegId, category: "project", file_name: "forbidden.pdf",
+          relative_path: `security/forbidden-sales-${probeStamp}.pdf`,
+          storage_path: `${buyLegId}/project/forbidden-sales-${probeStamp}.pdf`,
+          file_variant: "original", lifecycle_status: "ready",
+        }).select("id");
+        results.push({ userKey: "house-sales", probeName: "projects.sales-writes-hidden-buy-leg", description: "House salesperson writes a project file onto the hidden buy leg", outcome: (data?.length ?? 0) > 0 ? "leaked" : "blocked", rowsSeen: data?.length ?? 0, errorMessage: error?.message });
+        if (data?.length) await admin.from("order_files").delete().in("id", data.map((row) => row.id));
+      }
+      await probeRead(salesClient, "house-sales", "e4.sales-reads-supplier-org",
+        "House salesperson reads the supplier org row (walled address book)", "organisations", "id", orgDId);
+      await salesClient.auth.signOut();
 
-    // Client (buyer org of the sell leg): the upstream buy leg is invisible —
-    // the middle of the chain does not exist for them.
-    const clientUser = TEST_USERS.find((u) => u.userKey === "client-user")!;
-    const clientClient = await userClient(clientUser);
-    await probeRead(clientClient, "client-user", "e4.client-reads-buy-leg",
-      "Client selects the upstream buy leg (goods' origin hidden)", "orders", "id", buyLegId);
-    await probeRead(clientClient, "client-user", "e4.client-reads-supplier-org",
-      "Client reads the supplier org row", "organisations", "id", orgDId);
-    {
-      const { data, error } = await clientClient.from("order_files").insert({
-        order_id: sellLegId, category: "project", file_name: "forbidden.pdf",
-        relative_path: `security/forbidden-client-${probeStamp}.pdf`,
-        storage_path: `${sellLegId}/project/forbidden-client-${probeStamp}.pdf`,
-        file_variant: "original", lifecycle_status: "ready",
-      }).select("id");
-      results.push({ userKey: "client-user", probeName: "projects.client-writes-without-capability", description: "Client writes a project file without action/deal/create", outcome: (data?.length ?? 0) > 0 ? "leaked" : "blocked", rowsSeen: data?.length ?? 0, errorMessage: error?.message });
-      if (data?.length) await admin.from("order_files").delete().in("id", data.map((row) => row.id));
-    }
-    await clientClient.auth.signOut();
+      const purchUser = TEST_USERS.find((u) => u.userKey === "house-purchasing")!;
+      const purchClient = await userClient(purchUser);
+      await assertVisible(purchClient, "house-purchasing", "orders", "id", buyLegId, "buy-leg project");
+      await assertVisible(purchClient, "house-purchasing", "order_files", "order_id", buyLegId, "buy-leg project file");
+      await probeRead(purchClient, "house-purchasing", "e4.purchasing-reads-sell-leg",
+        "House purchasing (side.buy) selects the downstream sell leg", "orders", "id", sellLegId);
+      await purchClient.auth.signOut();
 
-    // Supplier (seller org of the buy leg): the sell leg is invisible —
-    // nothing onward in the chain.
-    const supplierUser = TEST_USERS.find((u) => u.userKey === "supplier-user")!;
-    const supplierClient = await userClient(supplierUser);
-    await probeRead(supplierClient, "supplier-user", "e4.supplier-reads-sell-leg",
-      "Supplier selects the downstream sell leg", "orders", "id", sellLegId);
-    await supplierClient.auth.signOut();
+      const clientUser = TEST_USERS.find((u) => u.userKey === "client-user")!;
+      const clientClient = await userClient(clientUser);
+      await assertVisible(clientClient, "client-user", "orders", "id", sellLegId, "own project");
+      await assertVisible(clientClient, "client-user", "order_files", "order_id", sellLegId, "own project file");
+      await probeRead(clientClient, "client-user", "e4.client-reads-buy-leg",
+        "Client selects the upstream buy leg (goods' origin hidden)", "orders", "id", buyLegId);
+      await probeRead(clientClient, "client-user", "e4.client-reads-supplier-org",
+        "Client reads the supplier org row", "organisations", "id", orgDId);
+      {
+        const { data, error } = await clientClient.from("order_files").insert({
+          order_id: sellLegId, category: "project", file_name: "forbidden.pdf",
+          relative_path: `security/forbidden-client-${probeStamp}.pdf`,
+          storage_path: `${sellLegId}/project/forbidden-client-${probeStamp}.pdf`,
+          file_variant: "original", lifecycle_status: "ready",
+        }).select("id");
+        results.push({ userKey: "client-user", probeName: "projects.client-writes-without-capability", description: "Client writes a project file without action/deal/create", outcome: (data?.length ?? 0) > 0 ? "leaked" : "blocked", rowsSeen: data?.length ?? 0, errorMessage: error?.message });
+        if (data?.length) await admin.from("order_files").delete().in("id", data.map((row) => row.id));
+      }
+      await clientClient.auth.signOut();
 
-    if (projectFileCanaries?.length) {
+      const supplierUser = TEST_USERS.find((u) => u.userKey === "supplier-user")!;
+      const supplierClient = await userClient(supplierUser);
+      await assertVisible(supplierClient, "supplier-user", "orders", "id", buyLegId, "own project");
+      await assertVisible(supplierClient, "supplier-user", "order_files", "order_id", buyLegId, "own project file");
+      await probeRead(supplierClient, "supplier-user", "e4.supplier-reads-sell-leg",
+        "Supplier selects the downstream sell leg", "orders", "id", sellLegId);
+      await supplierClient.auth.signOut();
+    } finally {
       await admin.from("order_files").delete().in("id", projectFileCanaries.map((row) => row.id));
     }
-  } else {
-    console.warn("E4 chain fixture missing — run seed first; skipping E4 probes.");
   }
 
   return results;

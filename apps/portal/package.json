@@ -11,7 +11,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:epic6": "playwright test epic6"
+    "test:e2e:epic6": "playwright test epic6",
+    "test:timber-mvp-gate": "tsx src/features/projects/__tests__/timber-role-matrix.test.ts && tsx src/features/counterparties/__tests__/counterparty-access.test.ts && tsx src/features/projects/__tests__/projects-gate.test.ts && tsx src/features/projects/__tests__/projects-projection.test.ts && tsx src/features/projects/__tests__/projects-workspace.test.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "4",
