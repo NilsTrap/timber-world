@@ -181,13 +181,13 @@ async function test(name: string, fn: () => void | Promise<void>) {
 async function main() {
   const onboarding = await import("../personOnboarding");
   const { sendPasswordlessInvite } = await import("../passwordlessInvite");
-  const { hasPlatformOnboardingAuthority } = await import("../../actions/_platformAdmin");
+  const { isPlatformAdmin } = await import("@/lib/auth/getSession");
   const { isValidUUID } = await import("../../types");
 
   await test("only the platform-admin flag authorizes onboarding mutations", () => {
-    assert.equal(hasPlatformOnboardingAuthority({ isPlatformAdmin: true }), true);
-    assert.equal(hasPlatformOnboardingAuthority({ isPlatformAdmin: false }), false);
-    assert.equal(hasPlatformOnboardingAuthority(null), false);
+    assert.equal(isPlatformAdmin({ isPlatformAdmin: true } as never), true);
+    assert.equal(isPlatformAdmin({ isPlatformAdmin: false } as never), false);
+    assert.equal(isPlatformAdmin(null), false);
   });
 
   await test("malformed pasted identifiers fail the mutation validation primitive", () => {
