@@ -13,13 +13,20 @@ import {
   type OrganisationBookFacts,
 } from "../../counterparties/policy";
 import { projectDealView, resolveFieldAccess } from "../../orders/services/dealFields";
-import { isValidUUID } from "../../orders/types";
 import { emptyAccessProfile, fullAccessProfile } from "@/lib/access/types";
+import type { ProjectsActor } from "../access";
+import {
+  requireVisibleProjectWith,
+  type VisibleProjectDependencies,
+} from "../actions/_projectAuthorization";
+import {
+  authoriseProjectFileWith,
+  type ProjectFileAccessDependencies,
+} from "../actions/_projectFileAccess";
 import { evaluateProjectCapabilities } from "../capabilities";
 import { evaluateProjectsGate, PROJECTS_MODULE } from "../gate";
 import { personasForOrg, type OrgRoleFlags } from "../personas";
 import {
-  isPartyOrg,
   toProjectDetail,
   type DealHeaderLike,
   type DealLineLike,
@@ -33,6 +40,13 @@ const PARTNER = "22222222-2222-4222-8222-222222222222";
 const PRODUCER = "33333333-3333-4333-8333-333333333333";
 const UNRELATED = "44444444-4444-4444-8444-444444444444";
 const PROJECT = "55555555-5555-4555-8555-555555555555";
+const UNKNOWN_PROJECT = "66666666-6666-4666-8666-666666666666";
+const HIDDEN_PROJECT = "77777777-7777-4777-8777-777777777777";
+const CROSS_LEG_PROJECT = "88888888-8888-4888-8888-888888888888";
+const FILE = "99999999-9999-4999-8999-999999999999";
+const UNKNOWN_FILE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const HIDDEN_FILE = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const CROSS_LEG_FILE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const BOOKS: readonly CounterpartyBook[] = ["clients", "suppliers", "traders"];
 
 let passed = 0;
@@ -265,7 +279,7 @@ function dealFixture() {
 }
 
 const files = [{
-  id: "file-1", fileName: "drawing.pdf", relativePath: "drawings/drawing.pdf",
+  id: FILE, fileName: "drawing.pdf", relativePath: "drawings/drawing.pdf",
   mimeType: "application/pdf", fileSizeBytes: 42, lifecycleStatus: "ready",
   createdAt: "2026-08-01T00:00:00Z", storagePath: "secret/file.pdf",
   signedUrl: "https://invalid.example/signed",
@@ -289,6 +303,93 @@ const forbiddenPayloadKeys = [
   "marginApprovedAt", "plTotalValue", "eurPerM3", "externalRefs", "documents", "vatRate",
 ];
 
+function allowedActor(actor: MatrixActor): ProjectsActor {
+  const profile = actor.isPlatformAdmin ? fullAccessProfile() : emptyAccessProfile();
+  if (actor.hasDealCreate) profile.actions.add("deal:create");
+  return {
+    ok: true,
+    db: {} as Extract<ProjectsActor, { ok: true }>["db"],
+    actor: {
+      portalUserId: actor.authenticated ? `matrix-${actor.label}` : null,
+      isPlatformAdmin: actor.isPlatformAdmin,
+      isServiceAgent: false,
+      label: "timber-role-matrix",
+    },
+    orgId: actor.orgId,
+    organisationName: actor.label,
+    isPlatformAdmin: actor.isPlatformAdmin,
+    profile,
+    access: resolveFieldAccess(profile),
+    portalUserId: actor.authenticated ? `matrix-${actor.label}` : null,
+  };
+}
+
+function projectDeal(
+  id: string,
+  sellerId: string,
+  buyerId: string,
+  spineId: string,
+) {
+  return {
+    ...dealFixture(),
+    id,
+    seller: { id: sellerId, code: "SELL", name: "Seller" },
+    buyer: { id: buyerId, code: "BUY", name: "Buyer" },
+    spineId,
+  };
+}
+
+function projectDependencies(actor: MatrixActor): VisibleProjectDependencies {
+  const gate = gateLabel(actor);
+  const resolved: ProjectsActor = gate === "admin" || gate === "module"
+    ? allowedActor(actor)
+    : { ok: false, deny: gate === "login" ? "login" : "not_found" };
+  const rows = new Map([
+    [PROJECT, projectDeal(PROJECT, ORG, PARTNER, "matrix-spine")],
+    [HIDDEN_PROJECT, projectDeal(HIDDEN_PROJECT, UNRELATED, PRODUCER, "other-spine")],
+    // Same transaction spine as PROJECT, but the customer is not a party to
+    // this supplier leg. A chain relationship must never widen visibility.
+    [CROSS_LEG_PROJECT, projectDeal(CROSS_LEG_PROJECT, PRODUCER, ORG, "matrix-spine")],
+  ]);
+  return {
+    resolveActor: async () => resolved,
+    getDeal: async (_db, _actor, projectId) => {
+      const row = rows.get(projectId);
+      return row
+        ? { success: true, data: row as never }
+        : { success: false, error: "Order not found", code: "NOT_FOUND" };
+    },
+  };
+}
+
+function fileDependencies(
+  actor: MatrixActor,
+  projects: VisibleProjectDependencies,
+): ProjectFileAccessDependencies {
+  const filesById = new Map([
+    [FILE, { id: FILE, order_id: PROJECT }],
+    [HIDDEN_FILE, { id: HIDDEN_FILE, order_id: HIDDEN_PROJECT }],
+    [CROSS_LEG_FILE, { id: CROSS_LEG_FILE, order_id: CROSS_LEG_PROJECT }],
+  ]);
+  return {
+    resolveActor: projects.resolveActor,
+    locateFile: async (_db, fileId) => {
+      const file = filesById.get(fileId);
+      return file
+        ? {
+            ...file,
+            file_name: "drawing.pdf",
+            relative_path: "drawings/drawing.pdf",
+            mime_type: "application/pdf",
+            storage_path: `${file.order_id}/project/internal_drawing.pdf`,
+          }
+        : null;
+    },
+    requireProject: (projectId, write) => requireVisibleProjectWith(projectId, write, projects),
+  };
+}
+
+async function run() {
 for (const actor of matrix) {
   const modes = new Map(BOOKS.map((book) => [book, decideCounterpartyBookMode({
     book,
@@ -315,8 +416,9 @@ for (const actor of matrix) {
   const projectsGate = gateLabel(actor);
   eq(`${actor.label}: Projects gate`, projectsGate, actor.expected.projectsGate);
   const raw = dealFixture();
-  const targetProjectVisible = projectsGate === "admin" ||
-    (projectsGate === "module" && isPartyOrg(raw as unknown as DealHeaderLike, actor.orgId));
+  const projectDeps = projectDependencies(actor);
+  const readAccess = await requireVisibleProjectWith(PROJECT, false, projectDeps);
+  const targetProjectVisible = readAccess.ok;
   eq(`${actor.label}: target project visibility`, targetProjectVisible, actor.expected.targetProjectVisible);
 
   const personas = personasForOrg(actor.orgRoles);
@@ -328,9 +430,10 @@ for (const actor of matrix) {
   });
   eq(`${actor.label}: create roles`, capabilities.createRoles, actor.expected.createRoles);
   eq(`${actor.label}: project creation`, capabilities.canCreateProject, actor.expected.canCreateProject);
+  const fileDeps = fileDependencies(actor, projectDeps);
   const fileAccess = {
-    read: targetProjectVisible,
-    write: targetProjectVisible && capabilities.canWriteFiles,
+    read: (await authoriseProjectFileWith(FILE, false, fileDeps)).ok,
+    write: (await authoriseProjectFileWith(FILE, true, fileDeps)).ok,
   };
   eq(`${actor.label}: workspace access`, fileAccess, actor.expected.files);
 
@@ -357,19 +460,32 @@ for (const actor of matrix) {
   }
 }
 
-// Malformed and pasted hidden IDs collapse to the same unavailable outcome.
-const unrelated = matrix.find((actor) => actor.label === "unrelated-organisation Buyer")!;
-const existingProjects = new Set([PROJECT]);
-function projectRouteOutcome(actor: MatrixActor, projectId: string) {
-  if (!isValidUUID(projectId) || !existingProjects.has(projectId)) return "not_found";
-  if (actor.isPlatformAdmin) return "available";
-  return isPartyOrg(dealFixture() as unknown as DealHeaderLike, actor.orgId) ? "available" : "not_found";
-}
+// Real production project/file guards collapse every pasted-ID denial to the
+// same unavailable result, including a sibling deal on the same spine.
+const customer = {
+  ...matrix.find((actor) => actor.label === "Buyer / Customer")!,
+  orgId: PARTNER,
+};
+const customerProjects = projectDependencies(customer);
+const customerFiles = fileDependencies(customer, customerProjects);
+const projectUnavailable = { ok: false, error: "Project unavailable", code: "NOT_FOUND" };
+const fileUnavailable = { ok: false, error: "File unavailable", code: "NOT_FOUND" };
 ok("malformed Company ID is rejected", !isValidCounterpartyId("pasted-company-id"));
-eq("malformed Project/File ID is unavailable", projectRouteOutcome(unrelated, "pasted-project-id"), "not_found");
-eq("unknown Project ID is unavailable", projectRouteOutcome(unrelated, "66666666-6666-4666-8666-666666666666"), "not_found");
-eq("pasted hidden Project ID is unavailable", projectRouteOutcome(unrelated, PROJECT), "not_found");
-eq("pasted hidden File ID inherits project unavailability", unrelated.expected.files.read ? "available" : "not_found", "not_found");
+ok("visible File ID passes its owning-project guard", (await authoriseProjectFileWith(FILE, false, customerFiles)).ok);
+eq("malformed Project ID is unavailable", await requireVisibleProjectWith("pasted-project-id", false, customerProjects), projectUnavailable);
+eq("unknown Project ID is unavailable", await requireVisibleProjectWith(UNKNOWN_PROJECT, false, customerProjects), projectUnavailable);
+eq("valid hidden Project ID is unavailable", await requireVisibleProjectWith(HIDDEN_PROJECT, false, customerProjects), projectUnavailable);
+eq("cross-leg Project ID is unavailable", await requireVisibleProjectWith(CROSS_LEG_PROJECT, false, customerProjects), projectUnavailable);
+eq("malformed File ID is unavailable", await authoriseProjectFileWith("pasted-file-id", false, customerFiles), fileUnavailable);
+eq("unknown File ID is unavailable", await authoriseProjectFileWith(UNKNOWN_FILE, false, customerFiles), fileUnavailable);
+eq("valid hidden File ID is unavailable", await authoriseProjectFileWith(HIDDEN_FILE, false, customerFiles), fileUnavailable);
+eq("cross-leg File ID is unavailable", await authoriseProjectFileWith(CROSS_LEG_FILE, false, customerFiles), fileUnavailable);
 
 console.log(`\nTimber role matrix: ${matrix.length} actors, ${passed} assertions passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
+}
+
+run().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

@@ -21,6 +21,7 @@ import {
 import type { ProjectFileMeta } from "../types";
 import { requireVisibleProject } from "./_projectAccess";
 import { resolveProjectsActor } from "../access";
+import { authoriseProjectFileWith } from "./_projectFileAccess";
 
 export interface PreparedProjectUpload {
   signedUrl: string;
@@ -29,6 +30,14 @@ export interface PreparedProjectUpload {
 
 const PREPARED_FILE_SELECT =
   "id, order_id, file_name, relative_path, mime_type, file_size_bytes, storage_path, lifecycle_status, created_at";
+
+async function authoriseProjectFile(fileId: string, write: boolean) {
+  return authoriseProjectFileWith(fileId, write, {
+    resolveActor: resolveProjectsActor,
+    locateFile: locateProjectFile,
+    requireProject: requireVisibleProject,
+  });
+}
 
 function publicFile(row: Record<string, unknown>): ProjectFileMeta {
   return {
@@ -194,20 +203,9 @@ export async function cancelProjectFileUpload(projectId: string, uploadId: strin
   await access.actor.db.storage.from("orders").remove([(data as { storage_path: string }).storage_path]);
 }
 
-async function authorisedFile(fileId: string, write: boolean) {
-  if (!isValidUUID(fileId)) return null;
-  const actor = await resolveProjectsActor();
-  if (!actor.ok) return null;
-  const file = await locateProjectFile(actor.db, fileId);
-  if (!file) return null;
-  const access = await requireVisibleProject(file.order_id, write);
-  if (!access.ok) return null;
-  return { actor: access.actor, file };
-}
-
 export async function renameProjectFileAction(fileId: string, nextName: string) {
-  const found = await authorisedFile(fileId, true);
-  if (!found) return { success: false, error: "File unavailable", code: "NOT_FOUND" } as const;
+  const found = await authoriseProjectFile(fileId, true);
+  if (!found.ok) return { success: false, error: found.error, code: found.code } as const;
   const result = await renameProjectFile(found.actor.db, found.file, nextName);
   if (result.success) revalidatePath(`/projects/${found.file.order_id}`);
   return result;
@@ -222,8 +220,8 @@ export async function renameProjectFolderAction(projectId: string, folderPath: s
 }
 
 export async function deleteProjectFileAction(fileId: string) {
-  const found = await authorisedFile(fileId, true);
-  if (!found) return { success: false, error: "File unavailable", code: "NOT_FOUND" } as const;
+  const found = await authoriseProjectFile(fileId, true);
+  if (!found.ok) return { success: false, error: found.error, code: found.code } as const;
   const result = await deleteProjectFiles(found.actor.db, [found.file]);
   if (result.success) revalidatePath(`/projects/${found.file.order_id}`);
   return result;
@@ -245,8 +243,8 @@ export async function getProjectFileUrlAction(
   fileId: string,
   mode: "preview" | "download",
 ): Promise<ActionResult<{ url: string; fileName: string; mimeType: string | null }>> {
-  const found = await authorisedFile(fileId, false);
-  if (!found) return { success: false, error: "File unavailable", code: "NOT_FOUND" };
+  const found = await authoriseProjectFile(fileId, false);
+  if (!found.ok) return { success: false, error: found.error, code: found.code };
   const mimeType = found.file.mime_type?.toLowerCase() ?? null;
   if (mode === "preview" && !isPreviewableProjectMimeType(mimeType)) {
     return { success: false, error: "Preview is unavailable for this file type", code: "PREVIEW_UNAVAILABLE" };
