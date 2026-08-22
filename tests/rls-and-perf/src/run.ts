@@ -9,13 +9,14 @@
  *   --mode=all        snapshot + diff + negative (the CI default)
  */
 
-import { TEST_USERS } from "./config.js";
+import { config, TEST_USERS } from "./config.js";
 import { runOrdersSuite } from "./suites/orders.js";
 import { runInventorySuite } from "./suites/inventory.js";
 import { runProductionSuite } from "./suites/production.js";
 import { runShipmentsSuite } from "./suites/shipments.js";
 import { runNegativeSuite, type ProbeResult } from "./suites/cross-tenant-negative.js";
 import { diffSnapshot, type SnapshotPath } from "./lib/snapshot.js";
+import { assertKnownStagingTarget } from "./lib/targetSafety.js";
 
 type Mode = "snapshot" | "baseline" | "diff" | "negative" | "all";
 
@@ -99,6 +100,13 @@ function summarizeNegative(results: ProbeResult[]): { leaks: number; report: str
 
 async function main(): Promise<void> {
   const mode = parseMode();
+
+  // Negative probes create and clean staging-owned canaries. Assert before
+  // any work in both mutating modes; a production or lookalike URL must never
+  // reach the suite, even when fail-on-leak is disabled.
+  if (mode === "negative" || mode === "all") {
+    assertKnownStagingTarget(config.supabaseUrl);
+  }
 
   if (mode === "baseline") {
     await runSnapshots("baseline");

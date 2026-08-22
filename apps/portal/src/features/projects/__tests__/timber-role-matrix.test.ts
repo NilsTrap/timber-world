@@ -9,9 +9,12 @@
 import {
   canAccessCounterpartyRecord,
   decideCounterpartyBookMode,
-  isValidCounterpartyId,
   type OrganisationBookFacts,
 } from "../../counterparties/policy";
+import {
+  requireCounterpartyRecordAccessWith,
+  type CounterpartyRecordAccessDependencies,
+} from "../../counterparties/recordAccess";
 import { projectDealView, resolveFieldAccess } from "../../orders/services/dealFields";
 import { emptyAccessProfile, fullAccessProfile } from "@/lib/access/types";
 import type { ProjectsActor } from "../access";
@@ -39,6 +42,8 @@ const ORG = "11111111-1111-4111-8111-111111111111";
 const PARTNER = "22222222-2222-4222-8222-222222222222";
 const PRODUCER = "33333333-3333-4333-8333-333333333333";
 const UNRELATED = "44444444-4444-4444-8444-444444444444";
+const UNKNOWN_COMPANY = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const WRONG_BOOK_COMPANY = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 const PROJECT = "55555555-5555-4555-8555-555555555555";
 const UNKNOWN_PROJECT = "66666666-6666-4666-8666-666666666666";
 const HIDDEN_PROJECT = "77777777-7777-4777-8777-777777777777";
@@ -389,6 +394,30 @@ function fileDependencies(
   };
 }
 
+function companyDependencies(): CounterpartyRecordAccessDependencies {
+  const organisations = new Map([
+    [PARTNER, { id: PARTNER, is_customer: true }],
+    [UNRELATED, { id: UNRELATED, is_customer: true }],
+    [WRONG_BOOK_COMPANY, { id: WRONG_BOOK_COMPANY, is_supplier: true }],
+  ]);
+  return {
+    resolveBookAccess: async (book) => {
+      const mode = decideCounterpartyBookMode({
+        book,
+        platformAdmin: false,
+        hasExactBookGrant: book === "clients",
+        callerOrgId: ORG,
+        callerOrg: { is_trader: true },
+      });
+      return mode
+        ? { ok: true, callerOrgId: ORG, mode, canManage: mode !== "self" }
+        : { ok: false, error: "Not found", code: "NOT_FOUND" };
+    },
+    loadOrganisation: async (organisationId) => organisations.get(organisationId) ?? null,
+    hasTradingPartnerLink: async (_callerOrgId, targetOrgId) => targetOrgId === PARTNER,
+  };
+}
+
 async function run() {
 for (const actor of matrix) {
   const modes = new Map(BOOKS.map((book) => [book, decideCounterpartyBookMode({
@@ -470,7 +499,13 @@ const customerProjects = projectDependencies(customer);
 const customerFiles = fileDependencies(customer, customerProjects);
 const projectUnavailable = { ok: false, error: "Project unavailable", code: "NOT_FOUND" };
 const fileUnavailable = { ok: false, error: "File unavailable", code: "NOT_FOUND" };
-ok("malformed Company ID is rejected", !isValidCounterpartyId("pasted-company-id"));
+const companyUnavailable = { ok: false, error: "Not found", code: "NOT_FOUND" };
+const companyDeps = companyDependencies();
+ok("visible Company ID passes its exact-book record guard", (await requireCounterpartyRecordAccessWith("clients", PARTNER, "read", companyDeps)).ok);
+eq("malformed Company ID is unavailable", await requireCounterpartyRecordAccessWith("clients", "pasted-company-id", "read", companyDeps), companyUnavailable);
+eq("unknown Company ID is unavailable", await requireCounterpartyRecordAccessWith("clients", UNKNOWN_COMPANY, "read", companyDeps), companyUnavailable);
+eq("valid unrelated Company ID is unavailable", await requireCounterpartyRecordAccessWith("clients", UNRELATED, "read", companyDeps), companyUnavailable);
+eq("valid wrong-book Company ID is unavailable", await requireCounterpartyRecordAccessWith("clients", WRONG_BOOK_COMPANY, "read", companyDeps), companyUnavailable);
 ok("visible File ID passes its owning-project guard", (await authoriseProjectFileWith(FILE, false, customerFiles)).ok);
 eq("malformed Project ID is unavailable", await requireVisibleProjectWith("pasted-project-id", false, customerProjects), projectUnavailable);
 eq("unknown Project ID is unavailable", await requireVisibleProjectWith(UNKNOWN_PROJECT, false, customerProjects), projectUnavailable);

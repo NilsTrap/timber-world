@@ -18,14 +18,13 @@ import { getAccessProfile } from "@/lib/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CounterpartyBook } from "./types";
 import {
-  canAccessCounterpartyRecord,
   decideCounterpartyBookMode,
   isOrganisationInBook,
   isOrganisationSelfInBook,
-  isValidCounterpartyId,
   type CounterpartyAccessMode,
   type OrganisationBookFacts,
 } from "./policy";
+import { requireCounterpartyRecordAccessWith } from "./recordAccess";
 
 export {
   canAccessCounterpartyRecord,
@@ -121,47 +120,34 @@ export async function requireCounterpartyRecordAccess(
   organisationId: string,
   intent: "read" | "manage" = "read",
 ): Promise<RecordAccess> {
-  if (!isValidCounterpartyId(organisationId)) {
-    return { ok: false, error: "Not found", code: "NOT_FOUND" };
-  }
-  const access = await resolveBookAccess(book);
-  if (!access.ok) return access;
-  if (intent === "manage" && !access.canManage) {
-    return { ok: false, error: "Not found", code: "NOT_FOUND" };
-  }
-
+  // Keep admin-client creation lazy so malformed IDs fail before any data
+  // access, matching the deterministic guard used by the local MVP gate.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-  const { data: target } = await admin
-    .from("organisations")
-    .select("id, is_customer, is_supplier, is_producer, is_manufacturer, is_trader")
-    .eq("id", organisationId)
-    .maybeSingle();
-  if (!target || !(isOrganisationInBook(target, book) || (access.mode === "self" && isOrganisationSelfInBook(target, book)))) {
-    return { ok: false, error: "Not found", code: "NOT_FOUND" };
-  }
+  let admin: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const getAdmin = (): any => (admin ??= createAdminClient());
 
-  let linked = false;
-  if (access.mode === "manager") {
-    const { data: link } = await admin
-      .from("organisation_trading_partners")
-      .select("partner_organisation_id")
-      .eq("organisation_id", access.callerOrgId)
-      .eq("partner_organisation_id", organisationId)
-      .maybeSingle();
-    linked = Boolean(link);
-  }
-  if (!canAccessCounterpartyRecord({
-    mode: access.mode,
-    callerOrgId: access.callerOrgId,
-    targetOrgId: organisationId,
-    linked,
-    intent,
-  })) {
-    return { ok: false, error: "Not found", code: "NOT_FOUND" };
-  }
-
-  return { ...access, target };
+  return requireCounterpartyRecordAccessWith(book, organisationId, intent, {
+    resolveBookAccess,
+    loadOrganisation: async (targetId) => {
+      const { data } = await getAdmin()
+        .from("organisations")
+        .select("id, is_customer, is_supplier, is_producer, is_manufacturer, is_trader")
+        .eq("id", targetId)
+        .maybeSingle();
+      return data ?? null;
+    },
+    hasTradingPartnerLink: async (callerOrgId, targetId) => {
+      if (!callerOrgId) return false;
+      const { data } = await getAdmin()
+        .from("organisation_trading_partners")
+        .select("partner_organisation_id")
+        .eq("organisation_id", callerOrgId)
+        .eq("partner_organisation_id", targetId)
+        .maybeSingle();
+      return Boolean(data);
+    },
+  });
 }
 
 /**
