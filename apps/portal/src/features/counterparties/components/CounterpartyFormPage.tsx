@@ -14,6 +14,11 @@ import { OrgContactsSection } from "./OrgContactsSection";
 
 type FormState = Required<Omit<CounterpartyInput, "isActive">> & { isActive: boolean };
 const value = (v?: string | null) => v ?? "";
+const BOOK_LABELS: Record<CounterpartyBook, { title: string; record: string }> = {
+  clients: { title: "Customers", record: "customer" },
+  suppliers: { title: "Suppliers", record: "supplier" },
+  traders: { title: "Traders", record: "trader" },
+};
 
 export function CounterpartyFormPage({
   book,
@@ -24,6 +29,7 @@ export function CounterpartyFormPage({
 }) {
   const router = useRouter();
   const editing = Boolean(profile);
+  const labels = BOOK_LABELS[book];
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState(profile?.logoUrl ?? "");
@@ -76,7 +82,7 @@ export function CounterpartyFormPage({
   return (
     <form onSubmit={submit} className="space-y-6">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <div><p className="text-sm text-muted-foreground">{book === "clients" ? "Customers" : "Suppliers"}</p><h1 className="text-3xl font-semibold tracking-tight">{editing ? `Edit ${profile?.name}` : `Add ${book === "clients" ? "customer" : "supplier"}`}</h1></div>
+        <div><p className="text-sm text-muted-foreground">{labels.title}</p><h1 className="text-3xl font-semibold tracking-tight">{editing ? `Edit ${profile?.name}` : `Add ${labels.record}`}</h1></div>
         <div className="flex gap-2"><Button type="button" variant="outline" asChild><Link href={profile ? `${listHref}/${profile.id}` : listHref}>Cancel</Link></Button><Button type="submit" disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? "Save changes" : "Create company"}</Button></div>
       </div>
 

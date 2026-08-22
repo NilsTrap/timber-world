@@ -66,7 +66,7 @@ export function CounterpartyManager({
             <TableBody>{rows.map((row) => (
               <TableRow key={row.id} className={row.isActive ? "group" : "group opacity-50"}>
                 <TableCell className="font-mono font-medium">{row.code}</TableCell>
-                <TableCell>{book === "traders" ? <span className="font-medium">{row.name}</span> : <Link className="font-medium hover:underline" href={`/counterparties/${book}/${row.id}`}>{row.name}</Link>}</TableCell>
+                <TableCell><Link className="font-medium hover:underline" href={`/counterparties/${book}/${row.id}`}>{row.name}</Link></TableCell>
                 <TableCell className="text-center">{row.userCount ?? 0}</TableCell>
                 <TableCell>{row.registrationNumber ?? "—"}</TableCell><TableCell>{row.vatNumber ?? "—"}</TableCell>
                 <TableCell>{row.country ?? "—"}</TableCell>

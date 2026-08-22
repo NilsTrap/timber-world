@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
+import { getCounterpartyBookContext } from "@/features/counterparties/actions";
 import { CounterpartyManager } from "@/features/counterparties/components";
 import { Card, CardContent } from "@timber/ui";
 
@@ -17,7 +18,9 @@ export const dynamic = "force-dynamic";
 export default async function CounterpartyTradersPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (!isAdmin(session)) notFound();
+
+  const context = await getCounterpartyBookContext("traders");
+  if (!context.success) notFound();
 
   return (
     <div className="space-y-6">
@@ -30,7 +33,7 @@ export default async function CounterpartyTradersPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <CounterpartyManager book="traders" canManage={false} />
+          <CounterpartyManager book="traders" canManage={context.data.canManage} />
         </CardContent>
       </Card>
     </div>
