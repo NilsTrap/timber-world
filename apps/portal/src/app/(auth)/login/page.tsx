@@ -8,13 +8,10 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <div className="space-y-6">
-      <div className="space-y-2 text-center">
+      <div className="text-center">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Timber World Portal
+          Nilitto Trading Platform
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Sign in to access the production management portal
-        </p>
       </div>
 
       <div className="rounded-lg border bg-card p-6 shadow-sm">
