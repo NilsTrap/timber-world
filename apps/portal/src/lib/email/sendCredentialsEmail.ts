@@ -93,7 +93,9 @@ export async function sendCredentialsEmail(
   data: CredentialsEmailData
 ): Promise<EmailResult> {
   const resendApiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@timber-world.com";
+  const fromSender =
+    process.env.RESEND_FROM_EMAIL ||
+    "Nilitto Trading Platform <noreply@mail.nilitto.com>";
 
   const emailHtml = generateEmailHtml(data);
   const emailText = generateEmailText(data);
@@ -125,7 +127,7 @@ export async function sendCredentialsEmail(
         Authorization: `Bearer ${resendApiKey}`,
       },
       body: JSON.stringify({
-        from: `Timber World <${fromEmail}>`,
+        from: fromSender,
         to: [data.to],
         subject,
         html: emailHtml,

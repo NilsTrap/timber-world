@@ -143,7 +143,9 @@ ${data.notes ? `Additional Notes\n----------------\n${data.notes}` : ""}
     `.trim();
 
     const emailResult = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL ?? "Timber International <onboarding@resend.dev>",
+      from:
+        process.env.RESEND_FROM_EMAIL ||
+        "Nilitto Trading Platform <noreply@mail.nilitto.com>",
       to: process.env.RESEND_TO_EMAIL ?? "nils@nils.lv",
       replyTo: data.email,
       subject: `Quote Request from ${data.name}${data.company ? ` (${data.company})` : ""}`,
