@@ -30,10 +30,10 @@ import type { OrganizationSwitcherOption } from "./OrganizationSwitcher";
 export async function SidebarWrapper() {
   const session = await getSession();
 
-  // Super Admin (null org) → "Timber World Platform"
+  // Super Admin (null org) → "Nilitto Trading Platform"
   // Organisation User → their org name
-  // Fallback (legacy/unlinked) → "Timber World Platform"
-  const brandName = session?.currentOrganizationName || session?.organisationName || "Timber World Platform";
+  // Fallback (legacy/unlinked) → "Nilitto Trading Platform"
+  const brandName = session?.currentOrganizationName || session?.organisationName || "Nilitto Trading Platform";
 
   // Get nav items based on role
   // Pending shipment count is loaded client-side to avoid blocking server render
