@@ -13,6 +13,7 @@ export interface OnboardingGroupOption {
   effectiveModules: string[];
   unavailableModules: string[];
   disabled: boolean;
+  recommended: boolean;
 }
 
 export interface OnboardingMembership {
@@ -60,6 +61,21 @@ export function derivePersonas(flags: {
   return personas;
 }
 
+/** System access-group presets recommended for each confirmed Nilitto persona. */
+export function recommendedGroupKeys(flags: {
+  isCustomer?: boolean;
+  isTrader?: boolean;
+  isManufacturer?: boolean;
+  isSupplier?: boolean;
+  isProducer?: boolean;
+}): string[] {
+  const keys: string[] = [];
+  if (flags.isCustomer) keys.push("buyer");
+  if (flags.isTrader) keys.push("trader");
+  if (flags.isManufacturer || flags.isSupplier || flags.isProducer) keys.push("manufacturer");
+  return keys;
+}
+
 export function effectiveModuleIntersection(orgModules: Iterable<string>, groupModules: Iterable<string>): string[] {
   const ceiling = new Set(orgModules);
   return Array.from(new Set(groupModules)).filter((code) => ceiling.has(code)).sort();
@@ -69,11 +85,22 @@ export async function listAssignableGroups(
   db: PersonOnboardingDb,
   organisationId: string,
 ): Promise<OnboardingGroupOption[]> {
-  const [{ data: groups }, { data: rights }, { data: orgModules }] = await Promise.all([
+  const [{ data: groups }, { data: rights }, { data: orgModules }, { data: organisation }] = await Promise.all([
     db.from("access_groups").select("id, key, name, is_system, sort_order").order("sort_order"),
     db.from("access_group_rights").select("group_id, key").eq("right_type", "module").eq("resource", "portal"),
     db.from("organization_modules").select("module_code").eq("organization_id", organisationId).eq("enabled", true),
+    db.from("organisations")
+      .select("is_customer, is_trader, is_manufacturer, is_supplier, is_producer")
+      .eq("id", organisationId)
+      .maybeSingle(),
   ]);
+  const recommended = new Set(recommendedGroupKeys({
+    isCustomer: organisation?.is_customer,
+    isTrader: organisation?.is_trader,
+    isManufacturer: organisation?.is_manufacturer,
+    isSupplier: organisation?.is_supplier,
+    isProducer: organisation?.is_producer,
+  }));
   const ceiling = new Set(((orgModules ?? []) as Array<{ module_code: string }>).map((r) => r.module_code));
   const modulesByGroup = new Map<string, string[]>();
   for (const row of (rights ?? []) as Array<{ group_id: string; key: string }>) {
@@ -93,6 +120,7 @@ export async function listAssignableGroups(
       effectiveModules,
       unavailableModules,
       disabled: granted.length > 0 && effectiveModules.length === 0,
+      recommended: recommended.has(g.key),
     };
   });
 }

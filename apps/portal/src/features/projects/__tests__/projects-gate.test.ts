@@ -5,14 +5,20 @@
  *
  * Proves the fail-closed matrix: the flag beats everything (and denies BEFORE
  * auth, so the redirect cannot be used as an oracle), platform admin is the
- * ONLY admin notion, a non-admin needs a current org AND an exact `orders.view`,
+ * ONLY admin notion, a non-admin needs a current org AND an exact `projects.view`,
  * and organisation role flags never grant anything.
  */
 import { evaluateProjectsGate, PROJECTS_MODULE, type ProjectsGateInput } from "../gate";
 import { isTimberProjectsEnabled } from "../config";
 import { personasForOrg, type OrgRoleFlags } from "../personas";
 import { isPartyOrg } from "../projection";
-import { PROJECTS_NAV_ITEM, withProjectsNav, ADMIN_NAV_ITEMS } from "@/components/layout/navItems";
+import {
+  PROJECTS_NAV_ITEM,
+  withProjectsNav,
+  ADMIN_NAV_ITEMS,
+  getOrgUserNavItems,
+  filterNavItemsByModules,
+} from "@/components/layout/navItems";
 import type { NavItem } from "@/components/layout/Sidebar";
 
 let passed = 0;
@@ -46,7 +52,7 @@ eq("flag off + unauthenticated → not_found (never a login redirect oracle)",
    gate({ flagEnabled: false, authenticated: false }), { ok: false, deny: "not_found" });
 eq("flag off + platform admin → not_found (admins cannot bypass the flag)",
    gate({ flagEnabled: false, isPlatformAdmin: true }), { ok: false, deny: "not_found" });
-eq("flag off + orders.view user → not_found",
+eq("flag off + projects.view user → not_found",
    gate({ flagEnabled: false }), { ok: false, deny: "not_found" });
 
 // ── 2. Authentication ────────────────────────────────────────────────────────
@@ -60,8 +66,8 @@ eq("platform admin with no org and no modules → allowed",
    gate({ isPlatformAdmin: true, orgId: null, modules: new Set() }), { ok: true, reason: "admin" });
 
 // ── 4. Non-admin: org + exact module ─────────────────────────────────────────
-eq("orders.view in a current org → allowed", gate(), { ok: true, reason: "module" });
-eq("orders.view but no current org → not_found",
+eq("projects.view in a current org → allowed", gate(), { ok: true, reason: "module" });
+eq("projects.view but no current org → not_found",
    gate({ orgId: null }), { ok: false, deny: "not_found" });
 eq("no modules at all → not_found",
    gate({ modules: new Set() }), { ok: false, deny: "not_found" });
@@ -76,7 +82,7 @@ eq("an unrelated module (counterparties.clients) → not_found",
 // walk the module path like anybody else.
 eq("legacy role-admin (is_platform_admin false) with no modules → not_found",
    gate({ isPlatformAdmin: false, modules: new Set() }), { ok: false, deny: "not_found" });
-eq("legacy role-admin WITH orders.view → allowed as a module user, not as admin",
+eq("legacy role-admin WITH projects.view → allowed as a module user, not as admin",
    gate({ isPlatformAdmin: false }), { ok: true, reason: "module" });
 
 // ── 5. Organisation role flags label, they never grant ───────────────────────
@@ -102,11 +108,11 @@ eq("the three personas really are different",
 eq("…yet the access decision is identical for all three",
    [buyerViewer.decision, traderViewer.decision, supplierViewer.decision],
    [{ ok: true, reason: "module" }, { ok: true, reason: "module" }, { ok: true, reason: "module" }]);
-eq("a supplier-flagged organisation without orders.view is still denied",
+eq("a supplier-flagged organisation without projects.view is still denied",
    viewer({ isSupplier: true }, new Set()).decision, { ok: false, deny: "not_found" });
-eq("a buyer-flagged organisation without orders.view is still denied",
+eq("a buyer-flagged organisation without projects.view is still denied",
    viewer({ isCustomer: true }, new Set()).decision, { ok: false, deny: "not_found" });
-eq("an organisation with NO role flag but WITH orders.view is allowed",
+eq("an organisation with NO role flag but WITH projects.view is allowed",
    viewer({}, withModule).decision, { ok: true, reason: "module" });
 
 // ── 5b. The flag reader itself (clause #1 of the contract) ───────────────────
@@ -155,9 +161,9 @@ eq("enabled → the input array is not mutated", baseNav.map((i) => i.href),
    ["/dashboard", "/orders", "/counterparties"]);
 eq("idempotent — a second call adds nothing",
    withProjectsNav(on, true).filter((i) => i.href === "/projects").length, 1);
-eq("no Orders item → Projects goes first",
+eq("no Orders item → Projects follows Dashboard",
    withProjectsNav([{ href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" }], true)
-     .map((i) => i.href), ["/projects", "/dashboard"]);
+     .map((i) => i.href), ["/dashboard", "/projects"]);
 eq("the injected item carries the shared icon/group contract",
    { icon: PROJECTS_NAV_ITEM.iconName, group: PROJECTS_NAV_ITEM.group, label: PROJECTS_NAV_ITEM.label },
    { icon: "Boxes", group: "deals", label: "Projects" });
@@ -167,6 +173,29 @@ ok("the injected item requires no module of its own (the caller gates it)",
 // The static admin nav must stay exactly as navItems.test.ts asserts it.
 ok("ADMIN_NAV_ITEMS still contains no /projects entry",
    !ADMIN_NAV_ITEMS.some((i) => i.href === "/projects" || (i.children ?? []).some((c) => c.href === "/projects")));
+
+// ── 7. Confirmed Nilitto MVP navigation presets ──────────────────────────
+function navFor(modules: string[]) {
+  const filtered = filterNavItemsByModules(getOrgUserNavItems(), new Set(modules));
+  return withProjectsNav(filtered, modules.includes(PROJECTS_MODULE)).map((item) => ({
+    label: item.label,
+    children: item.children?.map((child) => child.label) ?? [],
+  }));
+}
+
+eq("Buyer sees only Dashboard and Projects",
+   navFor(["dashboard.view", PROJECTS_MODULE]),
+   [{ label: "Dashboard", children: [] }, { label: "Projects", children: [] }]);
+eq("Manufacturer/Supplier sees only Dashboard and Projects",
+   navFor(["dashboard.view", PROJECTS_MODULE]),
+   [{ label: "Dashboard", children: [] }, { label: "Projects", children: [] }]);
+eq("Trader sees Dashboard, Projects and both company books",
+   navFor(["dashboard.view", PROJECTS_MODULE, "counterparties.clients", "counterparties.suppliers"]),
+   [
+     { label: "Dashboard", children: [] },
+     { label: "Projects", children: [] },
+     { label: "Companies", children: ["Clients", "Suppliers"] },
+   ]);
 
 console.log(`\nprojects-gate.test.ts: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

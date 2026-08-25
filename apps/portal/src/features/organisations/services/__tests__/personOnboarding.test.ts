@@ -208,6 +208,16 @@ async function main() {
     );
   });
 
+  await test("maps confirmed personas to recommended Nilitto access groups", () => {
+    assert.deepEqual(onboarding.recommendedGroupKeys({ isCustomer: true }), ["buyer"]);
+    assert.deepEqual(onboarding.recommendedGroupKeys({ isTrader: true }), ["trader"]);
+    assert.deepEqual(onboarding.recommendedGroupKeys({ isSupplier: true }), ["manufacturer"]);
+    assert.deepEqual(
+      onboarding.recommendedGroupKeys({ isCustomer: true, isTrader: true, isManufacturer: true }),
+      ["buyer", "trader", "manufacturer"],
+    );
+  });
+
   await test("caps effective access at each organisation's module ceiling", () => {
     const grants = ["orders.view", "inventory.view", "counterparties.clients"];
     assert.deepEqual(onboarding.effectiveModuleIntersection(["orders.view"], grants), ["orders.view"]);

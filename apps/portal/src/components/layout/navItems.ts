@@ -177,18 +177,20 @@ export const PROJECTS_NAV_ITEM: ModuleNavItem = {
 };
 
 /**
- * Insert the Projects item directly after Orders (or first, when Orders is not
- * in the list). Pure: the caller decides `enabled` — it must combine the env
+ * Insert the Projects item directly after Orders, or after Dashboard for an
+ * MVP role that does not have legacy Orders. Pure: the caller decides `enabled` — it must combine the env
  * flag with the SAME access rule the route enforces (platform admin, or an
- * exact `orders.view`), so the nav can never advertise a page that 404s.
+ * exact `projects.view`), so the nav can never advertise a page that 404s.
  * Returns the input untouched when disabled; never mutates the input array.
  */
 export function withProjectsNav(items: NavItem[], enabled: boolean): NavItem[] {
   if (!enabled) return items;
   if (items.some((item) => item.href === PROJECTS_NAV_ITEM.href)) return items;
   const ordersIndex = items.findIndex((item) => item.href === "/orders");
+  const dashboardIndex = items.findIndex((item) => item.href === "/dashboard");
   const out = [...items];
-  out.splice(ordersIndex >= 0 ? ordersIndex + 1 : 0, 0, PROJECTS_NAV_ITEM);
+  const insertAt = ordersIndex >= 0 ? ordersIndex + 1 : dashboardIndex >= 0 ? dashboardIndex + 1 : 0;
+  out.splice(insertAt, 0, PROJECTS_NAV_ITEM);
   return out;
 }
 

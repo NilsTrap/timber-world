@@ -60,7 +60,7 @@ export async function SidebarWrapper() {
 
   // Timber Projects (staging-gated). The predicate MIRRORS the route gate
   // (features/projects/gate.ts): platform admin by is_platform_admin, or an
-  // EXACT `orders.view` in the current org — deliberately not the nav's
+  // EXACT `projects.view` in the current org — deliberately not the nav's
   // prefix-matching moduleMatches, which would advertise a link that 404s.
   let projectsVisible = false;
   if (isTimberProjectsEnabled() && session) {

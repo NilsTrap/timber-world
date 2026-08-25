@@ -86,7 +86,12 @@ export function AddUserDialog({
     setSendInvite(true);
     setMakePrimary(false);
     getAddPersonContext(organisationId).then((r) => {
-      if (r.success) setCtx(r.data);
+      if (r.success) {
+        setCtx(r.data);
+        setSelectedGroups(new Set(
+          r.data.groups.filter((group) => group.recommended && !group.disabled).map((group) => group.id),
+        ));
+      }
       else toast.error(r.error);
       setCtxLoading(false);
     });
@@ -220,6 +225,9 @@ export function AddUserDialog({
                         </label>
                         {g.isSystem && (
                           <Badge variant="secondary" className="text-[10px]">System</Badge>
+                        )}
+                        {g.recommended && (
+                          <Badge className="text-[10px]">Recommended</Badge>
                         )}
                       </div>
                     ))}

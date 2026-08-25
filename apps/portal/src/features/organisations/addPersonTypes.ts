@@ -23,6 +23,8 @@ export interface AddPersonGroupOption {
   effectiveModules: string[];
   unavailableModules: string[];
   disabled: boolean;
+  /** Recommended by the organisation's Buyer/Trader/Manufacturer persona. */
+  recommended: boolean;
 }
 
 /** Dialog bootstrap: who the caller is for THIS org + the group choices.

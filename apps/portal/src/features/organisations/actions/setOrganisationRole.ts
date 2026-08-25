@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { updateTag } from "next/cache";
 import { getSession, isAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
@@ -86,6 +87,33 @@ export async function setOrganisationRole(
       error: "Failed to update organisation",
       code: "UPDATE_FAILED",
     };
+  }
+
+  // New persona organisations need the module ceiling that makes their
+  // recommended Nilitto access group effective. Disabling a persona never
+  // removes modules: another persona or an explicit admin configuration may
+  // still rely on them.
+  if (enabled) {
+    const moduleCodes = ["dashboard.view", "projects.view"];
+    if (role === "trader") {
+      moduleCodes.push("counterparties.clients", "counterparties.suppliers");
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: moduleError } = await (supabase as any)
+      .from("organization_modules")
+      .upsert(
+        moduleCodes.map((moduleCode) => ({ organization_id: id, module_code: moduleCode, enabled: true })),
+        { onConflict: "organization_id,module_code" },
+      );
+    if (moduleError) {
+      console.error("Failed to configure organisation role modules:", moduleError);
+      return {
+        success: false,
+        error: "Role saved but its navigation could not be configured",
+        code: "UPDATE_FAILED",
+      };
+    }
+    updateTag(`org-modules:${id}`);
   }
 
   await logAudit({

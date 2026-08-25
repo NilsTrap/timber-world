@@ -30,7 +30,7 @@ export type ProjectsGateDecision =
   | { ok: false; deny: "not_found" | "login" };
 
 /** The module a non-admin needs to reach Projects (exact match, no prefix). */
-export const PROJECTS_MODULE = "orders.view";
+export const PROJECTS_MODULE = "projects.view";
 
 /**
  * Decide whether this viewer may reach Projects. First match wins:
@@ -41,7 +41,7 @@ export const PROJECTS_MODULE = "orders.view";
  * 2. no session                  → login
  * 3. is_platform_admin           → allow
  * 4. no current organisation     → not_found
- * 5. no exact `orders.view`      → not_found  (deliberately `has()`, NOT the
+ * 5. no exact `projects.view`    → not_found  (deliberately `has()`, NOT the
  *                                  nav's prefix-matching `moduleMatches` — an
  *                                  `orders.tab.*`-only user is not admitted)
  * 6. otherwise                   → allow
