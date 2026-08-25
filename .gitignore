@@ -20,6 +20,9 @@ out
 # turborepo
 .turbo
 
+# local Graphify knowledge graph (rebuilt incrementally by Git hooks)
+graphify-out/
+
 # production
 /build
 

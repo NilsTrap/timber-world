@@ -1,0 +1,9 @@
+# Nilitto application graph scope. Keep the separate agent and marketing apps
+# out of the portal graph while retaining shared packages and Supabase code.
+apps/agents/
+apps/marketing/
+
+# Planning/reference corpora are reviewed directly when needed, not AST-indexed.
+_bmad/
+_bmad-output/
+docs/
