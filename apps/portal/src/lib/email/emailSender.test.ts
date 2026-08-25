@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { sendCredentialsEmail } from "./sendCredentialsEmail";
 import { sendPasswordResetEmail } from "./sendPasswordResetEmail";
+import { sendNilittoInviteEmail } from "./sendNilittoInviteEmail";
 
 const FALLBACK_SENDER = "Nilitto Trading Platform <noreply@mail.nilitto.com>";
 const CONFIGURED_SENDER = "Custom Sender <custom@mail.nilitto.com>";
@@ -45,7 +46,18 @@ async function run() {
     assert.equal(sentBodies.at(-1)?.from, CONFIGURED_SENDER);
     assert.equal(sentBodies.some((body) => String(body.from).includes("<Custom Sender <")), false);
 
-    console.log("2 portal email sender assertions passed.");
+    await sendNilittoInviteEmail({
+      to: "recipient@example.com",
+      name: "Recipient",
+      organisationName: "Customer A",
+      inviteUrl: "https://staging.nilitto.com/accept-invite?code=test-only",
+    });
+    const invite = sentBodies.at(-1);
+    assert.equal(invite?.from, FALLBACK_SENDER);
+    assert.match(String(invite?.subject), /Nilitto/);
+    assert.doesNotMatch(String(invite?.html), /Timber World|Timber International/);
+
+    console.log("5 portal email sender assertions passed.");
   } finally {
     globalThis.fetch = originalFetch;
     if (originalApiKey === undefined) delete process.env.RESEND_API_KEY;

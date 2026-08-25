@@ -29,11 +29,11 @@ function generateEmailHtml(data: PasswordResetEmailData): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Timber World Portal - Password Reset</title>
+  <title>Nilitto - Password Reset</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background-color: #1a4d2e; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Timber World Portal</h1>
+    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Nilitto Trading Platform</h1>
   </div>
 
   <div style="background-color: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
@@ -62,7 +62,7 @@ function generateEmailHtml(data: PasswordResetEmailData): string {
 
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
 
-    <p style="font-size: 14px; color: #9ca3af; margin: 0;">Best regards,<br>Timber World Team</p>
+    <p style="font-size: 14px; color: #9ca3af; margin: 0;">Best regards,<br>Nilitto Team</p>
   </div>
 </body>
 </html>
@@ -86,7 +86,7 @@ New Password: ${data.newPassword}
 If you did not expect this password reset, please contact your administrator immediately.
 
 Best regards,
-Timber World Team
+Nilitto Team
 `;
 }
 
@@ -103,7 +103,7 @@ export async function sendPasswordResetEmail(
 
   const emailHtml = generateEmailHtml(data);
   const emailText = generateEmailText(data);
-  const subject = "Timber World Portal - Password Reset";
+  const subject = "Nilitto - Password Reset";
 
   // If no Resend API key, log to console for development
   if (!resendApiKey) {

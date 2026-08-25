@@ -14,7 +14,6 @@ import {
   Send,
   RefreshCw,
   KeyRound,
-  Settings2,
   UserMinus,
   Star,
 } from "lucide-react";
@@ -47,18 +46,11 @@ import {
   setPrimaryMembership,
 } from "../actions";
 import dynamic from "next/dynamic";
-import { getOrgUsersGroups } from "@/features/access/actions/groups";
 import type { OrganisationUser } from "../types";
 
-// AddUserDialog (369 LOC) and UserGroupsDialog only mount when
-// the admin clicks the corresponding action — keep them out of the
-// initial OrganisationUsersTable bundle.
+// AddUserDialog only mounts when the admin clicks the corresponding action.
 const AddUserDialog = dynamic(
   () => import("./AddUserDialog").then((mod) => mod.AddUserDialog),
-  { ssr: false },
-);
-const UserGroupsDialog = dynamic(
-  () => import("./UserGroupsDialog").then((mod) => mod.UserGroupsDialog),
   { ssr: false },
 );
 import { EditUserDialog } from "./EditUserDialog";
@@ -157,11 +149,6 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
   const [resendingCredentialsFor, setResendingCredentialsFor] = useState<string | null>(null);
   const [resettingPasswordFor, setResettingPasswordFor] = useState<string | null>(null);
 
-  // User groups dialog state (E4 — group assignments replaced per-user modules)
-  const [groupsUser, setGroupsUser] = useState<OrganisationUser | null>(null);
-  // I2 · current access groups per user (chips column) — batch-loaded with users.
-  const [userGroups, setUserGroups] = useState<Record<string, { groupId: string; groupName: string }[]>>({});
-
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
     const result = await getOrganisationUsers(organisationId, { includeInactive: true });
@@ -170,9 +157,6 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
     } else {
       toast.error(result.error);
     }
-    // I2 · load the group chips in the background (admin-only; ignore failure —
-    // a non-super-admin viewer just sees no chips).
-    getOrgUsersGroups(organisationId).then((r) => { if (r.success) setUserGroups(r.data); });
     setIsLoading(false);
   }, [organisationId]);
 
@@ -414,7 +398,6 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                     <SortIndicator column="lastLoginAt" sortColumn={sortColumn} sortDirection={sortDirection} />
                   </button>
                 </TableHead>
-                <TableHead>Access groups</TableHead>
                 <TableHead className="w-40 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -436,19 +419,6 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                     <TableCell className="text-muted-foreground text-sm">
                       {formatDate(user.lastLoginAt)}
                     </TableCell>
-                    {/* I2 · current access groups as chips (empty = no rights beyond
-                        the org module ceiling). Manage via the button in Actions. */}
-                    <TableCell>
-                      {(userGroups[user.id]?.length ?? 0) > 0 ? (
-                        <span className="flex flex-wrap gap-1">
-                          {userGroups[user.id]!.map((gr) => (
-                            <Badge key={gr.groupId} variant="secondary" className="text-[10px]">{gr.groupName}</Badge>
-                          ))}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">None</span>
-                      )}
-                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         {user.membershipActive !== false && !user.isPrimaryMembership && (
@@ -456,18 +426,6 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                             <Star className="h-4 w-4" />
                           </Button>
                         )}
-                        {/* I2 · make group management discoverable — a labelled action,
-                            not a bare icon (Edgars "couldn't find it"). */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setGroupsUser(user)}
-                          disabled={user.membershipActive === false}
-                          aria-label={`Manage groups for ${user.name}`}
-                          title="Manage access groups"
-                        >
-                          <Settings2 className="h-4 w-4" /> Groups
-                        </Button>
                         {/* Send Credentials button - for created users (no auth_user_id yet) */}
                         {user.status === "created" && !user.authUserId && user.isActive && (
                           <Button
@@ -666,14 +624,6 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* User Groups Dialog */}
-      <UserGroupsDialog
-        user={groupsUser}
-        organisationId={organisationId}
-        open={!!groupsUser}
-        onOpenChange={(open) => !open && setGroupsUser(null)}
-        onSuccess={handleSuccess}
-      />
     </div>
   );
 }

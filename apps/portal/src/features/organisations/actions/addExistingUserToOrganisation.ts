@@ -5,9 +5,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/features/audit/logAudit";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
-import { attachPersonMembership, listAssignableGroups, setMembershipGroups } from "../services/personOnboarding";
+import { getOrganisationRoleGroup, setMembershipActive, setMembershipGroups } from "../services/personOnboarding";
 import { sendPasswordlessInvite } from "../services/passwordlessInvite";
 import { ADMIN_DENIED, requirePlatformAdmin } from "./_platformAdmin";
+import { requirePersonOnboardingAccess } from "./_personOnboardingAccess";
 
 export interface ExistingUserInfo {
   id: string;
@@ -49,46 +50,46 @@ export interface AttachedPersonResult {
 export async function addExistingUserToOrganisation(
   userId: string,
   organisationId: string,
-  groupIds: string[] = [],
-  options: { makePrimary?: boolean; sendInvite?: boolean } = {},
 ): Promise<ActionResult<AttachedPersonResult>> {
-  const guard = await requirePlatformAdmin();
-  if (!guard.ok || !isValidUUID(userId) || !isValidUUID(organisationId)) return ADMIN_DENIED;
-  if (!Array.isArray(groupIds) || groupIds.some((id) => !isValidUUID(id))) return ADMIN_DENIED;
+  if (!isValidUUID(userId) || !isValidUUID(organisationId)) return ADMIN_DENIED;
+  const guard = await requirePersonOnboardingAccess(organisationId);
+  if (!guard.ok) return ADMIN_DENIED;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const [{ data: user }, groupOptions] = await Promise.all([
-    admin.from("portal_users").select("id").eq("id", userId).maybeSingle(),
-    listAssignableGroups(admin, organisationId),
+  const [{ data: user }, { data: memberships }, role] = await Promise.all([
+    admin.from("portal_users").select("id, is_active, status").eq("id", userId).maybeSingle(),
+    admin.from("organization_memberships").select("organization_id, is_active").eq("user_id", userId),
+    getOrganisationRoleGroup(admin, organisationId),
   ]);
-  if (!user) return ADMIN_DENIED;
-  const optionsById = new Map(groupOptions.map((g) => [g.id, g]));
-  if (groupIds.some((id) => !optionsById.has(id) || optionsById.get(id)?.disabled)) {
-    return { success: false, error: "Selected access is unavailable for this organisation", code: "ACCESS_ABOVE_ORG_CEILING" };
+  if (!user || !role.ok) return ADMIN_DENIED;
+  const membershipRows = (memberships ?? []) as Array<{ organization_id: string; is_active: boolean }>;
+  const targetMembership = membershipRows.find((m) => m.organization_id === organisationId);
+  if (!targetMembership || membershipRows.some((m) => m.organization_id !== organisationId && m.is_active)) {
+    return { success: false, error: "This person cannot be added to this company", code: "EMAIL_UNAVAILABLE" };
   }
-  const attached = await attachPersonMembership(admin, {
-    userId,
-    organisationId,
-    makePrimary: options.makePrimary === true,
-    invitedBy: guard.session.portalUserId,
-  });
-  if (!attached.ok) {
-    return attached.code === "ALREADY_MEMBER"
-      ? { success: false, error: "User is already a member of this organisation", code: attached.code }
-      : ADMIN_DENIED;
+
+  if (user.status === "active" && user.is_active === true && targetMembership.is_active) {
+    return { success: false, error: "This person already has active access", code: "ALREADY_ACTIVE" };
   }
-  const groups = await setMembershipGroups(admin, userId, organisationId, groupIds);
-  if (!groups.ok) return { success: false, error: "Membership added but access could not be assigned", code: groups.code };
+  if (!targetMembership.is_active) {
+    const reactivated = await setMembershipActive(admin, userId, organisationId, true);
+    if (!reactivated.ok) return ADMIN_DENIED;
+  }
+  if (user.is_active !== true) {
+    const { error } = await admin.from("portal_users").update({ is_active: true, updated_at: new Date().toISOString() }).eq("id", userId);
+    if (error) return { success: false, error: "Could not reactivate this person", code: "UPDATE_FAILED" };
+  }
+
+  const groups = await setMembershipGroups(admin, userId, organisationId, [role.group.id]);
+  if (!groups.ok) return { success: false, error: "Access could not be assigned", code: groups.code };
   updateTag(`user-modules:${userId}:${organisationId}`);
   updateTag(`access-profile:${userId}:${organisationId}`);
 
-  let inviteSent = false;
-  let inviteError: string | null = null;
-  if (options.sendInvite) {
-    const invite = await sendPasswordlessInvite(admin, admin, userId, organisationId, guard.session.portalUserId);
-    inviteSent = invite.ok;
-    inviteError = invite.ok || invite.code === "ALREADY_ACTIVE" ? null : "Membership added; invitation email can be retried";
-  }
-  await logAudit({ action: "membership.attach", resourceType: "portal_user", resourceId: userId, organisationId, metadata: { makePrimary: options.makePrimary === true, groupCount: groupIds.length, inviteSent } });
+  const invite = user.status === "active"
+    ? null
+    : await sendPasswordlessInvite(admin, admin, userId, organisationId, guard.session.portalUserId);
+  const inviteSent = invite?.ok === true;
+  const inviteError = invite === null || invite.ok ? null : "Access restored; invitation email can be retried";
+  await logAudit({ action: "portal_user.reinvite", resourceType: "portal_user", resourceId: userId, organisationId, metadata: { inheritedRole: role.group.key, inviteSent } });
   return { success: true, data: { userId, organisationId, inviteSent, inviteError } };
 }

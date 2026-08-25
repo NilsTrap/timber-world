@@ -29,17 +29,17 @@ function generateEmailHtml(data: CredentialsEmailData): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your Timber World Portal Access</title>
+  <title>Your Nilitto Access</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background-color: #1a4d2e; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Timber World Portal</h1>
+    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Nilitto Trading Platform</h1>
   </div>
 
   <div style="background-color: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
     <p style="font-size: 16px;">Hello ${data.name},</p>
 
-    <p style="font-size: 16px;">Your account has been created for the Timber World Production Portal.</p>
+    <p style="font-size: 16px;">Your account has been created for the Nilitto Trading Platform.</p>
 
     <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
       <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;">Login URL:</p>
@@ -58,7 +58,7 @@ function generateEmailHtml(data: CredentialsEmailData): string {
 
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
 
-    <p style="font-size: 14px; color: #9ca3af; margin: 0;">Best regards,<br>Timber World Team</p>
+    <p style="font-size: 14px; color: #9ca3af; margin: 0;">Best regards,<br>Nilitto Team</p>
   </div>
 </body>
 </html>
@@ -71,7 +71,7 @@ function generateEmailHtml(data: CredentialsEmailData): string {
 function generateEmailText(data: CredentialsEmailData): string {
   return `Hello ${data.name},
 
-Your account has been created for the Timber World Production Portal.
+Your account has been created for the Nilitto Trading Platform.
 
 Login URL: ${data.loginUrl}
 Email: ${data.email}
@@ -82,7 +82,7 @@ Please log in and change your password after first access.
 If you have questions, contact your administrator.
 
 Best regards,
-Timber World Team
+Nilitto Team
 `;
 }
 
@@ -99,7 +99,7 @@ export async function sendCredentialsEmail(
 
   const emailHtml = generateEmailHtml(data);
   const emailText = generateEmailText(data);
-  const subject = "Your Timber World Portal Access";
+  const subject = "Your Nilitto Trading Platform access";
 
   // If no Resend API key, log to console for development
   if (!resendApiKey) {

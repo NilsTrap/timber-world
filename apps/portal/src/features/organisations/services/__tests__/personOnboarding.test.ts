@@ -40,6 +40,7 @@ class Query {
     if (this.table === "portal_users") return [...this.db.users.values()];
     if (this.table === "organization_memberships") return this.db.memberships;
     if (this.table === "organisations") return [...this.db.organisations.values()];
+    if (this.table === "access_groups") return [...this.db.accessGroups.values()];
     throw new Error(`Unexpected table ${this.table}`);
   }
 
@@ -67,8 +68,12 @@ class OnboardingMemoryDb {
   memberships: Membership[] = [];
   assignments = new Map<string, Set<string>>();
   organisations = new Map([
-    ["org-a", { id: "org-a", name: "Customer A", is_active: true }],
-    ["org-b", { id: "org-b", name: "Trader B", is_active: true }],
+    ["org-a", { id: "org-a", name: "Customer A", is_active: true, is_customer: true, is_trader: false, is_manufacturer: false, is_supplier: false, is_producer: false }],
+    ["org-b", { id: "org-b", name: "Trader B", is_active: true, is_customer: false, is_trader: true, is_manufacturer: false, is_supplier: false, is_producer: false }],
+  ]);
+  accessGroups = new Map([
+    ["customer-group", { id: "customer-group", key: "buyer", name: "Buyer", is_system: true }],
+    ["trader-group", { id: "trader-group", key: "trader", name: "Trader", is_system: true }],
   ]);
   allowedGroups = new Map([
     ["org-a", new Set(["customer-group"])],
@@ -123,6 +128,9 @@ class OnboardingMemoryDb {
       if (name === "admin_upsert_user_membership") {
         if (!this.organisations.has(orgId)) return denied("ONBOARDING_DENIED");
         if (membership?.is_active) return denied("ALREADY_MEMBER");
+        if (this.memberships.some((row) => row.user_id === userId && row.organization_id !== orgId && row.is_active)) {
+          return denied("SINGLE_COMPANY_MEMBERSHIP");
+        }
         if (membership) Object.assign(membership, { is_active: true, is_primary: false });
         else this.memberships.push({ user_id: userId, organization_id: orgId, is_active: true, is_primary: false });
         this.assignments.delete(`${userId}:${orgId}`);
@@ -139,6 +147,9 @@ class OnboardingMemoryDb {
       }
       if (name === "admin_set_membership_active") {
         if (args.p_is_active === true) {
+          if (this.memberships.some((row) => row.user_id === userId && row.organization_id !== orgId && row.is_active)) {
+            return denied("SINGLE_COMPANY_MEMBERSHIP");
+          }
           membership.is_active = true;
           membership.is_primary = false;
           this.assignments.delete(`${userId}:${orgId}`);
@@ -225,6 +236,18 @@ async function main() {
   });
 
   const db = new OnboardingMemoryDb();
+
+  await test("inherits one system role from the target company", async () => {
+    assert.deepEqual(await onboarding.getOrganisationRoleGroup(db, "org-a"), {
+      ok: true,
+      group: { id: "customer-group", key: "buyer", name: "Buyer" },
+    });
+    assert.deepEqual(await onboarding.getOrganisationRoleGroup(db, "org-b"), {
+      ok: true,
+      group: { id: "trader-group", key: "trader", name: "Trader" },
+    });
+  });
+
   const created = await onboarding.createPersonWithPrimaryMembership(db, {
     email: "person@example.test", name: "Person", organisationId: "org-a", invitedBy: "admin",
   });
@@ -239,35 +262,12 @@ async function main() {
     assert.equal(rows[0]?.is_primary, true);
   });
 
-  await test("attach adds a second organisation without leaking its groups", async () => {
+  await test("ordinary users cannot be attached to a second active company", async () => {
     assert.deepEqual(await onboarding.setMembershipGroups(db, userId, "org-a", ["customer-group"]), { ok: true, count: 1 });
     assert.deepEqual(await onboarding.attachPersonMembership(db, {
       userId, organisationId: "org-b", makePrimary: false, invitedBy: "admin",
-    }), { ok: true });
-    assert.deepEqual(await onboarding.setMembershipGroups(db, userId, "org-b", ["trader-group"]), { ok: true, count: 1 });
+    }), { ok: false, code: "SINGLE_COMPANY_MEMBERSHIP" });
     assert.deepEqual([...db.assignments.get(`${userId}:org-a`)!], ["customer-group"]);
-    assert.deepEqual([...db.assignments.get(`${userId}:org-b`)!], ["trader-group"]);
-  });
-
-  await test("concurrent primary changes still leave exactly one synchronized primary", async () => {
-    await Promise.all([
-      onboarding.setPrimaryMembership(db, userId, "org-a"),
-      onboarding.setPrimaryMembership(db, userId, "org-b"),
-      onboarding.setPrimaryMembership(db, userId, "org-a"),
-    ]);
-    const primary = db.memberships.filter((row) => row.user_id === userId && row.is_active && row.is_primary);
-    assert.equal(primary.length, 1);
-    assert.equal(db.users.get(userId)?.organisation_id, primary[0]?.organization_id);
-  });
-
-  await test("deactivate refuses primary, isolates revocation, and reactivation restores no access", async () => {
-    await onboarding.setPrimaryMembership(db, userId, "org-b");
-    assert.deepEqual(await onboarding.setMembershipActive(db, userId, "org-b", false), { ok: false, code: "PRIMARY_OR_ONLY_MEMBERSHIP" });
-    assert.deepEqual(await onboarding.setMembershipActive(db, userId, "org-a", false), { ok: true });
-    assert.equal(db.assignments.has(`${userId}:org-a`), false);
-    assert.deepEqual([...db.assignments.get(`${userId}:org-b`)!], ["trader-group"]);
-    assert.deepEqual(await onboarding.setMembershipActive(db, userId, "org-a", true), { ok: true });
-    assert.equal(db.assignments.has(`${userId}:org-a`), false);
   });
 
   await test("rejects group access above the target organisation ceiling", async () => {
@@ -277,21 +277,31 @@ async function main() {
   });
 
   await test("send and resend use passwordless auth without exposing a secret", async () => {
-    let inviteCalls = 0;
-    let resendCalls = 0;
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.RESEND_API_KEY;
+    process.env.RESEND_API_KEY = "test-only-key";
+    globalThis.fetch = async () => new Response(JSON.stringify({ id: "mail-1" }), { status: 200 });
+    let generateCalls = 0;
     const authAdmin = {
       auth: {
-        admin: { inviteUserByEmail: async () => { inviteCalls++; return { data: { user: { id: "auth-1" } }, error: null }; } },
-        resend: async () => { resendCalls++; return { error: null }; },
+        admin: { generateLink: async () => {
+          generateCalls++;
+          return { data: { user: { id: "auth-1" }, properties: { action_link: `https://example.test/invite-${generateCalls}` } }, error: null };
+        } },
       },
     };
-    const sent = await sendPasswordlessInvite(db, authAdmin, userId, "org-a", "admin");
-    const resent = await sendPasswordlessInvite(db, authAdmin, userId, "org-a", "admin");
-    assert.deepEqual(sent, { ok: true, email: "person@example.test", mode: "sent" });
-    assert.deepEqual(resent, { ok: true, email: "person@example.test", mode: "resent" });
-    assert.equal(inviteCalls, 1);
-    assert.equal(resendCalls, 1);
-    assert.doesNotMatch(JSON.stringify([sent, resent]), /token|password|action[_-]?link|auth-1/i);
+    try {
+      const sent = await sendPasswordlessInvite(db, authAdmin, userId, "org-a", "admin");
+      const resent = await sendPasswordlessInvite(db, authAdmin, userId, "org-a", "admin");
+      assert.deepEqual(sent, { ok: true, email: "person@example.test", mode: "sent" });
+      assert.deepEqual(resent, { ok: true, email: "person@example.test", mode: "resent" });
+      assert.equal(generateCalls, 2);
+      assert.doesNotMatch(JSON.stringify([sent, resent]), /token|password|action[_-]?link|auth-1/i);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = originalKey;
+    }
   });
 
   await test("mail failure is retryable and does not change membership", async () => {
@@ -299,7 +309,7 @@ async function main() {
     user.auth_user_id = null;
     user.status = "created";
     const membershipsBefore = structuredClone(db.memberships);
-    const failingAuth = { auth: { admin: { inviteUserByEmail: async () => ({ data: null, error: { message: "mail unavailable" } }) } } };
+    const failingAuth = { auth: { admin: { generateLink: async () => ({ data: null, error: { message: "mail unavailable" } }) } } };
     assert.deepEqual(await sendPasswordlessInvite(db, failingAuth, userId, "org-a", "admin"), { ok: false, code: "MAIL_FAILED" });
     assert.deepEqual(db.memberships, membershipsBefore);
     assert.equal(user.auth_user_id, null);
@@ -309,7 +319,7 @@ async function main() {
   await test("inactive account and wrong-organisation invite attempts are denied", async () => {
     assert.equal((await onboarding.setPersonAccountActive(db, userId, false)).ok, true);
     let authCalled = false;
-    const authAdmin = { auth: { admin: { inviteUserByEmail: async () => { authCalled = true; return { data: null, error: null }; } } } };
+    const authAdmin = { auth: { admin: { generateLink: async () => { authCalled = true; return { data: null, error: null }; } } } };
     assert.deepEqual(await sendPasswordlessInvite(db, authAdmin, userId, "org-a", "admin"), { ok: false, code: "ONBOARDING_DENIED" });
     assert.deepEqual(await sendPasswordlessInvite(db, authAdmin, userId, "missing-org", "admin"), { ok: false, code: "ONBOARDING_DENIED" });
     assert.equal(authCalled, false);

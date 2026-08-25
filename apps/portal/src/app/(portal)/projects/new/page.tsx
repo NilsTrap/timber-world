@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { resolveProjectsActor, resolveProjectsViewer } from "@/features/projects/access";
 import { ProjectCreateView } from "@/features/projects/components/ProjectCreateView";
 
-export const metadata: Metadata = { title: "New project | Timber World" };
+export const metadata: Metadata = { title: "New project | Nilitto" };
 export const dynamic = "force-dynamic";
 
 export default async function NewProjectPage() {

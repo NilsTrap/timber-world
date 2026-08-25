@@ -5,7 +5,7 @@ import { OrdersPageClient } from "@/features/orders/components";
 import type { SessionUser } from "@/lib/auth/getSession";
 
 export const metadata = {
-  title: "Orders | Timber World",
+  title: "Orders | Nilitto",
 };
 
 function OrdersSkeleton() {

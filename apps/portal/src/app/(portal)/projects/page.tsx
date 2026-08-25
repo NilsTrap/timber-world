@@ -4,7 +4,7 @@ import { listProjects } from "@/features/projects/actions/getProjects";
 import { ProjectsListView } from "@/features/projects/components/ProjectsListView";
 
 export const metadata: Metadata = {
-  title: "Projects | Timber World",
+  title: "Projects | Nilitto",
 };
 
 /** Session + flag are per-request facts; nothing here may be cached. */

@@ -122,7 +122,7 @@ export default async function DashboardPage({
         <p className="text-muted-foreground">
           {userIsAdmin
             ? "Manage inventory, products, and view organisation efficiency"
-            : "Welcome to the Timber World Production Portal"}
+            : "Welcome to the Nilitto Trading Platform"}
         </p>
       </div>
 

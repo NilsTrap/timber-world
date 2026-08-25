@@ -16,6 +16,7 @@ import { checkContactAccessForOrgByProfile } from "@/features/counterparties/acc
 import {
   attachPersonMembership,
   createPersonWithPrimaryMembership,
+  getOrganisationRoleGroup,
   listPeopleWithMemberships,
   setMembershipActive,
   setMembershipGroups,
@@ -296,7 +297,7 @@ export const crmTools: ToolDef[] = [
   {
     name: "timber_create_person",
     description:
-      "Create a new person with one active primary organisation membership and ceiling-capped access groups. Platform-admin only. No credentials are returned or sent by this tool.",
+      "Create a new person with one company membership. Access is inherited from the company's role. Platform-admin only. No credentials are returned or sent by this tool.",
     readOnly: false,
     lifecycle: "access",
     inputSchema: {
@@ -305,7 +306,6 @@ export const crmTools: ToolDef[] = [
         org_id: { type: "string", description: "Organisation UUID to create the person under." },
         name: { type: "string", description: "Person name." },
         email: { type: "string", description: "Email (globally unique across portal users)." },
-        group_ids: { type: "array", items: { type: "string" }, description: "Access-group UUIDs (admins only; ignored for a scoped non-admin key — the forced book group wins)." },
       },
       required: ["org_id", "name", "email"],
     },
@@ -313,7 +313,7 @@ export const crmTools: ToolDef[] = [
   {
     name: "timber_add_person_to_org",
     description:
-      "Add an existing person to an organisation (or reactivate without restoring old rights) and assign ceiling-capped access groups. Platform-admin only.",
+      "Reactivate a same-company person and restore access inherited from the company's role. Ordinary users cannot belong to multiple companies. Platform-admin only.",
     readOnly: false,
     lifecycle: "access",
     inputSchema: {
@@ -321,7 +321,6 @@ export const crmTools: ToolDef[] = [
       properties: {
         user_id: { type: "string", description: "Existing portal user UUID." },
         org_id: { type: "string", description: "Organisation UUID to add them to." },
-        group_ids: { type: "array", items: { type: "string" }, description: "Access-group UUIDs (admins only; forced for a scoped key)." },
       },
       required: ["user_id", "org_id"],
     },
@@ -760,9 +759,11 @@ export const crmHandlers: Record<string, ToolHandler> = {
     if (!email) return toolErr("email is required");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    const role = await getOrganisationRoleGroup(admin, args.org_id);
+    if (!role.ok) return toolErr("Set one company role before inviting people");
     const created = await createPersonWithPrimaryMembership(admin, { email, name, organisationId: args.org_id, invitedBy: ctx.actor.portalUserId });
     if (!created.ok) return toolErr(created.code === "DUPLICATE_EMAIL" ? "Email already registered" : "Permission denied");
-    const groupRes = await setMembershipGroups(admin, created.userId, args.org_id, Array.isArray(args?.group_ids) ? args.group_ids : []);
+    const groupRes = await setMembershipGroups(admin, created.userId, args.org_id, [role.group.id]);
     if (!groupRes.ok) return toolErr("Selected access is unavailable for this organisation");
     return toolOk({ id: created.userId, organisation_id: args.org_id, status: "created", is_active: true, is_primary: true });
   },
@@ -772,9 +773,11 @@ export const crmHandlers: Record<string, ToolHandler> = {
     if (!args?.org_id || !UUID_RE.test(args.org_id)) return toolErr("org_id (UUID) is required");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    const role = await getOrganisationRoleGroup(admin, args.org_id);
+    if (!role.ok) return toolErr("Set one company role before inviting people");
     const attached = await attachPersonMembership(admin, { userId: args.user_id, organisationId: args.org_id, makePrimary: false, invitedBy: ctx.actor.portalUserId });
-    if (!attached.ok) return toolErr(attached.code === "ALREADY_MEMBER" ? "User is already a member of this organisation" : "Permission denied");
-    const groupRes = await setMembershipGroups(admin, args.user_id, args.org_id, Array.isArray(args?.group_ids) ? args.group_ids : []);
+    if (!attached.ok) return toolErr(attached.code === "ALREADY_MEMBER" ? "User is already a member of this organisation" : attached.code === "SINGLE_COMPANY_MEMBERSHIP" ? "User already belongs to another company" : "Permission denied");
+    const groupRes = await setMembershipGroups(admin, args.user_id, args.org_id, [role.group.id]);
     if (!groupRes.ok) return toolErr("Selected access is unavailable for this organisation");
     return toolOk({ user_id: args.user_id, organisation_id: args.org_id });
   },

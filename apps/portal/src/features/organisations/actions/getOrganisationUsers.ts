@@ -4,14 +4,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { OrganisationUser, ActionResult } from "../types";
 import { isValidUUID } from "../types";
 import { listPeopleWithMemberships } from "../services/personOnboarding";
-import { ADMIN_DENIED, requirePlatformAdmin } from "./_platformAdmin";
+import { ADMIN_DENIED } from "./_platformAdmin";
+import { requirePersonOnboardingAccess } from "./_personOnboardingAccess";
 
 export async function getOrganisationUsers(
   organisationId: string,
   options?: { includeInactive?: boolean },
 ): Promise<ActionResult<OrganisationUser[]>> {
-  const guard = await requirePlatformAdmin();
-  if (!guard.ok || !isValidUUID(organisationId)) return ADMIN_DENIED;
+  if (!isValidUUID(organisationId)) return ADMIN_DENIED;
+  const guard = await requirePersonOnboardingAccess(organisationId);
+  if (!guard.ok) return ADMIN_DENIED;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   try {

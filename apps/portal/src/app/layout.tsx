@@ -12,10 +12,10 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Timber World Portal",
-    template: "%s | Timber World Portal",
+    default: "Nilitto Trading Platform",
+    template: "%s | Nilitto",
   },
-  description: "Production management portal for Timber World",
+  description: "Nilitto trading and production management platform",
 };
 
 export default function RootLayout({

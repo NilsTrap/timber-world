@@ -17,13 +17,13 @@ export default function RegisterPage() {
           Registration Not Available
         </h1>
         <p className="text-sm text-muted-foreground">
-          Self-registration is not available for the Timber World Portal
+          Self-registration is not available for the Nilitto Trading Platform
         </p>
       </div>
 
       <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
         <p className="text-sm text-muted-foreground">
-          Access to the Timber World Portal is by invitation only. If you need
+          Access to the Nilitto Trading Platform is by invitation only. If you need
           access, please contact your administrator.
         </p>
         <p className="text-sm text-muted-foreground">

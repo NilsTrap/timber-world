@@ -4,7 +4,7 @@ import { getProject } from "@/features/projects/actions/getProject";
 import { ProjectDetailView } from "@/features/projects/components/ProjectDetailView";
 
 export const metadata: Metadata = {
-  title: "Project | Timber World",
+  title: "Project | Nilitto",
 };
 
 export const dynamic = "force-dynamic";

@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canOnboardPeopleForOrganisation } from "@/features/organisations/actions/_personOnboardingAccess";
 import { getPlatformSetting } from "@/features/access/actions/platformSettings";
 import { deleteOrganisation } from "@/features/organisations/actions/deleteOrganisation";
 import { crmSyncOrg } from "@/features/organisations/services/oscarCrm";
@@ -204,7 +205,7 @@ export async function getCounterpartyProfile(
       ...mapRow(org),
       accessMode: access.mode,
       canManage: access.canManage,
-      canOnboardPeople: access.session.isPlatformAdmin === true,
+      canOnboardPeople: await canOnboardPeopleForOrganisation(id),
       deliveryAddresses: (addresses ?? []).map((a: Record<string, unknown>) => ({
         id: String(a.id), label: String(a.label), address: String(a.address),
         contactName: (a.contact_name as string | null) ?? null,

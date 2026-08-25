@@ -5,14 +5,16 @@ import { logAudit } from "@/features/audit/logAudit";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
 import { sendPasswordlessInvite } from "../services/passwordlessInvite";
-import { ADMIN_DENIED, requirePlatformAdmin } from "./_platformAdmin";
+import { ADMIN_DENIED } from "./_platformAdmin";
+import { requirePersonOnboardingAccess } from "./_personOnboardingAccess";
 
 export async function resendUserCredentials(
   userId: string,
   organisationId: string,
 ): Promise<ActionResult<{ email: string }>> {
-  const guard = await requirePlatformAdmin();
-  if (!guard.ok || !isValidUUID(userId) || !isValidUUID(organisationId)) return ADMIN_DENIED;
+  if (!isValidUUID(userId) || !isValidUUID(organisationId)) return ADMIN_DENIED;
+  const guard = await requirePersonOnboardingAccess(organisationId);
+  if (!guard.ok) return ADMIN_DENIED;
   const admin = createAdminClient();
   const result = await sendPasswordlessInvite(admin, admin, userId, organisationId, guard.session.portalUserId);
   if (!result.ok) {

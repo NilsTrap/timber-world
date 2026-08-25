@@ -7,11 +7,7 @@
  * on the route at runtime — the type-export trap), so these live here instead.
  */
 
-/** How the current caller may add people to a given organisation.
- *  - admin:  unrestricted — full access-group picker, any org.
- *  - scoped: book-scoped non-admin (salesperson/purchasing) — the access group
- *            is FORCED server-side (no picker) and only eligible orgs are offered.
- *  - forbidden: the caller may not add people to this org. */
+/** How the current caller may add people to a given organisation. */
 export type AddPersonMode = "admin" | "scoped" | "forbidden";
 
 /** An access group the admin may pick in the inline group step. */
@@ -27,15 +23,13 @@ export interface AddPersonGroupOption {
   recommended: boolean;
 }
 
-/** Dialog bootstrap: who the caller is for THIS org + the group choices.
- *  The client uses this only to render — the server re-derives and enforces
- *  everything on the actual create/add call (the client is never the wall). */
+/** Dialog bootstrap. The inherited role is informational; the server assigns it. */
 export interface AddPersonContext {
   mode: AddPersonMode;
   orgName: string | null;
-  /** admin mode only: the assignable access groups for the inline picker. */
+  /** Retained for DTO compatibility. Company-user onboarding never exposes it. */
   groups: AddPersonGroupOption[];
-  /** scoped mode only: the single group the server WILL force (shown read-only). */
+  /** Single role preset inherited from the target company. */
   forcedGroupId: string | null;
   forcedGroupName: string | null;
 }
@@ -47,4 +41,7 @@ export interface AddablePerson {
   name: string;
   /** Already an active member of the target org — the UI disables "Add". */
   alreadyMember: boolean;
+  status: "created" | "invited" | "active";
+  isActive: boolean;
+  membershipActive: boolean;
 }

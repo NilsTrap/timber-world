@@ -16,6 +16,12 @@ export interface OnboardingGroupOption {
   recommended: boolean;
 }
 
+export interface OrganisationRoleGroup {
+  id: string;
+  key: "buyer" | "trader" | "manufacturer";
+  name: string;
+}
+
 export interface OnboardingMembership {
   orgId: string;
   orgName: string;
@@ -74,6 +80,43 @@ export function recommendedGroupKeys(flags: {
   if (flags.isTrader) keys.push("trader");
   if (flags.isManufacturer || flags.isSupplier || flags.isProducer) keys.push("manufacturer");
   return keys;
+}
+
+/**
+ * Resolve the single system access preset inherited from the company's role.
+ * Access groups remain an implementation detail; onboarding callers must use
+ * this resolver instead of accepting group ids from the browser or MCP.
+ */
+export async function getOrganisationRoleGroup(
+  db: PersonOnboardingDb,
+  organisationId: string,
+): Promise<{ ok: true; group: OrganisationRoleGroup } | { ok: false; code: string }> {
+  const { data: organisation } = await db.from("organisations")
+    .select("is_customer, is_trader, is_manufacturer, is_supplier, is_producer")
+    .eq("id", organisationId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!organisation) return { ok: false, code: "ONBOARDING_DENIED" };
+
+  const keys = recommendedGroupKeys({
+    isCustomer: organisation.is_customer,
+    isTrader: organisation.is_trader,
+    isManufacturer: organisation.is_manufacturer,
+    isSupplier: organisation.is_supplier,
+    isProducer: organisation.is_producer,
+  });
+  const uniqueKeys = Array.from(new Set(keys));
+  if (uniqueKeys.length !== 1) return { ok: false, code: "COMPANY_ROLE_REQUIRED" };
+
+  const key = uniqueKeys[0] as OrganisationRoleGroup["key"];
+  const { data: group } = await db.from("access_groups")
+    .select("id, key, name")
+    .eq("key", key)
+    .eq("is_system", true)
+    .maybeSingle();
+  return group
+    ? { ok: true, group: { id: group.id, key, name: group.name } }
+    : { ok: false, code: "ROLE_GROUP_MISSING" };
 }
 
 export function effectiveModuleIntersection(orgModules: Iterable<string>, groupModules: Iterable<string>): string[] {
@@ -210,6 +253,7 @@ function rpcErrorCode(error: { message?: string } | null): string {
   if (message.includes("PRIMARY_OR_ONLY_MEMBERSHIP")) return "PRIMARY_OR_ONLY_MEMBERSHIP";
   if (message.includes("ACCESS_ABOVE_ORG_CEILING")) return "ACCESS_ABOVE_ORG_CEILING";
   if (message.includes("ALREADY_MEMBER")) return "ALREADY_MEMBER";
+  if (message.includes("SINGLE_COMPANY_MEMBERSHIP")) return "SINGLE_COMPANY_MEMBERSHIP";
   if (message.includes("duplicate key")) return "DUPLICATE_EMAIL";
   return "ONBOARDING_DENIED";
 }

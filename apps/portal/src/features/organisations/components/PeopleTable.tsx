@@ -54,9 +54,8 @@ const selectClass =
 /**
  * K2 · Person-centric People directory.
  *
- * Every portal user appears ONCE with all their organisations (primary flagged)
- * and their access groups. Search (name/email/phone) + filters (organisation,
- * access group, status). Row actions edit the profile, send/resend/reset
+ * Every portal user appears once with their company and inherited persona.
+ * Search (name/email/phone) + filters (company, status). Row actions edit the profile, send/resend/reset
  * credentials, and activate/deactivate — person-level ops using the person's
  * primary org where an org is needed. Exact platform-admin only; a scoped
  * viewer never reaches this component.
@@ -68,7 +67,6 @@ export function PeopleTable() {
 
   const [search, setSearch] = useState("");
   const [orgFilter, setOrgFilter] = useState("");
-  const [groupFilter, setGroupFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
 
   const [editPerson, setEditPerson] = useState<EditablePerson | null>(null);
@@ -95,24 +93,17 @@ export function PeopleTable() {
     return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [people]);
 
-  const groupOptions = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const p of people) for (const g of p.groups) m.set(g.groupId, g.groupName);
-    return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [people]);
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return people.filter((p) => {
       if (q && !(p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q) || (p.phone ?? "").toLowerCase().includes(q)))
         return false;
       if (orgFilter && !p.orgs.some((o) => o.id === orgFilter)) return false;
-      if (groupFilter && !p.groups.some((g) => g.groupId === groupFilter)) return false;
       if (statusFilter === "active" && !p.isActive) return false;
       if (statusFilter === "inactive" && p.isActive) return false;
       return true;
     });
-  }, [people, search, orgFilter, groupFilter, statusFilter]);
+  }, [people, search, orgFilter, statusFilter]);
 
   const credentialAction = (p: DirectoryPerson): "send" | "resend" | "reset" | null => {
     if (!p.isActive) return null;
@@ -184,16 +175,8 @@ export function PeopleTable() {
           />
         </div>
         <select className={selectClass} value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)}>
-          <option value="">All organisations</option>
+          <option value="">All companies</option>
           {orgOptions.map(([id, label]) => (
-            <option key={id} value={id}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select className={selectClass} value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
-          <option value="">All access groups</option>
-          {groupOptions.map(([id, label]) => (
             <option key={id} value={id}>
               {label}
             </option>
@@ -222,9 +205,8 @@ export function PeopleTable() {
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Organisations</TableHead>
+                <TableHead>Company</TableHead>
                 <TableHead>Persona</TableHead>
-                <TableHead>Access groups</TableHead>
                 <TableHead>Last login</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -233,8 +215,6 @@ export function PeopleTable() {
               {filtered.map((p) => {
                 const s = statusInfo(p);
                 const action = credentialAction(p);
-                // Distinct group names across all orgs (compact display).
-                const groupNames = Array.from(new Set(p.groups.map((g) => g.groupName)));
                 return (
                   <TableRow key={p.id} className={!p.isActive ? "opacity-60" : ""}>
                     <TableCell className="font-medium">
@@ -270,20 +250,6 @@ export function PeopleTable() {
                           <Badge key={persona} variant="outline" className="text-[10px]">{persona}</Badge>
                         ))}
                       </span>
-                    </TableCell>
-                    <TableCell>
-                      {groupNames.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">None</span>
-                      ) : (
-                        <span className="flex flex-wrap gap-1">
-                          {groupNames.slice(0, 2).map((n) => (
-                            <Badge key={n} variant="secondary" className="text-[10px]">{n}</Badge>
-                          ))}
-                          {groupNames.length > 2 && (
-                            <Badge variant="outline" className="text-[10px]">+{groupNames.length - 2}</Badge>
-                          )}
-                        </span>
-                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">{formatDate(p.lastLoginAt)}</TableCell>
                     <TableCell className="text-right">

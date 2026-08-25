@@ -10,7 +10,7 @@ export default function AcceptInvitePage() {
     <div className="space-y-6">
       <div className="space-y-2 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Welcome to Timber World
+          Welcome to Nilitto
         </h1>
         <p className="text-sm text-muted-foreground">
           Set your password to complete your account setup

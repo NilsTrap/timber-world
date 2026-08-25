@@ -60,7 +60,7 @@ export async function TopNav() {
             className="flex items-center space-x-2"
             aria-label="Go to dashboard home"
           >
-            <span className="font-semibold text-lg">Timber World</span>
+            <span className="font-semibold text-lg">Nilitto</span>
             <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded">
               Portal
             </span>

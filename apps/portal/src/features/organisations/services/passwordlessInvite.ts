@@ -1,4 +1,4 @@
-import { siteConfig } from "@timber/config";
+import { sendNilittoInviteEmail } from "@/lib/email/sendNilittoInviteEmail";
 import type { PersonOnboardingDb } from "./personOnboarding";
 
 export type PasswordlessInviteResult =
@@ -6,8 +6,9 @@ export type PasswordlessInviteResult =
   | { ok: false; code: "ONBOARDING_DENIED" | "ALREADY_ACTIVE" | "MAIL_FAILED" };
 
 /**
- * Send or resend a Supabase passwordless invite without returning, logging, or
- * persisting a link/token. Resend never deletes/recreates the auth identity.
+ * Generate a one-time Supabase activation link and deliver the application-
+ * controlled Nilitto email through Resend. The link/token is never returned,
+ * logged or persisted.
  */
 export async function sendPasswordlessInvite(
   db: PersonOnboardingDb,
@@ -25,33 +26,47 @@ export async function sendPasswordlessInvite(
   if (!user || !membership || !org || user.is_active !== true) return { ok: false, code: "ONBOARDING_DENIED" };
   if (user.status === "active") return { ok: false, code: "ALREADY_ACTIVE" };
 
-  const redirectTo = `${siteConfig.url.replace(/\/$/, "")}/accept-invite`;
-  if (!user.auth_user_id) {
-    const { data, error } = await authAdmin.auth.admin.inviteUserByEmail(user.email, {
+  const isResend = Boolean(user.auth_user_id);
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://nilitto.com").replace(/\/$/, "");
+  const redirectTo = `${appUrl}/accept-invite`;
+  const linkType = user.auth_user_id ? "recovery" : "invite";
+  const { data, error } = await authAdmin.auth.admin.generateLink({
+    type: linkType,
+    email: user.email,
+    options: {
       data: { name: user.name, role: user.role, organisation_name: org.name },
       redirectTo,
-    });
-    if (error || !data?.user) return { ok: false, code: "MAIL_FAILED" };
+    },
+  });
+  const actionLink = data?.properties?.action_link;
+  const authUserId = data?.user?.id ?? user.auth_user_id;
+  if (error || !actionLink || !authUserId) return { ok: false, code: "MAIL_FAILED" };
+
+  const now = new Date().toISOString();
+  if (!user.auth_user_id) {
     const { error: updateError } = await db.from("portal_users").update({
-      auth_user_id: data.user.id,
+      auth_user_id: authUserId,
       status: "invited",
-      invited_at: new Date().toISOString(),
+      invited_at: now,
       invited_by: invitedBy,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     }).eq("id", userId).is("auth_user_id", null);
-    return updateError ? { ok: false, code: "MAIL_FAILED" } : { ok: true, email: user.email, mode: "sent" };
+    if (updateError) return { ok: false, code: "MAIL_FAILED" };
   }
 
-  const { error } = await authAdmin.auth.resend({
-    type: "invite",
-    email: user.email,
-    options: { emailRedirectTo: redirectTo },
+  const mail = await sendNilittoInviteEmail({
+    to: user.email,
+    name: user.name,
+    organisationName: org.name,
+    inviteUrl: actionLink,
   });
-  if (error) return { ok: false, code: "MAIL_FAILED" };
+  if (!mail.success) return { ok: false, code: "MAIL_FAILED" };
+
   await db.from("portal_users").update({
-    invited_at: new Date().toISOString(),
+    status: "invited",
+    invited_at: now,
     invited_by: invitedBy,
-    updated_at: new Date().toISOString(),
-  }).eq("id", userId).eq("auth_user_id", user.auth_user_id);
-  return { ok: true, email: user.email, mode: "resent" };
+    updated_at: now,
+  }).eq("id", userId).eq("auth_user_id", authUserId);
+  return { ok: true, email: user.email, mode: isResend ? "resent" : "sent" };
 }

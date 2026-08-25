@@ -32,8 +32,6 @@ import {
   Send,
   RefreshCw,
   Building2,
-  Plus,
-  Settings2,
   Star,
   Loader2,
 } from "lucide-react";
@@ -46,14 +44,10 @@ import {
   resetUserPassword,
   removeUserFromOrganisation,
   setMembershipActive,
-  setPrimaryMembership,
   type PersonDetail,
   type PersonMembership,
 } from "../actions";
-import type { OrganisationUser } from "../types";
 import { PersonEditDialog, type EditablePerson } from "./PersonEditDialog";
-import { AddPersonToOrgDialog } from "./AddPersonToOrgDialog";
-import { UserGroupsDialog } from "./UserGroupsDialog";
 import { PersonApiKeysSection } from "./PersonApiKeysSection";
 
 interface PersonDetailTabsProps {
@@ -86,8 +80,6 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
 
   // Dialog / confirm state
   const [editOpen, setEditOpen] = useState(false);
-  const [addOrgOpen, setAddOrgOpen] = useState(false);
-  const [groupsOrg, setGroupsOrg] = useState<{ id: string; name: string } | null>(null);
   const [removeOrg, setRemoveOrg] = useState<PersonMembership | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
   const [membershipBusy, setMembershipBusy] = useState<string | null>(null);
@@ -118,24 +110,6 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
     if (person.organisationId) return person.organisationId;
     return memberships.find((m) => m.isPrimary)?.orgId ?? memberships[0]?.orgId ?? null;
   }, [person.organisationId, memberships]);
-
-  // Build an OrganisationUser shape for UserGroupsDialog (it uses id + name).
-  const orgUserFor = (orgId: string): OrganisationUser => ({
-    id: person.id,
-    email: person.email,
-    name: person.name,
-    role: person.role,
-    organisationId: orgId,
-    authUserId: person.authUserId,
-    isActive: person.isActive,
-    status: person.status,
-    invitedAt: person.invitedAt,
-    invitedBy: null,
-    invitedByName: null,
-    lastLoginAt: person.lastLoginAt,
-    createdAt: person.createdAt,
-    updatedAt: person.updatedAt,
-  });
 
   const editablePerson: EditablePerson = {
     id: person.id,
@@ -215,16 +189,6 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
     } else toast.error(r.error);
   };
 
-  const makePrimary = async (membership: PersonMembership) => {
-    setMembershipBusy(membership.orgId);
-    const r = await setPrimaryMembership(person.id, membership.orgId);
-    setMembershipBusy(null);
-    if (r.success) {
-      toast.success(`${membership.orgName} is now primary`);
-      await Promise.all([loadMemberships(), refreshPerson()]);
-    } else toast.error(r.error);
-  };
-
   const statusBadge = (
     <div className="flex items-center gap-2">
       <Badge
@@ -255,7 +219,7 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
       <Tabs defaultValue="profile">
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="organisations">Organisations ({memberships.length})</TabsTrigger>
+          <TabsTrigger value="organisations">Company</TabsTrigger>
           <TabsTrigger value="api-keys">API keys</TabsTrigger>
           <TabsTrigger value="login-history">Login history</TabsTrigger>
         </TabsList>
@@ -307,14 +271,11 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
         {/* ── Organisations ───────────────────────────────────────── */}
         <TabsContent value="organisations" className="mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Building2 className="h-5 w-5" />
-                Organisations
+                Company
               </CardTitle>
-              <Button size="sm" onClick={() => setAddOrgOpen(true)}>
-                <Plus className="h-4 w-4 mr-1" /> Add to organisation
-              </Button>
             </CardHeader>
             <CardContent>
               {membershipsLoading ? (
@@ -348,35 +309,11 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
                           </Badge>
                         </div>
                         <div className="mt-1 flex flex-wrap gap-1">
-                          {m.groups.length > 0 ? (
-                            m.groups.map((g) => (
-                              <Badge key={g.groupId} variant="secondary" className="text-[10px]">
-                                {g.groupName}
-                              </Badge>
-                            ))
-                          ) : (
-                            <span className="text-xs text-muted-foreground">No access groups</span>
-                          )}
                           {m.personas.map((persona) => (
                             <Badge key={persona} variant="outline" className="text-[10px]">{persona}</Badge>
                           ))}
-                          <span className="text-xs text-muted-foreground">{m.effectiveModules.length} effective modules</span>
                         </div>
                       </div>
-                      {m.isActive && !m.isPrimary && (
-                        <Button variant="ghost" size="sm" onClick={() => makePrimary(m)} disabled={membershipBusy !== null}>
-                          <Star className="h-4 w-4 mr-1" /> Make primary
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setGroupsOrg({ id: m.orgId, name: m.orgName })}
-                        disabled={!m.isActive || membershipBusy !== null}
-                        title="Manage access groups"
-                      >
-                        <Settings2 className="h-4 w-4 mr-1" /> Groups
-                      </Button>
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -423,24 +360,6 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
         onOpenChange={setEditOpen}
         onSuccess={refreshPerson}
       />
-
-      <AddPersonToOrgDialog
-        personId={person.id}
-        personName={person.name}
-        open={addOrgOpen}
-        onOpenChange={setAddOrgOpen}
-        onSuccess={loadMemberships}
-      />
-
-      {groupsOrg && (
-        <UserGroupsDialog
-          user={orgUserFor(groupsOrg.id)}
-          organisationId={groupsOrg.id}
-          open={!!groupsOrg}
-          onOpenChange={(open) => !open && setGroupsOrg(null)}
-          onSuccess={loadMemberships}
-        />
-      )}
 
       {/* Toggle active confirm */}
       <AlertDialog open={toggleOpen} onOpenChange={(o) => !isToggling && setToggleOpen(o)}>
