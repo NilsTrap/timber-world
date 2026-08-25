@@ -7,6 +7,7 @@
  * (dispatch handlers = the exact former route.ts switch-case bodies, unchanged).
  */
 import { listOrgs, getOrg, createOrg, updateOrg } from "@/features/organisations/services/orgService";
+import { exclusiveRoleUpdateFromFlags } from "@/features/organisations/services/organisationRolePolicy";
 import { listAccessGroups, getAccessGroupDetail, getUserAccessGroups, listPortalUsers } from "@/features/access/services/groupsRead";
 import { createAccessGroup, updateAccessGroup, deleteAccessGroup, saveGroupRights, updateUserAccessGroups } from "@/features/access/services/groupsWrite";
 import type { GroupRightsInput } from "@/features/access/types";
@@ -51,7 +52,7 @@ export const crmTools: ToolDef[] = [
   },
   {
     name: "timber_create_org",
-    description: "Create a Timber organisation (3-char code + name + optional company card + role flags). Set is_customer/is_manufacturer/is_producer/is_supplier/is_trader to seed the org's supply-chain roles at creation (default false; can be changed later via timber_update_org). Mirrors to the Oscar CRM when configured and returns the stored org incl. crm_org_id.",
+    description: "Create a Timber organisation (3-char code + name + optional company card + one company role). At most one of is_customer/is_manufacturer/is_producer/is_supplier/is_trader may be true. Mirrors to the Oscar CRM when configured and returns the stored org incl. crm_org_id.",
     readOnly: false,
     lifecycle: "org",
     inputSchema: {
@@ -81,7 +82,7 @@ export const crmTools: ToolDef[] = [
   {
     name: "timber_update_org",
     description:
-      "Update an existing Timber organisation (partial — only the provided fields change). Edits the company card (name, legal address, VAT/registration, country, contact, bank details, default document signee) AND the role flags (is_customer, is_manufacturer, is_producer, is_supplier, is_trader) + is_active. Flip is_supplier to add/remove the org from the Suppliers book (so it can be picked as a sourcing supplier); flip is_trader to add/remove it from the admin-only Traders book. The 3-char CODE is IMMUTABLE (deal codes embed it) and cannot be changed here. Mirrors card + customer/manufacturer/producer changes to the Oscar CRM when configured (is_supplier, is_trader and signee stay Timber-local).",
+      "Update an existing Timber organisation (partial — only the provided fields change). A true role flag selects that one company role and clears the others; multiple true role flags are rejected. The 3-char CODE is immutable. Mirrors card + customer/manufacturer/producer changes to the Oscar CRM when configured.",
     readOnly: false,
     lifecycle: "org",
     inputSchema: {
@@ -496,6 +497,14 @@ export const crmHandlers: Record<string, ToolHandler> = {
   timber_create_org: async (args, ctx) => {
     const { db } = ctx;
     if (!args?.code || !args?.name) return toolErr("code and name are required");
+    const roleValidation = exclusiveRoleUpdateFromFlags({
+      isCustomer: args?.is_customer,
+      isManufacturer: args?.is_manufacturer,
+      isProducer: args?.is_producer,
+      isSupplier: args?.is_supplier,
+      isTrader: args?.is_trader,
+    });
+    if (!roleValidation.success) return toolErr(roleValidation.error);
     const res = await createOrg(db, {
       code: args.code,
       name: args.name,
@@ -511,10 +520,9 @@ export const crmHandlers: Record<string, ToolHandler> = {
       bankSwiftCode: args?.bank_swift_code,
     });
     if (!res.success) return toolErr(res.error);
-    // T3 · seed the role flags at create. createOrg's service writes only the
-    // company card; the role flags reuse the updateOrg twin (same columns the
-    // Roles toggle writes) so create can set is_customer/manufacturer/producer/
-    // supplier/trader in one call. Only applied when at least one flag is provided.
+    // Seed the exclusive role after the company card is created. Input is
+    // validated before creation so a conflicting request cannot leave a partial
+    // unassigned company behind.
     const flags: Record<string, boolean> = {};
     if (typeof args?.is_customer === "boolean") flags.isCustomer = args.is_customer;
     if (typeof args?.is_manufacturer === "boolean") flags.isManufacturer = args.is_manufacturer;

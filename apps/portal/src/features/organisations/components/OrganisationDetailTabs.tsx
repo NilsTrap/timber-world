@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   Tabs,
   TabsList,
@@ -16,6 +17,11 @@ import {
   Label,
   Textarea,
   Checkbox,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@timber/ui";
 import { toast } from "sonner";
 import {
@@ -33,6 +39,11 @@ import {
 } from "lucide-react";
 import { usePersistedTab } from "@/hooks/usePersistedTab";
 import type { Organisation, DeliveryAddress } from "../types";
+import {
+  isOrganisationRole,
+  organisationRoleFromFlags,
+  type OrganisationRoleSelection,
+} from "../services/organisationRolePolicy";
 import { OrganisationUsersTable } from "./OrganisationUsersTable";
 import { OrganisationModulesTab } from "./OrganisationModulesTab";
 import { CompanyVisibilityTab } from "./CompanyVisibilityTab";
@@ -63,15 +74,13 @@ export function OrganisationDetailTabs({
   defaultTab,
   canManageCompanyVisibility = false,
 }: OrganisationDetailTabsProps) {
+  const router = useRouter();
   const [isExternal, setIsExternal] = useState(organisation.isExternal);
   const [isTogglingExternal, setIsTogglingExternal] = useState(false);
 
-  // Supply-chain role flags (independent multi-select)
-  const [isCustomer, setIsCustomer] = useState(organisation.isCustomer);
-  const [isManufacturer, setIsManufacturer] = useState(organisation.isManufacturer);
-  const [isProducer, setIsProducer] = useState(organisation.isProducer);
-  const [isSupplier, setIsSupplier] = useState(organisation.isSupplier);
-  const [isTrader, setIsTrader] = useState(organisation.isTrader);
+  const [selectedRole, setSelectedRole] = useState<OrganisationRoleSelection>(() =>
+    organisationRoleFromFlags(organisation),
+  );
   const [isTogglingRole, setIsTogglingRole] = useState(false);
 
   // Editable fields (name/code inline editing)
@@ -141,19 +150,15 @@ export function OrganisationDetailTabs({
     setIsTogglingExternal(false);
   };
 
-  const handleRoleToggle = async (
-    role: "customer" | "manufacturer" | "producer" | "supplier" | "trader",
-    current: boolean
-  ) => {
+  const handleRoleChange = async (value: string) => {
+    if (value !== "unassigned" && !isOrganisationRole(value)) return;
     setIsTogglingRole(true);
-    const newValue = !current;
-    const result = await setOrganisationRole(organisation.id, role, newValue);
+    const role = value === "unassigned" ? null : value;
+    const result = await setOrganisationRole(organisation.id, role);
     if (result.success) {
-      if (role === "customer") setIsCustomer(result.data.enabled);
-      else if (role === "manufacturer") setIsManufacturer(result.data.enabled);
-      else if (role === "producer") setIsProducer(result.data.enabled);
-      else if (role === "supplier") setIsSupplier(result.data.enabled);
-      else setIsTrader(result.data.enabled);
+      setSelectedRole(result.data.role ?? "unassigned");
+      toast.success(role ? "Company role updated" : "Company role cleared");
+      router.refresh();
     } else {
       toast.error(result.error);
     }
@@ -363,7 +368,7 @@ export function OrganisationDetailTabs({
           <Settings2 className="h-4 w-4" />
           Modules
         </TabsTrigger>
-        {canManageCompanyVisibility && organisation.isTrader ? (
+        {canManageCompanyVisibility && selectedRole === "trader" ? (
           <TabsTrigger value="access">
             <Share2 className="h-4 w-4" />
             Company access
@@ -454,69 +459,41 @@ export function OrganisationDetailTabs({
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">
-                    Roles
+                    Role
                   </label>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <Button
-                      variant={isCustomer ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleRoleToggle("customer", isCustomer)}
-                      disabled={isTogglingRole}
-                    >
-                      Customer
-                    </Button>
-                    <Button
-                      variant={isManufacturer ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleRoleToggle("manufacturer", isManufacturer)}
-                      disabled={isTogglingRole}
-                    >
-                      Manufacturer
-                    </Button>
-                    <Button
-                      variant={isProducer ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleRoleToggle("producer", isProducer)}
-                      disabled={isTogglingRole}
-                    >
-                      Producer
-                    </Button>
-                    <Button
-                      variant={isSupplier ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleRoleToggle("supplier", isSupplier)}
-                      disabled={isTogglingRole}
-                    >
-                      Supplier
-                    </Button>
-                    <Button
-                      variant={isTrader ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleRoleToggle("trader", isTrader)}
-                      disabled={isTogglingRole}
-                    >
-                      Trader
-                    </Button>
-                  </div>
-                  {/* I1/L2 · "Appears in" — the CRM books are filtered VIEWS of
-                      this one org list (Clients = customer; Suppliers = supplier
-                      OR producer; Traders = trader, admin-only). Reveal where this
-                      org lands so an unflagged (internal) org shows WHY it's in no
-                      book. */}
+                  <Select value={selectedRole} onValueChange={handleRoleChange} disabled={isTogglingRole}>
+                    <SelectTrigger className="mt-1 w-full min-w-44">
+                      <SelectValue placeholder="Select company role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selectedRole === "multiple" ? (
+                        <SelectItem value="multiple" disabled>Multiple roles (legacy)</SelectItem>
+                      ) : null}
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      <SelectItem value="customer">Customer</SelectItem>
+                      <SelectItem value="trader">Trader</SelectItem>
+                      <SelectItem value="manufacturer">Manufacturer</SelectItem>
+                      <SelectItem value="producer">Producer</SelectItem>
+                      <SelectItem value="supplier">Supplier</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <p className="mt-1.5 text-xs text-muted-foreground">
                     {(() => {
                       const books: React.ReactNode[] = [];
-                      if (isCustomer) books.push(
+                      if (selectedRole === "customer") books.push(
                         <a key="c" href="/counterparties/clients" className="text-primary hover:underline">Clients book</a>
                       );
-                      if (isSupplier || isProducer) books.push(
+                      if (selectedRole === "supplier" || selectedRole === "producer") books.push(
                         <a key="s" href="/counterparties/suppliers" className="text-primary hover:underline">Suppliers book</a>
                       );
-                      if (isTrader) books.push(
+                      if (selectedRole === "trader") books.push(
                         <a key="t" href="/counterparties/traders" className="text-primary hover:underline">Traders book</a>
                       );
                       if (books.length === 0) {
-                        return "Internal — appears in no CRM book (toggle a role to place it in Clients, Suppliers or Traders).";
+                        if (selectedRole === "multiple") {
+                          return "Legacy multiple-role record — select one role to normalize it.";
+                        }
+                        return "Appears in no company book until a role is selected.";
                       }
                       return (
                         <>
@@ -902,7 +879,7 @@ export function OrganisationDetailTabs({
         </Card>
       </TabsContent>
 
-      {canManageCompanyVisibility && organisation.isTrader ? (
+      {canManageCompanyVisibility && selectedRole === "trader" ? (
         <TabsContent value="access">
           <Card>
             <CardHeader><CardTitle>Company access</CardTitle></CardHeader>

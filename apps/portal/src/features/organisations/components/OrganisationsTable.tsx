@@ -41,6 +41,7 @@ import {
 } from "../actions";
 import type { Organisation } from "../types";
 import { OrganisationForm } from "./OrganisationForm";
+import { organisationRoleFromFlags } from "../services/organisationRolePolicy";
 
 type SortColumn = "code" | "name" | "userCount" | "isActive";
 type SortDirection = "asc" | "desc";
@@ -374,20 +375,13 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
                       </Badge>
                     </button>
                   </TableCell>
-                  {/* The org's role flags (multi-role; set in the org detail "Roles"
-                      toggle). "—" = no role assigned. */}
                   <TableCell>
-                    {org.isTrader || org.isCustomer || org.isSupplier || org.isProducer || org.isManufacturer ? (
-                      <span className="flex flex-wrap gap-1">
-                        {org.isTrader && <Badge variant="secondary" className="text-[10px]">Trader</Badge>}
-                        {org.isCustomer && <Badge variant="secondary" className="text-[10px]">Customer</Badge>}
-                        {org.isSupplier && <Badge variant="secondary" className="text-[10px]">Supplier</Badge>}
-                        {org.isProducer && <Badge variant="secondary" className="text-[10px]">Producer</Badge>}
-                        {org.isManufacturer && <Badge variant="secondary" className="text-[10px]">Manufacturer</Badge>}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
+                    {(() => {
+                      const role = organisationRoleFromFlags(org);
+                      if (role === "unassigned") return <span className="text-xs text-muted-foreground">—</span>;
+                      if (role === "multiple") return <Badge variant="warning" className="text-[10px]">Multiple (legacy)</Badge>;
+                      return <Badge variant="secondary" className="text-[10px] capitalize">{role}</Badge>;
+                    })()}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>

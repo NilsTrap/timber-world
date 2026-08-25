@@ -14,7 +14,7 @@ export interface Organisation {
   isActive: boolean;
   /** External organisations don't use the platform - they're suppliers/customers */
   isExternal: boolean;
-  /** Supply-chain role flags (independent, any combination) */
+  /** Legacy storage columns for one exclusive supply-chain role. */
   isCustomer: boolean;
   isManufacturer: boolean;
   isProducer: boolean;
@@ -23,7 +23,7 @@ export interface Organisation {
   isSupplier: boolean;
   /** L2 (Wave 2): a trader is one of the house's own trading companies — the
    *  seller side of a deal. Drives the New-deal "Trader" slot + admin-only CRM
-   *  Traders book. Independent of is_manufacturer (legacy) which is left intact. */
+   *  Traders book. */
   isTrader: boolean;
   legalAddress: string | null;
   vatNumber: string | null;

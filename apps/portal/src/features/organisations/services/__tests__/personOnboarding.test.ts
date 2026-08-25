@@ -196,7 +196,7 @@ async function main() {
     assert.equal(isValidUUID("00000000-0000-4000-8000-000000000001"), true);
   });
 
-  await test("derives every persona and preserves multi-role organisations", () => {
+  await test("derives every persona and safely reads legacy multi-role organisations", () => {
     assert.deepEqual(onboarding.derivePersonas({ isCustomer: true }), ["Customer"]);
     assert.deepEqual(onboarding.derivePersonas({ isTrader: true }), ["Trader"]);
     for (const flags of [{ isManufacturer: true }, { isSupplier: true }, { isProducer: true }]) {
@@ -208,7 +208,7 @@ async function main() {
     );
   });
 
-  await test("maps confirmed personas to recommended Nilitto access groups", () => {
+  await test("maps confirmed personas and legacy role combinations to recommended Nilitto access groups", () => {
     assert.deepEqual(onboarding.recommendedGroupKeys({ isCustomer: true }), ["buyer"]);
     assert.deepEqual(onboarding.recommendedGroupKeys({ isTrader: true }), ["trader"]);
     assert.deepEqual(onboarding.recommendedGroupKeys({ isSupplier: true }), ["manufacturer"]);

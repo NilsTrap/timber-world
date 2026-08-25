@@ -8,6 +8,7 @@ import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
 import { createOrgSchema, updateOrgCardSchema, type CreateOrgInput, type UpdateOrgCardInput } from "../schemas";
 import { crmSyncOrg } from "./oscarCrm";
+import { exclusiveRoleUpdateFromFlags } from "./organisationRolePolicy";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DbClient = any;
@@ -151,7 +152,7 @@ export async function createOrg(db: DbClient, input: CreateOrgInput): Promise<Ac
   return { success: true, data: org };
 }
 
-/** Role/status booleans settable on an org (the org-detail "Roles" toggle set). */
+/** Legacy role columns accepted by service callers; at most one may be true. */
 export interface UpdateOrgFlags {
   isCustomer?: boolean;
   isManufacturer?: boolean;
@@ -167,9 +168,8 @@ export interface UpdateOrgFlags {
  * UI actions (one service, no logic duplication). Only PROVIDED fields change.
  *
  * - `code` is IMMUTABLE (deal codes embed it) → a code change is rejected.
- * - Role flags reuse the same columns the Roles toggle writes (is_customer/
- *   is_manufacturer/is_producer/is_supplier) + is_active — booleans, never
- *   interpolated. `is_supplier` drives the Suppliers book.
+ * - A true role flag selects that single role and clears all other role columns.
+ *   Multiple true flags are rejected. False-only input remains a partial clear.
  * - Signee defaults (default_signee_name/role, G3) feed document signature blocks.
  * - CRM mirror routes to crm_update_organization (the org's existing crm_org_id is
  *   passed through) — consistent with createOrg's create mirror. is_supplier + the
@@ -208,11 +208,11 @@ export async function updateOrg(
   if (card.bankSwiftCode !== undefined) u.bank_swift_code = nn(card.bankSwiftCode);
   if (card.defaultSigneeName !== undefined) u.default_signee_name = nn(card.defaultSigneeName);
   if (card.defaultSigneeRole !== undefined) u.default_signee_role = nn(card.defaultSigneeRole);
-  if (typeof input.isCustomer === "boolean") u.is_customer = input.isCustomer;
-  if (typeof input.isManufacturer === "boolean") u.is_manufacturer = input.isManufacturer;
-  if (typeof input.isProducer === "boolean") u.is_producer = input.isProducer;
-  if (typeof input.isSupplier === "boolean") u.is_supplier = input.isSupplier;
-  if (typeof input.isTrader === "boolean") u.is_trader = input.isTrader;
+  const roleUpdate = exclusiveRoleUpdateFromFlags(input);
+  if (!roleUpdate.success) {
+    return { success: false, error: roleUpdate.error, code: "VALIDATION_ERROR" };
+  }
+  Object.assign(u, roleUpdate.update);
   if (typeof input.isActive === "boolean") u.is_active = input.isActive;
 
   // Nothing to change → idempotent no-op, return the org as-is.

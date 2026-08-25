@@ -6,32 +6,24 @@ import { getSession, isAdmin } from "@/lib/auth";
 import type { ActionResult } from "../types";
 import { isValidUUID } from "../types";
 import { logAudit } from "@/features/audit/logAudit";
+import {
+  exclusiveRoleDbUpdate,
+  isOrganisationRole,
+  type OrganisationRole,
+} from "../services/organisationRolePolicy";
 
 /**
- * Set Organisation Role Flag
+ * Set Organisation Role
  *
- * Toggles one of an organisation's supply-chain role flags
- * (is_customer / is_manufacturer / is_producer). Roles are independent —
- * an organisation can have any combination of them.
+ * Selects one supply-chain role (or none). The database retains legacy boolean
+ * columns, but all five are written atomically so a company can never gain a
+ * second role through this action.
  */
-
-/** Whitelist mapping role keys to DB columns — never interpolate from input. */
-const ROLE_COLUMN_MAP: Record<
-  "customer" | "manufacturer" | "producer" | "supplier" | "trader",
-  "is_customer" | "is_manufacturer" | "is_producer" | "is_supplier" | "is_trader"
-> = {
-  customer: "is_customer",
-  manufacturer: "is_manufacturer",
-  producer: "is_producer",
-  supplier: "is_supplier",
-  trader: "is_trader",
-};
 
 export async function setOrganisationRole(
   id: string,
-  role: "customer" | "manufacturer" | "producer" | "supplier" | "trader",
-  enabled: boolean
-): Promise<ActionResult<{ role: string; enabled: boolean }>> {
+  role: OrganisationRole | null,
+): Promise<ActionResult<{ role: OrganisationRole | null }>> {
   // 1. Validate input
   if (!id || !isValidUUID(id)) {
     return {
@@ -41,8 +33,7 @@ export async function setOrganisationRole(
     };
   }
 
-  const column = ROLE_COLUMN_MAP[role];
-  if (!column) {
+  if (role !== null && !isOrganisationRole(role)) {
     return {
       success: false,
       error: "Invalid role",
@@ -75,9 +66,9 @@ export async function setOrganisationRole(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("organisations")
-    .update({ [column]: enabled })
+    .update(exclusiveRoleDbUpdate(role))
     .eq("id", id)
-    .select(column)
+    .select("id")
     .single();
 
   if (error) {
@@ -93,7 +84,7 @@ export async function setOrganisationRole(
   // recommended Nilitto access group effective. Disabling a persona never
   // removes modules: another persona or an explicit admin configuration may
   // still rely on them.
-  if (enabled) {
+  if (role) {
     const moduleCodes = ["dashboard.view", "projects.view"];
     if (role === "trader") {
       moduleCodes.push("counterparties.clients", "counterparties.suppliers");
@@ -121,11 +112,11 @@ export async function setOrganisationRole(
     resourceType: "organisation",
     resourceId: id,
     organisationId: id,
-    metadata: { role, enabled },
+    metadata: { role },
   });
 
   return {
     success: true,
-    data: { role, enabled },
+    data: { role },
   };
 }
