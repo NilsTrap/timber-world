@@ -1,6 +1,15 @@
-# Agent onboarding — Timber World platform (for Nils's Claude Code agents)
+# Agent onboarding — Nilitto Trading Platform (for Nils's coding agents)
 
-_Last updated 2026-07-05. This is the standing context document for any AI agent working on this repository on Nils's side. Read it fully before your first change. It states the environment rules, the deployment mechanics, the architecture entry points, and the hard boundaries._
+_Last updated 2026-08-25. This is the standing context document for any AI agent working on this repository on Nils's side. Read it fully before your first change. It states the environment rules, the deployment mechanics, the architecture entry points, and the hard boundaries._
+
+## 0. Identity and domain
+
+- Current product/company name: **Nilitto**.
+- User-facing portal name: **Nilitto Trading Platform**.
+- Exact primary domain: **`nilitto.com`** (double `t`; never `nilito.com` or `nelito.com`).
+- Canonical staging URL: **https://staging.nilitto.com**.
+- Existing technical identifiers (`nils-timber`, `timber-world`, `feature/timber-spec-phase`, `timber-portal-staging`, `@timber/*`, database names) remain unchanged until an explicit migration is approved.
+- Before any DNS, email, domain, branding, or Vercel-hostname change, read **`docs/nilitto-domain-and-email.md`**.
 
 ---
 
@@ -26,7 +35,7 @@ Concretely, an agent must NEVER:
 
 | | Production (FROZEN) | Staging (work here) |
 |---|---|---|
-| Portal URL | the live legacy portal | **https://timber-portal-staging.vercel.app** |
+| Portal URL | the live legacy portal | **https://staging.nilitto.com** (`timber-portal-staging.vercel.app` is the technical fallback) |
 | Vercel project | `timber-portal` | **`timber-portal-staging`** |
 | Supabase project | `psmra…` (eu / Ireland) — DO NOT TOUCH | **`fyzrtqsnmnizoxgcqsjc`** (eu-central-1) |
 | Branch | `main` | `feature/timber-spec-phase` |
@@ -46,7 +55,7 @@ vercel --prod --yes --scope nils-projects-ee818bb8   # --prod here means "produc
 #   vercel link --yes --project timber-portal-staging --scope nils-projects-ee818bb8
 ```
 
-Then poll `vercel inspect <deployment-url>` until `● Ready` (region fra1), check `curl -sL -o /dev/null -w '%{http_code}' https://timber-portal-staging.vercel.app/` → 200, and **verify the actual feature you changed in the browser** before calling it done. If the deploy errors, read the build log (`vercel inspect --logs`), fix, redeploy — never leave staging broken overnight.
+Then poll `vercel inspect <deployment-url>` until `● Ready` (region fra1), check `curl -sL -o /dev/null -w '%{http_code}' https://staging.nilitto.com/` → 200, and **verify the actual feature you changed in the browser** before calling it done. If the deploy errors, read the build log (`vercel inspect --logs`), fix, redeploy — never leave staging broken overnight.
 
 **Safety check before every deploy:** `cat .vercel/project.json` — it must name `timber-portal-staging`. If it names anything else (e.g. the production project), STOP and re-link to staging first.
 

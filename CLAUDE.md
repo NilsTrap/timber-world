@@ -2,11 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **START HERE: read `docs/nils-agent-onboarding.md` before your first change.** It carries the environment rules that override everything in this file where they conflict — most importantly: **PRODUCTION IS FROZEN; all work happens on the staging branch `feature/timber-spec-phase` + the staging environment only.** It also has the current deploy runbook, DB rules, and the reading order for the new-platform docs (`docs/wave2-spine-lego.md` supersedes the legacy sections below where they disagree about deals).
+> **START HERE: read `docs/nils-agent-onboarding.md` before your first change.** It carries the environment rules that override everything in this file where they conflict — most importantly: **PRODUCTION IS FROZEN; all work happens on the staging branch `feature/timber-spec-phase` + the staging environment only.** For identity, DNS, email, and deployment-hostname work, also read `docs/nilitto-domain-and-email.md`.
 
 ## Project Overview
 
-This is a **BMad Method Framework** installation (v6.0.0-alpha.22) for the **Timber World Platform** project. BMad (Business Model Architecture Development) is an AI-assisted product development methodology with specialized agents and structured workflows.
+This is a **BMad Method Framework** installation (v6.0.0-alpha.22) for the **Nilitto Trading Platform**, formerly called Timber World. BMad (Business Model Architecture Development) is an AI-assisted product development methodology with specialized agents and structured workflows.
+
+**Naming rule:** Use **Nilitto** and **Nilitto Trading Platform** in new user-facing copy. The exact domain is `nilitto.com` (double `t`). Preserve existing repository, package, database, branch, and Vercel identifiers unless an explicit technical migration is requested.
 
 ### Architecture
 
@@ -204,7 +206,7 @@ The `supabase/config.toml` file is required for the Supabase CLI to work with mi
 
 ## Deploying to staging (IMPORTANT — read before deploying)
 
-Staging = the Vercel project **`timber-portal-staging`** (scope `nils-projects-ee818bb8`), serving **https://timber-portal-staging.vercel.app**. Nils logs in with prod credentials. Staging Supabase = `fyzrtqsnmnizoxgcqsjc` (keys/PAT in `~/.supabase-ijl/`).
+Staging = the Vercel project **`timber-portal-staging`** (scope `nils-projects-ee818bb8`), serving the canonical hostname **https://staging.nilitto.com**. The Vercel hostname `https://timber-portal-staging.vercel.app` remains available as a technical fallback. Nils logs in with prod credentials. Staging Supabase = `fyzrtqsnmnizoxgcqsjc` (keys/PAT in `~/.supabase-ijl/`).
 
 **Deploy from the REPO ROOT with a plain `vercel --prod` — do NOT deploy from `apps/portal`.**
 
