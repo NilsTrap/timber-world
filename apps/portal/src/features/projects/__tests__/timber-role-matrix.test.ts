@@ -387,6 +387,7 @@ function fileDependencies(
             relative_path: "drawings/drawing.pdf",
             mime_type: "application/pdf",
             storage_path: `${file.order_id}/project/internal_drawing.pdf`,
+            lifecycle_status: "ready" as const,
           }
         : null;
     },
@@ -481,7 +482,7 @@ for (const actor of matrix) {
       ]),
     };
     const detail = toProjectDetail(raw as unknown as DealHeaderLike, walled, ctx, {
-      lines: walled.lineItems ?? [], files, fileCounts: { total: files.length },
+      lines: walled.lineItems ?? [], files, folders: [], fileCounts: { total: files.length },
     });
     const keys = collectKeys(detail);
     eq(`${actor.label}: terms field-wall`, "terms" in detail, actor.expected.termsInPayload);

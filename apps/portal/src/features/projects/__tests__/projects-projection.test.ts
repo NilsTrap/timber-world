@@ -148,7 +148,7 @@ function render(p: AccessProfile, viewerOrgId: string | null, isPlatformAdmin = 
   return {
     item: toProjectListItem(rawHeader, walled, ctx, COUNTS.total),
     detail: toProjectDetail(rawHeader, walled, ctx, {
-      lines: walled.lineItems ?? [], files: FILES, fileCounts: COUNTS,
+      lines: walled.lineItems ?? [], files: FILES, folders: [], fileCounts: COUNTS,
     }),
   };
 }
@@ -214,7 +214,7 @@ const buyLegRender = (() => {
   const rawHeader = raw as unknown as DealHeaderLike;
   return {
     item: toProjectListItem(rawHeader, walled, ctx, 0),
-    detail: toProjectDetail(rawHeader, walled, ctx, { lines: walled.lineItems ?? [], files: [], fileCounts: { total: 0 } }),
+    detail: toProjectDetail(rawHeader, walled, ctx, { lines: walled.lineItems ?? [], files: [], folders: [], fileCounts: { total: 0 } }),
   };
 })();
 eq("purchasing on a BUY leg: direction is buy", buyLegRender.item.direction, "buy");
@@ -261,7 +261,7 @@ for (const [label, rendered] of [
 // ── The payload is an allow-list, not a spread ───────────────────────────────
 const ITEM_KEYS = ["id", "reference", "name", "stage", "stageLabel", "direction", "counterparty",
   "deliveryDeadline", "fileCount", "currency"];
-const DETAIL_KEYS = [...ITEM_KEYS, "otherParties", "terms", "lines", "files", "fileCounts", "notes"];
+const DETAIL_KEYS = [...ITEM_KEYS, "otherParties", "terms", "lines", "files", "folders", "fileCounts", "notes"];
 ok("list item keys ⊆ whitelist", Object.keys(admin.item).every((k) => ITEM_KEYS.includes(k)),
    Object.keys(admin.item));
 ok("detail keys ⊆ whitelist", Object.keys(admin.detail).every((k) => DETAIL_KEYS.includes(k)),

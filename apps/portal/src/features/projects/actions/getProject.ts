@@ -13,7 +13,7 @@ import { isValidUUID } from "../../orders/types";
 import { resolveProjectsActor, resolveProjectsViewer } from "../access";
 import { isPartyOrg, toProjectDetail, type ProjectionContext } from "../projection";
 import { loadOrgPersonas } from "../services/orgPersonas";
-import { countFilesByDeal, listProjectFiles } from "../services/projectFiles";
+import { countFilesByDeal, listProjectFiles, listProjectFolders } from "../services/projectFiles";
 import type { ProjectDetail, ProjectsResult, ProjectsViewer } from "../types";
 
 export type GetProjectResult = ProjectsResult<{
@@ -39,9 +39,10 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
 
   const walled = projectDealView(res.data, a.access, a.orgId);
 
-  const [personasByOrgId, files, fileCounts, viewer] = await Promise.all([
+  const [personasByOrgId, files, folders, fileCounts, viewer] = await Promise.all([
     loadOrgPersonas(a.db, [a.orgId, raw.seller.id, raw.buyer.id, raw.customer.id, raw.producer.id]),
     listProjectFiles(a.db, projectId),
+    listProjectFolders(a.db, projectId),
     countFilesByDeal(a.db, [projectId]),
     resolveProjectsViewer(a),
   ]);
@@ -56,6 +57,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   const project = toProjectDetail(raw, walled, ctx, {
     lines: walled.lineItems ?? [],
     files,
+    folders,
     fileCounts: fileCounts.get(projectId) ?? { total: 0 },
   });
 

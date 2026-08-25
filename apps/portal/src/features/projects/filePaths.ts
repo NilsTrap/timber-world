@@ -12,6 +12,23 @@ export function isPreviewableProjectMimeType(mimeType: string | null): boolean {
   return !!mimeType && PROJECT_PREVIEW_MIME_TYPES.has(mimeType.toLowerCase());
 }
 
+export function normaliseProjectMimeType(value: string | null): string | null {
+  if (!value) return null;
+  const mimeType = value.normalize("NFC").trim().toLowerCase().split(";", 1)[0] ?? "";
+  return mimeType.length <= 255 && /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(mimeType)
+    ? mimeType
+    : null;
+}
+
+export function storedProjectMimeType(storedObject: unknown): string | null {
+  if (!storedObject || typeof storedObject !== "object") return null;
+  const metadata = (storedObject as { metadata?: unknown }).metadata;
+  if (!metadata || typeof metadata !== "object") return null;
+  const raw = (metadata as { mimetype?: unknown; contentType?: unknown }).mimetype
+    ?? (metadata as { contentType?: unknown }).contentType;
+  return typeof raw === "string" ? normaliseProjectMimeType(raw) : null;
+}
+
 export type StoredUploadSizeValidation =
   | { ok: true; size: number }
   | { ok: false; reason: "missing" | "mismatch" | "too_large" };
@@ -96,23 +113,34 @@ export interface ProjectTreeNode {
 
 export function buildProjectTree(
   files: readonly { id?: string; relativePath: string }[],
+  folders: readonly { relativePath: string }[] = [],
 ): ProjectTreeNode[] {
   const root: ProjectTreeNode[] = [];
-  const folders = new Map<string, ProjectTreeNode>();
-  for (const file of [...files].sort((a, b) => a.relativePath.localeCompare(b.relativePath))) {
-    const valid = normaliseProjectPath(file.relativePath);
-    if (!valid.ok) continue;
+  const folderNodes = new Map<string, ProjectTreeNode>();
+  const ensureFolder = (segments: string[]): ProjectTreeNode | null => {
     let parent = root;
-    for (let index = 0; index < valid.segments.length - 1; index++) {
-      const path = valid.segments.slice(0, index + 1).join("/");
-      let folder = folders.get(path);
+    let folder: ProjectTreeNode | null = null;
+    for (let index = 0; index < segments.length; index++) {
+      const path = segments.slice(0, index + 1).join("/");
+      folder = folderNodes.get(path) ?? null;
       if (!folder) {
-        folder = { kind: "folder", name: valid.segments[index]!, path, children: [] };
-        folders.set(path, folder);
+        folder = { kind: "folder", name: segments[index]!, path, children: [] };
+        folderNodes.set(path, folder);
         parent.push(folder);
       }
       parent = folder.children;
     }
+    return folder;
+  };
+  for (const row of folders) {
+    const valid = normaliseProjectPath(row.relativePath);
+    if (valid.ok) ensureFolder(valid.segments);
+  }
+  for (const file of [...files].sort((a, b) => a.relativePath.localeCompare(b.relativePath))) {
+    const valid = normaliseProjectPath(file.relativePath);
+    if (!valid.ok) continue;
+    const parentFolder = ensureFolder(valid.segments.slice(0, -1));
+    const parent = parentFolder?.children ?? root;
     parent.push({
       kind: "file",
       name: valid.segments.at(-1)!,

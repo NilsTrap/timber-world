@@ -166,6 +166,7 @@ export function ProjectDetailView({
         <ProjectFileWorkspace
           projectId={project.id}
           initialFiles={project.files}
+          initialFolders={project.folders}
           canWrite={viewer.canWriteFiles}
         />
       </div>

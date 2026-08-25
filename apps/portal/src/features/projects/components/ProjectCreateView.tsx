@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CheckCircle2, File, Folder, Loader2, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCircle2, File, Folder, FolderPlus, Loader2, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { Button, Input, Label } from "@timber/ui";
 import { createProject, type CreatedProject } from "../actions/createProject";
+import { createProjectFolderAction } from "../actions/projectFileActions";
 import type { ProjectCreateRole } from "../capabilities";
 import {
   MAX_PROJECT_FILE_BYTES,
   normaliseProjectName,
+  normaliseProjectPath,
   pathFromBrowserFile,
   projectPathKey,
   replacePathPrefix,
@@ -31,6 +33,8 @@ export function ProjectCreateView({ viewer }: { viewer: ProjectsViewer }) {
   const [name, setName] = useState("");
   const [role, setRole] = useState<ProjectCreateRole>(viewer.createRoles[0] ?? "trader");
   const [files, setFiles] = useState<StagedFile[]>([]);
+  const [manualFolders, setManualFolders] = useState<string[]>([]);
+  const [createdFolderPaths, setCreatedFolderPaths] = useState<Set<string>>(new Set());
   const [created, setCreated] = useState<CreatedProject | null>(null);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -38,15 +42,31 @@ export function ProjectCreateView({ viewer }: { viewer: ProjectsViewer }) {
 
   const folders = useMemo(() => {
     const paths = new Set<string>();
+    manualFolders.forEach((path) => paths.add(path));
     for (const item of files) {
       const parts = item.relativePath.split("/");
       for (let index = 1; index < parts.length; index++) paths.add(parts.slice(0, index).join("/"));
     }
     return [...paths].sort((a, b) => a.localeCompare(b));
-  }, [files]);
+  }, [files, manualFolders]);
+
+  const addFolder = () => {
+    const value = window.prompt("New folder path", "New folder");
+    if (value == null) return;
+    const path = normaliseProjectPath(value.trim());
+    if (!path.ok) { setMessage(path.error); return; }
+    const additions = path.segments.map((_, index) => path.segments.slice(0, index + 1).join("/"));
+    const fileKeys = new Set(files.map((item) => projectPathKey(item.relativePath)));
+    const blocked = additions.find((folder) => fileKeys.has(projectPathKey(folder)));
+    if (blocked) { setMessage(`${blocked}: a file already uses this path.`); return; }
+    const occupied = new Set(folders.map(projectPathKey));
+    setManualFolders((current) => [...current, ...additions.filter((folder) => !occupied.has(projectPathKey(folder)))]);
+  };
 
   const addFiles = (incoming: File[]) => {
     const occupied = new Set(files.map((item) => projectPathKey(item.relativePath)));
+    const folderKeys = new Set(manualFolders.map(projectPathKey));
+    const existingFileKeys = new Set(occupied);
     const additions: StagedFile[] = [];
     const errors: string[] = [];
     for (const file of incoming) {
@@ -54,12 +74,14 @@ export function ProjectCreateView({ viewer }: { viewer: ProjectsViewer }) {
       if (!path.ok) { errors.push(`${file.name}: ${path.error}`); continue; }
       if (file.size > MAX_PROJECT_FILE_BYTES) { errors.push(`${path.path}: over 100 MB`); continue; }
       const key = projectPathKey(path.path);
-      if (occupied.has(key)) { errors.push(`${path.path}: duplicate path`); continue; }
+      const ancestorKeys = path.segments.slice(0, -1).map((_, index) => projectPathKey(path.segments.slice(0, index + 1).join("/")));
+      if (occupied.has(key) || folderKeys.has(key)) { errors.push(`${path.path}: duplicate path`); continue; }
+      if (ancestorKeys.some((ancestor) => existingFileKeys.has(ancestor))) { errors.push(`${path.path}: a file blocks this folder path`); continue; }
       occupied.add(key);
       additions.push({ id: crypto.randomUUID(), file, relativePath: path.path, status: "staged", progress: 0 });
     }
     setFiles((current) => [...current, ...additions]);
-    setMessage(errors.length ? errors.slice(0, 3).join(" · ") : null);
+    setMessage(errors.length ? errors.join(" · ") : null);
   };
 
   const renameFile = (item: StagedFile) => {
@@ -70,7 +92,8 @@ export function ProjectCreateView({ viewer }: { viewer: ProjectsViewer }) {
     if (!valid) { setMessage("Enter a valid file name."); return; }
     const parent = item.relativePath.includes("/") ? item.relativePath.slice(0, item.relativePath.lastIndexOf("/")) : "";
     const target = parent ? `${parent}/${valid}` : valid;
-    if (files.some((other) => other.id !== item.id && projectPathKey(other.relativePath) === projectPathKey(target))) {
+    if (files.some((other) => other.id !== item.id && projectPathKey(other.relativePath) === projectPathKey(target))
+      || manualFolders.some((folder) => projectPathKey(folder) === projectPathKey(target))) {
       setMessage("That name is already used in this folder."); return;
     }
     setFiles((current) => current.map((other) => other.id === item.id ? { ...other, relativePath: target } : other));
@@ -84,16 +107,22 @@ export function ProjectCreateView({ viewer }: { viewer: ProjectsViewer }) {
     if (!valid) { setMessage("Enter a valid folder name."); return; }
     const parent = folder.includes("/") ? folder.slice(0, folder.lastIndexOf("/")) : "";
     const target = parent ? `${parent}/${valid}` : valid;
+    if (files.some((item) => !item.relativePath.startsWith(`${folder}/`) && projectPathKey(item.relativePath) === projectPathKey(target))
+      || folders.some((path) => path !== folder && !path.startsWith(`${folder}/`) && projectPathKey(path) === projectPathKey(target))) {
+      setMessage("That folder name is already used."); return;
+    }
     const nextPaths = files.map((item) => replacePathPrefix(item.relativePath, folder, target));
     if (new Set(nextPaths.map(projectPathKey)).size !== nextPaths.length) {
       setMessage("That folder name would create duplicate paths."); return;
     }
     setFiles((current) => current.map((item) => ({ ...item, relativePath: replacePathPrefix(item.relativePath, folder, target) })));
+    setManualFolders((current) => current.map((path) => replacePathPrefix(path, folder, target)));
   };
 
   const removeFolder = (folder: string) => {
     if (!window.confirm(`Remove folder “${folder}” and all staged files inside it?`)) return;
     setFiles((current) => current.filter((item) => item.status === "done" || !item.relativePath.startsWith(`${folder}/`)));
+    setManualFolders((current) => current.filter((path) => path !== folder && !path.startsWith(`${folder}/`)));
   };
 
   const uploadOne = async (project: CreatedProject, item: StagedFile) => {
@@ -124,12 +153,22 @@ export function ProjectCreateView({ viewer }: { viewer: ProjectsViewer }) {
     }
     const pending = files.filter((item) => item.status === "staged" || item.status === "failed");
     let failures = 0;
+    for (const folderPath of manualFolders.filter((path) => !createdFolderPaths.has(projectPathKey(path))).sort((a, b) => a.split("/").length - b.split("/").length)) {
+      const parent = folderPath.includes("/") ? folderPath.slice(0, folderPath.lastIndexOf("/")) : "";
+      const name = folderPath.split("/").at(-1)!;
+      const folderResult = await createProjectFolderAction(project.id, parent, name);
+      if (folderResult.success || folderResult.code === "FOLDER_EXISTS") {
+        setCreatedFolderPaths((current) => new Set(current).add(projectPathKey(folderPath)));
+      } else failures += 1;
+    }
     for (const item of pending) if (!(await uploadOne(project, item))) failures += 1;
     setCreating(false);
-    setMessage(failures ? `${failures} file(s) failed. The project and successful files are saved; retry below.` : "Project saved with all files.");
+    setMessage(failures ? `${failures} item(s) failed. The project and successful items are saved; retry below.` : "Project saved with all files and folders.");
   };
 
-  const complete = !!created && files.every((file) => file.status === "done");
+  const complete = !!created
+    && files.every((file) => file.status === "done")
+    && manualFolders.every((path) => createdFolderPaths.has(projectPathKey(path)));
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -158,14 +197,16 @@ export function ProjectCreateView({ viewer }: { viewer: ProjectsViewer }) {
 
       <ProjectDropSurface disabled={creating || complete} onFiles={addFiles} onError={setMessage} />
 
+      {!created ? <div className="flex justify-end"><Button type="button" variant="outline" size="sm" onClick={addFolder}><FolderPlus className="mr-1.5 h-4 w-4" /> New folder</Button></div> : null}
+
       {folders.length > 0 ? (
         <div className="rounded-lg border bg-card divide-y">
           {folders.map((folder) => (
             <div key={folder} className="flex items-center gap-2 px-3 py-2 text-sm">
               <Folder className="h-4 w-4 text-amber-600" />
               <span className="min-w-0 flex-1 truncate" title={folder}>{folder}</span>
-              <Button type="button" variant="ghost" size="icon" aria-label={`Rename ${folder}`} onClick={() => renameFolder(folder)}><Pencil className="h-4 w-4" /></Button>
-              <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${folder}`} onClick={() => removeFolder(folder)}><Trash2 className="h-4 w-4" /></Button>
+              {!created ? <Button type="button" variant="ghost" size="icon" aria-label={`Rename ${folder}`} onClick={() => renameFolder(folder)}><Pencil className="h-4 w-4" /></Button> : null}
+              {!created ? <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${folder}`} onClick={() => removeFolder(folder)}><Trash2 className="h-4 w-4" /></Button> : null}
             </div>
           ))}
         </div>

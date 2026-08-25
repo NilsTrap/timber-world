@@ -101,6 +101,13 @@ export interface ProjectFileMeta {
   createdAt: string;
 }
 
+/** Logical workspace folder. It may exist without descendant files. */
+export interface ProjectFolderMeta {
+  id: string;
+  relativePath: string;
+  createdAt: string;
+}
+
 export interface ProjectFileCounts {
   total: number;
 }
@@ -112,6 +119,7 @@ export interface ProjectDetail extends ProjectListItem {
   terms?: ProjectTerms;
   lines: ProjectLine[];
   files: ProjectFileMeta[];
+  folders: ProjectFolderMeta[];
   fileCounts: ProjectFileCounts;
   notes: string | null;
 }

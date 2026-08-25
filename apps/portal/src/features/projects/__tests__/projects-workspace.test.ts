@@ -5,10 +5,12 @@ import {
   MAX_PROJECT_FILE_BYTES,
   buildProjectTree,
   isPreviewableProjectMimeType,
+  normaliseProjectMimeType,
   normaliseProjectName,
   normaliseProjectPath,
   projectPathKey,
   replacePathPrefix,
+  storedProjectMimeType,
   validateStoredProjectUploadSize,
 } from "../filePaths";
 
@@ -55,11 +57,17 @@ const tree = buildProjectTree([
 eq("reopened tree keeps top-level names", tree.map((node) => [node.kind, node.name]), [["folder", "drawings"], ["file", "readme.txt"]]);
 eq("nested folders are reconstructed", tree[0]?.children.map((node) => node.name), ["final", "source"]);
 eq("deep file path is preserved", tree[0]?.children[0]?.children[0]?.path, "drawings/final/a.pdf");
+const treeWithEmptyFolder = buildProjectTree([], [{ relativePath: "empty/nested" }]);
+eq("persisted empty folder survives without files", treeWithEmptyFolder[0]?.children[0]?.path, "empty/nested");
 
 ok("PDF preview is allowlisted", isPreviewableProjectMimeType("application/pdf"));
 ok("raster image preview is allowlisted", isPreviewableProjectMimeType("image/png"));
 ok("SVG is not previewed as a raster image", !isPreviewableProjectMimeType("image/svg+xml"));
 ok("office/archive preview is unavailable", !isPreviewableProjectMimeType("application/zip"));
+eq("MIME values are canonicalised", normaliseProjectMimeType(" Application/PDF; charset=binary "), "application/pdf");
+eq("invalid MIME values fail closed", normaliseProjectMimeType("not a mime"), null);
+eq("stored MIME comes from object metadata", storedProjectMimeType({ metadata: { mimetype: "IMAGE/PNG" } }), "image/png");
+eq("missing stored MIME fails closed", storedProjectMimeType({ metadata: {} }), null);
 
 // Source guards protect the easy-to-regress serialization/direct-ID boundaries.
 const service = readFileSync("src/features/projects/services/projectFiles.ts", "utf8");
@@ -67,6 +75,8 @@ const actions = readFileSync("src/features/projects/actions/projectFileActions.t
 const create = readFileSync("src/features/projects/actions/createProject.ts", "utf8");
 const workspace = readFileSync("src/features/projects/components/ProjectFileWorkspace.tsx", "utf8");
 const migration = readFileSync("../../supabase/migrations/20260821211500_project_file_workspace.sql", "utf8");
+const folderMigration = readFileSync("../../supabase/migrations/20260826090000_project_workspace_folders.sql", "utf8");
+const buyerAccessMigration = readFileSync("../../supabase/migrations/20260826130000_buyer_project_workspace_access.sql", "utf8");
 ok("metadata loader select excludes storage_path", /const SAFE_FILE_SELECT\s*=\s*[\s\S]*?;/.test(service) && !service.match(/const SAFE_FILE_SELECT\s*=\s*([\s\S]*?);/)?.[1]?.includes("storage_path"));
 ok("workspace reads only category=project", service.includes('.eq("category", PROJECT_CATEGORY)'));
 ok("workspace reads originals only", service.includes('.eq("file_variant", ORIGINAL_VARIANT)'));
@@ -77,10 +87,21 @@ ok("prepared upload response never exposes a storage path", /interface PreparedP
 ok("preparation persists an uploading row before signing", actions.indexOf('lifecycle_status: "uploading"') < actions.indexOf(".createSignedUploadUrl(storagePath"));
 ok("finalisation is bound to project and upload IDs", actions.includes('.eq("id", uploadId)') && actions.includes('.eq("order_id", projectId)'));
 ok("finalisation reads actual storage metadata size", actions.includes("validateStoredProjectUploadSize(object, expectedSize)"));
+ok("finalisation verifies stored MIME metadata", actions.includes("storedProjectMimeType(object)"));
+ok("signed reads require a ready file", actions.includes('found.file.lifecycle_status !== "ready"'));
 ok("invalid stored objects are removed before retry", actions.includes("if (!storedSize.ok)") && actions.includes('.remove([storagePath])'));
 ok("orders bucket rejects uploads over 100 MB", migration.includes("file_size_limit = LEAST(COALESCE(file_size_limit, 104857600), 104857600)"));
 ok("narrow workspace renders folders", workspace.includes('<MobileFolderRows nodes={tree}'));
 ok("mobile folder actions stay visible and touch-safe", workspace.includes('aria-label={`Rename folder ${node.path}`}') && workspace.includes('aria-label={`Delete folder ${node.path}`}') && workspace.includes('className="h-11 w-11"'));
+ok("empty folders have an RLS-walled persistence table", folderMigration.includes("CREATE TABLE IF NOT EXISTS public.project_folders") && folderMigration.includes("public.can_write_project_files(order_id)"));
+ok("folder moves update folder and file descendants transactionally", folderMigration.includes("move_project_workspace_folder") && folderMigration.includes("UPDATE public.project_folders") && folderMigration.includes("UPDATE public.order_files"));
+ok("folder delete metadata is transactional", folderMigration.includes("delete_project_workspace_folder") && folderMigration.includes("p_expected_file_ids"));
+ok("file deletion is durably queued before metadata removal", folderMigration.includes("project_storage_cleanup") && folderMigration.includes("delete_project_workspace_files") && folderMigration.includes("complete_project_storage_cleanup"));
+ok("abandoned signed uploads expire through a delayed cleanup queue", folderMigration.includes("cancel_project_workspace_upload") && folderMigration.includes("expire_project_workspace_uploads") && folderMigration.includes("interval '3 hours'"));
+ok("the inherited buyer role can create and upload its own project files", buyerAccessMigration.includes("WHERE key = 'client'") && buyerAccessMigration.includes("'action', 'deal', 'create'"));
+ok("shared file-folder namespace is serialized", folderMigration.includes("project_files_namespace_guard") && folderMigration.includes("pg_advisory_xact_lock"));
+ok("workspace exposes create, move and bulk delete controls", workspace.includes("createProjectFolderAction") && workspace.includes("moveProjectFolderAction") && workspace.includes("deleteProjectFilesAction"));
+ok("workspace limits parallel upload workers", workspace.includes("Math.min(3, next.length)"));
 
 console.log(`\nprojects-workspace.test.ts: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

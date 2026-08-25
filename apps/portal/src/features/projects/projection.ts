@@ -31,6 +31,7 @@ import type {
   ProjectDetail,
   ProjectFileCounts,
   ProjectFileMeta,
+  ProjectFolderMeta,
   ProjectLine,
   ProjectListItem,
   ProjectPartyRef,
@@ -237,6 +238,7 @@ export function toProjectLines(
 export interface ProjectDetailParts {
   lines: readonly DealLineLike[];
   files: readonly ProjectFileMeta[];
+  folders: readonly ProjectFolderMeta[];
   fileCounts: ProjectFileCounts;
 }
 
@@ -296,6 +298,11 @@ export function toProjectDetail(
       fileSizeBytes: f.fileSizeBytes,
       lifecycleStatus: f.lifecycleStatus,
       createdAt: f.createdAt,
+    })),
+    folders: parts.folders.map((folder) => ({
+      id: folder.id,
+      relativePath: folder.relativePath,
+      createdAt: folder.createdAt,
     })),
     fileCounts: parts.fileCounts,
     notes: walled.notes,
