@@ -191,7 +191,7 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
     const result = await toggleOrganisation(org.id, newActive);
 
     if (result.success) {
-      toast.success(newActive ? "Organisation activated" : "Organisation deactivated");
+      toast.success(newActive ? "Company activated" : "Company deactivated");
       loadOrganisations();
     } else {
       toast.error(result.error);
@@ -229,7 +229,7 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
       const result = await deleteOrganisation(deleteOrg.id);
 
       if (result.success) {
-        toast.success("Organisation deleted");
+        toast.success("Company deleted");
         loadOrganisations();
       } else {
         toast.error(result.error);
@@ -277,17 +277,17 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
         <div className="flex justify-end">
           <Button onClick={handleAdd}>
             <Plus className="h-4 w-4" />
-            Add Organisation
+            Add company
           </Button>
         </div>
       )}
 
       {organisations.length === 0 ? (
         <div className="rounded-lg border bg-card p-12 text-center">
-          <p className="text-muted-foreground">No organisations yet</p>
+          <p className="text-muted-foreground">No companies yet</p>
           <Button onClick={handleAdd} variant="outline" className="mt-4">
             <Plus className="h-4 w-4" />
-            Add First Organisation
+            Add first company
           </Button>
         </div>
       ) : (
@@ -445,7 +445,7 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate Organisation</AlertDialogTitle>
+            <AlertDialogTitle>Deactivate company</AlertDialogTitle>
             <AlertDialogDescription>
               {isCheckingShipments ? (
                 <span className="flex items-center gap-2">
@@ -501,7 +501,7 @@ export function OrganisationsTable({ hideAddButton }: { hideAddButton?: boolean 
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Organisation</AlertDialogTitle>
+            <AlertDialogTitle>Delete company</AlertDialogTitle>
             <AlertDialogDescription>
               {isCheckingDeleteShipments ? (
                 <span className="flex items-center gap-2">

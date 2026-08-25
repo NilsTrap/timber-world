@@ -20,13 +20,17 @@ const BOOK_LABELS: Record<CounterpartyBook, { title: string; record: string }> =
 export function CounterpartyManager({
   book,
   canManage = false,
+  accessMode = "self",
 }: {
   book: CounterpartyBook;
   canManage?: boolean;
+  accessMode?: "admin" | "manager" | "self";
 }) {
   const [rows, setRows] = useState<CounterpartyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const labels = BOOK_LABELS[book];
+  const companyHref = (id: string) =>
+    accessMode === "admin" ? `/admin/organisations/${id}` : `/counterparties/${book}/${id}`;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,12 +70,12 @@ export function CounterpartyManager({
             <TableBody>{rows.map((row) => (
               <TableRow key={row.id} className={row.isActive ? "group" : "group opacity-50"}>
                 <TableCell className="font-mono font-medium">{row.code}</TableCell>
-                <TableCell><Link className="font-medium hover:underline" href={`/counterparties/${book}/${row.id}`}>{row.name}</Link></TableCell>
+                <TableCell><Link className="font-medium hover:underline" href={companyHref(row.id)}>{row.name}</Link></TableCell>
                 <TableCell className="text-center">{row.userCount ?? 0}</TableCell>
                 <TableCell>{row.registrationNumber ?? "—"}</TableCell><TableCell>{row.vatNumber ?? "—"}</TableCell>
                 <TableCell>{row.country ?? "—"}</TableCell>
                 <TableCell><StatusBadge variant={row.isActive ? "success" : "draft"}>{row.isActive ? "Active" : "Inactive"}</StatusBadge></TableCell>
-                <TableCell>{book !== "traders" ? <Button asChild variant="ghost" size="icon-sm"><Link aria-label={`Open ${row.name}`} href={`/counterparties/${book}/${row.id}`}><ArrowRight className="h-4 w-4" /></Link></Button> : null}</TableCell>
+                <TableCell><Button asChild variant="ghost" size="icon-sm"><Link aria-label={`Open ${row.name}`} href={companyHref(row.id)}><ArrowRight className="h-4 w-4" /></Link></Button></TableCell>
               </TableRow>
             ))}</TableBody>
           </Table>

@@ -22,6 +22,7 @@ import {
   Building2,
   Users,
   Settings2,
+  Share2,
   Pencil,
   Check,
   X,
@@ -34,6 +35,7 @@ import { usePersistedTab } from "@/hooks/usePersistedTab";
 import type { Organisation, DeliveryAddress } from "../types";
 import { OrganisationUsersTable } from "./OrganisationUsersTable";
 import { OrganisationModulesTab } from "./OrganisationModulesTab";
+import { CompanyVisibilityTab } from "./CompanyVisibilityTab";
 import { OrgContactsSection } from "@/features/counterparties/components";
 import {
   toggleOrganisationExternal,
@@ -48,6 +50,7 @@ import {
 interface OrganisationDetailTabsProps {
   organisation: Organisation;
   defaultTab?: string;
+  canManageCompanyVisibility?: boolean;
 }
 
 /**
@@ -58,6 +61,7 @@ interface OrganisationDetailTabsProps {
 export function OrganisationDetailTabs({
   organisation,
   defaultTab,
+  canManageCompanyVisibility = false,
 }: OrganisationDetailTabsProps) {
   const [isExternal, setIsExternal] = useState(organisation.isExternal);
   const [isTogglingExternal, setIsTogglingExternal] = useState(false);
@@ -334,7 +338,7 @@ export function OrganisationDetailTabs({
   };
 
   const urlDefault =
-    defaultTab === "users" || defaultTab === "features" || defaultTab === "reference" || defaultTab === "partners"
+    defaultTab === "users" || defaultTab === "features" || defaultTab === "access"
       ? defaultTab
       : undefined;
 
@@ -359,6 +363,12 @@ export function OrganisationDetailTabs({
           <Settings2 className="h-4 w-4" />
           Modules
         </TabsTrigger>
+        {canManageCompanyVisibility && organisation.isTrader ? (
+          <TabsTrigger value="access">
+            <Share2 className="h-4 w-4" />
+            Company access
+          </TabsTrigger>
+        ) : null}
       </TabsList>
 
       <TabsContent value="details">
@@ -366,7 +376,7 @@ export function OrganisationDetailTabs({
           {/* Existing: Name, Code, Status, Type */}
           <Card>
             <CardHeader>
-              <CardTitle>Organisation Details</CardTitle>
+              <CardTitle>Company details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -891,6 +901,15 @@ export function OrganisationDetailTabs({
           </CardContent>
         </Card>
       </TabsContent>
+
+      {canManageCompanyVisibility && organisation.isTrader ? (
+        <TabsContent value="access">
+          <Card>
+            <CardHeader><CardTitle>Company access</CardTitle></CardHeader>
+            <CardContent><CompanyVisibilityTab traderId={organisation.id} /></CardContent>
+          </Card>
+        </TabsContent>
+      ) : null}
 
     </Tabs>
   );

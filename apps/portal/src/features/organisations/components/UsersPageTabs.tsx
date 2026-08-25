@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Tabs,
   TabsContent,
@@ -19,6 +19,7 @@ interface UsersPageTabsProps {
   /** K2 · the person-centric People directory is cross-org, so it is admin-only.
    *  When false the People tab is hidden (a scoped viewer only sees Organisations). */
   canManagePeople: boolean;
+  defaultTab?: "companies" | "people";
 }
 
 /**
@@ -27,28 +28,33 @@ interface UsersPageTabsProps {
  * Client component that renders the Organisations/People tabs
  * with the Add Organisation button next to the tab list.
  */
-export function UsersPageTabs({ canManagePeople }: UsersPageTabsProps) {
-  const [activeTab, setActiveTab] = useState("organisations");
+export function UsersPageTabs({ canManagePeople, defaultTab = "companies" }: UsersPageTabsProps) {
+  const [activeTab, setActiveTab] = useState(defaultTab);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  useEffect(() => setActiveTab(defaultTab), [defaultTab]);
+
   return (
     <>
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value === "people" ? "people" : "companies")}
+      >
         <div className="flex items-center justify-between">
           <TabsList>
-            <TabsTrigger value="organisations">Organisations</TabsTrigger>
+            <TabsTrigger value="companies">All companies</TabsTrigger>
             {canManagePeople && <TabsTrigger value="people">People</TabsTrigger>}
           </TabsList>
-          {activeTab === "organisations" && (
+          {activeTab === "companies" && (
             <Button onClick={() => setIsFormOpen(true)}>
               <Plus className="h-4 w-4" />
-              Add Organisation
+              Add company
             </Button>
           )}
         </div>
 
-        <TabsContent value="organisations" className="mt-4">
+        <TabsContent value="companies" className="mt-4">
           <Card>
             <CardContent className="pt-6">
               <OrganisationsTable hideAddButton key={refreshKey} />

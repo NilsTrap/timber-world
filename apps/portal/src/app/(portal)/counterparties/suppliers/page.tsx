@@ -32,7 +32,7 @@ export default async function CounterpartySuppliersPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <CounterpartyManager book="suppliers" canManage={context.data.canManage} />
+          <CounterpartyManager book="suppliers" canManage={context.data.canManage} accessMode={context.data.accessMode} />
         </CardContent>
       </Card>
     </div>

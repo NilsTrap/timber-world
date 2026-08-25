@@ -4,7 +4,7 @@ import { getSession, isAdmin, isPlatformAdmin, getUserEnabledModules } from "@/l
 import { UsersPageTabs } from "@/features/organisations/components/UsersPageTabs";
 
 export const metadata: Metadata = {
-  title: "Orgs & People",
+  title: "Companies",
 };
 
 /**
@@ -12,7 +12,11 @@ export const metadata: Metadata = {
  *
  * Allows admins to manage organisations and people (portal logins).
  */
-export default async function UsersPage() {
+export default async function UsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const session = await getSession();
 
   if (!session) {
@@ -30,15 +34,17 @@ export default async function UsersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Orgs &amp; People</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Companies</h1>
         <p className="text-muted-foreground">
-          Manage organisations and people
+          Manage company records, roles, people and access
         </p>
       </div>
 
-      {/* People directory is cross-org → admin-only. Org-scoped viewers with the
-          organizations.view module still see the Organisations tab only. */}
-      <UsersPageTabs canManagePeople={isPlatformAdmin(session)} />
+      {/* People directory is cross-company and therefore platform-admin only. */}
+      <UsersPageTabs
+        canManagePeople={isPlatformAdmin(session)}
+        defaultTab={(await searchParams).tab === "people" ? "people" : "companies"}
+      />
     </div>
   );
 }

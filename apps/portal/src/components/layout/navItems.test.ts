@@ -39,14 +39,15 @@ const LEGACY_HREFS = LEGACY_ADMIN_CHILDREN.map((c) => c.href);
 const EXPECTED_ADMIN = new Set<string>([
   "/dashboard", "/orders", "/counterparties", "/admin/crm", "/admin/shipments",
   "/admin/settings", "/admin/organisations",
+  "/admin/organisations?tab=people",
   "/counterparties/clients", "/counterparties/suppliers",
   "/admin/settings/fields", "/admin/settings/gates", "/admin/settings/groups",
   "/admin/settings/document-templates", "/admin/settings/packaging", "/admin/settings/pricing-units",
   "/admin/settings/currencies",
   // Added after this list was first written: L2 Traders book (admin-only),
-  // Q5.2 Audit log, and the two org-scoped legacy managers demoted into Legacy.
+  // Q5.2 Audit log and the remaining reference-data manager under Legacy.
   "/counterparties/traders", "/admin/settings/audit",
-  "/admin/reference", "/admin/trading-partners",
+  "/admin/reference",
   "/admin/agents", "/admin/agent-orders", "/admin/agent-manual",
   // Catalogue is now a section: parent link + Products / Categories children
   "/admin/catalog", "/admin/catalog/products", "/admin/catalog/categories",
@@ -62,8 +63,7 @@ ok("admin nav reaches EXACTLY the expected destination set (nothing dropped/adde
    { missing: [...EXPECTED_ADMIN].filter((h) => !adminSet.has(h)), extra: [...adminSet].filter((h) => !EXPECTED_ADMIN.has(h)) });
 
 // ── 2. The Legacy group holds exactly the legacy sections (CRM + Shipments were
-//       demoted here from the top level, later Reference Data + Trading
-//       Partners), and it is collapsible ──
+//       demoted here from the top level, later Reference Data), and it is collapsible ──
 const legacyItem = ADMIN_NAV_ITEMS.find((i) => i.label === "Legacy");
 ok("a 'Legacy' collapsible group exists", !!legacyItem && legacyItem.collapsible === true);
 ok("Legacy group holds exactly the legacy sections",
@@ -123,6 +123,8 @@ ok("route under Legacy child → 'legacy'",
    activeSectionKey(ADMIN_NAV_ITEMS, "/production") === "legacy");
 ok("counterparties child → '/counterparties'",
    activeSectionKey(ADMIN_NAV_ITEMS, "/counterparties/suppliers") === "/counterparties");
+ok("all-companies child → '/counterparties'",
+   activeSectionKey(ADMIN_NAV_ITEMS, "/admin/organisations") === "/counterparties");
 ok("a leaf route (Dashboard) opens NO section", activeSectionKey(ADMIN_NAV_ITEMS, "/dashboard") === null);
 ok("Catalogue opens its OWN section on catalog routes",
    activeSectionKey(ADMIN_NAV_ITEMS, "/admin/catalog") === "/admin/catalog" &&
@@ -143,10 +145,14 @@ const orgCrm = getOrgUserNavItems().find((i) => i.href === "/counterparties");
 ok("org-user counterparties hub is also labelled 'Companies'", orgCrm?.label === "Companies");
 ok("org-user nav has no top-level CRM/Shipments",
    !getOrgUserNavItems().some((i) => i.href === "/admin/crm" || i.href === "/shipments"));
-for (const [href, group] of [["/dashboard", "dashboard"], ["/orders", "orders"], ["/counterparties", "deals"], ["/admin/organisations", "orgs"]] as const) {
+for (const [href, group] of [["/dashboard", "dashboard"], ["/orders", "orders"], ["/counterparties", "deals"]] as const) {
   const it = ADMIN_NAV_ITEMS.find((i) => i.href === href);
   ok(`${href} carries a colour group (${group})`, it?.group === group, it?.group);
 }
+ok("all companies + people are consolidated under Companies",
+   crmItem?.children?.some((child) => child.href === "/admin/organisations") === true &&
+   crmItem?.children?.some((child) => child.href === "/admin/organisations?tab=people") === true &&
+   !ADMIN_NAV_ITEMS.some((item) => item.label === "Orgs & People"));
 
 // ── 9. Timber Projects (staging-gated) is INJECTED, never part of the static nav ──
 // The exact-set assertion in §1 is the reason: /projects must not appear in

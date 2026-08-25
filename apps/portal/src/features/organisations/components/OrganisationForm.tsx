@@ -147,7 +147,7 @@ export function OrganisationForm({ organisation, open, onOpenChange, onSuccess }
         ? await updateOrganisation(organisation.id, { name: data.name, ...card })
         : await createOrganisation({ code: data.code, name: data.name, ...card });
       if (result.success) {
-        toast.success(isEditing ? "Organisation updated" : "Organisation created");
+        toast.success(isEditing ? "Company updated" : "Company created");
         reset();
         onOpenChange(false);
         onSuccess();
@@ -170,7 +170,7 @@ export function OrganisationForm({ organisation, open, onOpenChange, onSuccess }
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Organisation" : "Add Organisation"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit company" : "Add company"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -195,7 +195,7 @@ export function OrganisationForm({ organisation, open, onOpenChange, onSuccess }
               <Label htmlFor="name">
                 Name <span className="text-destructive">*</span>
               </Label>
-              <Input id="name" placeholder="Organisation name" {...register("name")} aria-invalid={!!errors.name} />
+              <Input id="name" placeholder="Company name" {...register("name")} aria-invalid={!!errors.name} />
               {errors.name && <p className="text-sm text-destructive" role="alert">{errors.name.message}</p>}
             </div>
           </div>

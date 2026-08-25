@@ -129,3 +129,17 @@ export interface TradingPartner {
   partnerName: string;
   createdAt: string;
 }
+
+export type CompanyVisibilityGroup = "customers" | "traders" | "suppliers";
+
+export interface CompanyVisibilityOption {
+  id: string;
+  code: string;
+  name: string;
+  selected: boolean;
+}
+
+export interface CompanyVisibilityData {
+  traderId: string;
+  groups: Record<CompanyVisibilityGroup, CompanyVisibilityOption[]>;
+}

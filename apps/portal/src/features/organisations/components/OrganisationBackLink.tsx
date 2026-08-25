@@ -14,7 +14,7 @@ export function OrganisationBackLink() {
     <Button variant="ghost" size="icon" asChild>
       <Link href="/admin/organisations">
         <ArrowLeft className="h-4 w-4" />
-        <span className="sr-only">Back to Organisations</span>
+        <span className="sr-only">Back to companies</span>
       </Link>
     </Button>
   );

@@ -75,9 +75,8 @@ export const LEGACY_ADMIN_CHILDREN: ModuleNavChild[] = [
   { href: "/admin/competitor-pricing", label: "Competitor Pricing", iconName: "TrendingUp" },
   { href: "/admin/quotes", label: "Quote Requests", iconName: "FileText" },
   { href: "/admin/uk-staircase-pricing", label: "UK Staircase Pricing", iconName: "PoundSterling" },
-  // Moved out of the org detail view (Orgs & People) — org-scoped legacy managers.
+  // Per-company access moved into the canonical Companies detail page.
   { href: "/admin/reference", label: "Reference Data", iconName: "FileText" },
-  { href: "/admin/trading-partners", label: "Trading Partners", iconName: "Handshake" },
 ];
 
 /** Children of the "Legacy" collapsible section — ORG-USER hrefs + per-child module gates. */
@@ -104,12 +103,14 @@ export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
     { href: "/admin/catalog/products", label: "Products" },
     { href: "/admin/catalog/categories", label: "Categories" },
   ]},
-  // Companies = organisation-backed customer/supplier profiles.
+  // One Companies module over the single organisations entity. Platform-only
+  // administration (all companies + people) sits beside the walled role books.
   { href: "/counterparties", label: "Companies", iconName: "Handshake", group: "deals", children: [
-    { href: "/counterparties/clients", label: "Clients" },
+    { href: "/admin/organisations", label: "All companies" },
+    { href: "/counterparties/clients", label: "Customers" },
     { href: "/counterparties/suppliers", label: "Suppliers" },
-    // L2 · Traders book is ADMIN-ONLY — only listed in the admin nav.
     { href: "/counterparties/traders", label: "Traders" },
+    { href: "/admin/organisations?tab=people", label: "People" },
   ]},
   { href: "agent-app", label: "UK Agent app", iconName: "Store", group: "agent", collapsible: true,
     children: AGENT_APP_CHILDREN },
@@ -124,7 +125,6 @@ export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
     // Q5.2 · admin-only platform action audit log.
     { href: "/admin/settings/audit", label: "Audit" },
   ]},
-  { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2", group: "orgs" },
   { href: "legacy", label: "Legacy", iconName: "History", collapsible: true, children: LEGACY_ADMIN_CHILDREN },
 ];
 
@@ -154,7 +154,6 @@ export function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavI
       { href: "/admin/settings/pricing-units", label: "Pricing Units" },
       { href: "/admin/settings/currencies", label: "Currencies" },
     ]},
-    { href: "/admin/organisations", label: "Orgs & People", iconName: "Users2", requiresModule: "organizations.view", group: "orgs" },
     { href: "legacy", label: "Legacy", iconName: "History", collapsible: true,
       requiresAnyModule: LEGACY_MODULES, children: LEGACY_ORG_CHILDREN },
   ];

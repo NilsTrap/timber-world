@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { getSession, isAdmin, getUserEnabledModules } from "@/lib/auth";
+import { getSession, isAdmin, isPlatformAdmin, getUserEnabledModules } from "@/lib/auth";
 import { getOrganisationById } from "@/features/organisations/actions/getOrganisationById";
 import { OrganisationDetailTabs } from "@/features/organisations/components/OrganisationDetailTabs";
 import { OrganisationBackLink } from "@/features/organisations/components/OrganisationBackLink";
@@ -17,11 +17,11 @@ export async function generateMetadata({
   const result = await getOrganisationById(id);
 
   if (!result.success) {
-    return { title: "Organisation Not Found" };
+    return { title: "Company not found" };
   }
 
   return {
-    title: `${result.data.name} - Organisation`,
+    title: `${result.data.name} - Company`,
   };
 }
 
@@ -74,7 +74,11 @@ export default async function OrganisationDetailPage({
         </div>
       </div>
 
-      <OrganisationDetailTabs organisation={organisation} defaultTab={tab} />
+      <OrganisationDetailTabs
+        organisation={organisation}
+        defaultTab={tab}
+        canManageCompanyVisibility={isPlatformAdmin(session)}
+      />
     </div>
   );
 }

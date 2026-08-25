@@ -5,3 +5,4 @@ export { OrganisationUsersTable } from "./OrganisationUsersTable";
 export { AddUserDialog } from "./AddUserDialog";
 export { EditUserDialog } from "./EditUserDialog";
 export { PeopleTable } from "./PeopleTable";
+export { CompanyVisibilityTab } from "./CompanyVisibilityTab";

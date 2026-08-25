@@ -7,6 +7,7 @@ export { toggleOrganisationExternal } from "./toggleOrganisationExternal";
 export { setOrganisationRole } from "./setOrganisationRole";
 export { deleteOrganisation } from "./deleteOrganisation";
 export { getOrgShipmentCount } from "./getOrgShipmentCount";
+export { getCompanyVisibility, updateCompanyVisibility } from "./companyVisibility";
 
 // User management actions (Story 7.2)
 export { getOrganisationUsers } from "./getOrganisationUsers";
