@@ -381,6 +381,10 @@ async function seedE4Chain(
   if (!house || !client || !supplier) return;
 
   // Book flags + partner links (the address-book wall reads these).
+  await supabase
+    .from("organisations")
+    .update({ is_trader: true, is_customer: false })
+    .eq("id", house);
   await supabase.from("organisations").update({ is_customer: true }).eq("id", client);
   await supabase
     .from("organisations")

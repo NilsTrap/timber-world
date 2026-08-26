@@ -30,7 +30,7 @@ async function requireOwner(projectId: string) {
   const project = await getOrderDeal(a.db, a.actor, projectId);
   if (!project.success || project.data.lifecycleStage !== "draft") return null;
   if (!a.isPlatformAdmin && project.data.seller.id !== a.orgId) return null;
-  if (!a.isPlatformAdmin && (!a.profile.actions.has("deal:create") || !a.access.domainVisible("supplier_identity"))) return null;
+  if (!a.isPlatformAdmin && !a.profile.actions.has("deal:create")) return null;
   return { a, project: project.data };
 }
 
@@ -42,8 +42,9 @@ export async function getProjectRfqState(projectId: string): Promise<ActionResul
   if (error) return { success:false,error:"Could not load RFQ",code:"FETCH_FAILED" };
   if (!rfq) return { success:true,data:null };
   const row = rfq as Record<string,unknown>;
-  const canManage = a.isPlatformAdmin || row.organization_id === a.orgId;
-  const { data: candidates, error: candidateError } = await a.db.from("project_rfq_candidates").select("id, organization_id, status, quote_total_cents, quote_notes, submitted_at, organisations!inner(name)").eq("rfq_id",row.id).order("created_at");
+  const canManage = a.isPlatformAdmin || (row.organization_id === a.orgId && a.profile.actions.has("deal:create"));
+  const candidateDb = canManage ? createAdminClient() : a.db;
+  const { data: candidates, error: candidateError } = await candidateDb.from("project_rfq_candidates").select("id, organization_id, status, quote_total_cents, quote_notes, submitted_at, organisations!inner(name)").eq("rfq_id",row.id).order("created_at");
   if (candidateError) return { success:false,error:"Could not load RFQ candidates",code:"FETCH_FAILED" };
   const mapped = ((candidates??[]) as Array<Record<string,unknown>>).map((candidate)=>({ id:candidate.id as string, organisationId:candidate.organization_id as string, organisationName:(candidate.organisations as Record<string,unknown>).name as string, status:candidate.status as ProjectRfqCandidate["status"], quoteTotalCents:candidate.quote_total_cents==null?null:Number(candidate.quote_total_cents), quoteNotes:candidate.quote_notes as string|null, submittedAt:candidate.submitted_at as string|null }));
   return { success:true,data:{ id:row.id as string, deadline:row.deadline as string, status:row.status as ProjectRfqState["status"], ownerOrganisationId:row.organization_id as string, candidates:mapped, canManage, ownCandidateId:mapped.find((candidate)=>candidate.organisationId===a.orgId)?.id??null } };

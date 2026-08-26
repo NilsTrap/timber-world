@@ -19,6 +19,8 @@ assert.doesNotMatch(migration,/CREATE POLICY orders_rfq_candidate_select/);
 assert.doesNotMatch(migration,/CREATE POLICY order_lines_rfq_candidate_select/);
 assert.match(migration,/r\.deadline>now\(\)/);
 assert.match(migration,/UPDATE public\.orders SET upstream_deal_id=v_leg WHERE id=o\.id/);
+assert.doesNotMatch(migration,/INSERT INTO public\.orders\(id,code,name,organisation_id,/);
+assert.match(migration,/INSERT INTO public\.orders\([^)]*customer_organisation_id,seller_organisation_id,buyer_organisation_id/);
 assert.match(migration,/current_user_can_create_deal_in_org/);
 assert.doesNotMatch(editor,/Unit price|Margin|Cost build-up|unitPrice/);
 console.log("projectRfq.test.ts: passed");

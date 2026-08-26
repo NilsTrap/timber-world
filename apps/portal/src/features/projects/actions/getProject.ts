@@ -8,6 +8,7 @@
  * cases — a direct URL must not be an existence oracle.
  */
 import { getOrderDeal, type OrderDealView } from "../../orders/services/orderDeals";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { projectDealView } from "../../orders/services/dealFields";
 import type { DbClient } from "../../orders/services/dealModel";
 import { isValidUUID } from "../../orders/types";
@@ -115,7 +116,9 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   const ownsCenter = a.isPlatformAdmin || (!!a.orgId && centerRaw.id === a.orgId);
   const canManageChain = adminPartyRootAvailable && ownsCenter && viewer.canCreateProject && (a.isPlatformAdmin || viewer.createRoles.includes("trader"));
   const canSeeCustomers = a.isPlatformAdmin || a.access.domainVisible("customer_identity");
-  const canSeeSuppliers = a.isPlatformAdmin || a.access.domainVisible("supplier_identity");
+  const canSeeSuppliers = a.isPlatformAdmin
+    || a.access.domainVisible("supplier_identity")
+    || (viewer.canCreateProject && viewer.createRoles.includes("trader"));
 
   let seller: (ProjectPartyRef & { projectId?: string }) | null = project.direction === "buy"
     ? partyRef(raw.seller, personasByOrgId)
@@ -125,12 +128,18 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   const spineId = chainOrigin.spineId;
   const chainIsSellView = a.isPlatformAdmin ? adminPartyRootAvailable && chainOrigin.dealKind !== "purchase_only" : project.direction === "sell";
   if (chainIsSellView && spineId && centerRaw.id && canSeeSuppliers) {
-    const chain = await loadDownstreamChain(a.db, spineId, chainOrigin.id, centerRaw.id, a.isPlatformAdmin);
+    // The query remains constrained to this spine and, for ordinary traders,
+    // to the represented company's adjacent buying leg.
+    const chainDb = createAdminClient();
+    const chain = await loadDownstreamChain(chainDb, spineId, chainOrigin.id, centerRaw.id, a.isPlatformAdmin);
     if (chain.length > 0) {
       const orgIds = chain.map((leg) => leg.sellerOrganisationId);
+      // The application permission above is the identity wall. Some legacy
+      // organisation RLS profiles are narrower than the trader capability, so
+      // load only the already-authorised chain identities with the admin client.
       const [{ data: orgRows }, chainPersonas] = await Promise.all([
-        a.db.from("organisations").select("id, code, name, is_trader, is_supplier, is_producer").in("id", orgIds),
-        loadOrgPersonas(a.db, orgIds),
+        chainDb.from("organisations").select("id, code, name, is_trader, is_supplier, is_producer").in("id", orgIds),
+        loadOrgPersonas(chainDb, orgIds),
       ]);
       const orgById = new Map(((orgRows ?? []) as ChainOrgRow[]).map((row) => [row.id, row]));
       const projected = chain.flatMap((leg): ProjectChainParty[] => {
