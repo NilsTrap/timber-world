@@ -323,12 +323,17 @@ export function ProjectFileWorkspace({
 
   const cleanSelected = async () => {
     setCleanupBusy(true);
-    const result = await cleanProjectFilesAction([...selectedFileIds]);
-    setCleanupBusy(false);
-    if (!result.success) return setMessage(result.error);
-    const updates = new Map(result.data.map((item) => [item.fileId, item]));
-    setFiles((current) => current.map((file) => { const item = updates.get(file.id); return item ? { ...file, cleanFileId: item.cleanFileId, cleanupStatus: item.cleanupStatus, cleanupFindingsCount: item.findingsCount, shared: false } : file; }));
-    setMessage(`${result.data.length} cleaned file(s) ready for review.`);
+    try {
+      const result = await cleanProjectFilesAction([...selectedFileIds]);
+      if (!result.success) return setMessage(result.error);
+      const updates = new Map(result.data.map((item) => [item.fileId, item]));
+      setFiles((current) => current.map((file) => { const item = updates.get(file.id); return item ? { ...file, cleanFileId: item.cleanFileId, cleanupStatus: item.cleanupStatus, cleanupFindingsCount: item.findingsCount, shared: false } : file; }));
+      setMessage(`${result.data.length} cleaned file(s) ready for review.`);
+    } catch {
+      setMessage("Cleanup failed. Please try again.");
+    } finally {
+      setCleanupBusy(false);
+    }
   };
 
   const openCleanPreview = async (file: ProjectFileMeta) => {

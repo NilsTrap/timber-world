@@ -1,5 +1,5 @@
-import DOMPurify from "isomorphic-dompurify";
 import { PDFDocument, rgb } from "pdf-lib";
+import { parse, serialize, type DefaultTreeAdapterTypes } from "parse5";
 
 export interface CleanupFinding { type: "matched_term" | "metadata"; label: string }
 export interface TextCleanupResult { output: string; findings: CleanupFinding[] }
@@ -23,12 +23,44 @@ function redact(input: string, terms: readonly string[]): TextCleanupResult {
 }
 
 export function cleanHtmlText(input: string, terms: readonly string[]): TextCleanupResult {
-  const safe = DOMPurify.sanitize(input, {
-    WHOLE_DOCUMENT: true,
-    FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "meta"],
-    FORBID_ATTR: ["srcdoc"],
-  });
+  const safe = sanitizeHtml(input);
   return redact(safe, terms);
+}
+
+function sanitizeHtml(input: string): string {
+  // parse5 is browser-independent and is bundled cleanly by the Vercel server
+  // runtime. Parsing first also normalises malformed markup and HTML entities.
+  const document = parse(input);
+  sanitizeChildren(document);
+  return serialize(document);
+}
+
+const DROP_HTML_TAGS = new Set(["base", "embed", "iframe", "link", "math", "meta", "object", "script", "style", "svg"]);
+const UNWRAP_HTML_TAGS = new Set(["form"]);
+const URL_ATTRIBUTES = new Set(["action", "formaction", "href", "src", "xlink:href"]);
+
+function sanitizeChildren(parent: DefaultTreeAdapterTypes.ParentNode): void {
+  const children: DefaultTreeAdapterTypes.ChildNode[] = [];
+  for (const child of parent.childNodes) {
+    if (!("tagName" in child)) { children.push(child); continue; }
+    const tagName = child.tagName.toLocaleLowerCase();
+    if (DROP_HTML_TAGS.has(tagName)) continue;
+    sanitizeChildren(child);
+    if (UNWRAP_HTML_TAGS.has(tagName)) { children.push(...child.childNodes); continue; }
+    child.attrs = child.attrs.filter((attribute) => {
+      const name = attribute.name.toLocaleLowerCase();
+      if (name === "srcdoc" || name.startsWith("on")) return false;
+      return !URL_ATTRIBUTES.has(name) || !isDangerousHtmlUrl(attribute.value);
+    });
+    children.push(child);
+  }
+  parent.childNodes = children;
+  for (const child of children) child.parentNode = parent;
+}
+
+function isDangerousHtmlUrl(value: string): boolean {
+  const protocol = value.replace(/[\u0000-\u0020\u007f]+/gu, "").toLocaleLowerCase();
+  return protocol.startsWith("javascript:") || protocol.startsWith("vbscript:") || protocol.startsWith("data:text/html");
 }
 
 export function cleanDxfText(input: string, terms: readonly string[]): TextCleanupResult {
