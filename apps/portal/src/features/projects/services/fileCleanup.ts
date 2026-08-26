@@ -33,7 +33,7 @@ function redact(input: string, terms: readonly string[]): TextCleanupResult {
     const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const pattern = new RegExp(escaped, "giu");
     if (!pattern.test(output)) continue;
-    output = output.replace(pattern, "[REMOVED]");
+    output = output.replace(pattern, "Nilitto");
     findings.push({ type: "matched_term", label: term });
   }
   return { output, findings };
@@ -63,8 +63,10 @@ function sanitizeChildren(parent: DefaultTreeAdapterTypes.ParentNode, terms: rea
     if (!("tagName" in child)) {
       if ("value" in child && !parentIsStyle) {
         const cleaned = redact(child.value, terms);
-        child.value = cleaned.output;
+        const inferred = redactLikelyPersonNames(cleaned.output);
+        child.value = inferred.output;
         findings.push(...cleaned.findings);
+        findings.push(...inferred.findings);
       }
       children.push(child);
       continue;
@@ -93,6 +95,15 @@ function sanitizeChildren(parent: DefaultTreeAdapterTypes.ParentNode, terms: rea
   }
   parent.childNodes = children;
   for (const child of children) child.parentNode = parent;
+}
+
+function redactLikelyPersonNames(value: string): TextCleanupResult {
+  const findings: CleanupFinding[] = [];
+  const output = value.replace(/((?:[·|]|\b(?:prepared|created|author|contact|customer|client|owner|by)\s*:)\s*)(\p{Lu}[\p{Ll}'’-]+\s+\p{Lu}[\p{Ll}'’-]+)/giu, (_match, prefix: string, name: string) => {
+    findings.push({ type: "matched_term", label: name.toLocaleLowerCase() });
+    return `${prefix}Nilitto`;
+  });
+  return { output, findings };
 }
 
 function sanitizeCss(value: string, terms: readonly string[], findings: CleanupFinding[]): string {

@@ -58,7 +58,7 @@ context:
 
 ## Design Notes
 
-Neutral names use a purpose label plus a short random suffix, such as `Cleaned report a1b2c3d4.html`, avoiding collisions without preserving identifying source tokens.
+Neutral names use a purpose label plus a short random suffix, such as `Cleaned report a1b2c3d4.html`, avoiding collisions without preserving identifying source tokens. Visible identifiers are replaced with `Nilitto`.
 
 ## Verification
 

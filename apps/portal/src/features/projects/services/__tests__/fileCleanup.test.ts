@@ -29,13 +29,17 @@ const embeddedImage = cleanHtmlText('<img alt="KOI overview" src="data:image/png
 assert(embeddedImage.output.includes("data:image/png;base64,AAAKOIAAA"));
 assert(!embeddedImage.output.includes(">KOI<"));
 
+const inferredAuthor = cleanHtmlText("<p>12 August 2026 · Parth Patel</p><p>Created: Jane Doe</p>", []);
+assert(!inferredAuthor.output.includes("Parth Patel"));
+assert(!inferredAuthor.output.includes("Jane Doe"));
+
 const cleanName = buildNeutralCleanFileName("html", "a1b2c3d4");
 assert.equal(cleanName, "Cleaned report a1b2c3d4.html");
 assert(!cleanName.includes("Jane Masen"));
 assert.deepEqual(inferSensitiveFileNameTerms("S04739 - Jane Masen - Metal_ v10_Report.html"), ["Jane Masen"]);
 
 const dxf = cleanDxfText("0\nSECTION\n2\nENTITIES\n0\nTEXT\n1\nBuyer Ltd\n0\nMTEXT\n1\nProject Oak\n0\nENDSEC\n0\nEOF", terms);
-assert(dxf.output.includes("[REMOVED]"));
+assert(dxf.output.includes("Nilitto"));
 assert(!dxf.output.toLowerCase().includes("buyer ltd"));
 assert.equal(dxf.findings.length, 2);
 
