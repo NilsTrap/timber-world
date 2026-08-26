@@ -144,7 +144,7 @@ ok("abandoned signed uploads expire through a delayed cleanup queue", folderMigr
 ok("the inherited buyer role can create and upload its own project files", buyerAccessMigration.includes("WHERE key = 'client'") && buyerAccessMigration.includes("'action', 'deal', 'create'"));
 ok("shared file-folder namespace is serialized", folderMigration.includes("project_files_namespace_guard") && folderMigration.includes("pg_advisory_xact_lock"));
 ok("workspace exposes create, move and bulk delete controls", workspace.includes("createProjectFolderAction") && workspace.includes("moveProjectFolderAction") && workspace.includes("deleteProjectFilesAction"));
-ok("workspace exposes clean preview and adjacent sharing controls", workspace.includes("Clean selected") && workspace.includes("Share with next party") && workspace.includes("Approve cleaned file") && workspace.includes("Not shared"));
+ok("workspace exposes clean preview and checkbox-only sharing controls", workspace.includes("Clean selected") && workspace.includes("Share with next party") && workspace.includes("Approve cleaned file") && workspace.includes("Shared status for") && !workspace.includes(">Not shared<"));
 ok("clean derivatives are linked and downstream reads require approval", cleanupMigration.includes("source_file_id") && cleanupMigration.includes("shared_to_order_id") && cleanupMigration.includes("cleanup_status='approved'"));
 ok("cleanup actions derive the adjacent leg server-side", cleanupActions.includes('.eq("buyer_organisation_id", deal.seller_organisation_id)') && !cleanupActions.includes("destinationOrderId"));
 ok("workspace limits parallel upload workers", workspace.includes("Math.min(3, next.length)"));
