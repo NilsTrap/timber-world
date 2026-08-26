@@ -52,7 +52,8 @@ function sanitizeHtml(input: string, terms: readonly string[]): TextCleanupResul
   return { output: serialize(document), findings: dedupeFindings(findings) };
 }
 
-const DROP_HTML_TAGS = new Set(["base", "embed", "iframe", "link", "math", "meta", "object", "script", "svg"]);
+const DROP_HTML_TAGS = new Set(["base", "embed", "iframe", "link", "math", "meta", "object", "script"]);
+const DROP_ACTIVE_SVG_TAGS = new Set(["animate", "animatemotion", "animatetransform", "discard", "foreignobject", "image", "mpath", "set", "use"]);
 const UNWRAP_HTML_TAGS = new Set(["form"]);
 const URL_ATTRIBUTES = new Set(["action", "background", "formaction", "href", "poster", "src", "xlink:href"]);
 
@@ -72,7 +73,7 @@ function sanitizeChildren(parent: DefaultTreeAdapterTypes.ParentNode, terms: rea
       continue;
     }
     const tagName = child.tagName.toLocaleLowerCase();
-    if (DROP_HTML_TAGS.has(tagName)) continue;
+    if (DROP_HTML_TAGS.has(tagName) || DROP_ACTIVE_SVG_TAGS.has(tagName)) continue;
     sanitizeChildren(child, terms, findings);
     if (tagName === "style") {
       for (const node of child.childNodes) {
@@ -87,7 +88,8 @@ function sanitizeChildren(parent: DefaultTreeAdapterTypes.ParentNode, terms: rea
       else if (!(URL_ATTRIBUTES.has(name) && attribute.value.trim().toLocaleLowerCase().startsWith("data:"))) {
         const cleaned = redact(attribute.value, terms);
         findings.push(...cleaned.findings);
-        attribute.value = redactIdentifierVariants(name === "class" || name === "id" ? decodeCssEscapes(cleaned.output) : cleaned.output, terms, findings);
+        const redacted = redactIdentifierVariants(name === "class" || name === "id" ? decodeCssEscapes(cleaned.output) : cleaned.output, terms, findings);
+        attribute.value = /url\s*\(/iu.test(decodeCssEscapes(redacted)) ? sanitizeCss(redacted, terms, findings) : redacted;
       }
       return !URL_ATTRIBUTES.has(name) || isSafeEmbeddedHtmlUrl(attribute.value);
     });
@@ -112,7 +114,7 @@ function sanitizeCss(value: string, terms: readonly string[], findings: CleanupF
   const withoutImageSets = withoutImports.replace(/(?:-webkit-)?image-set\([\s\S]*?\)/giu, "none");
   const withoutSrcFunctions = withoutImageSets.replace(/src\([\s\S]*?\)/giu, "none");
   const withoutRemoteUrls = withoutSrcFunctions.replace(/url\(\s*(["']?)([\s\S]*?)\1\s*\)/giu, (match, _quote: string, url: string) =>
-    /^data:(?:image|font)\//iu.test(url.trim()) ? match : "none");
+    url.trim().startsWith("#") || /^data:(?:image|font)\//iu.test(url.trim()) ? match : "none");
   return redactIdentifierVariants(withoutRemoteUrls, terms, findings).replaceAll("<", "\\3c ").replaceAll(">", "\\3e ");
 }
 

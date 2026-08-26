@@ -328,6 +328,7 @@ export function ProjectFileWorkspace({
       if (!result.success) return setMessage(result.error);
       const updates = new Map(result.data.map((item) => [item.fileId, item]));
       setFiles((current) => current.map((file) => { const item = updates.get(file.id); return item ? { ...file, cleanFileId: item.cleanFileId, cleanupStatus: item.cleanupStatus, cleanupFindingsCount: item.findingsCount, shared: false } : file; }));
+      setSelectedFileIds((current) => new Set([...current].filter((id) => !updates.has(id))));
       setMessage(`${result.data.length} cleaned file(s) ready for review.`);
     } catch {
       setMessage("Cleanup failed. Please try again.");

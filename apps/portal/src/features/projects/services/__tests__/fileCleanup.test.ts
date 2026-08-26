@@ -14,7 +14,8 @@ assert(!html.output.includes("<form"));
 assert(!html.output.includes("onload="));
 assert(!html.output.includes("javascript:"));
 assert(!html.output.includes("<base"));
-assert(!html.output.includes("<svg"));
+assert(html.output.includes("<svg"));
+assert(!html.output.includes("xlink:href"));
 assert(html.output.includes("<style>"));
 assert(html.output.includes("display:grid"));
 assert(html.output.includes("data:image/png"));
@@ -32,6 +33,13 @@ assert(!embeddedImage.output.includes(">KOI<"));
 const inferredAuthor = cleanHtmlText("<p>12 August 2026 · Parth Patel</p><p>Created: Jane Doe</p>", []);
 assert(!inferredAuthor.output.includes("Parth Patel"));
 assert(!inferredAuthor.output.includes("Jane Doe"));
+
+const svgDrawing = cleanHtmlText('<svg viewBox="0 0 100 100" onload="steal()"><defs><linearGradient id="paint"><stop offset="0" stop-color="#fff"/></linearGradient></defs><rect x="0" y="0" width="100" height="100" fill="url(#paint)"/><rect fill="URL(https://attacker.test/paint)"/><rect stroke="u\\72l(https://attacker.test/stroke)"/><line x1="0" y1="0" x2="100" y2="100" stroke="#000"/><circle cx="50" cy="50" r="4"/><path d="M0 0L10 10"/><polygon points="0,0 10,0 5,10"/><text x="5" y="20">DXF drawing</text><script>alert(1)</script><foreignObject><div>unsafe</div></foreignObject><animate attributeName="x"/><image href="https://attacker.test/drawing.svg"/><use href="https://attacker.test/sprite.svg#x"/></svg>', []);
+for (const tag of ["svg", "rect", "line", "circle", "path", "polygon", "text"]) assert(svgDrawing.output.includes(`<${tag}`));
+for (const tag of ["script", "foreignObject", "animate", "image", "use"]) assert(!svgDrawing.output.toLocaleLowerCase().includes(`<${tag.toLocaleLowerCase()}`));
+assert(!svgDrawing.output.includes("onload="));
+assert(!svgDrawing.output.includes("attacker.test"));
+assert(svgDrawing.output.includes("url(#paint)"));
 
 const cleanName = buildNeutralCleanFileName("html", "a1b2c3d4");
 assert.equal(cleanName, "Cleaned report a1b2c3d4.html");
