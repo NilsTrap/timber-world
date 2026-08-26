@@ -9,16 +9,18 @@
  */
 import { getOrderDeal } from "../../orders/services/orderDeals";
 import { projectDealView } from "../../orders/services/dealFields";
+import type { DbClient } from "../../orders/services/dealModel";
 import { isValidUUID } from "../../orders/types";
 import { resolveProjectsActor, resolveProjectsViewer } from "../access";
 import { isPartyOrg, toProjectDetail, type ProjectionContext } from "../projection";
 import { loadOrgPersonas } from "../services/orgPersonas";
 import { countFilesByDeal, listProjectFiles, listProjectFolders } from "../services/projectFiles";
-import type { ProjectDetail, ProjectsResult, ProjectsViewer } from "../types";
+import type { ProjectDetail, ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace, ProjectsResult, ProjectsViewer } from "../types";
 
 export type GetProjectResult = ProjectsResult<{
   project: ProjectDetail;
   viewer: ProjectsViewer;
+  partyWorkspace: ProjectPartyWorkspace;
 }>;
 
 export async function getProject(projectId: string): Promise<GetProjectResult> {
@@ -61,5 +63,78 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     fileCounts: fileCounts.get(projectId) ?? { total: 0 },
   });
 
-  return { ok: true, project, viewer };
+  const centerRaw = project.direction === "buy" ? raw.buyer : raw.seller;
+  const buyerRaw = project.direction === "buy" ? null : raw.buyer;
+  const center = partyRef(centerRaw, personasByOrgId);
+  const buyer = buyerRaw ? partyRef(buyerRaw, personasByOrgId) : null;
+  const ownsCenter = a.isPlatformAdmin || (!!a.orgId && centerRaw.id === a.orgId);
+  const canManageChain = ownsCenter && viewer.canCreateProject && (a.isPlatformAdmin || viewer.createRoles.includes("trader"));
+  const canSeeCustomers = a.isPlatformAdmin || a.access.domainVisible("customer_identity");
+  const canSeeSuppliers = a.isPlatformAdmin || a.access.domainVisible("supplier_identity");
+
+  let seller: (ProjectPartyRef & { projectId?: string }) | null = project.direction === "buy"
+    ? partyRef(raw.seller, personasByOrgId)
+    : null;
+  const spineId = (raw as typeof raw & { spineId?: string | null }).spineId ?? null;
+  if (project.direction === "sell" && spineId && centerRaw.id && canSeeSuppliers) {
+    const { data: leg } = await a.db
+      .from("orders")
+      .select("id, seller_organisation_id")
+      .eq("spine_id", spineId)
+      .eq("buyer_organisation_id", centerRaw.id)
+      .neq("id", projectId)
+      .neq("lifecycle_stage", "cancelled")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const sellerId = (leg as { seller_organisation_id?: string | null } | null)?.seller_organisation_id ?? null;
+    if (sellerId) {
+      const { data: sellerOrg } = await a.db.from("organisations").select("id, code, name").eq("id", sellerId).maybeSingle();
+      if (sellerOrg) seller = { ...(partyRef(sellerOrg, personasByOrgId) as ProjectPartyRef), projectId: (leg as { id: string }).id };
+    }
+  }
+
+  const buyerOptions = canManageChain && canSeeCustomers && buyerRaw !== null && !buyerRaw.id && raw.lifecycleStage === "draft"
+    ? await loadPartyOptions(a.db, a.isPlatformAdmin, centerRaw.id, "buyer")
+    : [];
+  const sellerOptions = canManageChain && canSeeSuppliers && !seller
+    ? await loadPartyOptions(a.db, a.isPlatformAdmin, centerRaw.id, "seller")
+    : [];
+  const partyWorkspace: ProjectPartyWorkspace = {
+    center,
+    buyer,
+    seller,
+    buyerOptions,
+    sellerOptions,
+    canSetBuyer: buyerOptions.length > 0,
+    canSetSeller: sellerOptions.length > 0,
+  };
+
+  return { ok: true, project, viewer, partyWorkspace };
+}
+
+function partyRef(row: { id: string | null; code: string | null; name: string | null }, personas: ReadonlyMap<string, ProjectPartyRef["personas"]>): ProjectPartyRef | null {
+  if (!row.id) return null;
+  return { id: row.id, code: row.code, name: row.name, personas: personas.get(row.id) ?? [] };
+}
+
+async function loadPartyOptions(
+  db: DbClient,
+  admin: boolean,
+  centerOrgId: string | null,
+  side: "buyer" | "seller",
+): Promise<ProjectPartyOption[]> {
+  if (!centerOrgId) return [];
+  let ids: string[] | null = null;
+  if (!admin) {
+    const { data } = await db.from("organisation_trading_partners").select("partner_organisation_id").eq("organisation_id", centerOrgId);
+    ids = ((data ?? []) as { partner_organisation_id: string }[]).map((row) => row.partner_organisation_id);
+    if (ids.length === 0) return [];
+  }
+  let query = db.from("organisations").select("id, code, name, is_customer, is_trader, is_supplier, is_producer").eq("is_active", true).order("name");
+  if (ids) query = query.in("id", ids);
+  const { data } = await query;
+  return ((data ?? []) as Array<ProjectPartyOption & { is_customer: boolean; is_trader: boolean; is_supplier: boolean; is_producer: boolean }>)
+    .filter((row) => row.id !== centerOrgId && (side === "buyer" ? row.is_customer : row.is_trader || row.is_supplier || row.is_producer))
+    .map(({ id, code, name }) => ({ id, code, name }));
 }

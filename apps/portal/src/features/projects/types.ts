@@ -42,6 +42,23 @@ export interface ProjectsViewer {
   createRoles: ProjectCreateRole[];
 }
 
+export interface ProjectPartyOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
+/** Safe, viewer-relative projection used by the Parties chain builder. */
+export interface ProjectPartyWorkspace {
+  center: ProjectPartyRef | null;
+  buyer: ProjectPartyRef | null;
+  seller: (ProjectPartyRef & { projectId?: string }) | null;
+  buyerOptions: ProjectPartyOption[];
+  sellerOptions: ProjectPartyOption[];
+  canSetBuyer: boolean;
+  canSetSeller: boolean;
+}
+
 /** One visible bilateral deal = one project row. */
 export interface ProjectListItem {
   id: string;

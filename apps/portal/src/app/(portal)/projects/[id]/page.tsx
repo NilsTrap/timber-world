@@ -27,5 +27,5 @@ export default async function ProjectDetailPage({
     if (res.deny === "login") redirect("/login");
     notFound();
   }
-  return <ProjectDetailView project={res.project} viewer={res.viewer} />;
+  return <ProjectDetailView project={res.project} viewer={res.viewer} partyWorkspace={res.partyWorkspace} />;
 }

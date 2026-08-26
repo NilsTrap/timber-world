@@ -12,10 +12,10 @@ import {
   TableRow,
 } from "@timber/ui";
 import { PERSONA_LABEL } from "../personas";
-import type { ProjectDetail, ProjectsViewer } from "../types";
-import { PersonaBadges } from "./PersonaBadges";
+import type { ProjectDetail, ProjectPartyWorkspace, ProjectsViewer } from "../types";
 import { ProjectStageBadge } from "./ProjectStageBadge";
 import { ProjectFileWorkspace } from "./ProjectFileWorkspace";
+import { ProjectPartiesBlock } from "./ProjectPartiesBlock";
 
 /**
  * Project detail (server component).
@@ -29,9 +29,11 @@ import { ProjectFileWorkspace } from "./ProjectFileWorkspace";
 export function ProjectDetailView({
   project,
   viewer,
+  partyWorkspace,
 }: {
   project: ProjectDetail;
   viewer: ProjectsViewer;
+  partyWorkspace: ProjectPartyWorkspace;
 }) {
   const currency = project.currency ?? "";
   return (
@@ -60,28 +62,7 @@ export function ProjectDetailView({
 
       <div className="space-y-3">
         <SectionHeader title="Parties" />
-        <div className="grid gap-3 sm:grid-cols-2">
-          {project.counterparty ? (
-            <PartyCard
-              role={project.direction === "sell" ? "Customer" : "Supplier"}
-              name={project.counterparty.name}
-              code={project.counterparty.code}
-              personas={project.counterparty.personas}
-            />
-          ) : null}
-          {project.otherParties.map((party) => (
-            <PartyCard
-              key={party.id}
-              role={partyRoleLabel(party.role)}
-              name={party.name}
-              code={party.code}
-              personas={party.personas}
-            />
-          ))}
-          {!project.counterparty && project.otherParties.length === 0 ? (
-            <EmptyState message="No parties are visible to you on this project." />
-          ) : null}
-        </div>
+        <ProjectPartiesBlock projectId={project.id} workspace={partyWorkspace} />
       </div>
 
       {project.terms ? (
@@ -173,40 +154,6 @@ export function ProjectDetailView({
           </div>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-const PARTY_ROLE_LABEL: Record<string, string> = {
-  customer: "Customer",
-  seller: "Seller",
-  producer: "Producer",
-  buyer: "Buyer",
-};
-
-function partyRoleLabel(role: string | undefined): string {
-  return (role && PARTY_ROLE_LABEL[role]) || "Party";
-}
-
-function PartyCard({
-  role,
-  name,
-  code,
-  personas,
-}: {
-  role: string;
-  name: string | null;
-  code: string | null;
-  personas: ProjectDetail["otherParties"][number]["personas"];
-}) {
-  return (
-    <div className="rounded-lg border bg-card p-4">
-      <p className="text-sm text-muted-foreground">{role}</p>
-      <p className="text-base font-semibold truncate">{name ?? "—"}</p>
-      <div className="mt-2 flex items-center gap-2">
-        {code ? <span className="text-xs text-muted-foreground">{code}</span> : null}
-        <PersonaBadges personas={personas} />
-      </div>
     </div>
   );
 }
