@@ -20,8 +20,9 @@ import {
   renameProjectFolder,
 } from "../services/projectFiles";
 import {
+  MAX_INTERACTIVE_PROJECT_PREVIEW_BYTES,
   MAX_PROJECT_FILE_BYTES,
-  isPreviewableProjectMimeType,
+  getProjectPreviewKind,
   normaliseProjectName,
   normaliseProjectMimeType,
   normaliseProjectPath,
@@ -330,8 +331,16 @@ export async function getProjectFileUrlAction(
     return { success: false, error: "File upload is not complete", code: "NOT_READY" };
   }
   const mimeType = found.file.mime_type?.toLowerCase() ?? null;
-  if (mode === "preview" && !isPreviewableProjectMimeType(mimeType)) {
+  const previewKind = getProjectPreviewKind(found.file.file_name, mimeType);
+  if (mode === "preview" && !previewKind) {
     return { success: false, error: "Preview is unavailable for this file type", code: "PREVIEW_UNAVAILABLE" };
+  }
+  if (
+    mode === "preview"
+    && previewKind !== "native"
+    && (found.file.file_size_bytes ?? 0) > MAX_INTERACTIVE_PROJECT_PREVIEW_BYTES
+  ) {
+    return { success: false, error: "Interactive preview is limited to 25MB", code: "PREVIEW_TOO_LARGE" };
   }
   const { data, error } = await found.actor.db.storage.from("orders").createSignedUrl(
     found.file.storage_path,

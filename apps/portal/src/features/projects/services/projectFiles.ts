@@ -100,6 +100,7 @@ interface InternalFileRow {
   file_name: string;
   relative_path: string;
   mime_type: string | null;
+  file_size_bytes?: number | null;
   storage_path: string;
   lifecycle_status: "uploading" | "ready" | "failed";
 }
@@ -117,7 +118,7 @@ export async function locateProjectFile(
 ): Promise<InternalFileRow | null> {
   const { data, error } = await db
     .from("order_files")
-    .select("id, order_id, file_name, relative_path, mime_type, storage_path, lifecycle_status")
+    .select("id, order_id, file_name, relative_path, mime_type, file_size_bytes, storage_path, lifecycle_status")
     .eq("id", fileId)
     .eq("category", PROJECT_CATEGORY)
     .eq("file_variant", ORIGINAL_VARIANT)

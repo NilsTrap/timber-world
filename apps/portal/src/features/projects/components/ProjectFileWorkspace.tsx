@@ -1,15 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Download,
   Eye,
-  File,
-  FileArchive,
-  FileCode2,
-  FileImage,
-  FileSpreadsheet,
-  FileText,
   Folder,
   FolderInput,
   FolderPlus,
@@ -47,7 +41,7 @@ import {
 } from "../actions/projectFileActions";
 import {
   buildProjectTree,
-  isPreviewableProjectMimeType,
+  isPreviewableProjectFile,
   normaliseProjectName,
   pathFromBrowserFile,
   projectPathKey,
@@ -56,6 +50,9 @@ import {
 } from "../filePaths";
 import type { ProjectFileMeta, ProjectFolderMeta } from "../types";
 import { ProjectDropSurface } from "./ProjectDropSurface";
+import { ProjectFilePreview, type ProjectPreviewSource } from "./ProjectFilePreview";
+import { ProjectFileTypeIcon } from "./projectFileTypes";
+import { PROJECT_PREVIEW_COPY } from "./previewCopy";
 import { uploadProjectBrowserFile } from "./projectUploadClient";
 
 interface PendingUpload {
@@ -84,7 +81,9 @@ export function ProjectFileWorkspace({
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+  const [preview, setPreview] = useState<ProjectPreviewSource | null>(null);
+  const [previewRefreshError, setPreviewRefreshError] = useState<string | null>(null);
+  const previewRequestRef = useRef(0);
   const tree = useMemo(() => buildProjectTree(files, folders), [files, folders]);
   const folderPaths = useMemo(() => {
     const paths = new Set(folders.map((folder) => folder.relativePath));
@@ -262,9 +261,29 @@ export function ProjectFileWorkspace({
   };
 
   const openPreview = async (file: ProjectFileMeta) => {
+    const requestId = ++previewRequestRef.current;
+    setPreviewRefreshError(null);
     const result = await getProjectFileUrlAction(file.id, "preview");
+    if (requestId !== previewRequestRef.current) return;
     if (!result.success) { setMessage(result.error); return; }
-    setPreview({ url: result.data.url, name: result.data.fileName });
+    setPreview({ fileId: file.id, url: result.data.url, fileName: result.data.fileName, mimeType: result.data.mimeType });
+  };
+
+  const refreshPreview = async () => {
+    if (!preview) return;
+    const fileId = preview.fileId;
+    const requestId = previewRequestRef.current;
+    setPreviewRefreshError(null);
+    const result = await getProjectFileUrlAction(fileId, "preview");
+    if (requestId !== previewRequestRef.current) return;
+    if (!result.success) {
+      setPreviewRefreshError(result.error);
+      return;
+    }
+    setPreview((current) => {
+      if (current?.fileId !== fileId) return current;
+      return { ...current, url: result.data.url, fileName: result.data.fileName, mimeType: result.data.mimeType };
+    });
   };
 
   const download = async (file: ProjectFileMeta) => {
@@ -308,7 +327,8 @@ export function ProjectFileWorkspace({
         <div className="rounded-lg border bg-card divide-y">
           {pending.map((item) => (
             <div key={item.id} className="flex items-center gap-3 p-3">
-              {item.status === "uploading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <File className="h-4 w-4 text-destructive" />}
+              {item.status === "uploading" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              <ProjectFileTypeIcon fileName={item.file.name} mimeType={item.file.type || null} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium" title={item.relativePath}>{item.relativePath}</p>
                 {item.status === "uploading" ? (
@@ -346,7 +366,7 @@ export function ProjectFileWorkspace({
             {files.map((file) => (
               <div key={file.id} className="flex items-center gap-3 p-3">
                 {canWrite ? <Checkbox checked={selectedFileIds.has(file.id)} onCheckedChange={(checked) => setSelectedFileIds((current) => { const next = new Set(current); if (checked === true) next.add(file.id); else next.delete(file.id); return next; })} aria-label={`Select ${file.fileName}`} /> : null}
-                <FileTypeIcon file={file} />
+                <ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} />
                 <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium" title={file.relativePath}>{file.relativePath}</p><p className="text-xs text-muted-foreground">{formatBytes(file.fileSizeBytes)}</p></div>
                 <FileActions file={file} canWrite={canWrite} onPreview={openPreview} onDownload={download} onRename={renameFile} onDelete={deleteFile} />
               </div>
@@ -355,10 +375,10 @@ export function ProjectFileWorkspace({
         </div>
       ) : null}
 
-      <Dialog open={!!preview} onOpenChange={(open) => { if (!open) setPreview(null); }}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader><DialogTitle>{preview?.name}</DialogTitle><DialogDescription>Preview link expires shortly.</DialogDescription></DialogHeader>
-          {preview ? <iframe src={preview.url} title={`Preview ${preview.name}`} sandbox="" referrerPolicy="no-referrer" className="h-[70vh] w-full rounded border bg-white" /> : null}
+      <Dialog open={!!preview} onOpenChange={(open) => { if (!open) { previewRequestRef.current++; setPreview(null); setPreviewRefreshError(null); } }}>
+        <DialogContent className="sm:max-w-6xl">
+          <DialogHeader><DialogTitle>{preview?.fileName}</DialogTitle><DialogDescription>{PROJECT_PREVIEW_COPY.description}</DialogDescription></DialogHeader>
+          {preview ? <ProjectFilePreview source={preview} onRetry={refreshPreview} refreshError={previewRefreshError} /> : null}
         </DialogContent>
       </Dialog>
     </div>
@@ -375,22 +395,12 @@ function TreeNodes({ nodes, selected, onSelect, canWrite, onRename, onMove, onDe
 
 function WorkspaceRow({ file, selected, onSelected, canWrite, onPreview, onDownload, onRename, onDelete }: { file: ProjectFileMeta; selected: boolean; onSelected: (checked: boolean) => void; canWrite: boolean; onPreview: (file: ProjectFileMeta) => void; onDownload: (file: ProjectFileMeta) => void; onRename: (file: ProjectFileMeta) => void; onDelete: (file: ProjectFileMeta) => void }) {
   const parent = file.relativePath.includes("/") ? file.relativePath.slice(0, file.relativePath.lastIndexOf("/")) : "—";
-  return <TableRow><TableCell>{canWrite ? <Checkbox checked={selected} onCheckedChange={(checked) => onSelected(checked === true)} aria-label={`Select ${file.fileName}`} /> : null}</TableCell><TableCell><span className="flex min-w-0 items-center gap-2"><FileTypeIcon file={file} /><span className="max-w-[18rem] truncate font-medium whitespace-nowrap" title={file.fileName}>{file.fileName}</span></span></TableCell><TableCell className="max-w-[14rem] truncate" title={parent}>{parent}</TableCell><TableCell>{formatBytes(file.fileSizeBytes)}</TableCell><TableCell className="capitalize">{file.lifecycleStatus}</TableCell><TableCell><div className="flex justify-end"><FileActions file={file} canWrite={canWrite} onPreview={onPreview} onDownload={onDownload} onRename={onRename} onDelete={onDelete} /></div></TableCell></TableRow>;
+  return <TableRow><TableCell>{canWrite ? <Checkbox checked={selected} onCheckedChange={(checked) => onSelected(checked === true)} aria-label={`Select ${file.fileName}`} /> : null}</TableCell><TableCell><span className="flex min-w-0 items-center gap-2"><ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} /><span className="max-w-[18rem] truncate font-medium whitespace-nowrap" title={file.fileName}>{file.fileName}</span></span></TableCell><TableCell className="max-w-[14rem] truncate" title={parent}>{parent}</TableCell><TableCell>{formatBytes(file.fileSizeBytes)}</TableCell><TableCell className="capitalize">{file.lifecycleStatus}</TableCell><TableCell><div className="flex justify-end"><FileActions file={file} canWrite={canWrite} onPreview={onPreview} onDownload={onDownload} onRename={onRename} onDelete={onDelete} /></div></TableCell></TableRow>;
 }
 
 function FileActions({ file, canWrite, onPreview, onDownload, onRename, onDelete }: { file: ProjectFileMeta; canWrite: boolean; onPreview: (file: ProjectFileMeta) => void; onDownload: (file: ProjectFileMeta) => void; onRename: (file: ProjectFileMeta) => void; onDelete: (file: ProjectFileMeta) => void }) {
-  return <div className="flex items-center"><Button type="button" variant="ghost" size="icon" disabled={!isPreviewableProjectMimeType(file.mimeType)} aria-label={isPreviewableProjectMimeType(file.mimeType) ? `Preview ${file.fileName}` : `Preview unavailable for ${file.fileName}`} onClick={() => onPreview(file)}><Eye className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" aria-label={`Download ${file.fileName}`} onClick={() => onDownload(file)}><Download className="h-4 w-4" /></Button>{canWrite ? <><Button type="button" variant="ghost" size="icon" aria-label={`Rename ${file.fileName}`} onClick={() => onRename(file)}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" aria-label={`Delete ${file.fileName}`} onClick={() => onDelete(file)}><Trash2 className="h-4 w-4" /></Button></> : null}</div>;
-}
-
-function FileTypeIcon({ file }: { file: ProjectFileMeta }) {
-  const name = file.fileName.toLowerCase();
-  const cls = "h-4 w-4 shrink-0 text-muted-foreground";
-  if (file.mimeType?.startsWith("image/")) return <FileImage className={cls} />;
-  if (file.mimeType === "application/pdf" || /\.(docx?|txt|rtf)$/.test(name)) return <FileText className={cls} />;
-  if (/\.(xlsx?|csv|ods)$/.test(name)) return <FileSpreadsheet className={cls} />;
-  if (/\.(zip|rar|7z|tar|gz)$/.test(name)) return <FileArchive className={cls} />;
-  if (/\.(json|xml|html?|css|js|ts|tsx)$/.test(name)) return <FileCode2 className={cls} />;
-  return <File className={cls} />;
+  const previewable = isPreviewableProjectFile(file.fileName, file.mimeType);
+  return <div className="flex items-center"><Button type="button" variant="ghost" size="icon" disabled={!previewable} aria-label={previewable ? `Preview ${file.fileName}` : `Preview unavailable for ${file.fileName}`} onClick={() => onPreview(file)}><Eye className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" aria-label={`Download ${file.fileName}`} onClick={() => onDownload(file)}><Download className="h-4 w-4" /></Button>{canWrite ? <><Button type="button" variant="ghost" size="icon" aria-label={`Rename ${file.fileName}`} onClick={() => onRename(file)}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" aria-label={`Delete ${file.fileName}`} onClick={() => onDelete(file)}><Trash2 className="h-4 w-4" /></Button></> : null}</div>;
 }
 
 function formatBytes(bytes: number | null): string {

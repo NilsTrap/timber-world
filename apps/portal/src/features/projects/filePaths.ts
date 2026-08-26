@@ -1,15 +1,73 @@
 export const MAX_PROJECT_FILE_BYTES = 100 * 1024 * 1024;
-export const PROJECT_PREVIEW_MIME_TYPES = new Set([
-  "application/pdf",
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-  "image/bmp",
-]);
+export const MAX_INTERACTIVE_PROJECT_PREVIEW_BYTES = 25 * 1024 * 1024;
 
-export function isPreviewableProjectMimeType(mimeType: string | null): boolean {
-  return !!mimeType && PROJECT_PREVIEW_MIME_TYPES.has(mimeType.toLowerCase());
+export type ProjectPreviewKind = "native" | "html" | "dxf" | "step";
+export type ProjectFileKind =
+  | "pdf"
+  | "image"
+  | "html"
+  | "dxf"
+  | "step"
+  | "nc1"
+  | "document"
+  | "spreadsheet"
+  | "archive"
+  | "code"
+  | "unknown";
+
+const RASTER_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp"]);
+const RASTER_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"]);
+
+export function projectFileExtension(fileName: string): string {
+  const leaf = fileName.split("/").at(-1)?.trim().toLowerCase() ?? "";
+  const dot = leaf.lastIndexOf(".");
+  return dot > 0 && dot < leaf.length - 1 ? leaf.slice(dot + 1) : "";
+}
+
+export function getProjectPreviewKind(
+  fileName: string,
+  mimeType: string | null,
+): ProjectPreviewKind | null {
+  const extension = projectFileExtension(fileName);
+  const mime = mimeType?.toLowerCase().split(";", 1)[0]?.trim() ?? "";
+  if (extension === "nc1") return null;
+  const kind = classifyProjectFile(fileName, mimeType);
+  if (kind === "html") return "html";
+  if (kind === "dxf") return "dxf";
+  if (kind === "step") return "step";
+  if (kind === "pdf") return "native";
+  if (kind === "image" && (RASTER_EXTENSIONS.has(extension) || RASTER_MIME_TYPES.has(mime))) return "native";
+  return null;
+}
+
+export function isPreviewableProjectFile(fileName: string, mimeType: string | null): boolean {
+  return getProjectPreviewKind(fileName, mimeType) !== null;
+}
+
+export function classifyProjectFile(fileName: string, mimeType: string | null): ProjectFileKind {
+  const extension = projectFileExtension(fileName);
+  const mime = mimeType?.toLowerCase().split(";", 1)[0]?.trim() ?? "";
+  if (extension === "pdf") return "pdf";
+  if (["html", "htm"].includes(extension)) return "html";
+  if (extension === "dxf") return "dxf";
+  if (["step", "stp"].includes(extension)) return "step";
+  if (extension === "nc1") return "nc1";
+  if ([...RASTER_EXTENSIONS, "svg", "heic", "heif"].includes(extension)) return "image";
+  if (["doc", "docx", "txt", "rtf", "odt"].includes(extension)) return "document";
+  if (["xls", "xlsx", "csv", "ods"].includes(extension)) return "spreadsheet";
+  if (["zip", "rar", "7z", "tar", "gz"].includes(extension)) return "archive";
+  if (["json", "xml", "css", "js", "ts", "tsx"].includes(extension)) return "code";
+
+  if (mime === "application/pdf") return "pdf";
+  if (mime === "text/html") return "html";
+  if (["application/dxf", "application/vnd.dxf", "application/x-dxf", "image/vnd.dxf"].includes(mime)) return "dxf";
+  if (["application/step", "application/x-step", "model/step", "model/step+xml"].includes(mime)) return "step";
+  if (mime.startsWith("image/")) return "image";
+  if (["text/plain", "application/rtf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"].includes(mime)) return "document";
+  if (["text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"].includes(mime)) return "spreadsheet";
+  if (["application/zip", "application/x-7z-compressed", "application/vnd.rar", "application/gzip", "application/x-tar"].includes(mime)) return "archive";
+  if (["application/json", "application/xml", "text/xml", "text/css", "text/javascript"].includes(mime)) return "code";
+  return "unknown";
 }
 
 export function normaliseProjectMimeType(value: string | null): string | null {

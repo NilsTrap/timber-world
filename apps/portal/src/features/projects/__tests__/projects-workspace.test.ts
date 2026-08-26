@@ -2,9 +2,12 @@
 import { readFileSync } from "node:fs";
 import { evaluateProjectCapabilities } from "../capabilities";
 import {
+  MAX_INTERACTIVE_PROJECT_PREVIEW_BYTES,
   MAX_PROJECT_FILE_BYTES,
   buildProjectTree,
-  isPreviewableProjectMimeType,
+  classifyProjectFile,
+  getProjectPreviewKind,
+  isPreviewableProjectFile,
   normaliseProjectMimeType,
   normaliseProjectName,
   normaliseProjectPath,
@@ -14,6 +17,8 @@ import {
   storedProjectMimeType,
   validateStoredProjectUploadSize,
 } from "../filePaths";
+import { sanitizeProjectHtml } from "../components/viewers/sanitizeProjectHtml";
+import { isValidOcctResult } from "../components/viewers/validateOcctResult";
 
 let passed = 0;
 let failed = 0;
@@ -64,20 +69,49 @@ eq("deep file path is preserved", tree[0]?.children[0]?.children[0]?.path, "draw
 const treeWithEmptyFolder = buildProjectTree([], [{ relativePath: "empty/nested" }]);
 eq("persisted empty folder survives without files", treeWithEmptyFolder[0]?.children[0]?.path, "empty/nested");
 
-ok("PDF preview is allowlisted", isPreviewableProjectMimeType("application/pdf"));
-ok("raster image preview is allowlisted", isPreviewableProjectMimeType("image/png"));
-ok("SVG is not previewed as a raster image", !isPreviewableProjectMimeType("image/svg+xml"));
-ok("office/archive preview is unavailable", !isPreviewableProjectMimeType("application/zip"));
+ok("PDF preview is allowlisted", isPreviewableProjectFile("drawing.pdf", "application/pdf"));
+ok("raster image preview is allowlisted", isPreviewableProjectFile("photo.png", "image/png"));
+ok("raster extension falls back without MIME", isPreviewableProjectFile("photo.webp", null));
+ok("SVG is not previewed as a raster image", !isPreviewableProjectFile("drawing.svg", "image/svg+xml"));
+ok("HEIC is not offered to the native browser viewer", !isPreviewableProjectFile("photo.heic", "image/heic"));
+ok("office/archive preview is unavailable", !isPreviewableProjectFile("files.zip", "application/zip"));
+eq("HTML extension routes to the safe report viewer", getProjectPreviewKind("report.HTML", "application/octet-stream"), "html");
+eq("DXF extension routes without reliable browser MIME", getProjectPreviewKind("plate.dxf", null), "dxf");
+eq("STEP alternate extension routes without reliable browser MIME", getProjectPreviewKind("model.stp", "application/octet-stream"), "step");
+eq("PDF extension falls back when MIME is absent", getProjectPreviewKind("drawing.pdf", null), "native");
+eq("NC1 remains download-only", getProjectPreviewKind("part.nc1", "text/plain"), null);
+for (const misleadingMime of ["application/pdf", "text/html", "application/dxf", "model/step", "image/png"]) {
+  eq(`NC1 cannot bypass preview denial with ${misleadingMime}`, getProjectPreviewKind("part.nc1", misleadingMime), null);
+}
+ok("engineering extension makes the server preview boundary available", isPreviewableProjectFile("part.step", null));
+eq("DXF MIME is not mistaken for a generic image icon", classifyProjectFile("part", "image/vnd.dxf"), "dxf");
+eq("extension wins over a conflicting MIME for icon and viewer routing", classifyProjectFile("drawing.dxf", "application/pdf"), "dxf");
+eq("NC1 receives its own machine-file icon classification", classifyProjectFile("part.nc1", "text/plain"), "nc1");
+eq("interactive preview budget is 25 MB", MAX_INTERACTIVE_PROJECT_PREVIEW_BYTES, 26214400);
 eq("MIME values are canonicalised", normaliseProjectMimeType(" Application/PDF; charset=binary "), "application/pdf");
 eq("invalid MIME values fail closed", normaliseProjectMimeType("not a mime"), null);
 eq("stored MIME comes from object metadata", storedProjectMimeType({ metadata: { mimetype: "IMAGE/PNG" } }), "image/png");
 eq("missing stored MIME fails closed", storedProjectMimeType({ metadata: {} }), null);
+
+const hostileHtml = sanitizeProjectHtml('<html><head><style>.ok{color:green}</style></head><body onload="steal()"><script>steal()</script><form action="https://bad.test"><input></form><img src="data:image/png;base64,AA=="></body></html>');
+ok("HTML sanitizer strips scripts and event handlers", !hostileHtml.includes("<script") && !hostileHtml.includes("onload="));
+ok("HTML sanitizer strips interactive forms", !hostileHtml.includes("<form") && !hostileHtml.includes("<input"));
+ok("HTML sanitizer retains inline styles and data images", hostileHtml.includes(".ok{color:green}") && hostileHtml.includes("data:image/png;base64,AA=="));
+ok("HTML sanitizer injects a restrictive CSP", hostileHtml.includes("Content-Security-Policy") && hostileHtml.includes("default-src 'none'"));
+const validMesh = { success: true, meshes: [{ attributes: { position: { array: [0, 0, 0, 1, 0, 0, 0, 1, 0] } }, index: { array: [0, 1, 2] } }] };
+ok("STEP validation accepts finite triangles", isValidOcctResult(validMesh));
+ok("STEP validation rejects non-finite coordinates", !isValidOcctResult({ ...validMesh, meshes: [{ ...validMesh.meshes[0], attributes: { position: { array: [0, 0, Number.NaN] } } }] }));
+ok("STEP validation rejects out-of-range indices", !isValidOcctResult({ ...validMesh, meshes: [{ ...validMesh.meshes[0], index: { array: [0, 1, 9] } }] }));
 
 // Source guards protect the easy-to-regress serialization/direct-ID boundaries.
 const service = readFileSync("src/features/projects/services/projectFiles.ts", "utf8");
 const actions = readFileSync("src/features/projects/actions/projectFileActions.ts", "utf8");
 const create = readFileSync("src/features/projects/actions/createProject.ts", "utf8");
 const workspace = readFileSync("src/features/projects/components/ProjectFileWorkspace.tsx", "utf8");
+const preview = readFileSync("src/features/projects/components/ProjectFilePreview.tsx", "utf8");
+const htmlViewer = readFileSync("src/features/projects/components/viewers/HtmlFileViewer.tsx", "utf8");
+const dxfViewer = readFileSync("src/features/projects/components/viewers/DxfFileViewer.tsx", "utf8");
+const stepViewer = readFileSync("src/features/projects/components/viewers/StepFileViewer.tsx", "utf8");
 const migration = readFileSync("../../supabase/migrations/20260821211500_project_file_workspace.sql", "utf8");
 const folderMigration = readFileSync("../../supabase/migrations/20260826090000_project_workspace_folders.sql", "utf8");
 const buyerAccessMigration = readFileSync("../../supabase/migrations/20260826130000_buyer_project_workspace_access.sql", "utf8");
@@ -93,6 +127,8 @@ ok("finalisation is bound to project and upload IDs", actions.includes('.eq("id"
 ok("finalisation reads actual storage metadata size", actions.includes("validateStoredProjectUploadSize(object, expectedSize)"));
 ok("finalisation verifies stored MIME metadata", actions.includes("storedProjectMimeType(object)"));
 ok("signed reads require a ready file", actions.includes('found.file.lifecycle_status !== "ready"'));
+ok("signed preview checks persisted name and MIME together", actions.includes("getProjectPreviewKind(found.file.file_name, mimeType)"));
+ok("server caps interactive previews below upload size", actions.includes("MAX_INTERACTIVE_PROJECT_PREVIEW_BYTES") && actions.includes('code: "PREVIEW_TOO_LARGE"'));
 ok("invalid stored objects are removed before retry", actions.includes("if (!storedSize.ok)") && actions.includes('.remove([storagePath])'));
 ok("orders bucket rejects uploads over 100 MB", migration.includes("file_size_limit = LEAST(COALESCE(file_size_limit, 104857600), 104857600)"));
 ok("narrow workspace renders folders", workspace.includes('<MobileFolderRows nodes={tree}'));
@@ -106,6 +142,11 @@ ok("the inherited buyer role can create and upload its own project files", buyer
 ok("shared file-folder namespace is serialized", folderMigration.includes("project_files_namespace_guard") && folderMigration.includes("pg_advisory_xact_lock"));
 ok("workspace exposes create, move and bulk delete controls", workspace.includes("createProjectFolderAction") && workspace.includes("moveProjectFolderAction") && workspace.includes("deleteProjectFilesAction"));
 ok("workspace limits parallel upload workers", workspace.includes("Math.min(3, next.length)"));
+ok("workspace uses centralized icons and viewer routing", workspace.includes("ProjectFileTypeIcon") && workspace.includes("ProjectFilePreview"));
+ok("heavy engineering viewers are lazy chunks", preview.includes('dynamic(() => import("./viewers/DxfFileViewer")') && preview.includes('dynamic(() => import("./viewers/StepFileViewer")'));
+ok("HTML preview is sanitized and scriptless", htmlViewer.includes("sanitizeProjectHtml") && htmlViewer.includes('sandbox=""'));
+ok("DXF parsing uses a dedicated worker and destroys viewer resources", dxfViewer.includes("workerFactory") && dxfViewer.includes("viewer?.Destroy()"));
+ok("STEP parsing uses a terminating local worker and disposes WebGL resources", stepViewer.includes("occt-import-js-worker.js") && stepViewer.includes("worker.terminate()") && stepViewer.includes("renderer?.dispose()"));
 
 console.log(`\nprojects-workspace.test.ts: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
