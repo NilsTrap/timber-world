@@ -256,6 +256,7 @@ export async function updateDealTerms(input: { orderId: string; terms: DealTerms
   if (res.success) {
     await logOrderActivity(input.orderId, a.actor.portalUserId, "Deal terms updated", undefined, "list");
     revalidatePath(`/orders/${input.orderId}`);
+    revalidatePath(`/projects/${input.orderId}`);
   }
   return res;
 }

@@ -132,6 +132,7 @@ export async function resolveProjectsViewer(
     organisationId: a.orgId,
     organisationName: a.organisationName,
     personas,
+    canEditTerms: a.isPlatformAdmin || a.access.domainEditable("deal_terms"),
     ...capabilities,
   };
 }

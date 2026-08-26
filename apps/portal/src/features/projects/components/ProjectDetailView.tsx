@@ -16,6 +16,7 @@ import type { ProjectDetail, ProjectPartyWorkspace, ProjectsViewer } from "../ty
 import { ProjectStageBadge } from "./ProjectStageBadge";
 import { ProjectFileWorkspace } from "./ProjectFileWorkspace";
 import { ProjectPartiesBlock } from "./ProjectPartiesBlock";
+import { ProjectTermsCard } from "./ProjectTermsCard";
 
 /**
  * Project detail (server component).
@@ -66,25 +67,7 @@ export function ProjectDetailView({
       </div>
 
       {project.terms ? (
-        <div className="space-y-3">
-          <SectionHeader title="Terms" />
-          <SummaryGrid columns={4}>
-            <SummaryCard
-              label="Incoterms"
-              value={
-                [project.terms.incoterms, project.terms.incotermsPlace]
-                  .filter(Boolean)
-                  .join(" ") || "—"
-              }
-            />
-            <SummaryCard label="Payment" value={project.terms.paymentTerms ?? "—"} />
-            <SummaryCard label="Delivery" value={project.terms.deliveryTerms ?? "—"} />
-            <SummaryCard
-              label="Advance"
-              value={project.terms.advancePct != null ? `${project.terms.advancePct}%` : "—"}
-            />
-          </SummaryGrid>
-        </div>
+        <ProjectTermsCard projectId={project.id} terms={project.terms} deliveryDeadline={project.deliveryDeadline} canEdit={viewer.canEditTerms} />
       ) : null}
 
       <div className="space-y-3">

@@ -39,6 +39,7 @@ export interface ProjectsViewer {
   personas: ProjectPersona[];
   canCreateProject: boolean;
   canWriteFiles: boolean;
+  canEditTerms: boolean;
   createRoles: ProjectCreateRole[];
 }
 
@@ -46,6 +47,13 @@ export interface ProjectPartyOption {
   id: string;
   code: string;
   name: string;
+  /** Presentation grouping. Seller options always classify dual-role orgs as traders. */
+  group: "buyers" | "traders" | "suppliers";
+}
+
+export interface ProjectChainParty extends ProjectPartyRef {
+  projectId: string;
+  group: "traders" | "suppliers";
 }
 
 /** Safe, viewer-relative projection used by the Parties chain builder. */
@@ -53,10 +61,15 @@ export interface ProjectPartyWorkspace {
   center: ProjectPartyRef | null;
   buyer: ProjectPartyRef | null;
   seller: (ProjectPartyRef & { projectId?: string }) | null;
+  /** Admin-only ordered downstream projection. Omitted for ordinary party viewers. */
+  downstreamParties?: ProjectChainParty[];
   buyerOptions: ProjectPartyOption[];
   sellerOptions: ProjectPartyOption[];
+  centerOptions: ProjectPartyOption[];
   canSetBuyer: boolean;
   canSetSeller: boolean;
+  canEditBuyer: boolean;
+  canEditCenter: boolean;
 }
 
 /** One visible bilateral deal = one project row. */
