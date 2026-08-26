@@ -16,6 +16,7 @@ import { isPartyOrg, toProjectDetail, type ProjectionContext } from "../projecti
 import { loadOrgPersonas } from "../services/orgPersonas";
 import { countFilesByDeal, listProjectFiles, listProjectFolders } from "../services/projectFiles";
 import type { ProjectChainParty, ProjectDetail, ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace, ProjectsResult, ProjectsViewer } from "../types";
+import type { DealLineComponentLike } from "../projection";
 
 export type GetProjectResult = ProjectsResult<{
   project: ProjectDetail;
@@ -49,12 +50,15 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
 
   const walled = projectDealView(res.data, a.access, a.orgId);
 
-  const [personasByOrgId, files, folders, fileCounts, viewer] = await Promise.all([
+  const [personasByOrgId, files, folders, fileCounts, viewer, lineComponents] = await Promise.all([
     loadOrgPersonas(a.db, [a.orgId, raw.seller.id, raw.buyer.id, raw.customer.id, raw.producer.id, buyerProject?.seller.id, buyerProject?.buyer.id]),
     listProjectFiles(a.db, projectId, a.isPlatformAdmin || raw.seller.id === a.orgId),
     listProjectFolders(a.db, projectId),
     countFilesByDeal(a.db, [projectId]),
     resolveProjectsViewer(a),
+    a.access.domainVisible("deal_terms")
+      ? loadLineComponents(a.db, raw.lineItems.map((line) => line.id).filter((id): id is string => Boolean(id)))
+      : Promise.resolve([]),
   ]);
 
   const ctx: ProjectionContext = {
@@ -66,6 +70,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
 
   const project = toProjectDetail(raw, walled, ctx, {
     lines: walled.lineItems ?? [],
+    lineComponents,
     files,
     folders,
     fileCounts: fileCounts.get(projectId) ?? { total: 0 },
@@ -146,6 +151,25 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   };
 
   return { ok: true, project, viewer, partyWorkspace };
+}
+
+async function loadLineComponents(db: DbClient, lineIds: string[]): Promise<DealLineComponentLike[]> {
+  if (lineIds.length === 0) return [];
+  const { data, error } = await db.from("order_line_item_components")
+    .select("id, order_line_item_id, component_type, name, quantity, unit, unit_cost, total_cost_cents, sort_order")
+    .in("order_line_item_id", lineIds)
+    .order("sort_order");
+  if (error) throw new Error("Could not load specification cost components");
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    id: row.id as string,
+    orderLineItemId: row.order_line_item_id as string,
+    type: row.component_type as DealLineComponentLike["type"],
+    name: row.name as string,
+    quantity: Number(row.quantity),
+    unit: row.unit as string,
+    unitCost: Number(row.unit_cost),
+    totalCostCents: Number(row.total_cost_cents),
+  }));
 }
 
 async function resolveRootSellingProject(

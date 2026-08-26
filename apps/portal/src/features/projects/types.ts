@@ -112,6 +112,19 @@ export interface ProjectLine {
   unit: string;
   unitPriceCents?: number | null;
   lineTotalCents?: number | null;
+  notes: string | null;
+  /** Internal cost build-up. Absent unless the viewer may see deal terms. */
+  components?: ProjectLineComponent[];
+}
+
+export interface ProjectLineComponent {
+  id: string;
+  type: "material" | "process" | "service";
+  name: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  totalCostCents: number;
 }
 
 /** Commercial terms — the whole object is absent without `deal_terms`. */

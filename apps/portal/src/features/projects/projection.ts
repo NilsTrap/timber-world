@@ -86,6 +86,18 @@ export interface DealLineLike {
   /** Required by the field wall's line shape; deliberately NOT serialized. */
   vatRate: number | null;
   lineTotalCents: number | null;
+  notes?: string | null;
+}
+
+export interface DealLineComponentLike {
+  id: string;
+  orderLineItemId: string;
+  type: "material" | "process" | "service";
+  name: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  totalCostCents: number;
 }
 
 export interface ProjectionContext {
@@ -209,8 +221,17 @@ export function toProjectListItem(
 export function toProjectLines(
   walledLines: readonly DealLineLike[],
   ctx: ProjectionContext,
+  components: readonly DealLineComponentLike[] = [],
 ): ProjectLine[] {
   const seeTerms = ctx.access.domainVisible("deal_terms");
+  const componentsByLine = new Map<string, DealLineComponentLike[]>();
+  if (seeTerms) {
+    for (const component of components) {
+      const current = componentsByLine.get(component.orderLineItemId) ?? [];
+      current.push(component);
+      componentsByLine.set(component.orderLineItemId, current);
+    }
+  }
   return walledLines.map((li) => {
     const line: ProjectLine = {
       id: li.id ?? null,
@@ -226,10 +247,20 @@ export function toProjectLines(
       pieces: li.pieces,
       volumeM3: li.volumeM3,
       unit: li.unit,
+      notes: li.notes ?? null,
     };
     if (seeTerms) {
       line.unitPriceCents = li.unitPriceCents;
       line.lineTotalCents = li.lineTotalCents;
+      line.components = (li.id ? componentsByLine.get(li.id) : undefined)?.map((component) => ({
+        id: component.id,
+        type: component.type,
+        name: component.name,
+        quantity: component.quantity,
+        unit: component.unit,
+        unitCost: component.unitCost,
+        totalCostCents: component.totalCostCents,
+      })) ?? [];
     }
     return line;
   });
@@ -237,6 +268,7 @@ export function toProjectLines(
 
 export interface ProjectDetailParts {
   lines: readonly DealLineLike[];
+  lineComponents?: readonly DealLineComponentLike[];
   files: readonly ProjectFileMeta[];
   folders: readonly ProjectFolderMeta[];
   fileCounts: ProjectFileCounts;
@@ -289,7 +321,7 @@ export function toProjectDetail(
     direction,
     counterparty,
     otherParties,
-    lines: toProjectLines(parts.lines, ctx),
+    lines: toProjectLines(parts.lines, ctx, parts.lineComponents),
     files: parts.files.map((f) => ({
       id: f.id,
       fileName: f.fileName,

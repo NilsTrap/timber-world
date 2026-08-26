@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@timber/ui";
+import { Fragment } from "react";
 import type { ProjectDetail, ProjectPartyWorkspace, ProjectsViewer } from "../types";
 import { ProjectStageBadge } from "./ProjectStageBadge";
 import { ProjectFileWorkspace } from "./ProjectFileWorkspace";
@@ -74,8 +75,17 @@ export function ProjectDetailView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {project.lines.map((line) => (
-                  <TableRow key={line.id ?? `${line.lineNo}`}>
+                {project.lines.map((line) => {
+                  // Persisted component cents are canonical so displayed rows,
+                  // the cost summary, and margin always reconcile exactly.
+                  const componentCost = line.components?.reduce(
+                    (sum, component) => sum + component.totalCostCents,
+                    0,
+                  ) ?? 0;
+                  const margin = line.lineTotalCents == null ? null : line.lineTotalCents - componentCost;
+                  return (
+                  <Fragment key={line.id ?? `${line.lineNo}`}>
+                  <TableRow>
                     <TableCell>{line.lineNo}</TableCell>
                     <TableCell className="max-w-[16rem] truncate">
                       {line.productName ?? "—"}
@@ -99,7 +109,39 @@ export function ProjectDetailView({
                       </TableCell>
                     ) : null}
                   </TableRow>
-                ))}
+                  {line.notes || (line.components?.length ?? 0) > 0 ? (
+                    <TableRow className="bg-muted/20 hover:bg-muted/20">
+                      <TableCell />
+                      <TableCell colSpan={project.terms ? 7 : 5} className="py-3">
+                        {line.notes ? <p className="mb-3 text-xs text-muted-foreground">{line.notes}</p> : null}
+                        {(line.components?.length ?? 0) > 0 ? (
+                          <div className="max-w-3xl space-y-2">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Cost build-up</p>
+                            <div className="overflow-hidden rounded-md border bg-background">
+                              {line.components?.map((component) => (
+                                <div key={component.id} className="grid grid-cols-[minmax(8rem,1fr)_5rem_6rem_7rem] gap-3 border-b px-3 py-2 text-xs last:border-b-0">
+                                  <div className="min-w-0">
+                                    <span className="font-medium">{component.name}</span>
+                                    <span className="ml-2 text-muted-foreground capitalize">· {component.type}</span>
+                                  </div>
+                                  <span className="text-right tabular-nums">{formatNumber(component.quantity)} {component.unit}</span>
+                                  <span className="text-right tabular-nums">× {formatNumber(component.unitCost)}</span>
+                                  <span className="text-right font-medium tabular-nums">{formatCents(component.totalCostCents, currency)}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex flex-wrap justify-end gap-x-6 gap-y-1 text-xs">
+                              <span>Internal cost <strong>{formatCents(componentCost, currency)}</strong></span>
+                              {margin != null ? <span>Margin <strong>{formatCents(margin, currency)}</strong></span> : null}
+                            </div>
+                          </div>
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  </Fragment>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -124,6 +166,10 @@ export function ProjectDetailView({
       ) : null}
     </div>
   );
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat("en", { maximumFractionDigits: 4 }).format(value);
 }
 
 function formatCents(cents: number | null | undefined, currency: string): string {

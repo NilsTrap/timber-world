@@ -121,6 +121,9 @@ const migration = readFileSync("../../supabase/migrations/20260821211500_project
 const folderMigration = readFileSync("../../supabase/migrations/20260826090000_project_workspace_folders.sql", "utf8");
 const buyerAccessMigration = readFileSync("../../supabase/migrations/20260826130000_buyer_project_workspace_access.sql", "utf8");
 const adminBuyerMigration = readFileSync("../../supabase/migrations/20260826160000_project_admin_buyer_selection.sql", "utf8");
+const specificationCostMigration = readFileSync("../../supabase/migrations/20260826200000_project_line_cost_components.sql", "utf8");
+const specificationSecurityMigration = readFileSync("../../supabase/migrations/20260826203000_project_line_cost_components_security.sql", "utf8");
+const specificationSampleSeed = readFileSync("../../supabase/seeds/mills_sample_p04668_s04739.sql", "utf8");
 const cleanupMigration = readFileSync("../../supabase/migrations/20260826150000_project_file_cleanup.sql", "utf8");
 const cleanupActions = readFileSync("src/features/projects/actions/projectFileCleanupActions.ts", "utf8");
 ok("metadata loader select excludes storage_path", /const SAFE_FILE_SELECT\s*=\s*[\s\S]*?;/.test(service) && !service.match(/const SAFE_FILE_SELECT\s*=\s*([\s\S]*?);/)?.[1]?.includes("storage_path"));
@@ -157,6 +160,9 @@ ok("resolved admin purchase roots drive downstream traversal and append mutation
 ok("ordinary buyer mutations still require a trading-partner link", partyActions.includes("if (!a.isPlatformAdmin) {") && partyActions.includes("Selected company is not this trader's trading partner") && adminBuyerMigration.includes("IF NOT public.is_current_user_platform_admin()") && adminBuyerMigration.includes("Buyer is not a trading partner"));
 ok("admin buyer mutation retains active-customer and self-deal guards", adminBuyerMigration.includes("is_active AND is_customer") && adminBuyerMigration.includes("Buyer and seller must differ"));
 ok("project name is primary and redundant summary metadata is absent", detail.includes("title={projectName || project.reference}") && detail.includes("subtitle={projectName ? project.reference : undefined}") && !detail.includes("<SummaryGrid") && !detail.includes('"Platform admin"'));
+ok("manufacturing costs are nested beneath the sellable specification line", detail.includes("Cost build-up") && detail.includes("line.components?.map") && specificationCostMigration.includes("order_line_item_components"));
+ok("component RLS requires seller-side commercial access", specificationCostMigration.includes("current_user_deal_terms_access") && specificationSecurityMigration.includes("current_user_in_org(deal.seller_organisation_id)") && specificationSecurityMigration.includes("p_editable"));
+ok("Mills sample is an explicit development seed, not deployable schema", specificationSampleSeed.includes("'Carcass'") && specificationSampleSeed.includes("'Sheet metal'") && specificationSampleSeed.includes("'Cutting'") && specificationSampleSeed.includes("'Wet priming'") && !specificationCostMigration.includes("'Carcass'"));
 ok("editable buyer name opens the selector accessibly", parties.includes('onPartyClick={workspace.canEditBuyer') && parties.includes('aria-label={`Change buyer ${party.name ?? "company"}`}'));
 ok("buyer corrections target the projected root project", parties.includes("projectId: workspace.buyerProjectId"));
 ok("workspace exposes concise cleanup and sharing controls", workspace.includes("> Move") && workspace.includes("> Delete") && workspace.includes("} Clean") && workspace.includes("> Share") && workspace.includes(">Unshare<") && workspace.includes("Approve cleaned file") && workspace.includes("Shared status for") && !workspace.includes("Move selected") && !workspace.includes("Delete selected") && !workspace.includes("Clean selected") && !workspace.includes("Share with next party") && !workspace.includes("Unshare selected"));

@@ -22,6 +22,7 @@ import {
   toProjectDetail,
   toProjectListItem,
   type DealHeaderLike,
+  type DealLineComponentLike,
   type DealLineLike,
   type ProjectionContext,
 } from "../projection";
@@ -133,6 +134,10 @@ const FILES = [
   },
 ] as unknown as ProjectFileMeta[];
 const COUNTS = { total: 1 };
+const COMPONENTS: DealLineComponentLike[] = [{
+  id: "component-1", orderLineItemId: "li-1", type: "process", name: "Cutting",
+  quantity: 207.73, unit: "kg", unitCost: 0.39, totalCostCents: 8101,
+}];
 
 /** Run the real pipeline: field wall → projectors. */
 function render(p: AccessProfile, viewerOrgId: string | null, isPlatformAdmin = false) {
@@ -148,7 +153,7 @@ function render(p: AccessProfile, viewerOrgId: string | null, isPlatformAdmin = 
   return {
     item: toProjectListItem(rawHeader, walled, ctx, COUNTS.total),
     detail: toProjectDetail(rawHeader, walled, ctx, {
-      lines: walled.lineItems ?? [], files: FILES, folders: [], fileCounts: COUNTS,
+      lines: walled.lineItems ?? [], lineComponents: COMPONENTS, files: FILES, folders: [], fileCounts: COUNTS,
     }),
   };
 }
@@ -168,6 +173,7 @@ eq("admin: counterparty resolves to the buyer on a sell-shaped deal", admin.item
 eq("admin: counterparty carries persona labels", admin.item.counterparty?.personas, ["buyer"]);
 ok("admin: terms are present", !!admin.detail.terms);
 eq("admin: line prices are serialized", admin.detail.lines[0]?.unitPriceCents, 120000);
+eq("admin: internal cost components are serialized", admin.detail.lines[0]?.components?.[0]?.name, "Cutting");
 ok("admin: sees the producer among the other parties",
    admin.detail.otherParties.some((p) => p.id === PRODUCER), admin.detail.otherParties);
 
@@ -233,6 +239,8 @@ ok("client: line rows carry NO price keys",
    client.detail.lines.length > 0 &&
    !("unitPriceCents" in client.detail.lines[0]!) && !("lineTotalCents" in client.detail.lines[0]!),
    Object.keys(client.detail.lines[0] ?? {}));
+ok("client: internal cost components are absent",
+   !("components" in client.detail.lines[0]!), Object.keys(client.detail.lines[0] ?? {}));
 ok("client: the producer is not serialized at all",
    !client.detail.otherParties.some((p) => p.id === PRODUCER), client.detail.otherParties);
 ok("client: no third party of any kind is serialized",
