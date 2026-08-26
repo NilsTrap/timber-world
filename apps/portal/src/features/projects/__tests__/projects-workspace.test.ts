@@ -107,6 +107,10 @@ ok("STEP validation rejects out-of-range indices", !isValidOcctResult({ ...valid
 const service = readFileSync("src/features/projects/services/projectFiles.ts", "utf8");
 const actions = readFileSync("src/features/projects/actions/projectFileActions.ts", "utf8");
 const create = readFileSync("src/features/projects/actions/createProject.ts", "utf8");
+const projectLoader = readFileSync("src/features/projects/actions/getProject.ts", "utf8");
+const partyActions = readFileSync("src/features/projects/actions/projectPartyActions.ts", "utf8");
+const detail = readFileSync("src/features/projects/components/ProjectDetailView.tsx", "utf8");
+const parties = readFileSync("src/features/projects/components/ProjectPartiesBlock.tsx", "utf8");
 const workspace = readFileSync("src/features/projects/components/ProjectFileWorkspace.tsx", "utf8");
 const dropSurface = readFileSync("src/features/projects/components/ProjectDropSurface.tsx", "utf8");
 const preview = readFileSync("src/features/projects/components/ProjectFilePreview.tsx", "utf8");
@@ -116,6 +120,7 @@ const stepViewer = readFileSync("src/features/projects/components/viewers/StepFi
 const migration = readFileSync("../../supabase/migrations/20260821211500_project_file_workspace.sql", "utf8");
 const folderMigration = readFileSync("../../supabase/migrations/20260826090000_project_workspace_folders.sql", "utf8");
 const buyerAccessMigration = readFileSync("../../supabase/migrations/20260826130000_buyer_project_workspace_access.sql", "utf8");
+const adminBuyerMigration = readFileSync("../../supabase/migrations/20260826160000_project_admin_buyer_selection.sql", "utf8");
 const cleanupMigration = readFileSync("../../supabase/migrations/20260826150000_project_file_cleanup.sql", "utf8");
 const cleanupActions = readFileSync("src/features/projects/actions/projectFileCleanupActions.ts", "utf8");
 ok("metadata loader select excludes storage_path", /const SAFE_FILE_SELECT\s*=\s*[\s\S]*?;/.test(service) && !service.match(/const SAFE_FILE_SELECT\s*=\s*([\s\S]*?);/)?.[1]?.includes("storage_path"));
@@ -144,7 +149,18 @@ ok("abandoned signed uploads expire through a delayed cleanup queue", folderMigr
 ok("the inherited buyer role can create and upload its own project files", buyerAccessMigration.includes("WHERE key = 'client'") && buyerAccessMigration.includes("'action', 'deal', 'create'"));
 ok("shared file-folder namespace is serialized", folderMigration.includes("project_files_namespace_guard") && folderMigration.includes("pg_advisory_xact_lock"));
 ok("workspace exposes create, move and bulk delete controls", workspace.includes("createProjectFolderAction") && workspace.includes("moveProjectFolderAction") && workspace.includes("deleteProjectFilesAction"));
-ok("workspace exposes clean preview and checkbox-only sharing controls", workspace.includes("Clean selected") && workspace.includes("Share with next party") && workspace.includes("Approve cleaned file") && workspace.includes("Shared status for") && !workspace.includes(">Not shared<"));
+ok("admin buyer options are not partner-book scoped", projectLoader.includes('if (!admin) {') && !projectLoader.includes('if (!admin || side === "buyer")'));
+ok("admin purchase legs resolve one active same-spine root without widening ordinary projections", projectLoader.includes('a.isPlatformAdmin && raw.dealKind === "purchase_only"') && projectLoader.includes("resolveRootSellingProject") && projectLoader.includes('.neq("deal_kind", "purchase_only")') && projectLoader.includes("candidates.length !== 1") && projectLoader.includes("root.data.spineId !== purchaseLeg.spineId"));
+ok("admin party workspace is absolute while ordinary viewers stay direction-relative", projectLoader.includes("adminPartyRootAvailable ? buyerSource.seller : raw.buyer") && projectLoader.includes("adminPartyRootAvailable ? buyerSource.buyer : null") && projectLoader.includes('project.direction === "buy" ? null : raw.buyer'));
+ok("unresolved admin purchase roots expose no buyer or chain mutation target", projectLoader.includes("adminPartyRootAvailable = !isAdminPurchaseLeg || buyerProject !== null") && projectLoader.includes("buyerProjectId: adminPartyRootAvailable ? buyerSource.id : null") && projectLoader.includes("chainProjectId: adminPartyRootAvailable ? chainOrigin.id : null"));
+ok("resolved admin purchase roots drive downstream traversal and append mutations", projectLoader.includes("loadDownstreamChain(a.db, spineId, chainOrigin.id, centerRaw.id") && parties.includes("projectId: workspace.chainProjectId"));
+ok("ordinary buyer mutations still require a trading-partner link", partyActions.includes("if (!a.isPlatformAdmin) {") && partyActions.includes("Selected company is not this trader's trading partner") && adminBuyerMigration.includes("IF NOT public.is_current_user_platform_admin()") && adminBuyerMigration.includes("Buyer is not a trading partner"));
+ok("admin buyer mutation retains active-customer and self-deal guards", adminBuyerMigration.includes("is_active AND is_customer") && adminBuyerMigration.includes("Buyer and seller must differ"));
+ok("project name is primary and redundant summary metadata is absent", detail.includes("title={projectName || project.reference}") && detail.includes("subtitle={projectName ? project.reference : undefined}") && !detail.includes("<SummaryGrid") && !detail.includes('"Platform admin"'));
+ok("editable buyer name opens the selector accessibly", parties.includes('onPartyClick={workspace.canEditBuyer') && parties.includes('aria-label={`Change buyer ${party.name ?? "company"}`}'));
+ok("buyer corrections target the projected root project", parties.includes("projectId: workspace.buyerProjectId"));
+ok("workspace exposes concise cleanup and sharing controls", workspace.includes("> Move") && workspace.includes("> Delete") && workspace.includes("} Clean") && workspace.includes("> Share") && workspace.includes(">Unshare<") && workspace.includes("Approve cleaned file") && workspace.includes("Shared status for") && !workspace.includes("Move selected") && !workspace.includes("Delete selected") && !workspace.includes("Clean selected") && !workspace.includes("Share with next party") && !workspace.includes("Unshare selected"));
+ok("closed upload control uses the primary button style", workspace.includes('variant={uploadOpen ? "secondary" : "default"}'));
 ok("successful cleanup deselects only files actually cleaned", workspace.includes("filter((id) => !updates.has(id))") && workspace.indexOf("filter((id) => !updates.has(id))", workspace.indexOf("const cleanSelected")) < workspace.indexOf("} catch", workspace.indexOf("const cleanSelected")));
 ok("clean derivatives are linked and downstream reads require approval", cleanupMigration.includes("source_file_id") && cleanupMigration.includes("shared_to_order_id") && cleanupMigration.includes("cleanup_status='approved'"));
 ok("clean derivatives receive neutral filenames and paths", cleanupActions.includes("buildNeutralCleanFileName") && cleanupActions.includes("file_name: cleanFileName") && cleanupActions.includes("relative_path: cleanFileName"));

@@ -7,7 +7,7 @@
  * the underlying error code and nothing is logged that would separate the
  * cases — a direct URL must not be an existence oracle.
  */
-import { getOrderDeal } from "../../orders/services/orderDeals";
+import { getOrderDeal, type OrderDealView } from "../../orders/services/orderDeals";
 import { projectDealView } from "../../orders/services/dealFields";
 import type { DbClient } from "../../orders/services/dealModel";
 import { isValidUUID } from "../../orders/types";
@@ -39,10 +39,18 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   // not_found, so it is still indistinguishable from an unknown id.
   if (!a.isPlatformAdmin && !isPartyOrg(raw, a.orgId)) return { ok: false, deny: "not_found" };
 
+  // A platform admin may land on a protected purchase leg from the chain UI.
+  // Resolve the unique same-spine root sell leg without ever
+  // broadening the projection for ordinary bilateral viewers.
+  const isAdminPurchaseLeg = a.isPlatformAdmin && raw.dealKind === "purchase_only";
+  const buyerProject = isAdminPurchaseLeg
+    ? await resolveRootSellingProject(a.db, a.actor, raw)
+    : null;
+
   const walled = projectDealView(res.data, a.access, a.orgId);
 
   const [personasByOrgId, files, folders, fileCounts, viewer] = await Promise.all([
-    loadOrgPersonas(a.db, [a.orgId, raw.seller.id, raw.buyer.id, raw.customer.id, raw.producer.id]),
+    loadOrgPersonas(a.db, [a.orgId, raw.seller.id, raw.buyer.id, raw.customer.id, raw.producer.id, buyerProject?.seller.id, buyerProject?.buyer.id]),
     listProjectFiles(a.db, projectId, a.isPlatformAdmin || raw.seller.id === a.orgId),
     listProjectFolders(a.db, projectId),
     countFilesByDeal(a.db, [projectId]),
@@ -63,12 +71,14 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     fileCounts: fileCounts.get(projectId) ?? { total: 0 },
   });
 
-  const centerRaw = project.direction === "buy" ? raw.buyer : raw.seller;
-  const buyerRaw = project.direction === "buy" ? null : raw.buyer;
+  const buyerSource = buyerProject ?? raw;
+  const adminPartyRootAvailable = !isAdminPurchaseLeg || buyerProject !== null;
+  const centerRaw = a.isPlatformAdmin ? (adminPartyRootAvailable ? buyerSource.seller : raw.buyer) : project.direction === "buy" ? raw.buyer : raw.seller;
+  const buyerRaw = a.isPlatformAdmin ? (adminPartyRootAvailable ? buyerSource.buyer : null) : project.direction === "buy" ? null : raw.buyer;
   const center = partyRef(centerRaw, personasByOrgId);
   const buyer = buyerRaw ? partyRef(buyerRaw, personasByOrgId) : null;
   const ownsCenter = a.isPlatformAdmin || (!!a.orgId && centerRaw.id === a.orgId);
-  const canManageChain = ownsCenter && viewer.canCreateProject && (a.isPlatformAdmin || viewer.createRoles.includes("trader"));
+  const canManageChain = adminPartyRootAvailable && ownsCenter && viewer.canCreateProject && (a.isPlatformAdmin || viewer.createRoles.includes("trader"));
   const canSeeCustomers = a.isPlatformAdmin || a.access.domainVisible("customer_identity");
   const canSeeSuppliers = a.isPlatformAdmin || a.access.domainVisible("supplier_identity");
 
@@ -76,9 +86,11 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     ? partyRef(raw.seller, personasByOrgId)
     : null;
   let downstreamParties: ProjectChainParty[] | undefined;
-  const spineId = (raw as typeof raw & { spineId?: string | null }).spineId ?? null;
-  if (project.direction === "sell" && spineId && centerRaw.id && canSeeSuppliers) {
-    const chain = await loadDownstreamChain(a.db, spineId, projectId, centerRaw.id, a.isPlatformAdmin);
+  const chainOrigin = a.isPlatformAdmin ? buyerSource : raw;
+  const spineId = chainOrigin.spineId;
+  const chainIsSellView = a.isPlatformAdmin ? adminPartyRootAvailable && chainOrigin.dealKind !== "purchase_only" : project.direction === "sell";
+  if (chainIsSellView && spineId && centerRaw.id && canSeeSuppliers) {
+    const chain = await loadDownstreamChain(a.db, spineId, chainOrigin.id, centerRaw.id, a.isPlatformAdmin);
     if (chain.length > 0) {
       const orgIds = chain.map((leg) => leg.sellerOrganisationId);
       const [{ data: orgRows }, chainPersonas] = await Promise.all([
@@ -99,7 +111,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     }
   }
 
-  const isDraft = raw.lifecycleStage === "draft";
+  const isDraft = buyerSource.lifecycleStage === "draft";
   const buyerOptions = canManageChain && canSeeCustomers && buyerRaw !== null && isDraft
     ? await loadPartyOptions(a.db, a.isPlatformAdmin, centerRaw.id, "buyer")
     : [];
@@ -114,10 +126,12 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   // Buyer + at most two traders + final supplier. After Trader 2, only a
   // manufacturer/supplier may be appended.
   if (tradersInChain >= 2) sellerOptions = sellerOptions.filter((option) => option.group === "suppliers");
-  const centerOptions = a.isPlatformAdmin && isDraft && project.direction === "sell"
+  const centerOptions = a.isPlatformAdmin && isDraft && chainIsSellView
     ? await loadPartyOptions(a.db, true, null, "center")
     : [];
   const partyWorkspace: ProjectPartyWorkspace = {
+    buyerProjectId: adminPartyRootAvailable ? buyerSource.id : null,
+    chainProjectId: adminPartyRootAvailable ? chainOrigin.id : null,
     center,
     buyer,
     seller,
@@ -134,6 +148,22 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   return { ok: true, project, viewer, partyWorkspace };
 }
 
+async function resolveRootSellingProject(
+  db: DbClient,
+  actor: Parameters<typeof getOrderDeal>[1],
+  purchaseLeg: OrderDealView,
+): Promise<OrderDealView | null> {
+  if (!purchaseLeg.spineId) return null;
+  const { data, error } = await db.from("orders").select("id")
+    .eq("spine_id", purchaseLeg.spineId).neq("deal_kind", "purchase_only")
+    .neq("lifecycle_stage", "cancelled").limit(2);
+  const candidates = (data ?? []) as Array<{ id: string }>;
+  if (error || candidates.length !== 1) return null;
+  const root = await getOrderDeal(db, actor, candidates[0]!.id);
+  if (!root.success || root.data.spineId !== purchaseLeg.spineId || root.data.dealKind === "purchase_only") return null;
+  return root.data;
+}
+
 function partyRef(row: { id: string | null; code: string | null; name: string | null }, personas: ReadonlyMap<string, ProjectPartyRef["personas"]>): ProjectPartyRef | null {
   if (!row.id) return null;
   return { id: row.id, code: row.code, name: row.name, personas: personas.get(row.id) ?? [] };
@@ -147,7 +177,7 @@ async function loadPartyOptions(
 ): Promise<ProjectPartyOption[]> {
   if (!centerOrgId && side !== "center") return [];
   let ids: string[] | null = null;
-  if (!admin || side === "buyer") {
+  if (!admin) {
     const { data } = await db.from("organisation_trading_partners").select("partner_organisation_id").eq("organisation_id", centerOrgId as string);
     ids = ((data ?? []) as { partner_organisation_id: string }[]).map((row) => row.partner_organisation_id);
     if (ids.length === 0) return [];

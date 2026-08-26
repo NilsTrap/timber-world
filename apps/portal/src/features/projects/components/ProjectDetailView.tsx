@@ -2,8 +2,6 @@ import {
   EmptyState,
   PageHeader,
   SectionHeader,
-  SummaryCard,
-  SummaryGrid,
   Table,
   TableBody,
   TableCell,
@@ -11,7 +9,6 @@ import {
   TableHeader,
   TableRow,
 } from "@timber/ui";
-import { PERSONA_LABEL } from "../personas";
 import type { ProjectDetail, ProjectPartyWorkspace, ProjectsViewer } from "../types";
 import { ProjectStageBadge } from "./ProjectStageBadge";
 import { ProjectFileWorkspace } from "./ProjectFileWorkspace";
@@ -37,29 +34,16 @@ export function ProjectDetailView({
   partyWorkspace: ProjectPartyWorkspace;
 }) {
   const currency = project.currency ?? "";
+  const projectName = project.name?.trim();
   return (
     <div className="space-y-6">
       <PageHeader
         backHref="/projects"
         backLabel="Back to projects"
-        title={project.reference}
-        subtitle={project.name ?? undefined}
+        title={projectName || project.reference}
+        subtitle={projectName ? project.reference : undefined}
         badge={<ProjectStageBadge stage={project.stage} label={project.stageLabel} />}
-        actions={
-          <span className="text-xs text-muted-foreground">
-            {viewer.isPlatformAdmin
-              ? "Platform admin"
-              : viewer.personas.map((p) => PERSONA_LABEL[p]).join(" · ")}
-          </span>
-        }
       />
-
-      <SummaryGrid columns={4}>
-        <SummaryCard label="Your side" value={project.direction === "sell" ? "Selling" : "Buying"} />
-        <SummaryCard label="Counterparty" value={project.counterparty?.name ?? "—"} />
-        <SummaryCard label="Delivery" value={project.deliveryDeadline ?? "—"} />
-        <SummaryCard label="Files" value={String(project.fileCounts.total)} />
-      </SummaryGrid>
 
       <div className="space-y-3">
         <SectionHeader title="Parties" />

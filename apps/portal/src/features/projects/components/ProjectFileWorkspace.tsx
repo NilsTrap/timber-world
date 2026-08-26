@@ -385,7 +385,7 @@ export function ProjectFileWorkspace({
           <Button
             type="button"
             size="sm"
-            variant={uploadOpen ? "secondary" : "outline"}
+            variant={uploadOpen ? "secondary" : "default"}
             aria-expanded={uploadOpen}
             aria-controls="project-file-upload-surface"
             onClick={() => {
@@ -414,18 +414,18 @@ export function ProjectFileWorkspace({
             <FolderPlus className="mr-1.5 h-4 w-4" /> New folder
           </Button>
           <Button type="button" size="sm" variant="outline" disabled={selectedFileIds.size === 0} onClick={moveSelectedFiles}>
-            <FolderInput className="mr-1.5 h-4 w-4" /> Move selected
+            <FolderInput className="mr-1.5 h-4 w-4" /> Move
           </Button>
           <Button type="button" size="sm" variant="outline" disabled={selectedFileIds.size === 0} onClick={deleteSelectedFiles}>
-            <Trash2 className="mr-1.5 h-4 w-4" /> Delete selected
+            <Trash2 className="mr-1.5 h-4 w-4" /> Delete
           </Button>
           {canManageCleanup ? <><Button type="button" size="sm" variant="outline" disabled={selectedFileIds.size === 0 || cleanupBusy} onClick={cleanSelected}>
-            {cleanupBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />} Clean selected
+            {cleanupBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />} Clean
           </Button>
           <Button type="button" size="sm" variant="outline" disabled={selectedFileIds.size === 0} onClick={shareSelected}>
-            <ShieldCheck className="mr-1.5 h-4 w-4" /> Share with next party
+            <ShieldCheck className="mr-1.5 h-4 w-4" /> Share
           </Button>
-          <Button type="button" size="sm" variant="ghost" disabled={selectedFileIds.size === 0} onClick={unshareSelected}>Unshare selected</Button></> : null}
+          <Button type="button" size="sm" variant="ghost" disabled={selectedFileIds.size === 0} onClick={unshareSelected}>Unshare</Button></> : null}
           {files.length > 0 ? (
             <label className="ml-auto flex items-center gap-2 text-sm">
               <Checkbox

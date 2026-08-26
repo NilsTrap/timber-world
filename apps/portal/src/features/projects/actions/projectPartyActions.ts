@@ -30,9 +30,11 @@ export async function setProjectBuyer(input: { projectId: string; buyerOrganisat
   const { data: selected } = await a.db.from("organisations").select("id, is_customer, is_active").eq("id", input.buyerOrganisationId).maybeSingle();
   const buyerOrg = selected as { id: string; is_customer: boolean; is_active: boolean } | null;
   if (!buyerOrg?.is_active || !buyerOrg.is_customer) return { success: false, error: "Selected company is not an eligible buyer", code: "VALIDATION_ERROR" };
-  const { data: relation } = await a.db.from("organisation_trading_partners").select("partner_organisation_id")
-    .eq("organisation_id", origin.data.seller.id).eq("partner_organisation_id", input.buyerOrganisationId).maybeSingle();
-  if (!relation) return { success: false, error: "Selected company is not this trader's trading partner", code: "FORBIDDEN" };
+  if (!a.isPlatformAdmin) {
+    const { data: relation } = await a.db.from("organisation_trading_partners").select("partner_organisation_id")
+      .eq("organisation_id", origin.data.seller.id).eq("partner_organisation_id", input.buyerOrganisationId).maybeSingle();
+    if (!relation) return { success: false, error: "Selected company is not this trader's trading partner", code: "FORBIDDEN" };
+  }
   const { data: corrected, error } = await a.db.rpc("correct_project_parties", { p_project_id: input.projectId, p_buyer_id: input.buyerOrganisationId, p_trader_id: null });
   if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
   await logProjectPartyChange(a.db, input.projectId, a.portalUserId, origin.data.buyer.id ? "Buyer changed" : "Buyer assigned");

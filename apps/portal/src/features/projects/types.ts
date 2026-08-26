@@ -58,6 +58,10 @@ export interface ProjectChainParty extends ProjectPartyRef {
 
 /** Safe, viewer-relative projection used by the Parties chain builder. */
 export interface ProjectPartyWorkspace {
+  /** Deal whose buyer is displayed/edited. Differs from the viewed deal only for admin purchase-leg projections. */
+  buyerProjectId: string | null;
+  /** Root deal used for chain extension; null when an admin purchase leg cannot resolve uniquely. */
+  chainProjectId: string | null;
   center: ProjectPartyRef | null;
   buyer: ProjectPartyRef | null;
   seller: (ProjectPartyRef & { projectId?: string }) | null;
