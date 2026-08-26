@@ -93,10 +93,13 @@ export function projectPathKey(path: string): string {
 
 export function pathFromBrowserFile(file: File & { path?: string }): PathValidation {
   const supplied = file.webkitRelativePath || file.path || file.name;
-  // file-selector (used by react-dropzone) prefixes dropped paths with `/`.
-  // This strips only its transport marker; the strict server boundary above
-  // still rejects caller-supplied absolute paths.
-  return normaliseProjectPath(supplied.replace(/^\/+/, ""));
+  // file-selector (used by react-dropzone) represents an ordinary selected
+  // file as `./name.ext` and dropped entries with a leading `/`. Strip exactly
+  // those browser transport markers; the strict boundary still rejects `../`.
+  const browserPath = supplied.startsWith("./")
+    ? supplied.slice(2)
+    : supplied.replace(/^\/+/, "");
+  return normaliseProjectPath(browserPath);
 }
 
 export function replacePathPrefix(path: string, from: string, to: string): string {

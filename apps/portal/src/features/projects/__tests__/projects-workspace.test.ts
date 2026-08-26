@@ -8,6 +8,7 @@ import {
   normaliseProjectMimeType,
   normaliseProjectName,
   normaliseProjectPath,
+  pathFromBrowserFile,
   projectPathKey,
   replacePathPrefix,
   storedProjectMimeType,
@@ -38,6 +39,9 @@ for (const bad of ["", "/root/a.pdf", "C:/a.pdf", "../a.pdf", "a/../b.pdf", "a//
   ok(`reject invalid path ${JSON.stringify(bad)}`, !normaliseProjectPath(bad).ok);
 }
 eq("normalise Windows separators", normaliseProjectPath("drawings\\final\\A.pdf"), { ok: true, path: "drawings/final/A.pdf", segments: ["drawings", "final", "A.pdf"] });
+eq("react-dropzone single-file marker is removed", pathFromBrowserFile({ name: "quote.pdf", path: "./quote.pdf", webkitRelativePath: "" } as File & { path: string }), { ok: true, path: "quote.pdf", segments: ["quote.pdf"] });
+eq("dropped folder leading slash is removed", pathFromBrowserFile({ name: "quote.pdf", path: "/drawings/quote.pdf", webkitRelativePath: "" } as File & { path: string }), { ok: true, path: "drawings/quote.pdf", segments: ["drawings", "quote.pdf"] });
+ok("parent traversal is not treated as a browser marker", !pathFromBrowserFile({ name: "quote.pdf", path: "../quote.pdf", webkitRelativePath: "" } as File & { path: string }).ok);
 eq("case-insensitive duplicate key", projectPathKey("Drawings/A.PDF"), projectPathKey("drawings/a.pdf"));
 eq("reject blank file name", normaliseProjectName("  "), null);
 eq("reject separators in a rename", normaliseProjectName("folder/name"), null);
