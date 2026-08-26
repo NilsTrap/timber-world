@@ -91,6 +91,8 @@ export interface ProjectListItem {
   deliveryDeadline: string | null;
   /** Files attached to THIS deal only (RLS-filtered); never a chain roll-up. */
   fileCount: number;
+  /** Temporary sourcing invitation; the viewer is not yet a committed deal party. */
+  rfqInvitation?: boolean;
   /** Only for viewers with the `deal_terms` domain. */
   currency?: string;
 }

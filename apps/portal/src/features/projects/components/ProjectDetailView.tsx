@@ -5,6 +5,7 @@ import { ProjectFileWorkspace } from "./ProjectFileWorkspace";
 import { ProjectPartiesBlock } from "./ProjectPartiesBlock";
 import { ProjectTermsCard } from "./ProjectTermsCard";
 import { ProjectSpecificationEditor } from "./ProjectSpecificationEditor";
+import { ProjectRfqCard } from "./ProjectRfqCard";
 
 /**
  * Project detail (server component).
@@ -19,10 +20,14 @@ export function ProjectDetailView({
   project,
   viewer,
   partyWorkspace,
+  isRfqCandidate,
+  initialRfqCandidates,
 }: {
   project: ProjectDetail;
   viewer: ProjectsViewer;
   partyWorkspace: ProjectPartyWorkspace;
+  isRfqCandidate: boolean;
+  initialRfqCandidates: Array<{ id: string; name: string }>;
 }) {
   const currency = project.currency ?? "";
   const projectName = project.name?.trim();
@@ -36,12 +41,12 @@ export function ProjectDetailView({
         badge={<ProjectStageBadge stage={project.stage} label={project.stageLabel} />}
       />
 
-      <div className="space-y-3">
+      {!isRfqCandidate ? <div className="space-y-3">
         <SectionHeader title="Parties" />
         <ProjectPartiesBlock projectId={project.id} workspace={partyWorkspace} />
-      </div>
+      </div> : null}
 
-      {project.terms ? (
+      {!isRfqCandidate && project.terms ? (
         <ProjectTermsCard projectId={project.id} terms={project.terms} deliveryDeadline={project.deliveryDeadline} canEdit={viewer.canEditTerms} />
       ) : null}
 
@@ -51,6 +56,10 @@ export function ProjectDetailView({
         currency={currency}
         canEdit={viewer.canEditTerms && project.stage === "draft"}
       />
+
+      {(viewer.canCreateProject || isRfqCandidate || viewer.isPlatformAdmin) ? (
+        <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={viewer.canCreateProject && project.stage === "draft"} initialOptions={initialRfqCandidates} />
+      ) : null}
 
       <ProjectFileWorkspace
         projectId={project.id}

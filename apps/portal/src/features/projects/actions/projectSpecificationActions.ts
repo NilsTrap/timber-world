@@ -6,9 +6,9 @@ import type { ActionResult } from "../../orders/types";
 import { getOrderDeal } from "../../orders/services/orderDeals";
 import type { ActorContext, DbClient } from "../../orders/services/dealModel";
 import { resolveProjectsActor } from "../access";
+import { readLineFieldValues } from "../../catalog/services/lineFieldValues";
 import {
   calculateComponentTotalCents,
-  calculateLineTotalCents,
   canEditProjectSpecification,
 } from "../services/projectSpecification";
 
@@ -24,8 +24,8 @@ const lineSchema = z.object({
   productName: z.string().trim().min(1).max(200),
   quantity: positiveNumber,
   unit: lineUnit,
-  unitPrice: nonNegativeNumber,
   notes: z.string().trim().max(2000).optional().default(""),
+  catalogVariantId: uuid.optional(),
 });
 
 const componentSchema = z.object({
@@ -83,20 +83,73 @@ export async function createProjectSpecificationLine(raw: unknown): Promise<Acti
   const input = parsed.data;
   const ctx = await editableProject(input.projectId);
   if (!ctx.success) return ctx;
+  let snapshot: Record<string, unknown> = { product_name: input.productName, unit: input.unit, notes: input.notes || null, is_standard: false };
+  if (input.catalogVariantId) {
+    const { data: variant, error: catalogError } = await ctx.data.db.from("catalog_variants")
+      .select("id, product_id, sku, thickness_mm, width_mm, length_mm, is_active, catalog_products!inner(id, name, is_active, category_id, catalog_categories!inner(primary_unit, is_active))")
+      .eq("id", input.catalogVariantId).eq("is_active", true).eq("catalog_products.is_active", true).eq("catalog_products.catalog_categories.is_active", true).maybeSingle();
+    if (catalogError || !variant) return { success: false, error: "Catalogue selection is missing or inactive", code: "VALIDATION_ERROR" };
+    const row = variant as Record<string, unknown>;
+    const product = row.catalog_products as Record<string, unknown>;
+    const category = product.catalog_categories as Record<string, unknown>;
+    const catalogUnit = lineUnit.safeParse(category.primary_unit);
+    if (!catalogUnit.success) return { success: false, error: "Catalogue unit is not supported by project specifications", code: "VALIDATION_ERROR" };
+    const resolvedFields = await readLineFieldValues(ctx.data.db, {
+      productId: row.product_id as string,
+      variantId: row.id as string,
+    });
+    const fieldSnapshot = Object.values(resolvedFields.fields)
+      .map((field) => `${field.label}: ${field.value}`)
+      .join(" · ");
+    const snapshotNotes = [input.notes, fieldSnapshot].filter(Boolean).join(" · ");
+    if (snapshotNotes.length > 2000) {
+      return { success: false, error: "Catalogue details exceed the specification note limit", code: "VALIDATION_ERROR" };
+    }
+    snapshot = {
+      product_name: product.name as string,
+      product_type: row.sku as string | null,
+      thickness: row.thickness_mm == null ? null : String(row.thickness_mm),
+      width: row.width_mm == null ? null : String(row.width_mm),
+      length: row.length_mm == null ? null : String(row.length_mm),
+      unit: catalogUnit.data,
+      notes: snapshotNotes || null,
+      catalog_product_id: row.product_id as string,
+      catalog_variant_id: row.id as string,
+      is_standard: true,
+    };
+  }
   const { data: rows, error: readError } = await ctx.data.db.from("order_line_items").select("line_no").eq("order_id", input.projectId).eq("side", "sell");
   if (readError) return { success: false, error: readError.message, code: "FETCH_FAILED" };
   const lineNo = (rows ?? []).reduce((max: number, row: { line_no?: number }) => Math.max(max, row.line_no ?? 0), 0) + 1;
-  const quantity = lineQuantities(input.unit, input.quantity);
+  const resolvedUnit = snapshot.unit as z.infer<typeof lineUnit>;
+  const quantity = lineQuantities(resolvedUnit, input.quantity);
   const { data, error } = await ctx.data.db.from("order_line_items").insert({
     order_id: input.projectId, side: "sell", line_no: lineNo,
-    product_name: input.productName, unit: input.unit,
-    unit_price_cents: Math.round(input.unitPrice * 100),
-    line_total_cents: calculateLineTotalCents(input.quantity, input.unitPrice),
-    notes: input.notes || null, ...quantity,
+    ...snapshot, unit_price_cents: null, line_total_cents: null, ...quantity,
   }).select("id").single();
   if (error || !data) return { success: false, error: error?.message ?? "Could not add line", code: "INSERT_FAILED" };
   refreshProject(input.projectId);
   return { success: true, data: { id: data.id as string } };
+}
+
+export type ProjectCatalogOption = { id: string; label: string; unit: string };
+
+export async function getProjectCatalogOptions(): Promise<ActionResult<ProjectCatalogOption[]>> {
+  const a = await resolveProjectsActor();
+  if (!a.ok) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
+  const { data, error } = await a.db.from("catalog_variants")
+    .select("id, sku, thickness_mm, width_mm, length_mm, is_active, catalog_products!inner(name, is_active, catalog_categories!inner(primary_unit, is_active))")
+    .eq("is_active", true).eq("catalog_products.is_active", true).eq("catalog_products.catalog_categories.is_active", true).order("sort_order");
+  if (error) return { success: false, error: "Could not load catalogue", code: "FETCH_FAILED" };
+  const options = ((data ?? []) as Array<Record<string, unknown>>).flatMap((row) => {
+    const product = row.catalog_products as Record<string, unknown>;
+    const category = product.catalog_categories as Record<string, unknown>;
+    const unit = lineUnit.safeParse(category.primary_unit);
+    if (!unit.success) return [];
+    const dimensions = [row.thickness_mm, row.width_mm, row.length_mm].filter((value) => value != null).join(" × ");
+    return [{ id: row.id as string, unit: unit.data, label: `${product.name as string}${row.sku ? ` · ${row.sku as string}` : ""}${dimensions ? ` · ${dimensions}` : ""}` }];
+  });
+  return { success: true, data: options };
 }
 
 export async function updateProjectSpecificationLine(raw: unknown): Promise<ActionResult<{ id: string }>> {
@@ -108,9 +161,10 @@ export async function updateProjectSpecificationLine(raw: unknown): Promise<Acti
   const quantity = lineQuantities(input.unit, input.quantity);
   const { data, error } = await ctx.data.db.from("order_line_items").update({
     product_name: input.productName, unit: input.unit,
-    unit_price_cents: Math.round(input.unitPrice * 100),
-    line_total_cents: calculateLineTotalCents(input.quantity, input.unitPrice),
-    notes: input.notes || null, ...quantity,
+    unit_price_cents: null, line_total_cents: null,
+    notes: input.notes || null,
+    catalog_product_id: null, catalog_variant_id: null, is_standard: false,
+    ...quantity,
   }).eq("id", input.lineId).eq("order_id", input.projectId).select("id").maybeSingle();
   if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
   if (!data) return { success: false, error: "Line not found", code: "NOT_FOUND" };

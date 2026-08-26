@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getProject } from "@/features/projects/actions/getProject";
+import { getEligibleProjectRfqCandidates } from "@/features/projects/actions/projectRfqActions";
 import { ProjectDetailView } from "@/features/projects/components/ProjectDetailView";
 
 export const metadata: Metadata = {
@@ -27,5 +28,8 @@ export default async function ProjectDetailPage({
     if (res.deny === "login") redirect("/login");
     notFound();
   }
-  return <ProjectDetailView project={res.project} viewer={res.viewer} partyWorkspace={res.partyWorkspace} />;
+  const candidates = res.viewer.canCreateProject && res.project.stage === "draft"
+    ? await getEligibleProjectRfqCandidates(id)
+    : null;
+  return <ProjectDetailView project={res.project} viewer={res.viewer} partyWorkspace={res.partyWorkspace} isRfqCandidate={res.isRfqCandidate} initialRfqCandidates={candidates?.success ? candidates.data : []} />;
 }

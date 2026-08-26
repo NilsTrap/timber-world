@@ -22,12 +22,42 @@ export type GetProjectResult = ProjectsResult<{
   project: ProjectDetail;
   viewer: ProjectsViewer;
   partyWorkspace: ProjectPartyWorkspace;
+  isRfqCandidate: boolean;
 }>;
 
 export async function getProject(projectId: string): Promise<GetProjectResult> {
   const a = await resolveProjectsActor();
   if (!a.ok) return a;
   if (!isValidUUID(projectId)) return { ok: false, deny: "not_found" };
+
+  if (!a.isPlatformAdmin) {
+    const candidateProject = await loadRfqCandidateProject(a.db, projectId);
+    if (candidateProject) {
+      const [files, viewer] = await Promise.all([
+        listProjectFiles(a.db, projectId, false),
+        resolveProjectsViewer(a),
+      ]);
+      return {
+        ok: true,
+        project: {
+          ...candidateProject,
+          files,
+          folders: [],
+          fileCount: files.length,
+          fileCounts: { total: files.length },
+        },
+        viewer: {
+          ...viewer,
+          canCreateProject: false,
+          canWriteFiles: false,
+          canEditTerms: false,
+          createRoles: [],
+        },
+        partyWorkspace: emptyPartyWorkspace(),
+        isRfqCandidate: true,
+      };
+    }
+  }
 
   const res = await getOrderDeal(a.db, a.actor, projectId);
   if (!res.success) return { ok: false, deny: "not_found" };
@@ -150,7 +180,56 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     canEditCenter: centerOptions.length > 0,
   };
 
-  return { ok: true, project, viewer, partyWorkspace };
+  return { ok: true, project, viewer, partyWorkspace, isRfqCandidate: false };
+}
+
+type CandidateSnapshot = {
+  id: string;
+  reference: string;
+  name: string | null;
+  stage: string;
+  deliveryDeadline: string | null;
+  currency: string;
+  lines: ProjectDetail["lines"];
+};
+
+async function loadRfqCandidateProject(db: DbClient, projectId: string): Promise<Omit<ProjectDetail, "files" | "folders" | "fileCount" | "fileCounts"> | null> {
+  const { data, error } = await db.rpc("get_project_rfq_candidate_snapshot", { p_order_id: projectId });
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) return null;
+  const row = data as unknown as CandidateSnapshot;
+  if (row.id !== projectId || !Array.isArray(row.lines)) return null;
+  return {
+    id: row.id,
+    reference: row.reference,
+    name: row.name,
+    stage: row.stage,
+    stageLabel: row.stage.replaceAll("_", " "),
+    direction: "buy",
+    counterparty: null,
+    deliveryDeadline: row.deliveryDeadline,
+    currency: row.currency,
+    rfqInvitation: true,
+    otherParties: [],
+    lines: row.lines,
+    notes: null,
+  };
+}
+
+function emptyPartyWorkspace(): ProjectPartyWorkspace {
+  return {
+    buyerProjectId: null,
+    chainProjectId: null,
+    center: null,
+    buyer: null,
+    seller: null,
+    buyerOptions: [],
+    sellerOptions: [],
+    centerOptions: [],
+    canSetBuyer: false,
+    canSetSeller: false,
+    canEditBuyer: false,
+    canEditCenter: false,
+  };
 }
 
 async function loadLineComponents(db: DbClient, lineIds: string[]): Promise<DealLineComponentLike[]> {

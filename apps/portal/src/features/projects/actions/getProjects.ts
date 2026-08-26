@@ -44,7 +44,16 @@ export async function listProjects(): Promise<ListProjectsResult> {
   const res = await listDeals(a.db, a.actor, { limit: LIST_LIMIT, partyOrganisationId });
   if (!res.success) return { ok: false, deny: "not_found" };
 
-  const raws: OrderDealSummary[] = res.data;
+  const committedRaws: OrderDealSummary[] = res.data;
+  let invitedRows: Array<{ id: string; reference: string; name: string | null; stage: string; deliveryDeadline: string | null }> = [];
+  if (!a.isPlatformAdmin && a.orgId) {
+    const { data, error } = await a.db.rpc("list_project_rfq_invitations");
+    if (error || !Array.isArray(data)) return { ok: false, deny: "not_found" };
+    invitedRows = data.slice(0, LIST_LIMIT) as typeof invitedRows;
+  }
+  const committedIds = new Set(committedRaws.map((deal) => deal.id));
+  invitedRows = invitedRows.filter((row) => !committedIds.has(row.id));
+  const raws: OrderDealSummary[] = committedRaws;
   const visibleIds = raws.map((d) => d.id);
 
   // Persona lookup covers ONLY the orgs that actually reach the payload — the
@@ -67,12 +76,24 @@ export async function listProjects(): Promise<ListProjectsResult> {
     personasByOrgId,
   };
 
-  const items = raws.map((raw) => {
+  const committedItems = raws.map((raw) => {
     // The E4 field wall runs on every row before anything is projected; the
     // list has no line items, so an empty array stands in for them.
     const walled = projectDealView({ ...raw, lineItems: [] }, a.access, a.orgId);
     return toProjectListItem(raw, walled, ctx, fileCounts.get(raw.id)?.total ?? 0);
   });
+  const invitedItems: ProjectListItem[] = invitedRows.map((row) => ({
+    id: row.id,
+    reference: row.reference,
+    name: row.name,
+    stage: row.stage,
+    stageLabel: row.stage.replaceAll("_", " "),
+    direction: "buy",
+    counterparty: null,
+    deliveryDeadline: row.deliveryDeadline,
+    fileCount: 0,
+    rfqInvitation: true,
+  }));
 
-  return { ok: true, items, viewer };
+  return { ok: true, items: [...committedItems, ...invitedItems], viewer };
 }

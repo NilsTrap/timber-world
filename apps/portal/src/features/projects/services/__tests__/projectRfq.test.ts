@@ -1,0 +1,24 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { canManageProjectRfq, candidateCanSee, quoteTotalToCents } from "../projectRfq";
+
+assert.equal(quoteTotalToCents(12.345), 1235);
+assert.throws(() => quoteTotalToCents(-1));
+assert.equal(canManageProjectRfq({isPlatformAdmin:false,actorOrganisationId:"owner",ownerOrganisationId:"owner",lifecycleStage:"draft"}),true);
+assert.equal(canManageProjectRfq({isPlatformAdmin:false,actorOrganisationId:"candidate",ownerOrganisationId:"owner",lifecycleStage:"draft"}),false);
+assert.equal(canManageProjectRfq({isPlatformAdmin:true,actorOrganisationId:null,ownerOrganisationId:"owner",lifecycleStage:"confirmed"}),false);
+assert.equal(candidateCanSee("supplier-a","supplier-a"),true);
+assert.equal(candidateCanSee("supplier-b","supplier-a"),false);
+const migration=readFileSync("../../supabase/migrations/20260826210000_project_supplier_rfqs.sql","utf8");
+const editor=readFileSync("src/features/projects/components/ProjectSpecificationEditor.tsx","utf8");
+assert.match(migration,/project_rfq_candidates_select/);
+assert.match(migration,/FOR UPDATE/);
+assert.match(migration,/status=CASE WHEN id=c\.id THEN 'awarded' ELSE 'not_awarded'/);
+assert.match(migration,/get_project_rfq_candidate_snapshot/);
+assert.doesNotMatch(migration,/CREATE POLICY orders_rfq_candidate_select/);
+assert.doesNotMatch(migration,/CREATE POLICY order_lines_rfq_candidate_select/);
+assert.match(migration,/r\.deadline>now\(\)/);
+assert.match(migration,/UPDATE public\.orders SET upstream_deal_id=v_leg WHERE id=o\.id/);
+assert.match(migration,/current_user_can_create_deal_in_org/);
+assert.doesNotMatch(editor,/Unit price|Margin|Cost build-up|unitPrice/);
+console.log("projectRfq.test.ts: passed");

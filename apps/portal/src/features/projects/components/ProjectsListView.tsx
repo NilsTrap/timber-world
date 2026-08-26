@@ -31,8 +31,8 @@ export function ProjectsListView({
   items: ProjectListItem[];
   viewer: ProjectsViewer;
 }) {
-  const sellCount = items.filter((i) => i.direction === "sell").length;
-  const buyCount = items.length - sellCount;
+  const sellCount = items.filter((i) => !i.rfqInvitation && i.direction === "sell").length;
+  const buyCount = items.filter((i) => !i.rfqInvitation && i.direction === "buy").length;
   const fileCount = items.reduce((sum, i) => sum + i.fileCount, 0);
 
   return (
@@ -87,7 +87,7 @@ export function ProjectsListView({
                     </Link>
                   </TableCell>
                   <TableCell className="max-w-[18rem] truncate">{item.name ?? "—"}</TableCell>
-                  <TableCell className="capitalize">{item.direction}</TableCell>
+                  <TableCell className="capitalize">{item.rfqInvitation ? "RFQ" : item.direction}</TableCell>
                   <TableCell>
                     <span className="flex flex-wrap items-center gap-1">
                       <span>{item.counterparty?.name ?? "—"}</span>
