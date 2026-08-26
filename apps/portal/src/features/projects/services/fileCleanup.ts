@@ -56,7 +56,7 @@ function sanitizeHtml(input: string, terms: readonly string[]): TextCleanupResul
 
 const DROP_HTML_TAGS = new Set(["base", "embed", "iframe", "link", "math", "meta", "object", "script", "svg"]);
 const UNWRAP_HTML_TAGS = new Set(["form"]);
-const URL_ATTRIBUTES = new Set(["action", "formaction", "href", "src", "xlink:href"]);
+const URL_ATTRIBUTES = new Set(["action", "background", "formaction", "href", "poster", "src", "xlink:href"]);
 
 function sanitizeChildren(parent: DefaultTreeAdapterTypes.ParentNode, terms: readonly string[], findings: CleanupFinding[]): void {
   const children: DefaultTreeAdapterTypes.ChildNode[] = [];
@@ -89,7 +89,8 @@ function sanitizeCss(value: string, terms: readonly string[], findings: CleanupF
   const decodedEscapes = decodeCssEscapes(value).replace(/\/\*[\s\S]*?\*\//gu, "");
   const withoutImports = decodedEscapes.replace(/@import\s*(?:url\([\s\S]*?\)|["'][\s\S]*?["'])[^;]*;?/giu, "");
   const withoutImageSets = withoutImports.replace(/(?:-webkit-)?image-set\([\s\S]*?\)/giu, "none");
-  const withoutRemoteUrls = withoutImageSets.replace(/url\(\s*(["']?)([\s\S]*?)\1\s*\)/giu, (match, _quote: string, url: string) =>
+  const withoutSrcFunctions = withoutImageSets.replace(/src\([\s\S]*?\)/giu, "none");
+  const withoutRemoteUrls = withoutSrcFunctions.replace(/url\(\s*(["']?)([\s\S]*?)\1\s*\)/giu, (match, _quote: string, url: string) =>
     /^data:(?:image|font)\//iu.test(url.trim()) ? match : "none");
   return redactIdentifierVariants(withoutRemoteUrls, terms, findings).replaceAll("<", "\\3c ").replaceAll(">", "\\3e ");
 }
