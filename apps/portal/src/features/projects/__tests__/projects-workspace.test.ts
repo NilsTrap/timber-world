@@ -110,6 +110,7 @@ const create = readFileSync("src/features/projects/actions/createProject.ts", "u
 const projectLoader = readFileSync("src/features/projects/actions/getProject.ts", "utf8");
 const partyActions = readFileSync("src/features/projects/actions/projectPartyActions.ts", "utf8");
 const detail = readFileSync("src/features/projects/components/ProjectDetailView.tsx", "utf8");
+const specificationEditor = readFileSync("src/features/projects/components/ProjectSpecificationEditor.tsx", "utf8");
 const parties = readFileSync("src/features/projects/components/ProjectPartiesBlock.tsx", "utf8");
 const workspace = readFileSync("src/features/projects/components/ProjectFileWorkspace.tsx", "utf8");
 const dropSurface = readFileSync("src/features/projects/components/ProjectDropSurface.tsx", "utf8");
@@ -160,7 +161,7 @@ ok("resolved admin purchase roots drive downstream traversal and append mutation
 ok("ordinary buyer mutations still require a trading-partner link", partyActions.includes("if (!a.isPlatformAdmin) {") && partyActions.includes("Selected company is not this trader's trading partner") && adminBuyerMigration.includes("IF NOT public.is_current_user_platform_admin()") && adminBuyerMigration.includes("Buyer is not a trading partner"));
 ok("admin buyer mutation retains active-customer and self-deal guards", adminBuyerMigration.includes("is_active AND is_customer") && adminBuyerMigration.includes("Buyer and seller must differ"));
 ok("project name is primary and redundant summary metadata is absent", detail.includes("title={projectName || project.reference}") && detail.includes("subtitle={projectName ? project.reference : undefined}") && !detail.includes("<SummaryGrid") && !detail.includes('"Platform admin"'));
-ok("manufacturing costs are nested beneath the sellable specification line", detail.includes("Cost build-up") && detail.includes("line.components?.map") && specificationCostMigration.includes("order_line_item_components"));
+ok("manufacturing costs are nested beneath the sellable specification line", specificationEditor.includes("Cost build-up") && specificationEditor.includes("line.components?.map") && specificationCostMigration.includes("order_line_item_components"));
 ok("component RLS requires seller-side commercial access", specificationCostMigration.includes("current_user_deal_terms_access") && specificationSecurityMigration.includes("current_user_in_org(deal.seller_organisation_id)") && specificationSecurityMigration.includes("p_editable"));
 ok("Mills sample is an explicit development seed, not deployable schema", specificationSampleSeed.includes("'Carcass'") && specificationSampleSeed.includes("'Sheet metal'") && specificationSampleSeed.includes("'Cutting'") && specificationSampleSeed.includes("'Wet priming'") && !specificationCostMigration.includes("'Carcass'"));
 ok("editable buyer name opens the selector accessibly", parties.includes('onPartyClick={workspace.canEditBuyer') && parties.includes('aria-label={`Change buyer ${party.name ?? "company"}`}'));
