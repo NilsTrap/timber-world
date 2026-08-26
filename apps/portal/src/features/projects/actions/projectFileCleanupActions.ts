@@ -6,7 +6,7 @@ import { sanitizeStorageFileName } from "@/lib/utils/storage";
 import type { ActionResult } from "../../orders/types";
 import { isValidUUID } from "../../orders/types";
 import { resolveProjectsActor } from "../access";
-import { cleanDxfText, cleanHtmlText, cleanPdfBytes, cleanPlainText, normaliseSensitiveTerms, type CleanupFinding } from "../services/fileCleanup";
+import type { CleanupFinding } from "../services/fileCleanup";
 
 type CleanupStatus = "not_started" | "processing" | "needs_review" | "approved" | "failed";
 export interface CleanedFileResult { fileId: string; cleanFileId: string; cleanupStatus: CleanupStatus; findingsCount: number }
@@ -37,6 +37,10 @@ async function cleanOne(actor: Extract<Awaited<ReturnType<typeof resolveProjects
   const { data: buyer } = await actor.db.from("organisations").select("name, code, email, phone, website, default_signee_name").eq("id", deal.buyer_organisation_id).maybeSingle();
   const { data: setting } = await actor.db.from("platform_settings").select("value").eq("key", "project_file_cleanup").maybeSingle();
   const policy = (((setting as any)?.value ?? {}) as { llmEnabled?: boolean; prompt?: string; extraTerms?: string[] });
+  // Load format tooling only while executing cleanup. Keeping DOM/PDF libraries
+  // out of the server-action module's initial graph prevents Next from trying
+  // to initialise JSDOM while merely rendering the project page.
+  const { cleanDxfText, cleanHtmlText, cleanPdfBytes, cleanPlainText, normaliseSensitiveTerms } = await import("../services/fileCleanup");
   const baseTerms = normaliseSensitiveTerms([deal.name, ...(buyer ? Object.values(buyer as Record<string, string | null>) : []), ...(policy.extraTerms ?? [])]);
   await actor.db.from("order_files").update({ cleanup_status: "processing", cleanup_findings: [] }).eq("id", fileId);
   const { data: blob, error: downloadError } = await actor.db.storage.from("orders").download(file.storage_path);
