@@ -408,11 +408,19 @@ export function ProjectFileWorkspace({
           <div className="rounded-lg border bg-card divide-y md:hidden">
             <MobileFolderRows nodes={tree} canWrite={canWrite} onRename={renameFolder} onMove={moveFolder} onDelete={deleteFolder} />
             {files.map((file) => (
-              <div key={file.id} className="flex items-center gap-3 p-3">
-                {canWrite ? <Checkbox checked={selectedFileIds.has(file.id)} onCheckedChange={(checked) => setSelectedFileIds((current) => { const next = new Set(current); if (checked === true) next.add(file.id); else next.delete(file.id); return next; })} aria-label={`Select ${file.fileName}`} /> : null}
-                <ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} />
-                <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium" title={file.relativePath}>{file.relativePath}</p><p className="text-xs text-muted-foreground">{formatBytes(file.fileSizeBytes)}</p></div>
-                <FileActions file={file} canWrite={canWrite} onInfo={setFileInfo} onPreview={openPreview} onDownload={download} onRename={renameFile} onDelete={deleteFile} />
+              <div
+                key={file.id}
+                className={`flex items-center gap-3 p-3 ${isPreviewableProjectFile(file.fileName, file.mimeType) ? "cursor-pointer hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" : ""}`}
+                onClick={isPreviewableProjectFile(file.fileName, file.mimeType) ? () => openPreview(file) : undefined}
+              >
+                {canWrite ? <span onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}><Checkbox checked={selectedFileIds.has(file.id)} onCheckedChange={(checked) => setSelectedFileIds((current) => { const next = new Set(current); if (checked === true) next.add(file.id); else next.delete(file.id); return next; })} aria-label={`Select ${file.fileName}`} /></span> : null}
+                {isPreviewableProjectFile(file.fileName, file.mimeType) ? (
+                  <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={(event) => { event.stopPropagation(); void openPreview(file); }}>
+                    <ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} />
+                    <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium" title={file.relativePath}>{file.relativePath}</span><span className="block text-xs text-muted-foreground">{formatBytes(file.fileSizeBytes)}</span></span>
+                  </button>
+                ) : <><ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium" title={file.relativePath}>{file.relativePath}</p><p className="text-xs text-muted-foreground">{formatBytes(file.fileSizeBytes)}</p></div></>}
+                <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}><FileActions file={file} canWrite={canWrite} onInfo={setFileInfo} onPreview={openPreview} onDownload={download} onRename={renameFile} onDelete={deleteFile} /></div>
               </div>
             ))}
           </div>
@@ -448,7 +456,8 @@ function TreeNodes({ nodes, selected, onSelect, canWrite, onRename, onMove, onDe
 }
 
 function WorkspaceRow({ file, selected, onSelected, canWrite, onInfo, onPreview, onDownload, onRename, onDelete }: { file: ProjectFileMeta; selected: boolean; onSelected: (checked: boolean) => void; canWrite: boolean; onInfo: (file: ProjectFileMeta) => void; onPreview: (file: ProjectFileMeta) => void; onDownload: (file: ProjectFileMeta) => void; onRename: (file: ProjectFileMeta) => void; onDelete: (file: ProjectFileMeta) => void }) {
-  return <TableRow><TableCell>{canWrite ? <Checkbox checked={selected} onCheckedChange={(checked) => onSelected(checked === true)} aria-label={`Select ${file.fileName}`} /> : null}</TableCell><TableCell><span className="flex min-w-0 items-center gap-2"><ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} /><span className="min-w-0 flex-1 truncate font-medium whitespace-nowrap" title={file.fileName}>{file.fileName}</span></span></TableCell><TableCell>{formatBytes(file.fileSizeBytes)}</TableCell><TableCell className="capitalize">{file.lifecycleStatus}</TableCell><TableCell><div className="flex justify-end"><FileActions file={file} canWrite={canWrite} onInfo={onInfo} onPreview={onPreview} onDownload={onDownload} onRename={onRename} onDelete={onDelete} /></div></TableCell></TableRow>;
+  const previewable = isPreviewableProjectFile(file.fileName, file.mimeType);
+  return <TableRow className={previewable ? "cursor-pointer" : undefined} onClick={previewable ? () => onPreview(file) : undefined}><TableCell><span onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>{canWrite ? <Checkbox checked={selected} onCheckedChange={(checked) => onSelected(checked === true)} aria-label={`Select ${file.fileName}`} /> : null}</span></TableCell><TableCell>{previewable ? <button type="button" className="flex w-full min-w-0 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={(event) => { event.stopPropagation(); onPreview(file); }}><ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} /><span className="min-w-0 flex-1 truncate font-medium whitespace-nowrap" title={file.fileName}>{file.fileName}</span></button> : <span className="flex min-w-0 items-center gap-2"><ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} /><span className="min-w-0 flex-1 truncate font-medium whitespace-nowrap" title={file.fileName}>{file.fileName}</span></span>}</TableCell><TableCell>{formatBytes(file.fileSizeBytes)}</TableCell><TableCell className="capitalize">{file.lifecycleStatus}</TableCell><TableCell><div className="flex justify-end" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}><FileActions file={file} canWrite={canWrite} onInfo={onInfo} onPreview={onPreview} onDownload={onDownload} onRename={onRename} onDelete={onDelete} /></div></TableCell></TableRow>;
 }
 
 function FileActions({ file, canWrite, onInfo, onPreview, onDownload, onRename, onDelete }: { file: ProjectFileMeta; canWrite: boolean; onInfo: (file: ProjectFileMeta) => void; onPreview: (file: ProjectFileMeta) => void; onDownload: (file: ProjectFileMeta) => void; onRename: (file: ProjectFileMeta) => void; onDelete: (file: ProjectFileMeta) => void }) {

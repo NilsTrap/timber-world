@@ -93,6 +93,7 @@ export function StepFileViewer({ url, onRetry }: { url: string; onRetry: () => P
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.domElement.classList.add("block", "h-full", "w-full");
         container.appendChild(renderer.domElement);
         const model = new THREE.Group();
         scene.add(model);
@@ -131,15 +132,18 @@ export function StepFileViewer({ url, onRetry }: { url: string; onRetry: () => P
           renderer.setSize(width, height, false);
           camera.aspect = width / height;
           camera.updateProjectionMatrix();
-          render();
+          if (fitRef.current) fitRef.current(); else render();
         };
         const fitModel = () => {
           if (!camera) return;
           const bounds = new THREE.Box3().setFromObject(model);
           if (bounds.isEmpty()) throw new Error("geometry");
           const center = bounds.getCenter(new THREE.Vector3());
-          const size = Math.max(bounds.getSize(new THREE.Vector3()).length(), 1);
-          const distance = size / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.35;
+          const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+          const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+          const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
+          const limitingFov = Math.min(verticalFov, horizontalFov);
+          const distance = Math.max(sphere.radius, 0.5) / Math.sin(limitingFov / 2) * 1.15;
           camera.position.copy(center).add(new THREE.Vector3(1, -1, 0.8).normalize().multiplyScalar(distance));
           camera.near = Math.max(distance / 1000, 0.01);
           camera.far = Math.max(distance * 100, 1000);
@@ -153,7 +157,6 @@ export function StepFileViewer({ url, onRetry }: { url: string; onRetry: () => P
         resizeObserver = new ResizeObserver(resize);
         resizeObserver.observe(container);
         resize();
-        fitModel();
         setLoading(false);
       } catch {
         disposeResources();
@@ -173,8 +176,8 @@ export function StepFileViewer({ url, onRetry }: { url: string; onRetry: () => P
         </Button>
         <span className="ml-auto text-xs text-muted-foreground">{PROJECT_PREVIEW_COPY.visualReference}</span>
       </div>
-      <div className="relative h-[70vh] overflow-hidden rounded border bg-slate-50">
-        <div ref={containerRef} className="h-full w-full" aria-label={PROJECT_PREVIEW_COPY.stepAria} />
+      <div className="relative h-[70vh] min-w-0 overflow-hidden rounded border bg-slate-50">
+        <div ref={containerRef} className="h-full min-w-0 w-full overflow-hidden" aria-label={PROJECT_PREVIEW_COPY.stepAria} />
         {loading ? <div className="absolute inset-0"><PreviewLoading label={PROJECT_PREVIEW_COPY.stepTriangulating} /></div> : null}
       </div>
     </div>

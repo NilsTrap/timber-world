@@ -148,9 +148,16 @@ ok("workspace uploader starts behind a header control and collapses only after t
 ok("drop surface reports active drag and file-picker interaction", dropSurface.includes("isDragActive || pickerOpen") && dropSurface.includes("onActivityChange") && dropSurface.includes('window.addEventListener("focus"'));
 ok("workspace replaces the folder column with file information", !workspace.includes("<TableHead>Folder</TableHead>") && workspace.includes("File information") && workspace.includes("Information for ${file.fileName}") && workspace.includes('["Folder", folder]') && workspace.includes('["Uploaded", formatDateTime(file.createdAt)]'));
 ok("heavy engineering viewers are lazy chunks", preview.includes('dynamic(() => import("./viewers/DxfFileViewer")') && preview.includes('dynamic(() => import("./viewers/StepFileViewer")'));
+ok("PDF native viewer is not placed in a scriptless sandbox", preview.includes('const isPdf = classifyProjectFile(source.fileName, source.mimeType) === "pdf"') && preview.includes('{...(isPdf ? {} : { sandbox: "" })}'));
 ok("HTML preview is sanitized and scriptless", htmlViewer.includes("sanitizeProjectHtml") && htmlViewer.includes('sandbox=""'));
 ok("DXF parsing uses a dedicated worker and destroys viewer resources", dxfViewer.includes("workerFactory") && dxfViewer.includes("viewer?.Destroy()"));
 ok("STEP parsing uses a terminating local worker and disposes WebGL resources", stepViewer.includes("occt-import-js-worker.js") && stepViewer.includes("worker.terminate()") && stepViewer.includes("renderer?.dispose()"));
+ok("STEP canvas has a stable bounded CSS footprint", stepViewer.includes('renderer.domElement.classList.add("block", "h-full", "w-full")') && stepViewer.includes('className="h-full min-w-0 w-full overflow-hidden"'));
+ok("STEP camera fitting respects horizontal and vertical field of view", stepViewer.includes("horizontalFov") && stepViewer.includes("limitingFov") && stepViewer.includes("sphere.radius"));
+ok("previewable desktop and mobile rows support pointer and semantic button activation", workspace.includes('onClick={previewable ? () => onPreview(file) : undefined}') && workspace.includes('className="flex w-full min-w-0 items-center gap-2 text-left') && workspace.includes('className="flex min-w-0 flex-1 items-center gap-3 text-left"'));
+ok("unsupported rows remain outside the row preview interaction", workspace.includes('onClick={previewable ? () => onPreview(file) : undefined}') && workspace.includes('onClick={isPreviewableProjectFile(file.fileName, file.mimeType) ? () => openPreview(file) : undefined}'));
+ok("file selection and explicit actions stop row preview propagation", workspace.includes('onClick={(event) => event.stopPropagation()}') && workspace.includes('onKeyDown={(event) => event.stopPropagation()}'));
+ok("STEP refits after its container aspect changes", stepViewer.includes("if (fitRef.current) fitRef.current(); else render()"));
 
 console.log(`\nprojects-workspace.test.ts: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

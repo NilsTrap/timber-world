@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { Button } from "@timber/ui";
-import { getProjectPreviewKind } from "../filePaths";
+import { classifyProjectFile, getProjectPreviewKind } from "../filePaths";
 import { PROJECT_PREVIEW_COPY } from "./previewCopy";
 
 function ChunkLoading({ labelKey }: { labelKey: "prepareHtml" | "loadDxf" | "loadStep" }) {
@@ -85,6 +85,7 @@ export function ProjectFilePreview({
 }
 
 function NativeFileViewer({ source, onRetry }: { source: ProjectPreviewSource; onRetry: () => Promise<void> }) {
+  const isPdf = classifyProjectFile(source.fileName, source.mimeType) === "pdf";
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
 
   useEffect(() => {
@@ -115,7 +116,7 @@ function NativeFileViewer({ source, onRetry }: { source: ProjectPreviewSource; o
       <iframe
         src={source.url}
         title={`Preview ${source.fileName}`}
-        sandbox=""
+        {...(isPdf ? {} : { sandbox: "" })}
         referrerPolicy="no-referrer"
         className="h-[70vh] w-full rounded border bg-white"
         onError={() => setState("error")}
