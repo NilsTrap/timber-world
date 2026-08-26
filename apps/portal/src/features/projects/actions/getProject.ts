@@ -43,7 +43,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
 
   const [personasByOrgId, files, folders, fileCounts, viewer] = await Promise.all([
     loadOrgPersonas(a.db, [a.orgId, raw.seller.id, raw.buyer.id, raw.customer.id, raw.producer.id]),
-    listProjectFiles(a.db, projectId),
+    listProjectFiles(a.db, projectId, a.isPlatformAdmin || raw.seller.id === a.orgId),
     listProjectFolders(a.db, projectId),
     countFilesByDeal(a.db, [projectId]),
     resolveProjectsViewer(a),

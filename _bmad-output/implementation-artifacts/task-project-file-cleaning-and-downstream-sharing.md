@@ -2,9 +2,9 @@
 title: 'Project file cleaning and downstream sharing'
 type: 'feature-task'
 created: '2026-08-26'
-status: 'awaiting-green-light'
+status: 'in-progress'
 baseline_commit: '99f1a8a'
-implementation_authorized: false
+implementation_authorized: true
 context:
   - '_bmad-output/implementation-artifacts/platform/sprint-status.yaml'
   - '_bmad-output/planning-artifacts/platform/architecture.md'
@@ -119,12 +119,12 @@ Cleaning is format-aware and produces a reviewable artifact plus machine finding
 ## Implementation Tasks — Do Not Start Without Green Light
 
 - [ ] Try representative real PDFs, HTML, and DXFs and choose the simplest acceptable cleanup techniques for the prototype.
-- [ ] Add minimal cleanup/share fields and RLS, reusing `recipient_copy` and `source_file_id`.
-- [ ] Add PDF/HTML/DXF cleaners using deterministic terms plus optional structured LLM findings.
-- [ ] Add one admin-editable cleanup prompt and extra sensitive terms setting; no version history.
-- [ ] Add server actions/jobs for bulk clean, retry, approve, share, and unshare with adjacency enforcement.
-- [ ] Extend safe project file projections so one source row carries clean/shared presentation state without storage paths.
-- [ ] Update the single desktop/mobile workspace list and preview dialog.
+- [x] Add minimal cleanup/share fields and RLS, reusing `recipient_copy` and `source_file_id`.
+- [x] Add PDF/HTML/DXF cleaners using deterministic terms plus optional structured LLM findings.
+- [x] Add one admin-editable cleanup prompt and extra sensitive terms setting; no version history.
+- [x] Add server actions/jobs for bulk clean, retry, approve, share, and unshare with adjacency enforcement.
+- [x] Extend safe project file projections so one source row carries clean/shared presentation state without storage paths.
+- [x] Update the single desktop/mobile workspace list and preview dialog.
 - [ ] Add unit fixtures for company/customer/project/person names, emails, domains, phones, and optional bank-detail instructions, plus authorization and local browser E2E.
 - [ ] Validate locally against the running test project; do not push or deploy until explicitly authorized.
 
@@ -164,3 +164,26 @@ Cleaning is format-aware and produces a reviewable artifact plus machine finding
 - Existing MVP marker: `_bmad-output/implementation-artifacts/platform/sprint-status.yaml` under Orders Feature.
 - Current schema intentionally pre-seeds `recipient_copy` and `source_file_id` but current Project loaders select originals only.
 - HTML sanitization must follow maintained sanitizer guidance; DXF cleanup must respect Autodesk section/entity structure; PDF attachments/actions/metadata require explicit handling beyond page painting.
+
+## Dev Agent Record
+
+- Implemented a prototype deterministic cleaner for PDF, HTML, DXF, and plain text. The optional Anthropic detector only proposes exact additional terms for text formats and is disabled by default.
+- Originals remain unchanged. Clean derivatives reuse `recipient_copy` and require explicit preview approval before adjacent-leg sharing.
+- Added an admin File Cleanup setting, one-list desktop/mobile controls, clean preview, persistent shared state, and inbound shared-file projection.
+- Added row and storage RLS boundaries so buyers retain originals without receiving cleanup findings or clean-object access.
+- Validation: portal TypeScript check, full Timber MVP gate, and `git diff --check` pass. The PDF fixture reopens successfully; HTML/DXF fixtures verify targeted removal.
+- Local database application and real-role browser/RLS validation remain pending because another local Supabase project owns the configured ports. No existing database was stopped or modified, and nothing was pushed or deployed.
+
+## File List
+
+- `apps/portal/src/features/projects/actions/projectFileCleanupActions.ts`
+- `apps/portal/src/features/projects/services/fileCleanup.ts`
+- `apps/portal/src/features/projects/services/projectFiles.ts`
+- `apps/portal/src/features/projects/components/ProjectFileWorkspace.tsx`
+- `apps/portal/src/features/projects/components/FileCleanupSettings.tsx`
+- `apps/portal/src/app/(portal)/admin/settings/file-cleanup/page.tsx`
+- `supabase/migrations/20260826150000_project_file_cleanup.sql`
+
+## Change Log
+
+- 2026-08-26: Implemented the local prototype cleanup, review, approval, and immediate-next-leg sharing workflow. Kept status in progress pending isolated local database/RLS and browser validation.

@@ -116,6 +116,8 @@ const stepViewer = readFileSync("src/features/projects/components/viewers/StepFi
 const migration = readFileSync("../../supabase/migrations/20260821211500_project_file_workspace.sql", "utf8");
 const folderMigration = readFileSync("../../supabase/migrations/20260826090000_project_workspace_folders.sql", "utf8");
 const buyerAccessMigration = readFileSync("../../supabase/migrations/20260826130000_buyer_project_workspace_access.sql", "utf8");
+const cleanupMigration = readFileSync("../../supabase/migrations/20260826150000_project_file_cleanup.sql", "utf8");
+const cleanupActions = readFileSync("src/features/projects/actions/projectFileCleanupActions.ts", "utf8");
 ok("metadata loader select excludes storage_path", /const SAFE_FILE_SELECT\s*=\s*[\s\S]*?;/.test(service) && !service.match(/const SAFE_FILE_SELECT\s*=\s*([\s\S]*?);/)?.[1]?.includes("storage_path"));
 ok("workspace reads only category=project", service.includes('.eq("category", PROJECT_CATEGORY)'));
 ok("workspace reads originals only", service.includes('.eq("file_variant", ORIGINAL_VARIANT)'));
@@ -142,6 +144,9 @@ ok("abandoned signed uploads expire through a delayed cleanup queue", folderMigr
 ok("the inherited buyer role can create and upload its own project files", buyerAccessMigration.includes("WHERE key = 'client'") && buyerAccessMigration.includes("'action', 'deal', 'create'"));
 ok("shared file-folder namespace is serialized", folderMigration.includes("project_files_namespace_guard") && folderMigration.includes("pg_advisory_xact_lock"));
 ok("workspace exposes create, move and bulk delete controls", workspace.includes("createProjectFolderAction") && workspace.includes("moveProjectFolderAction") && workspace.includes("deleteProjectFilesAction"));
+ok("workspace exposes clean preview and adjacent sharing controls", workspace.includes("Clean selected") && workspace.includes("Share with next party") && workspace.includes("Approve cleaned file") && workspace.includes("Not shared"));
+ok("clean derivatives are linked and downstream reads require approval", cleanupMigration.includes("source_file_id") && cleanupMigration.includes("shared_to_order_id") && cleanupMigration.includes("cleanup_status='approved'"));
+ok("cleanup actions derive the adjacent leg server-side", cleanupActions.includes('.eq("buyer_organisation_id", deal.seller_organisation_id)') && !cleanupActions.includes("destinationOrderId"));
 ok("workspace limits parallel upload workers", workspace.includes("Math.min(3, next.length)"));
 ok("workspace uses centralized icons and viewer routing", workspace.includes("ProjectFileTypeIcon") && workspace.includes("ProjectFilePreview"));
 ok("workspace uploader starts behind a header control and collapses only after true idle", workspace.includes('aria-controls="project-file-upload-surface"') && workspace.includes("10_000") && workspace.includes("hasActiveUploads") && workspace.includes("uploadInteractionActive"));

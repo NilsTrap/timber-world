@@ -57,23 +57,50 @@ function mapFile(row: Record<string, unknown>): ProjectFileMeta {
         ? row.lifecycle_status
         : "ready",
     createdAt: row.created_at as string,
+    cleanupStatus: (row.cleanup_status as ProjectFileMeta["cleanupStatus"]) ?? "not_started",
+    cleanFileId: (row.clean_file_id as string) ?? null,
+    cleanupFindingsCount: Number(row.cleanup_findings_count ?? 0),
+    shared: !!row.shared_to_order_id,
+    sharedInbound: !!row.shared_inbound,
   };
 }
 
 const SAFE_FILE_SELECT =
-  "id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at";
+  "id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at, cleanup_status";
 
 /** Original workspace metadata for one visible deal. No storage/source columns. */
-export async function listProjectFiles(db: DbClient, dealId: string): Promise<ProjectFileMeta[]> {
-  const { data, error } = await db
+export async function listProjectFiles(db: DbClient, dealId: string, revealCleanup = false): Promise<ProjectFileMeta[]> {
+  let { data, error } = await db
     .from("order_files")
     .select(SAFE_FILE_SELECT)
     .eq("order_id", dealId)
     .eq("category", PROJECT_CATEGORY)
     .eq("file_variant", ORIGINAL_VARIANT)
     .order("relative_path");
+  // Keep the local UI usable before the additive cleanup migration is applied.
+  // The cleanup actions themselves remain unavailable until that local schema exists.
+  if (error) {
+    const legacy = await db.from("order_files").select("id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at")
+      .eq("order_id", dealId).eq("category", PROJECT_CATEGORY).eq("file_variant", ORIGINAL_VARIANT).order("relative_path");
+    data = legacy.data;
+    error = legacy.error;
+  }
   if (error || !data) return [];
-  return (data as Array<Record<string, unknown>>).map(mapFile);
+  const originals = data as Array<Record<string, unknown>>;
+  const originalIds = originals.map((row) => row.id as string);
+  const sourceDerivatives = revealCleanup && originalIds.length ? await db.from("order_files")
+    .select("id, source_file_id, cleanup_status, cleanup_findings, shared_to_order_id")
+    .in("source_file_id", originalIds).eq("category", PROJECT_CATEGORY).eq("file_variant", "recipient_copy") : { data: [] };
+  const inbound = await db.from("order_files")
+    .select("id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at, cleanup_status, cleanup_findings, shared_to_order_id")
+    .eq("shared_to_order_id", dealId).eq("category", PROJECT_CATEGORY).eq("file_variant", "recipient_copy").eq("cleanup_status", "approved");
+  const derivatives = new Map(((sourceDerivatives.data ?? []) as Array<Record<string, unknown>>).map((row) => [row.source_file_id as string, row]));
+  const own = originals.map((row) => {
+    const derivative = derivatives.get(row.id as string);
+    return mapFile({ ...row, cleanup_status: derivative?.cleanup_status ?? row.cleanup_status, clean_file_id: derivative?.id, cleanup_findings_count: Array.isArray(derivative?.cleanup_findings) ? derivative.cleanup_findings.length : 0, shared_to_order_id: derivative?.shared_to_order_id });
+  });
+  const received = ((inbound.data ?? []) as Array<Record<string, unknown>>).map((row) => mapFile({ ...row, clean_file_id: row.id, cleanup_findings_count: 0, shared_inbound: true }));
+  return [...own, ...received].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
 function mapFolder(row: Record<string, unknown>): ProjectFolderMeta {

@@ -127,6 +127,7 @@ export function ProjectDetailView({
         initialFiles={project.files}
         initialFolders={project.folders}
         canWrite={viewer.canWriteFiles}
+        canManageCleanup={viewer.isPlatformAdmin || project.direction === "sell"}
       />
 
       {project.notes ? (

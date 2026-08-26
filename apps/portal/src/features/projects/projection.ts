@@ -298,6 +298,11 @@ export function toProjectDetail(
       fileSizeBytes: f.fileSizeBytes,
       lifecycleStatus: f.lifecycleStatus,
       createdAt: f.createdAt,
+      cleanupStatus: f.cleanupStatus,
+      cleanFileId: f.cleanFileId,
+      cleanupFindingsCount: f.cleanupFindingsCount,
+      shared: f.shared,
+      sharedInbound: f.sharedInbound,
     })),
     folders: parts.folders.map((folder) => ({
       id: folder.id,

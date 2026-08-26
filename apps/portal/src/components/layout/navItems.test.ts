@@ -41,7 +41,7 @@ const EXPECTED_ADMIN = new Set<string>([
   "/admin/settings", "/admin/organisations",
   "/admin/organisations?tab=people",
   "/counterparties/clients", "/counterparties/suppliers",
-  "/admin/settings/fields", "/admin/settings/gates", "/admin/settings/groups",
+  "/admin/settings/fields", "/admin/settings/gates", "/admin/settings/groups", "/admin/settings/file-cleanup",
   "/admin/settings/document-templates", "/admin/settings/packaging", "/admin/settings/pricing-units",
   "/admin/settings/currencies",
   // Added after this list was first written: L2 Traders book (admin-only),

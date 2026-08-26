@@ -129,6 +129,11 @@ export interface ProjectFileMeta {
   fileSizeBytes: number | null;
   lifecycleStatus: "uploading" | "ready" | "failed";
   createdAt: string;
+  cleanupStatus: "not_started" | "processing" | "needs_review" | "approved" | "failed";
+  cleanFileId: string | null;
+  cleanupFindingsCount: number;
+  shared: boolean;
+  sharedInbound: boolean;
 }
 
 /** Logical workspace folder. It may exist without descendant files. */

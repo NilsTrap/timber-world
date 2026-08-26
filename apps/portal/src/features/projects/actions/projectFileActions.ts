@@ -60,6 +60,11 @@ function publicFile(row: Record<string, unknown>): ProjectFileMeta {
     fileSizeBytes: (row.file_size_bytes as number) ?? null,
     lifecycleStatus: row.lifecycle_status === "uploading" ? "uploading" : "ready",
     createdAt: row.created_at as string,
+    cleanupStatus: "not_started",
+    cleanFileId: null,
+    cleanupFindingsCount: 0,
+    shared: false,
+    sharedInbound: false,
   };
 }
 

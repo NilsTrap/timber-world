@@ -12,6 +12,8 @@ import {
   Loader2,
   Pencil,
   RotateCcw,
+  ShieldCheck,
+  Sparkles,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -43,6 +45,7 @@ import {
   renameProjectFileAction,
   renameProjectFolderAction,
 } from "../actions/projectFileActions";
+import { approveCleanProjectFileAction, cleanProjectFilesAction, getCleanProjectFileUrlAction, shareProjectFileAction, shareProjectFilesAction, unshareProjectFileAction, unshareProjectFilesAction } from "../actions/projectFileCleanupActions";
 import {
   buildProjectTree,
   isPreviewableProjectFile,
@@ -73,11 +76,13 @@ export function ProjectFileWorkspace({
   initialFiles,
   initialFolders,
   canWrite,
+  canManageCleanup,
 }: {
   projectId: string;
   initialFiles: ProjectFileMeta[];
   initialFolders: ProjectFolderMeta[];
   canWrite: boolean;
+  canManageCleanup: boolean;
 }) {
   const [files, setFiles] = useState(initialFiles);
   const [folders, setFolders] = useState(initialFolders);
@@ -91,6 +96,8 @@ export function ProjectFileWorkspace({
   const [fileInfo, setFileInfo] = useState<ProjectFileMeta | null>(null);
   const [preview, setPreview] = useState<ProjectPreviewSource | null>(null);
   const [previewRefreshError, setPreviewRefreshError] = useState<string | null>(null);
+  const [cleanPreviewFile, setCleanPreviewFile] = useState<ProjectFileMeta | null>(null);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
   const previewRequestRef = useRef(0);
   const tree = useMemo(() => buildProjectTree(files, folders), [files, folders]);
   const folderPaths = useMemo(() => {
@@ -278,9 +285,10 @@ export function ProjectFileWorkspace({
   const openPreview = async (file: ProjectFileMeta) => {
     const requestId = ++previewRequestRef.current;
     setPreviewRefreshError(null);
-    const result = await getProjectFileUrlAction(file.id, "preview");
+    const result = file.sharedInbound ? await getCleanProjectFileUrlAction(file.id) : await getProjectFileUrlAction(file.id, "preview");
     if (requestId !== previewRequestRef.current) return;
     if (!result.success) { setMessage(result.error); return; }
+    if (file.sharedInbound) setCleanPreviewFile(file);
     setPreview({ fileId: file.id, url: result.data.url, fileName: result.data.fileName, mimeType: result.data.mimeType });
   };
 
@@ -289,7 +297,7 @@ export function ProjectFileWorkspace({
     const fileId = preview.fileId;
     const requestId = previewRequestRef.current;
     setPreviewRefreshError(null);
-    const result = await getProjectFileUrlAction(fileId, "preview");
+    const result = cleanPreviewFile ? await getCleanProjectFileUrlAction(fileId) : await getProjectFileUrlAction(fileId, "preview");
     if (requestId !== previewRequestRef.current) return;
     if (!result.success) {
       setPreviewRefreshError(result.error);
@@ -302,7 +310,7 @@ export function ProjectFileWorkspace({
   };
 
   const download = async (file: ProjectFileMeta) => {
-    const result = await getProjectFileUrlAction(file.id, "download");
+    const result = file.sharedInbound ? await getCleanProjectFileUrlAction(file.id) : await getProjectFileUrlAction(file.id, "download");
     if (!result.success) { setMessage(result.error); return; }
     const anchor = document.createElement("a");
     anchor.href = result.data.url;
@@ -311,6 +319,55 @@ export function ProjectFileWorkspace({
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
+  };
+
+  const cleanSelected = async () => {
+    setCleanupBusy(true);
+    const result = await cleanProjectFilesAction([...selectedFileIds]);
+    setCleanupBusy(false);
+    if (!result.success) return setMessage(result.error);
+    const updates = new Map(result.data.map((item) => [item.fileId, item]));
+    setFiles((current) => current.map((file) => { const item = updates.get(file.id); return item ? { ...file, cleanFileId: item.cleanFileId, cleanupStatus: item.cleanupStatus, cleanupFindingsCount: item.findingsCount, shared: false } : file; }));
+    setMessage(`${result.data.length} cleaned file(s) ready for review.`);
+  };
+
+  const openCleanPreview = async (file: ProjectFileMeta) => {
+    if (!file.cleanFileId) return;
+    const result = await getCleanProjectFileUrlAction(file.cleanFileId);
+    if (!result.success) return setMessage(result.error);
+    setCleanPreviewFile(file);
+    setPreview({ fileId: file.cleanFileId, url: result.data.url, fileName: `Clean · ${result.data.fileName}`, mimeType: result.data.mimeType });
+  };
+
+  const approveClean = async () => {
+    if (!cleanPreviewFile?.cleanFileId) return;
+    const result = await approveCleanProjectFileAction(cleanPreviewFile.cleanFileId);
+    if (!result.success) return setMessage(result.error);
+    setFiles((current) => current.map((file) => file.id === cleanPreviewFile.id ? { ...file, cleanupStatus: "approved" } : file));
+    setCleanPreviewFile((current) => current ? { ...current, cleanupStatus: "approved" } : current);
+    setMessage("Cleaned file approved.");
+  };
+
+  const toggleShared = async (file: ProjectFileMeta, checked: boolean) => {
+    if (!file.cleanFileId) return;
+    const result = checked ? await shareProjectFileAction(file.cleanFileId) : await unshareProjectFileAction(file.cleanFileId);
+    if (!result.success) return setMessage(result.error);
+    setFiles((current) => current.map((row) => row.id === file.id ? { ...row, shared: checked } : row));
+  };
+
+  const shareSelected = async () => {
+    const selected = files.filter((file) => selectedFileIds.has(file.id));
+    if (selected.some((file) => file.cleanupStatus !== "approved" || !file.cleanFileId)) return setMessage("Preview and approve every selected cleaned file first.");
+    const result = await shareProjectFilesAction(selected.map((file) => file.cleanFileId!));
+    if (!result.success) return setMessage(result.error);
+    setFiles((current) => current.map((file) => selectedFileIds.has(file.id) ? { ...file, shared: true } : file));
+    setMessage(`${selected.length} file(s) shared with the next party.`);
+  };
+  const unshareSelected = async () => {
+    const selected = files.filter((file) => selectedFileIds.has(file.id) && file.cleanFileId && file.shared);
+    if (!selected.length) return setMessage("Select files that are currently shared.");
+    const result = await unshareProjectFilesAction(selected.map((file) => file.cleanFileId!)); if (!result.success) return setMessage(result.error);
+    setFiles((current) => current.map((file) => selectedFileIds.has(file.id) ? { ...file, shared: false } : file)); setMessage(`${selected.length} file(s) unshared.`);
   };
 
   return (
@@ -356,6 +413,13 @@ export function ProjectFileWorkspace({
           <Button type="button" size="sm" variant="outline" disabled={selectedFileIds.size === 0} onClick={deleteSelectedFiles}>
             <Trash2 className="mr-1.5 h-4 w-4" /> Delete selected
           </Button>
+          {canManageCleanup ? <><Button type="button" size="sm" variant="outline" disabled={selectedFileIds.size === 0 || cleanupBusy} onClick={cleanSelected}>
+            {cleanupBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />} Clean selected
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={selectedFileIds.size === 0} onClick={shareSelected}>
+            <ShieldCheck className="mr-1.5 h-4 w-4" /> Share with next party
+          </Button>
+          <Button type="button" size="sm" variant="ghost" disabled={selectedFileIds.size === 0} onClick={unshareSelected}>Unshare selected</Button></> : null}
           {files.length > 0 ? (
             <label className="ml-auto flex items-center gap-2 text-sm">
               <Checkbox
@@ -401,8 +465,8 @@ export function ProjectFileWorkspace({
           </div>
           <div className="hidden overflow-x-auto rounded-lg border bg-card md:block">
             <Table dense>
-              <TableHeader><TableRow><TableHead className="w-10"><span className="sr-only">Select</span></TableHead><TableHead>Name</TableHead><TableHead>Size</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-              <TableBody>{visibleFiles.map((file) => <WorkspaceRow key={file.id} file={file} selected={selectedFileIds.has(file.id)} onSelected={(checked) => setSelectedFileIds((current) => { const next = new Set(current); if (checked) next.add(file.id); else next.delete(file.id); return next; })} canWrite={canWrite} onInfo={setFileInfo} onPreview={openPreview} onDownload={download} onRename={renameFile} onDelete={deleteFile} />)}</TableBody>
+              <TableHeader><TableRow><TableHead className="w-10"><span className="sr-only">Select</span></TableHead><TableHead>Name</TableHead><TableHead>Clean</TableHead><TableHead>Shared</TableHead><TableHead>Size</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+              <TableBody>{visibleFiles.map((file) => <WorkspaceRow key={file.id} file={file} selected={selectedFileIds.has(file.id)} onSelected={(checked) => setSelectedFileIds((current) => { const next = new Set(current); if (checked) next.add(file.id); else next.delete(file.id); return next; })} canWrite={canWrite} onInfo={setFileInfo} onPreview={openPreview} onCleanPreview={openCleanPreview} onShared={toggleShared} onDownload={download} onRename={renameFile} onDelete={deleteFile} />)}</TableBody>
             </Table>
           </div>
           <div className="rounded-lg border bg-card divide-y md:hidden">
@@ -420,7 +484,8 @@ export function ProjectFileWorkspace({
                     <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium" title={file.relativePath}>{file.relativePath}</span><span className="block text-xs text-muted-foreground">{formatBytes(file.fileSizeBytes)}</span></span>
                   </button>
                 ) : <><ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium" title={file.relativePath}>{file.relativePath}</p><p className="text-xs text-muted-foreground">{formatBytes(file.fileSizeBytes)}</p></div></>}
-                <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}><FileActions file={file} canWrite={canWrite} onInfo={setFileInfo} onPreview={openPreview} onDownload={download} onRename={renameFile} onDelete={deleteFile} /></div>
+                <div className="flex shrink-0 flex-col items-end gap-1 text-[11px]" onClick={(event) => event.stopPropagation()}>{file.cleanFileId ? <button type="button" className="flex items-center gap-1" onClick={() => void openCleanPreview(file)}><ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />{file.cleanupStatus === "approved" ? "Approved" : "Review"}</button> : <span className="text-muted-foreground">Not cleaned</span>}<label className="flex items-center gap-1"><Checkbox checked={file.sharedInbound || file.shared} disabled={file.sharedInbound || !canWrite || file.cleanupStatus !== "approved"} onCheckedChange={(checked) => void toggleShared(file, checked === true)} />{file.sharedInbound ? "Received" : file.shared ? "Shared" : "Not shared"}</label></div>
+                <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}><FileActions file={file} canWrite={canWrite && !file.sharedInbound} onInfo={setFileInfo} onPreview={openPreview} onDownload={download} onRename={renameFile} onDelete={deleteFile} /></div>
               </div>
             ))}
           </div>
@@ -437,10 +502,11 @@ export function ProjectFileWorkspace({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!preview} onOpenChange={(open) => { if (!open) { previewRequestRef.current++; setPreview(null); setPreviewRefreshError(null); } }}>
+      <Dialog open={!!preview} onOpenChange={(open) => { if (!open) { previewRequestRef.current++; setPreview(null); setCleanPreviewFile(null); setPreviewRefreshError(null); } }}>
         <DialogContent className="sm:max-w-6xl">
           <DialogHeader><DialogTitle>{preview?.fileName}</DialogTitle><DialogDescription>{PROJECT_PREVIEW_COPY.description}</DialogDescription></DialogHeader>
           {preview ? <ProjectFilePreview source={preview} onRetry={refreshPreview} refreshError={previewRefreshError} /> : null}
+          {cleanPreviewFile?.cleanupStatus === "needs_review" ? <Button type="button" onClick={approveClean}><ShieldCheck className="mr-1.5 h-4 w-4" /> Approve cleaned file</Button> : null}
         </DialogContent>
       </Dialog>
     </div>
@@ -455,9 +521,9 @@ function TreeNodes({ nodes, selected, onSelect, canWrite, onRename, onMove, onDe
   return <>{nodes.filter((node) => node.kind === "folder").map((node) => <div key={node.path}><div className={`group flex items-center rounded ${selected === node.path ? "bg-muted" : "hover:bg-muted/60"}`} style={{ paddingLeft: `${depth * 12}px` }}><button type="button" className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-sm" onClick={() => onSelect(node.path)}><Folder className="h-4 w-4 shrink-0 text-amber-600" /><span className="truncate" title={node.name}>{node.name}</span></button>{canWrite ? <><Button type="button" variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label={`Rename ${node.name}`} onClick={() => onRename(node.path)}><Pencil className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label={`Move ${node.name}`} onClick={() => onMove(node.path)}><FolderInput className="h-3.5 w-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label={`Delete ${node.name}`} onClick={() => onDelete(node.path)}><Trash2 className="h-3.5 w-3.5" /></Button></> : null}</div><TreeNodes nodes={node.children} selected={selected} onSelect={onSelect} canWrite={canWrite} onRename={onRename} onMove={onMove} onDelete={onDelete} depth={depth + 1} /></div>)}</>;
 }
 
-function WorkspaceRow({ file, selected, onSelected, canWrite, onInfo, onPreview, onDownload, onRename, onDelete }: { file: ProjectFileMeta; selected: boolean; onSelected: (checked: boolean) => void; canWrite: boolean; onInfo: (file: ProjectFileMeta) => void; onPreview: (file: ProjectFileMeta) => void; onDownload: (file: ProjectFileMeta) => void; onRename: (file: ProjectFileMeta) => void; onDelete: (file: ProjectFileMeta) => void }) {
+function WorkspaceRow({ file, selected, onSelected, canWrite, onInfo, onPreview, onCleanPreview, onShared, onDownload, onRename, onDelete }: { file: ProjectFileMeta; selected: boolean; onSelected: (checked: boolean) => void; canWrite: boolean; onInfo: (file: ProjectFileMeta) => void; onPreview: (file: ProjectFileMeta) => void; onCleanPreview: (file: ProjectFileMeta) => void; onShared: (file: ProjectFileMeta, checked: boolean) => void; onDownload: (file: ProjectFileMeta) => void; onRename: (file: ProjectFileMeta) => void; onDelete: (file: ProjectFileMeta) => void }) {
   const previewable = isPreviewableProjectFile(file.fileName, file.mimeType);
-  return <TableRow className={previewable ? "cursor-pointer" : undefined} onClick={previewable ? () => onPreview(file) : undefined}><TableCell><span onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>{canWrite ? <Checkbox checked={selected} onCheckedChange={(checked) => onSelected(checked === true)} aria-label={`Select ${file.fileName}`} /> : null}</span></TableCell><TableCell>{previewable ? <button type="button" className="flex w-full min-w-0 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={(event) => { event.stopPropagation(); onPreview(file); }}><ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} /><span className="min-w-0 flex-1 truncate font-medium whitespace-nowrap" title={file.fileName}>{file.fileName}</span></button> : <span className="flex min-w-0 items-center gap-2"><ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} /><span className="min-w-0 flex-1 truncate font-medium whitespace-nowrap" title={file.fileName}>{file.fileName}</span></span>}</TableCell><TableCell>{formatBytes(file.fileSizeBytes)}</TableCell><TableCell className="capitalize">{file.lifecycleStatus}</TableCell><TableCell><div className="flex justify-end" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}><FileActions file={file} canWrite={canWrite} onInfo={onInfo} onPreview={onPreview} onDownload={onDownload} onRename={onRename} onDelete={onDelete} /></div></TableCell></TableRow>;
+  return <TableRow className={previewable ? "cursor-pointer" : undefined} onClick={previewable ? () => onPreview(file) : undefined}><TableCell><span onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>{canWrite && !file.sharedInbound ? <Checkbox checked={selected} onCheckedChange={(checked) => onSelected(checked === true)} aria-label={`Select ${file.fileName}`} /> : null}</span></TableCell><TableCell>{previewable ? <button type="button" className="flex w-full min-w-0 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={(event) => { event.stopPropagation(); onPreview(file); }}><ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} /><span className="min-w-0 flex-1 truncate font-medium whitespace-nowrap" title={file.fileName}>{file.fileName}</span></button> : <span className="flex min-w-0 items-center gap-2"><ProjectFileTypeIcon fileName={file.fileName} mimeType={file.mimeType} /><span className="min-w-0 flex-1 truncate font-medium whitespace-nowrap" title={file.fileName}>{file.fileName}</span></span>}</TableCell><TableCell onClick={(event) => event.stopPropagation()}>{file.cleanFileId ? <Button type="button" size="sm" variant="ghost" onClick={() => onCleanPreview(file)}><ShieldCheck className={`mr-1 h-4 w-4 ${file.cleanupStatus === "approved" ? "text-emerald-600" : "text-amber-600"}`} />{file.cleanupStatus === "approved" ? "Approved" : "Review"}</Button> : <span className="text-muted-foreground">—</span>}</TableCell><TableCell onClick={(event) => event.stopPropagation()}><label className="flex items-center gap-2 text-xs"><Checkbox checked={file.sharedInbound || file.shared} disabled={file.sharedInbound || !canWrite || file.cleanupStatus !== "approved"} onCheckedChange={(checked) => onShared(file, checked === true)} /><span>{file.sharedInbound ? "Received" : file.shared ? "Shared" : "Not shared"}</span></label></TableCell><TableCell>{formatBytes(file.fileSizeBytes)}</TableCell><TableCell className="capitalize">{file.lifecycleStatus}</TableCell><TableCell><div className="flex justify-end" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}><FileActions file={file} canWrite={canWrite && !file.sharedInbound} onInfo={onInfo} onPreview={onPreview} onDownload={onDownload} onRename={onRename} onDelete={onDelete} /></div></TableCell></TableRow>;
 }
 
 function FileActions({ file, canWrite, onInfo, onPreview, onDownload, onRename, onDelete }: { file: ProjectFileMeta; canWrite: boolean; onInfo: (file: ProjectFileMeta) => void; onPreview: (file: ProjectFileMeta) => void; onDownload: (file: ProjectFileMeta) => void; onRename: (file: ProjectFileMeta) => void; onDelete: (file: ProjectFileMeta) => void }) {
