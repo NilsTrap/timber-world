@@ -25,6 +25,10 @@ assert(!html.output.includes("</style><script"));
 assert(html.output.includes("removed-identifier"));
 assert.equal(html.findings.length, 2);
 
+const embeddedImage = cleanHtmlText('<img alt="KOI overview" src="data:image/png;base64,AAAKOIAAA"><p>KOI</p>', normaliseSensitiveTerms(["KOI"]));
+assert(embeddedImage.output.includes("data:image/png;base64,AAAKOIAAA"));
+assert(!embeddedImage.output.includes(">KOI<"));
+
 const cleanName = buildNeutralCleanFileName("html", "a1b2c3d4");
 assert.equal(cleanName, "Cleaned report a1b2c3d4.html");
 assert(!cleanName.includes("Jane Masen"));

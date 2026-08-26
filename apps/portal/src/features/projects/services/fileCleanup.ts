@@ -40,9 +40,7 @@ function redact(input: string, terms: readonly string[]): TextCleanupResult {
 }
 
 export function cleanHtmlText(input: string, terms: readonly string[]): TextCleanupResult {
-  const sanitized = sanitizeHtml(input, terms);
-  const visible = redact(sanitized.output, terms);
-  return { output: visible.output, findings: dedupeFindings([...sanitized.findings, ...visible.findings]) };
+  return sanitizeHtml(input, terms);
 }
 
 function sanitizeHtml(input: string, terms: readonly string[]): TextCleanupResult {
@@ -51,7 +49,7 @@ function sanitizeHtml(input: string, terms: readonly string[]): TextCleanupResul
   const document = parse(input);
   const findings: CleanupFinding[] = [];
   sanitizeChildren(document, terms, findings);
-  return { output: serialize(document), findings };
+  return { output: serialize(document), findings: dedupeFindings(findings) };
 }
 
 const DROP_HTML_TAGS = new Set(["base", "embed", "iframe", "link", "math", "meta", "object", "script", "svg"]);
@@ -60,8 +58,17 @@ const URL_ATTRIBUTES = new Set(["action", "background", "formaction", "href", "p
 
 function sanitizeChildren(parent: DefaultTreeAdapterTypes.ParentNode, terms: readonly string[], findings: CleanupFinding[]): void {
   const children: DefaultTreeAdapterTypes.ChildNode[] = [];
+  const parentIsStyle = "tagName" in parent && parent.tagName.toLocaleLowerCase() === "style";
   for (const child of parent.childNodes) {
-    if (!("tagName" in child)) { children.push(child); continue; }
+    if (!("tagName" in child)) {
+      if ("value" in child && !parentIsStyle) {
+        const cleaned = redact(child.value, terms);
+        child.value = cleaned.output;
+        findings.push(...cleaned.findings);
+      }
+      children.push(child);
+      continue;
+    }
     const tagName = child.tagName.toLocaleLowerCase();
     if (DROP_HTML_TAGS.has(tagName)) continue;
     sanitizeChildren(child, terms, findings);
@@ -74,9 +81,12 @@ function sanitizeChildren(parent: DefaultTreeAdapterTypes.ParentNode, terms: rea
     child.attrs = child.attrs.filter((attribute) => {
       const name = attribute.name.toLocaleLowerCase();
       if (name === "srcdoc" || name === "srcset" || name.startsWith("on")) return false;
-      attribute.value = name === "style"
-        ? sanitizeCss(attribute.value, terms, findings)
-        : redactIdentifierVariants(name === "class" || name === "id" ? decodeCssEscapes(attribute.value) : attribute.value, terms, findings);
+      if (name === "style") attribute.value = sanitizeCss(attribute.value, terms, findings);
+      else if (!(URL_ATTRIBUTES.has(name) && attribute.value.trim().toLocaleLowerCase().startsWith("data:"))) {
+        const cleaned = redact(attribute.value, terms);
+        findings.push(...cleaned.findings);
+        attribute.value = redactIdentifierVariants(name === "class" || name === "id" ? decodeCssEscapes(cleaned.output) : cleaned.output, terms, findings);
+      }
       return !URL_ATTRIBUTES.has(name) || isSafeEmbeddedHtmlUrl(attribute.value);
     });
     children.push(child);
