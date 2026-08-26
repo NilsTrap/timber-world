@@ -158,18 +158,12 @@ export function ProjectDetailView({
         )}
       </div>
 
-      <div className="space-y-3">
-        <SectionHeader
-          title="Files"
-          subtitle={`${project.fileCounts.total} file(s) on this project`}
-        />
-        <ProjectFileWorkspace
-          projectId={project.id}
-          initialFiles={project.files}
-          initialFolders={project.folders}
-          canWrite={viewer.canWriteFiles}
-        />
-      </div>
+      <ProjectFileWorkspace
+        projectId={project.id}
+        initialFiles={project.files}
+        initialFolders={project.folders}
+        canWrite={viewer.canWriteFiles}
+      />
 
       {project.notes ? (
         <div className="space-y-3">

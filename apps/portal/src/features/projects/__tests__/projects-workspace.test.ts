@@ -108,6 +108,7 @@ const service = readFileSync("src/features/projects/services/projectFiles.ts", "
 const actions = readFileSync("src/features/projects/actions/projectFileActions.ts", "utf8");
 const create = readFileSync("src/features/projects/actions/createProject.ts", "utf8");
 const workspace = readFileSync("src/features/projects/components/ProjectFileWorkspace.tsx", "utf8");
+const dropSurface = readFileSync("src/features/projects/components/ProjectDropSurface.tsx", "utf8");
 const preview = readFileSync("src/features/projects/components/ProjectFilePreview.tsx", "utf8");
 const htmlViewer = readFileSync("src/features/projects/components/viewers/HtmlFileViewer.tsx", "utf8");
 const dxfViewer = readFileSync("src/features/projects/components/viewers/DxfFileViewer.tsx", "utf8");
@@ -143,6 +144,9 @@ ok("shared file-folder namespace is serialized", folderMigration.includes("proje
 ok("workspace exposes create, move and bulk delete controls", workspace.includes("createProjectFolderAction") && workspace.includes("moveProjectFolderAction") && workspace.includes("deleteProjectFilesAction"));
 ok("workspace limits parallel upload workers", workspace.includes("Math.min(3, next.length)"));
 ok("workspace uses centralized icons and viewer routing", workspace.includes("ProjectFileTypeIcon") && workspace.includes("ProjectFilePreview"));
+ok("workspace uploader starts behind a header control and collapses only after true idle", workspace.includes('aria-controls="project-file-upload-surface"') && workspace.includes("10_000") && workspace.includes("hasActiveUploads") && workspace.includes("uploadInteractionActive"));
+ok("drop surface reports active drag and file-picker interaction", dropSurface.includes("isDragActive || pickerOpen") && dropSurface.includes("onActivityChange") && dropSurface.includes('window.addEventListener("focus"'));
+ok("workspace replaces the folder column with file information", !workspace.includes("<TableHead>Folder</TableHead>") && workspace.includes("File information") && workspace.includes("Information for ${file.fileName}") && workspace.includes('["Folder", folder]') && workspace.includes('["Uploaded", formatDateTime(file.createdAt)]'));
 ok("heavy engineering viewers are lazy chunks", preview.includes('dynamic(() => import("./viewers/DxfFileViewer")') && preview.includes('dynamic(() => import("./viewers/StepFileViewer")'));
 ok("HTML preview is sanitized and scriptless", htmlViewer.includes("sanitizeProjectHtml") && htmlViewer.includes('sandbox=""'));
 ok("DXF parsing uses a dedicated worker and destroys viewer resources", dxfViewer.includes("workerFactory") && dxfViewer.includes("viewer?.Destroy()"));
