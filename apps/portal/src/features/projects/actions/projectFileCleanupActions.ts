@@ -40,8 +40,8 @@ async function cleanOne(actor: Extract<Awaited<ReturnType<typeof resolveProjects
   // Load format tooling only while executing cleanup. Keeping DOM/PDF libraries
   // out of the server-action module's initial graph prevents Next from trying
   // to initialise JSDOM while merely rendering the project page.
-  const { cleanDxfText, cleanHtmlText, cleanPdfBytes, cleanPlainText, normaliseSensitiveTerms } = await import("../services/fileCleanup");
-  const baseTerms = normaliseSensitiveTerms([deal.name, ...(buyer ? Object.values(buyer as Record<string, string | null>) : []), ...(policy.extraTerms ?? [])]);
+  const { buildNeutralCleanFileName, cleanDxfText, cleanHtmlText, cleanPdfBytes, cleanPlainText, inferSensitiveFileNameTerms, normaliseSensitiveTerms } = await import("../services/fileCleanup");
+  const baseTerms = normaliseSensitiveTerms([deal.name, ...inferSensitiveFileNameTerms(file.file_name), ...(buyer ? Object.values(buyer as Record<string, string | null>) : []), ...(policy.extraTerms ?? [])]);
   await actor.db.from("order_files").update({ cleanup_status: "processing", cleanup_findings: [] }).eq("id", fileId);
   const { data: blob, error: downloadError } = await actor.db.storage.from("orders").download(file.storage_path);
   if (downloadError || !blob) return failCleanup(actor, fileId, "Could not read the original file");
@@ -55,19 +55,22 @@ async function cleanOne(actor: Extract<Awaited<ReturnType<typeof resolveProjects
     const aiTerms = policy.llmEnabled && !isPdf ? await findTermsWithAi(text, policy.prompt ?? "") : [];
     const terms = normaliseSensitiveTerms([...baseTerms, ...aiTerms]);
     let output: Uint8Array;
+    let cleanFileKind: import("../services/fileCleanup").CleanFileKind;
     let findings: CleanupFinding[];
-    if (isPdf) ({ output, findings } = await cleanPdfBytes(input, terms));
+    if (isPdf) { ({ output, findings } = await cleanPdfBytes(input, terms)); cleanFileKind = "pdf"; }
     else if (lower.endsWith(".html") || lower.endsWith(".htm") || file.mime_type === "text/html") {
-      const cleaned = cleanHtmlText(text, terms); output = new TextEncoder().encode(cleaned.output); findings = cleaned.findings;
+      const cleaned = cleanHtmlText(text, terms); output = new TextEncoder().encode(cleaned.output); findings = cleaned.findings; cleanFileKind = "html";
     } else if (lower.endsWith(".dxf")) {
-      const cleaned = cleanDxfText(text, terms); output = new TextEncoder().encode(cleaned.output); findings = cleaned.findings;
+      const cleaned = cleanDxfText(text, terms); output = new TextEncoder().encode(cleaned.output); findings = cleaned.findings; cleanFileKind = "dxf";
     } else if (file.mime_type?.startsWith("text/")) {
-      const cleaned = cleanPlainText(text, terms); output = new TextEncoder().encode(cleaned.output); findings = cleaned.findings;
+      const cleaned = cleanPlainText(text, terms); output = new TextEncoder().encode(cleaned.output); findings = cleaned.findings; cleanFileKind = "text";
     } else return failCleanup(actor, fileId, "This file type needs a manually cleaned replacement");
-    const storagePath = `${file.order_id}/project/${crypto.randomUUID()}_clean_${sanitizeStorageFileName(file.file_name)}`;
-    const { error: uploadError } = await actor.db.storage.from("orders").upload(storagePath, output, { contentType: file.mime_type || "application/octet-stream", upsert: false });
+    const cleanFileName = buildNeutralCleanFileName(cleanFileKind);
+    const cleanMimeType = cleanFileKind === "html" ? "text/html" : cleanFileKind === "pdf" ? "application/pdf" : cleanFileKind === "dxf" ? "image/vnd.dxf" : "text/plain";
+    const storagePath = `${file.order_id}/project/${crypto.randomUUID()}_${sanitizeStorageFileName(cleanFileName)}`;
+    const { error: uploadError } = await actor.db.storage.from("orders").upload(storagePath, output, { contentType: cleanMimeType, upsert: false });
     if (uploadError) return failCleanup(actor, fileId, "Could not save the cleaned copy");
-    const payload = { order_id: file.order_id, category: "project", file_name: file.file_name, relative_path: file.relative_path, mime_type: file.mime_type, file_size_bytes: output.byteLength, storage_path: storagePath, uploaded_by: actor.portalUserId, file_variant: "recipient_copy", source_file_id: file.id, lifecycle_status: "ready", cleanup_status: "needs_review", cleanup_findings: findings, cleaned_at: new Date().toISOString(), approved_at: null, approved_by: null, shared_to_order_id: null, shared_at: null, shared_by: null };
+    const payload = { order_id: file.order_id, category: "project", file_name: cleanFileName, relative_path: cleanFileName, mime_type: cleanMimeType, file_size_bytes: output.byteLength, storage_path: storagePath, uploaded_by: actor.portalUserId, file_variant: "recipient_copy", source_file_id: file.id, lifecycle_status: "ready", cleanup_status: "needs_review", cleanup_findings: findings, cleaned_at: new Date().toISOString(), approved_at: null, approved_by: null, shared_to_order_id: null, shared_at: null, shared_by: null };
     const { data: existing } = await actor.db.from("order_files").select("id, storage_path").eq("source_file_id", file.id).eq("file_variant", "recipient_copy").maybeSingle();
     let cleanFileId: string;
     if (existing) {

@@ -146,6 +146,7 @@ ok("shared file-folder namespace is serialized", folderMigration.includes("proje
 ok("workspace exposes create, move and bulk delete controls", workspace.includes("createProjectFolderAction") && workspace.includes("moveProjectFolderAction") && workspace.includes("deleteProjectFilesAction"));
 ok("workspace exposes clean preview and checkbox-only sharing controls", workspace.includes("Clean selected") && workspace.includes("Share with next party") && workspace.includes("Approve cleaned file") && workspace.includes("Shared status for") && !workspace.includes(">Not shared<"));
 ok("clean derivatives are linked and downstream reads require approval", cleanupMigration.includes("source_file_id") && cleanupMigration.includes("shared_to_order_id") && cleanupMigration.includes("cleanup_status='approved'"));
+ok("clean derivatives receive neutral filenames and paths", cleanupActions.includes("buildNeutralCleanFileName") && cleanupActions.includes("file_name: cleanFileName") && cleanupActions.includes("relative_path: cleanFileName"));
 ok("cleanup actions derive the adjacent leg server-side", cleanupActions.includes('.eq("buyer_organisation_id", deal.seller_organisation_id)') && !cleanupActions.includes("destinationOrderId"));
 ok("workspace limits parallel upload workers", workspace.includes("Math.min(3, next.length)"));
 ok("workspace uses centralized icons and viewer routing", workspace.includes("ProjectFileTypeIcon") && workspace.includes("ProjectFilePreview"));
