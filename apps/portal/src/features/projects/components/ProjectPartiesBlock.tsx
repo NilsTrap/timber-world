@@ -16,6 +16,10 @@ export function ProjectPartiesBlock({ projectId, workspace }: { projectId: strin
   const [editing, setEditing] = useState<"buyer" | "center" | null>(null);
   const downstream = workspace.downstreamParties ?? (workspace.seller ? [{ ...workspace.seller, projectId: workspace.seller.projectId ?? projectId, group: workspace.seller.personas.includes("trader") ? "traders" as const : "suppliers" as const }] : []);
   const mayAddTrader = workspace.sellerOptions.some((option) => option.group === "traders");
+  const centerIsTrader = workspace.center?.personas.includes("trader") ?? false;
+  const centerIsBuyer = !centerIsTrader && (workspace.center?.personas.includes("buyer") ?? false);
+  const showBuyerSlot = centerIsTrader || !centerIsBuyer || workspace.buyer !== null || workspace.canSetBuyer;
+  const centerLabel = centerIsTrader ? "Trader 1 · Represented company" : centerIsBuyer ? "Buyer · Represented company" : "Manufacturer / Supplier · Represented company";
 
   async function mutate(kind: "buyer" | "center" | "seller", action: () => Promise<{ success: boolean; error?: string }>, success: string) {
     setBusy(kind);
@@ -34,12 +38,11 @@ export function ProjectPartiesBlock({ projectId, workspace }: { projectId: strin
 
   return (
     <div className="flex items-stretch gap-3 overflow-x-auto pb-1">
-      <PartySlot label="Buyer" party={workspace.buyer} onPartyClick={workspace.canEditBuyer && editing !== "buyer" ? () => setEditing("buyer") : undefined} className="min-w-[14rem] flex-1">
+      {showBuyerSlot ? <><PartySlot label="Buyer" party={workspace.buyer} onPartyClick={workspace.canEditBuyer && editing !== "buyer" ? () => setEditing("buyer") : undefined} className="min-w-[14rem] flex-1">
         {workspace.buyerProjectId && (workspace.canSetBuyer || editing === "buyer") ? <PartySelect placeholder="Select customer" options={workspace.buyerOptions} busy={busy === "buyer"} onChange={(id) => void mutate("buyer", () => setProjectBuyer({ projectId: workspace.buyerProjectId!, buyerOrganisationId: id }), "Buyer updated")} /> : null}
         {editing === "buyer" ? <CancelButton onClick={() => setEditing(null)} /> : null}
-      </PartySlot>
-      <ChainArrow />
-      <PartySlot label="Trader 1 · Represented company" party={workspace.center} emphasized className="min-w-[15rem] flex-1">
+      </PartySlot><ChainArrow /></> : null}
+      <PartySlot label={centerLabel} party={workspace.center} emphasized className="min-w-[15rem] flex-1">
         {editing === "center" ? <PartySelect placeholder="Select represented trader" options={workspace.centerOptions} busy={busy === "center"} onChange={(id) => void mutate("center", () => setProjectCenter({ projectId, traderOrganisationId: id }), "Represented trader updated")} /> : workspace.canEditCenter ? <EditButton onClick={() => setEditing("center")} /> : null}
         {editing === "center" ? <CancelButton onClick={() => setEditing(null)} /> : null}
       </PartySlot>

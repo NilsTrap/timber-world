@@ -28,8 +28,9 @@ export default async function ProjectDetailPage({
     if (res.deny === "login") redirect("/login");
     notFound();
   }
-  const candidates = res.viewer.canCreateProject && res.project.stage === "draft"
+  const canManageRfq = (res.viewer.isPlatformAdmin || res.viewer.personas.includes("trader")) && res.viewer.canCreateProject && res.project.stage === "draft";
+  const candidates = canManageRfq
     ? await getEligibleProjectRfqCandidates(id)
     : null;
-  return <ProjectDetailView project={res.project} viewer={res.viewer} partyWorkspace={res.partyWorkspace} isRfqCandidate={res.isRfqCandidate} initialRfqCandidates={candidates?.success ? candidates.data : []} />;
+  return <ProjectDetailView project={res.project} viewer={res.viewer} partyWorkspace={res.partyWorkspace} isRfqCandidate={res.isRfqCandidate} initialRfqCandidates={candidates?.success ? candidates.data : []} canManageRfq={canManageRfq} />;
 }

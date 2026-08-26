@@ -48,8 +48,10 @@ export async function listProjects(): Promise<ListProjectsResult> {
   let invitedRows: Array<{ id: string; reference: string; name: string | null; stage: string; deliveryDeadline: string | null }> = [];
   if (!a.isPlatformAdmin && a.orgId) {
     const { data, error } = await a.db.rpc("list_project_rfq_invitations");
-    if (error || !Array.isArray(data)) return { ok: false, deny: "not_found" };
-    invitedRows = data.slice(0, LIST_LIMIT) as typeof invitedRows;
+    // Keep the canonical project list available during a code-first rollout;
+    // invitations appear as soon as the matching migration is installed.
+    if (error && error.code !== "PGRST202") return { ok: false, deny: "not_found" };
+    if (Array.isArray(data)) invitedRows = data.slice(0, LIST_LIMIT) as typeof invitedRows;
   }
   const committedIds = new Set(committedRaws.map((deal) => deal.id));
   invitedRows = invitedRows.filter((row) => !committedIds.has(row.id));

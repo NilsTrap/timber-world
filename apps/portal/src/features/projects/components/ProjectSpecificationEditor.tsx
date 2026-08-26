@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -29,6 +29,7 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
   const [pending, startTransition] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [catalog, setCatalog] = useState<ProjectCatalogOption[]>([]);
+  const [catalogSearch, setCatalogSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ProjectLine | null>(null);
 
   function openCatalog() {
@@ -38,6 +39,7 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
       if (result.data.length === 0) { toast.info("No active catalogue variants are available"); return; }
       const first = result.data[0]!;
       setCatalog(result.data);
+      setCatalogSearch("");
       setDraft({ ...blank(), productName: first.label, unit: first.unit, catalogVariantId: first.id });
     });
   }
@@ -103,10 +105,22 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
         <DialogDescription>{draft?.catalogVariantId ? "Copy the selected catalogue values into this project specification." : "Define the deliverable and its technical requirements without pricing."}</DialogDescription>
       </DialogHeader>
         {draft ? <div className="grid gap-4 py-2">
-          {catalog.length ? <Field label="Catalogue variant"><select className="h-9 rounded-md border bg-background px-3" value={draft.catalogVariantId} onChange={(event) => {
-            const option = catalog.find((item) => item.id === event.target.value);
-            if (option) setDraft({ ...draft, catalogVariantId: option.id, productName: option.label, unit: option.unit });
-          }}>{catalog.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></Field>
+          {catalog.length ? <Field label="Catalogue variant"><div className="overflow-hidden rounded-md border bg-background">
+            <div className="flex items-center gap-2 border-b px-3">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <Input className="border-0 px-0 shadow-none focus-visible:ring-0" value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} placeholder="Search products, SKU or dimensions…" autoFocus />
+            </div>
+            <div className="max-h-64 overflow-y-auto p-1" role="listbox" aria-label="Catalogue variants">
+              {filterCatalog(catalog, catalogSearch).map((option) => {
+                const selected = option.id === draft.catalogVariantId;
+                return <button key={option.id} type="button" role="option" aria-selected={selected} className="flex w-full items-start gap-2 rounded px-2 py-2 text-left text-sm hover:bg-muted" onClick={() => setDraft({ ...draft, catalogVariantId: option.id, productName: option.label, unit: option.unit })}>
+                  <Check className={`mt-0.5 h-4 w-4 shrink-0 ${selected ? "opacity-100" : "opacity-0"}`} />
+                  <span className="min-w-0 break-words">{option.label}</span>
+                </button>;
+              })}
+              {filterCatalog(catalog, catalogSearch).length === 0 ? <p className="px-3 py-6 text-center text-sm text-muted-foreground">No matching catalogue variants.</p> : null}
+            </div>
+          </div></Field>
           : <Field label="Deliverable"><Input value={draft.productName} onChange={(event) => setDraft({ ...draft, productName: event.target.value })} autoFocus /></Field>}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Quantity"><Input type="number" min="0.0001" step="any" value={draft.quantity} onChange={(event) => setDraft({ ...draft, quantity: event.target.value })} /></Field>
@@ -132,5 +146,10 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
 
 function lineToDraft(line: ProjectLine): Draft {
   return { id: line.id ?? undefined, productName: line.productName ?? "", quantity: String(line.volumeM3 ?? line.pieces ?? 1), unit: line.unit, notes: line.notes ?? "" };
+}
+function filterCatalog(options: ProjectCatalogOption[], query: string): ProjectCatalogOption[] {
+  const normalized = query.trim().toLocaleLowerCase();
+  if (!normalized) return options.slice(0, 100);
+  return options.filter((option) => option.label.toLocaleLowerCase().includes(normalized)).slice(0, 100);
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="grid gap-1.5"><Label>{label}</Label>{children}</div>; }

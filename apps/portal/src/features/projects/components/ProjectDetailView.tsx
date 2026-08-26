@@ -22,12 +22,14 @@ export function ProjectDetailView({
   partyWorkspace,
   isRfqCandidate,
   initialRfqCandidates,
+  canManageRfq,
 }: {
   project: ProjectDetail;
   viewer: ProjectsViewer;
   partyWorkspace: ProjectPartyWorkspace;
   isRfqCandidate: boolean;
   initialRfqCandidates: Array<{ id: string; name: string }>;
+  canManageRfq: boolean;
 }) {
   const currency = project.currency ?? "";
   const projectName = project.name?.trim();
@@ -57,8 +59,8 @@ export function ProjectDetailView({
         canEdit={viewer.canEditTerms && project.stage === "draft"}
       />
 
-      {(viewer.canCreateProject || isRfqCandidate || viewer.isPlatformAdmin) ? (
-        <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={viewer.canCreateProject && project.stage === "draft"} initialOptions={initialRfqCandidates} />
+      {(canManageRfq || isRfqCandidate) ? (
+        <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={canManageRfq} initialOptions={initialRfqCandidates} />
       ) : null}
 
       <ProjectFileWorkspace
