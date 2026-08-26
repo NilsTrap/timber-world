@@ -2,7 +2,7 @@
 title: 'Preserve inline DXF drawings during HTML cleanup'
 type: 'bugfix'
 created: '2026-08-26'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'f257d44f1fea29422a8ab1a4c51e396ac11d4e81'
 context:
   - 'CLAUDE.md'
@@ -50,7 +50,7 @@ context:
 - [x] `apps/portal/src/features/projects/services/__tests__/fileCleanup.test.ts` -- prove drawing primitives survive and hostile SVG constructs do not.
 - [x] `apps/portal/src/features/projects/components/ProjectFileWorkspace.tsx` -- clear selected files after successful cleanup while retaining failures for retry.
 - [x] `apps/portal/src/features/projects/__tests__/projects-workspace.test.ts` -- guard cleanup deselection behavior.
-- [ ] Staging browser -- regenerate and visually compare both HTML derivatives with their originals.
+- [x] Staging browser -- regenerate and visually compare both HTML derivatives with their originals.
 
 **Acceptance Criteria:**
 - Given either reported HTML file, when cleaned, then every original flat-pattern/DXF drawing remains visible in the corresponding cleaned page.
@@ -72,3 +72,26 @@ Inline SVG is treated as inert document artwork: core geometry and presentation 
 
 **Manual checks:**
 - Compare original and cleaned v10/v4 previews on staging; SVG and raster counts must match and all drawings must be visible.
+
+## Suggested Review Order
+
+**Drawing preservation and safety**
+
+- Preserve SVG geometry while excluding active and externally loaded constructs.
+  [`fileCleanup.ts:55`](../../../apps/portal/src/features/projects/services/fileCleanup.ts#L55)
+
+- Retain safe local paint references while rejecting escaped remote URLs.
+  [`fileCleanup.ts:84`](../../../apps/portal/src/features/projects/services/fileCleanup.ts#L84)
+
+**Cleanup interaction**
+
+- Deselect only files whose cleaned derivatives were successfully generated.
+  [`ProjectFileWorkspace.tsx:324`](../../../apps/portal/src/features/projects/components/ProjectFileWorkspace.tsx#L324)
+
+**Regression coverage**
+
+- Exercise drawing primitives, hostile SVG, local paint references, and URL bypasses.
+  [`fileCleanup.test.ts:37`](../../../apps/portal/src/features/projects/services/__tests__/fileCleanup.test.ts#L37)
+
+- Guard successful cleanup selection behavior at the workspace boundary.
+  [`projects-workspace.test.ts:147`](../../../apps/portal/src/features/projects/__tests__/projects-workspace.test.ts#L147)
