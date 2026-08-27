@@ -12,8 +12,8 @@
  *   nullable  = "this viewer may see it; there is nothing to show"
  *   optional  = "this viewer may NOT see it; the key is not in the payload"
  *
- * Deliberately absent everywhere: spineId / spineCode / upstreamDealId (chain),
- * margin + P&L figures, deal totals, order_documents (they carry storage paths
+ * Chain and value members are emitted only after their domain walls pass.
+ * Deliberately absent everywhere: margin + P&L figures, order_documents (they carry storage paths
  * and Oscar URLs), external refs, and `storage_path` on any file.
  */
 import type { ProjectPersona } from "./personas";
@@ -76,18 +76,26 @@ export interface ProjectPartyWorkspace {
   canEditCenter: boolean;
 }
 
-/** One visible bilateral deal = one project row. */
+/** One visible bilateral deal = one clickable row, optionally grouped by spine. */
 export interface ProjectListItem {
   id: string;
   /** Deal code (preferred) or the legacy ORD-### code. */
   reference: string;
   name: string | null;
+  /** Persisted spine code when chain visibility permits; deal reference otherwise. */
+  spineCode: string;
+  /** Presentation-only grouping key. Never identifies an invisible sibling. */
+  groupKey: string;
+  /** Visible chain depth: zero for the parent or a standalone row. */
+  depth: number;
   stage: string;
   stageLabel: string;
   /** The deal's framing FROM THIS VIEWER's standpoint (never absolute). */
   direction: "sell" | "buy";
   /** The viewer's own deal partner. null when the viewer is not a party. */
   counterparty: ProjectPartyRef | null;
+  buyer: ProjectPartyRef | null;
+  seller: ProjectPartyRef | null;
   deliveryDeadline: string | null;
   /** Files attached to THIS deal only (RLS-filtered); never a chain roll-up. */
   fileCount: number;
@@ -95,6 +103,21 @@ export interface ProjectListItem {
   rfqInvitation?: boolean;
   /** Only for viewers with the `deal_terms` domain. */
   currency?: string;
+  /** Final value in minor units; absent without deal_terms permission. */
+  valueCents?: number | null;
+}
+
+export interface ProjectListFilterOption {
+  id: string;
+  label: string;
+}
+
+export interface ProjectListFilters {
+  search: string;
+  customer: string;
+  trader: string;
+  supplier: string;
+  stage: string;
 }
 
 /** A specification line. Price members appear only with `deal_terms`. */

@@ -38,6 +38,8 @@ export interface OrderDealView {
   dealKind: string;
   productGroup: string | null;
   currency: string;
+  /** Final sales value for this bilateral deal, in currency minor units. */
+  valueCents: number | null;
   status: string;
   /** Deal lifecycle milestone (draft→confirmed→produced→loaded→delivered, +cancelled). */
   lifecycleStage: string;
@@ -71,7 +73,7 @@ export interface OrderDealView {
 export type OrderDealSummary = Omit<OrderDealView, "lineItems" | "externalRefs" | "documents">;
 
 const ORDER_SELECT = `
-  id, code, deal_code, name, deal_kind, product_group, currency, status, lifecycle_stage,
+  id, code, deal_code, name, deal_kind, product_group, currency, value_cents, status, lifecycle_stage,
   incoterms, incoterms_place, advance_pct, payment_terms, delivery_terms,
   delivery_deadline, transport_billing, notes, margin_approved_at,
   seller_signee_name, seller_signee_role, buyer_signee_name, buyer_signee_role,
@@ -94,6 +96,7 @@ function mapOrderDealHeader(row: any): OrderDealSummary {
     dealKind: row.deal_kind ?? "buy_sell",
     productGroup: row.product_group ?? null,
     currency: row.currency,
+    valueCents: row.value_cents != null ? Number(row.value_cents) : null,
     status: row.status,
     lifecycleStage: row.lifecycle_stage ?? "draft",
     incoterms: row.incoterms ?? null,

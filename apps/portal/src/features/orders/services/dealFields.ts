@@ -222,6 +222,7 @@ interface DealPartyRef {
 
 interface DealViewLike {
   dealKind: string;
+  valueCents?: number | null;
   incoterms: string | null;
   incotermsPlace: string | null;
   advancePct: number | null;
@@ -285,6 +286,7 @@ export function projectDealView<T extends DealViewLike>(
 
   return {
     ...view,
+    valueCents: seeTerms ? view.valueCents ?? null : null,
     incoterms: seeTerms ? view.incoterms : null,
     incotermsPlace: seeTerms ? view.incotermsPlace : null,
     advancePct: seeTerms ? view.advancePct : null,

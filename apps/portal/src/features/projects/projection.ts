@@ -53,6 +53,7 @@ export interface DealHeaderLike {
   name: string | null;
   dealKind: string;
   currency: string;
+  valueCents: number | null;
   lifecycleStage: string;
   incoterms: string | null;
   incotermsPlace: string | null;
@@ -65,6 +66,8 @@ export interface DealHeaderLike {
   seller: DealPartyLike;
   producer: DealPartyLike;
   buyer: DealPartyLike;
+  spineId: string | null;
+  upstreamDealId: string | null;
 }
 
 export interface DealLineLike {
@@ -204,16 +207,24 @@ export function toProjectListItem(
     id: walled.id,
     reference: walled.dealCode ?? walled.code,
     name: walled.name,
+    spineCode: walled.dealCode ?? walled.code,
+    groupKey: walled.id,
+    depth: 0,
     stage: walled.lifecycleStage,
     stageLabel: stageLabel(walled.lifecycleStage),
     direction,
     counterparty,
+    buyer: partyRef(walled.buyer, ctx),
+    seller: partyRef(walled.seller, ctx),
     deliveryDeadline: walled.deliveryDeadline,
     fileCount,
   };
   // Currency travels with the commercial terms: without `deal_terms` there are
   // no amounts to label, so the key is simply not emitted.
-  if (ctx.access.domainVisible("deal_terms")) item.currency = walled.currency;
+  if (ctx.access.domainVisible("deal_terms")) {
+    item.currency = walled.currency;
+    item.valueCents = walled.valueCents;
+  }
   return item;
 }
 

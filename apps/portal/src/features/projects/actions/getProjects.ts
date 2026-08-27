@@ -6,16 +6,17 @@
  * endpoint would add attack surface for nothing. Every call re-runs the full
  * gate through `resolveProjectsActor()` — there is no "already checked" path.
  *
- * One visible bilateral deal = one project. RLS on the authenticated client
+ * One visible bilateral deal = one clickable project row. RLS on the authenticated client
  * (`can_access_deal_row`) is authoritative; the additional seller/buyer filter
  * binds a multi-org viewer to their CURRENT organisation before its field wall
- * is applied. The loader never looks at a spine, sibling leg or upstream link.
+ * is applied. Rows are grouped only when the existing chain field wall permits it.
  */
 import { listDeals, type OrderDealSummary } from "../../orders/services/orderDeals";
 import { projectDealView } from "../../orders/services/dealFields";
 import { isValidUUID } from "../../orders/types";
 import { resolveProjectsActor, resolveProjectsViewer } from "../access";
-import { facingPartyOrgId, toProjectListItem, type ProjectionContext } from "../projection";
+import { toProjectListItem, type DealHeaderLike, type ProjectionContext } from "../projection";
+import { groupProjectRows } from "../groupProjects";
 import { loadOrgPersonas } from "../services/orgPersonas";
 import { countFilesByDeal } from "../services/projectFiles";
 import type { ProjectListItem, ProjectsResult, ProjectsViewer } from "../types";
@@ -58,14 +59,22 @@ export async function listProjects(): Promise<ListProjectsResult> {
   const raws: OrderDealSummary[] = committedRaws;
   const visibleIds = raws.map((d) => d.id);
 
-  // Persona lookup covers ONLY the orgs that actually reach the payload — the
-  // viewer's own org and the counterparty of each row — never every party slot
-  // of every deal. Fewer ids in the `.in(...)` and, more to the point, no flag
-  // lookup for an organisation the viewer is not going to be shown.
+  const walledRows = raws.map((raw) =>
+    projectDealView({ ...raw, lineItems: [] }, a.access, a.orgId) as OrderDealSummary & { lineItems: [] },
+  );
+  const visibleSpineIds = [...new Set(walledRows.map((row) => row.spineId).filter((id): id is string => Boolean(id)))];
+  const spineCodeById = new Map<string, string>();
+  if (visibleSpineIds.length > 0) {
+    const { data, error } = await a.db.from("spines").select("id, code").in("id", visibleSpineIds);
+    if (error) return { ok: false, deny: "not_found" };
+    for (const row of (data ?? []) as Array<{ id: string; code: string }>) spineCodeById.set(row.id, row.code);
+  }
+
+  // Load personas only for bilateral parties present on already-authorised rows.
   const [personasByOrgId, fileCounts, viewer] = await Promise.all([
     loadOrgPersonas(a.db, [
       a.orgId,
-      ...raws.map((d) => facingPartyOrgId(d, a.orgId, a.isPlatformAdmin)),
+      ...walledRows.flatMap((deal) => [deal.buyer.id, deal.seller.id]),
     ]),
     countFilesByDeal(a.db, visibleIds),
     resolveProjectsViewer(a),
@@ -78,20 +87,29 @@ export async function listProjects(): Promise<ListProjectsResult> {
     personasByOrgId,
   };
 
-  const committedItems = raws.map((raw) => {
-    // The E4 field wall runs on every row before anything is projected; the
-    // list has no line items, so an empty array stands in for them.
-    const walled = projectDealView({ ...raw, lineItems: [] }, a.access, a.orgId);
-    return toProjectListItem(raw, walled, ctx, fileCounts.get(raw.id)?.total ?? 0);
-  });
+  const committedItems = groupProjectRows(raws.map((raw, index) => {
+    const walled = walledRows[index]!;
+    return {
+      item: toProjectListItem(raw as DealHeaderLike, walled as DealHeaderLike, ctx, fileCounts.get(raw.id)?.total ?? 0),
+      spineId: walled.spineId,
+      spineCode: walled.spineId ? spineCodeById.get(walled.spineId) ?? null : null,
+      upstreamDealId: walled.upstreamDealId,
+      dealKind: walled.dealKind,
+    };
+  }));
   const invitedItems: ProjectListItem[] = invitedRows.map((row) => ({
     id: row.id,
     reference: row.reference,
     name: row.name,
+    spineCode: row.reference,
+    groupKey: `rfq:${row.id}`,
+    depth: 0,
     stage: row.stage,
     stageLabel: row.stage.replaceAll("_", " "),
     direction: "buy",
     counterparty: null,
+    buyer: null,
+    seller: null,
     deliveryDeadline: row.deliveryDeadline,
     fileCount: 0,
     rfqInvitation: true,

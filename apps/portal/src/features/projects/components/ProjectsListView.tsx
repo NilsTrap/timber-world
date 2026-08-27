@@ -14,8 +14,22 @@ import {
 } from "@timber/ui";
 import { PERSONA_LABEL } from "../personas";
 import type { ProjectListItem, ProjectsViewer } from "../types";
+import type { ProjectListFilters as ProjectListFilterState } from "../types";
 import { PersonaBadges } from "./PersonaBadges";
 import { ProjectStageBadge } from "./ProjectStageBadge";
+import { ProjectsListFilters } from "./ProjectsListFilters";
+
+const MONEY_FORMATTERS = new Map<string, Intl.NumberFormat>();
+function formatMoney(valueCents: number | null | undefined, currency: string | undefined): string {
+  if (valueCents == null || !currency) return "—";
+  try {
+    const formatter = MONEY_FORMATTERS.get(currency) ?? new Intl.NumberFormat("en-GB", { style: "currency", currency });
+    MONEY_FORMATTERS.set(currency, formatter);
+    return formatter.format(valueCents / 100);
+  } catch {
+    return "—";
+  }
+}
 
 /**
  * Projects list (server component).
@@ -26,13 +40,19 @@ import { ProjectStageBadge } from "./ProjectStageBadge";
  */
 export function ProjectsListView({
   items,
+  allItems,
   viewer,
+  filters,
+  filterOptions,
 }: {
   items: ProjectListItem[];
+  allItems: ProjectListItem[];
   viewer: ProjectsViewer;
+  filters: ProjectListFilterState;
+  filterOptions: Parameters<typeof ProjectsListFilters>[0]["options"];
 }) {
-  const sellCount = items.filter((i) => !i.rfqInvitation && i.direction === "sell").length;
-  const buyCount = items.filter((i) => !i.rfqInvitation && i.direction === "buy").length;
+  const projectCount = new Set(items.map((item) => item.groupKey)).size;
+  const partyCount = new Set(items.flatMap((item) => [item.buyer?.id, item.seller?.id]).filter(Boolean)).size;
   const fileCount = items.reduce((sum, i) => sum + i.fileCount, 0);
 
   return (
@@ -53,56 +73,67 @@ export function ProjectsListView({
       </div>
 
       <SummaryGrid columns={4}>
-        <SummaryCard label="Projects" value={String(items.length)} />
-        <SummaryCard label="Selling" value={String(sellCount)} />
-        <SummaryCard label="Buying" value={String(buyCount)} />
+        <SummaryCard label="Projects" value={String(projectCount)} />
+        <SummaryCard label="Visible legs" value={String(items.length)} />
+        <SummaryCard label="Counterparties" value={String(partyCount)} />
         <SummaryCard label="Files" value={String(fileCount)} />
       </SummaryGrid>
 
+      <ProjectsListFilters filters={filters} options={filterOptions} />
+
       {items.length === 0 ? (
-        <EmptyState message={viewer.canCreateProject ? "No projects yet. Create the first project." : "No projects yet. Projects appear here as soon as you are a party to a deal."} />
+        <EmptyState message={allItems.length > 0 ? "No projects match these filters." : viewer.canCreateProject ? "No projects yet. Create the first project." : "No projects yet. Projects appear here as soon as you are a party to a deal."} />
       ) : (
         <div className="rounded-lg border bg-card overflow-x-auto">
-          <Table dense>
+          <Table dense className="min-w-[1100px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Reference</TableHead>
+                <TableHead>Spine ID</TableHead>
                 <TableHead>Project</TableHead>
-                <TableHead>Direction</TableHead>
-                <TableHead>Counterparty</TableHead>
+                <TableHead>Buyer</TableHead>
+                <TableHead>Seller</TableHead>
                 <TableHead>Stage</TableHead>
                 <TableHead className="hidden md:table-cell">Delivery</TableHead>
                 <TableHead className="hidden sm:table-cell text-right">Files</TableHead>
+                <TableHead className="text-right">Value</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell>
+                  <TableCell className={item.depth > 0 ? "whitespace-nowrap pl-7" : "whitespace-nowrap"}>
                     <Link
                       href={`/projects/${item.id}`}
                       className="font-medium text-primary hover:underline"
                     >
-                      {item.reference}
+                      {item.depth > 0 ? `↳ ${item.reference}` : item.spineCode}
                     </Link>
                   </TableCell>
                   <TableCell className="max-w-[18rem] truncate">{item.name ?? "—"}</TableCell>
-                  <TableCell className="capitalize">{item.rfqInvitation ? "RFQ" : item.direction}</TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap">
                     <span className="flex flex-wrap items-center gap-1">
-                      <span>{item.counterparty?.name ?? "—"}</span>
-                      {item.counterparty ? (
-                        <PersonaBadges personas={item.counterparty.personas} />
+                      <span>{item.buyer?.name ?? "—"}</span>
+                      {item.buyer ? (
+                        <PersonaBadges personas={item.buyer.personas} />
                       ) : null}
                     </span>
                   </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <span className="flex flex-wrap items-center gap-1">
+                      <span>{item.seller?.name ?? "—"}</span>
+                      {item.seller ? <PersonaBadges personas={item.seller.personas} /> : null}
+                    </span>
+                  </TableCell>
                   <TableCell>
+                    {item.depth === 0 && item.stage ? (
                     <ProjectStageBadge stage={item.stage} label={item.stageLabel} />
+                    ) : "—"}
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     {item.deliveryDeadline ?? "—"}
                   </TableCell>
                   <TableCell className="hidden sm:table-cell text-right">{item.fileCount}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right font-medium">{formatMoney(item.valueCents, item.currency)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

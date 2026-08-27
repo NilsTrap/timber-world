@@ -91,7 +91,7 @@ function line(over: Partial<DealLineLike> = {}): DealLineLike {
 function deal() {
   return {
     id: "deal-1", code: "ORD-042", dealCode: "TWP-CLI-0007", name: "Staircase batch",
-    dealKind: "buy_sell", currency: "EUR", status: "confirmed", lifecycleStage: "confirmed",
+    dealKind: "buy_sell", currency: "EUR", valueCents: 345600, status: "confirmed", lifecycleStage: "confirmed",
     incoterms: "FOB", incotermsPlace: "Riga", advancePct: 30, paymentTerms: "30 days",
     deliveryTerms: "DAP site", deliveryDeadline: "2026-09-01", transportBilling: "in_price",
     notes: "Handle with care",
@@ -257,8 +257,8 @@ for (const [label, rendered] of [
   ["admin", admin], ["salesperson", sales], ["purchasing", purchasing], ["client", client],
 ] as const) {
   const blob = JSON.stringify(rendered.detail) + JSON.stringify(rendered.item);
-  ok(`${label}: no spine / chain id anywhere in the payload`,
-     !/spine|upstream/i.test(blob), blob.slice(0, 200));
+  ok(`${label}: no upstream chain pointer anywhere in the payload`,
+     !/upstream/i.test(blob), blob.slice(0, 200));
   ok(`${label}: no margin or P&L field anywhere in the payload`,
      !/margin|plTotal|eurPerM3|invoicedWork|usedWork/i.test(blob));
   ok(`${label}: no storage path or URL on file metadata`,
@@ -267,8 +267,8 @@ for (const [label, rendered] of [
 }
 
 // ── The payload is an allow-list, not a spread ───────────────────────────────
-const ITEM_KEYS = ["id", "reference", "name", "stage", "stageLabel", "direction", "counterparty",
-  "deliveryDeadline", "fileCount", "currency"];
+const ITEM_KEYS = ["id", "reference", "name", "spineCode", "groupKey", "depth", "stage", "stageLabel", "direction", "counterparty",
+  "buyer", "seller", "deliveryDeadline", "fileCount", "currency", "valueCents"];
 const DETAIL_KEYS = [...ITEM_KEYS, "otherParties", "terms", "lines", "files", "folders", "fileCounts", "notes"];
 ok("list item keys ⊆ whitelist", Object.keys(admin.item).every((k) => ITEM_KEYS.includes(k)),
    Object.keys(admin.item));
