@@ -677,7 +677,13 @@ export async function createDeal(db: DbClient, actor: ActorContext, input: Creat
     });
     if (sp.success) spineId = sp.data.id;
   }
-  if (spineId) await c.from("orders").update({ spine_id: spineId }).eq("id", orderId);
+  if (spineId) {
+    const { error: spineError } = await c.from("orders").update({ spine_id: spineId }).eq("id", orderId);
+    if (spineError) {
+      await c.from("orders").delete().eq("id", orderId);
+      return { success: false, error: "Could not attach the deal to its project spine", code: "CONFLICT" };
+    }
+  }
 
   // Allocate the deal code at creation (best-effort: a counter failure must not
   // orphan the row — the code can be re-allocated later via allocateDealCode).

@@ -6,6 +6,8 @@ import { ProjectPartiesBlock } from "./ProjectPartiesBlock";
 import { ProjectTermsCard } from "./ProjectTermsCard";
 import { ProjectSpecificationEditor } from "./ProjectSpecificationEditor";
 import { ProjectRfqCard } from "./ProjectRfqCard";
+import { ProjectLegSelector } from "./ProjectLegSelector";
+import { ProjectNextLegControl } from "./ProjectNextLegControl";
 
 /**
  * Project detail (server component).
@@ -48,8 +50,10 @@ export function ProjectDetailView({
       />
 
       {!isRfqCandidate ? <div className="space-y-3">
+        {partyWorkspace.legOptions ? <ProjectLegSelector currentProjectId={project.id} options={partyWorkspace.legOptions} /> : null}
         <SectionHeader title="Parties" />
         <ProjectPartiesBlock projectId={project.id} workspace={partyWorkspace} />
+        {partyWorkspace.canAppendNextSeller ? <ProjectNextLegControl projectId={project.id} options={partyWorkspace.nextSellerOptions} /> : null}
       </div> : null}
 
       {!isRfqCandidate && project.terms ? (

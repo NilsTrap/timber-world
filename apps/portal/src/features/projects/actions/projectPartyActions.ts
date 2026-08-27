@@ -36,7 +36,7 @@ export async function setProjectBuyer(input: { projectId: string; buyerOrganisat
     if (!relation) return { success: false, error: "Selected company is not this trader's trading partner", code: "FORBIDDEN" };
   }
   const { data: corrected, error } = await a.db.rpc("correct_project_parties", { p_project_id: input.projectId, p_buyer_id: input.buyerOrganisationId, p_trader_id: null });
-  if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
+  if (error) return { success: false, error: projectLegSellerError(error.message), code: "UPDATE_FAILED" };
   await logProjectPartyChange(a.db, input.projectId, a.portalUserId, origin.data.buyer.id ? "Buyer changed" : "Buyer assigned");
   revalidatePath(`/projects/${input.projectId}`);
   revalidatePath(`/orders/${input.projectId}`);
@@ -146,6 +146,39 @@ export async function setProjectSeller(input: { projectId: string; sellerOrganis
   revalidatePath(`/projects/${input.projectId}`);
   revalidatePath(`/projects/${created.data.id}`);
   return { success: true, data: { id: created.data.id, dealCode: created.data.dealCode } };
+}
+
+/** Replace the seller on the selected Draft leg. This is deliberately separate
+ * from setProjectSeller, which appends a new purchase leg. */
+export async function correctProjectLegSeller(input: { projectId: string; sellerOrganisationId: string }): Promise<ActionResult<{ dealCode: string | null }>> {
+  if (!isValidUUID(input.projectId) || !isValidUUID(input.sellerOrganisationId)) return { success: false, error: "Invalid party selection", code: "VALIDATION_ERROR" };
+  const a = await resolveProjectsActor();
+  if (!a.ok || !a.isPlatformAdmin) return { success: false, error: "Only a platform admin can correct a seller", code: "FORBIDDEN" };
+  const leg = await getOrderDeal(a.db, a.actor, input.projectId);
+  if (!leg.success) return { success: false, error: "Project not found", code: "NOT_FOUND" };
+  if (leg.data.lifecycleStage !== "draft") return { success: false, error: "Seller can only be changed while the project is a draft", code: "NOT_DRAFT" };
+  if (leg.data.buyer.id === input.sellerOrganisationId) return { success: false, error: "Buyer and seller must be different companies", code: "SELF_DEAL" };
+  if (leg.data.seller.id === input.sellerOrganisationId) return { success: true, data: { dealCode: leg.data.dealCode } };
+  const { data: selected } = await a.db.from("organisations").select("id, is_trader, is_supplier, is_producer, is_active").eq("id", input.sellerOrganisationId).maybeSingle();
+  const seller = selected as { id: string; is_trader: boolean; is_supplier: boolean; is_producer: boolean; is_active: boolean } | null;
+  if (!seller?.is_active || !(seller.is_trader || seller.is_supplier || seller.is_producer)) return { success: false, error: "Selected company is not an eligible seller", code: "VALIDATION_ERROR" };
+  const { data: corrected, error } = await a.db.rpc("correct_project_leg_seller", { p_project_id: input.projectId, p_seller_id: input.sellerOrganisationId });
+  if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
+  await logProjectPartyChange(a.db, input.projectId, a.portalUserId, "Seller changed");
+  revalidatePath(`/projects/${input.projectId}`);
+  revalidatePath(`/orders/${input.projectId}`);
+  const linkedId = (corrected as { linkedProjectId?: string | null } | null)?.linkedProjectId ?? null;
+  if (linkedId) { revalidatePath(`/projects/${linkedId}`); revalidatePath(`/orders/${linkedId}`); }
+  return { success: true, data: { dealCode: (corrected as { dealCode?: string | null } | null)?.dealCode ?? null } };
+}
+
+function projectLegSellerError(message: string): string {
+  if (message.includes("Seller already belongs")) return "That company already belongs to this project spine";
+  if (message.includes("Ambiguous downstream")) return "The project chain is ambiguous and cannot be changed safely";
+  if (message.includes("linked project must be Draft")) return "The next leg must be a draft before this seller can be changed";
+  if (message.includes("Invalid seller")) return "Selected company is not an eligible seller";
+  if (message.includes("Buyer and seller must differ") || message.includes("self-deal")) return "Buyer and seller must be different companies";
+  return "Could not update the seller";
 }
 
 async function logProjectPartyChange(db: DbClient, projectId: string, userId: string | null, action: string): Promise<void> {

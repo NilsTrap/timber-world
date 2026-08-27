@@ -99,11 +99,11 @@ export function ProjectsListView({
             </TableHeader>
             <TableBody>
               {items.map((item) => (
-                <TableRow key={item.id} className={item.depth === 0 ? "bg-muted/35 hover:bg-muted/55" : "bg-background hover:bg-muted/30"}>
-                  <TableCell className={item.depth > 0 ? "whitespace-nowrap pl-7" : "whitespace-nowrap"}>
+                <TableRow key={item.id} className={item.depth === 0 ? "border-t-2 border-border bg-muted/50 font-medium hover:bg-muted/65" : "bg-background text-muted-foreground hover:bg-muted/25"}>
+                  <TableCell className={item.depth > 0 ? "whitespace-nowrap pl-12" : "whitespace-nowrap"}>
                     <Link
                       href={`/projects/${item.id}`}
-                      className="font-medium text-primary hover:underline"
+                      className={item.depth > 0 ? "font-normal text-primary/75 hover:text-primary hover:underline" : "font-semibold text-primary hover:underline"}
                     >
                       {item.depth > 0 ? `↳ ${item.reference}` : item.spineCode}
                     </Link>

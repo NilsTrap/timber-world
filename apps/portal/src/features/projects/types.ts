@@ -51,29 +51,26 @@ export interface ProjectPartyOption {
   group: "buyers" | "traders" | "suppliers";
 }
 
-export interface ProjectChainParty extends ProjectPartyRef {
-  projectId: string;
-  group: "traders" | "suppliers";
+export interface ProjectLegOption {
+  id: string;
+  reference: string;
 }
 
-/** Safe, viewer-relative projection used by the Parties chain builder. */
+/** Safe projection for the selected bilateral leg. */
 export interface ProjectPartyWorkspace {
-  /** Deal whose buyer is displayed/edited. Differs from the viewed deal only for admin purchase-leg projections. */
+  /** Current deal whose buyer is displayed/edited. */
   buyerProjectId: string | null;
-  /** Root deal used for chain extension; null when an admin purchase leg cannot resolve uniquely. */
-  chainProjectId: string | null;
-  center: ProjectPartyRef | null;
   buyer: ProjectPartyRef | null;
-  seller: (ProjectPartyRef & { projectId?: string }) | null;
-  /** Admin-only ordered downstream projection. Omitted for ordinary party viewers. */
-  downstreamParties?: ProjectChainParty[];
+  seller: ProjectPartyRef | null;
+  /** Same-spine active legs. Admin-only and omitted unless there is a choice. */
+  legOptions?: ProjectLegOption[];
   buyerOptions: ProjectPartyOption[];
   sellerOptions: ProjectPartyOption[];
-  centerOptions: ProjectPartyOption[];
-  canSetBuyer: boolean;
-  canSetSeller: boolean;
+  /** Eligible choices for appending a next leg. Never contains sibling leg IDs. */
+  nextSellerOptions: ProjectPartyOption[];
   canEditBuyer: boolean;
-  canEditCenter: boolean;
+  canEditSeller: boolean;
+  canAppendNextSeller: boolean;
 }
 
 /** One visible bilateral deal = one clickable row, optionally grouped by spine. */

@@ -1,27 +1,20 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowRight, Loader2, Pencil, X } from "lucide-react";
 import { Button, Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@timber/ui";
 import { toast } from "sonner";
 import type { ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace } from "../types";
-import { setProjectBuyer, setProjectCenter, setProjectSeller } from "../actions/projectPartyActions";
+import { correctProjectLegSeller, setProjectBuyer } from "../actions/projectPartyActions";
 import { PersonaBadges } from "./PersonaBadges";
 
 export function ProjectPartiesBlock({ projectId, workspace }: { projectId: string; workspace: ProjectPartyWorkspace }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<"buyer" | "center" | "seller" | null>(null);
-  const [editing, setEditing] = useState<"buyer" | "center" | null>(null);
-  const downstream = workspace.downstreamParties ?? (workspace.seller ? [{ ...workspace.seller, projectId: workspace.seller.projectId ?? projectId, group: workspace.seller.personas.includes("trader") ? "traders" as const : "suppliers" as const }] : []);
-  const mayAddTrader = workspace.sellerOptions.some((option) => option.group === "traders");
-  const centerIsTrader = workspace.center?.personas.includes("trader") ?? false;
-  const centerIsBuyer = !centerIsTrader && (workspace.center?.personas.includes("buyer") ?? false);
-  const showBuyerSlot = centerIsTrader || !centerIsBuyer || workspace.buyer !== null || workspace.canSetBuyer;
-  const centerLabel = centerIsTrader ? "Trader 1 · Represented company" : centerIsBuyer ? "Buyer · Represented company" : "Manufacturer / Supplier · Represented company";
+  const [busy, setBusy] = useState<"buyer" | "seller" | null>(null);
+  const [editing, setEditing] = useState<"buyer" | "seller" | null>(null);
 
-  async function mutate(kind: "buyer" | "center" | "seller", action: () => Promise<{ success: boolean; error?: string }>, success: string) {
+  async function mutate(kind: "buyer" | "seller", action: () => Promise<{ success: boolean; error?: string }>, success: string) {
     setBusy(kind);
     try {
       const result = await action();
@@ -38,27 +31,23 @@ export function ProjectPartiesBlock({ projectId, workspace }: { projectId: strin
 
   return (
     <div className="flex items-stretch gap-3 overflow-x-auto pb-1">
-      {showBuyerSlot ? <><PartySlot label="Buyer" party={workspace.buyer} onPartyClick={workspace.canEditBuyer && editing !== "buyer" ? () => setEditing("buyer") : undefined} className="min-w-[14rem] flex-1">
-        {workspace.buyerProjectId && (workspace.canSetBuyer || editing === "buyer") ? <PartySelect placeholder="Select customer" options={workspace.buyerOptions} busy={busy === "buyer"} onChange={(id) => void mutate("buyer", () => setProjectBuyer({ projectId: workspace.buyerProjectId!, buyerOrganisationId: id }), "Buyer updated")} /> : null}
+      <PartySlot label="Buyer" party={workspace.buyer} onEdit={workspace.canEditBuyer && editing !== "buyer" ? () => setEditing("buyer") : undefined}>
+        {workspace.buyerProjectId && editing === "buyer" ? <PartySelect placeholder="Select buyer" options={workspace.buyerOptions} busy={busy === "buyer"} onChange={(id) => void mutate("buyer", () => setProjectBuyer({ projectId: workspace.buyerProjectId!, buyerOrganisationId: id }), "Buyer updated")} /> : null}
         {editing === "buyer" ? <CancelButton onClick={() => setEditing(null)} /> : null}
-      </PartySlot><ChainArrow /></> : null}
-      <PartySlot label={centerLabel} party={workspace.center} emphasized className="min-w-[15rem] flex-1">
-        {editing === "center" ? <PartySelect placeholder="Select represented trader" options={workspace.centerOptions} busy={busy === "center"} onChange={(id) => void mutate("center", () => setProjectCenter({ projectId, traderOrganisationId: id }), "Represented trader updated")} /> : workspace.canEditCenter ? <EditButton onClick={() => setEditing("center")} /> : null}
-        {editing === "center" ? <CancelButton onClick={() => setEditing(null)} /> : null}
       </PartySlot>
-      {downstream.map((party, index) => <div key={party.projectId} className="contents"><ChainArrow /><PartySlot label={party.group === "traders" ? `Trader ${index + (centerIsTrader ? 2 : 1)}` : "Manufacturer / Supplier"} party={party} href={`/projects/${party.projectId}`} className="min-w-[14rem] flex-1" /></div>)}
-      {workspace.canSetSeller && workspace.chainProjectId ? <><ChainArrow /><PartySlot label={mayAddTrader ? (downstream.length === 0 ? "Next seller" : "Next party") : "Manufacturer / Supplier"} party={null} className="min-w-[15rem] flex-1"><PartySelect placeholder={mayAddTrader ? "Select trader or supplier" : "Select supplier or manufacturer"} options={workspace.sellerOptions} grouped busy={busy === "seller"} onChange={(id) => void mutate("seller", () => setProjectSeller({ projectId: workspace.chainProjectId!, sellerOrganisationId: id }), "Party added to the project chain")} /></PartySlot></> : null}
+      <ArrowRight className="hidden h-5 w-5 shrink-0 self-center text-muted-foreground md:block" aria-hidden="true" />
+      <PartySlot label="Seller" party={workspace.seller} onEdit={workspace.canEditSeller && editing !== "seller" ? () => setEditing("seller") : undefined}>
+        {editing === "seller" ? <PartySelect placeholder="Select seller" options={workspace.sellerOptions} grouped busy={busy === "seller"} onChange={(id) => void mutate("seller", () => correctProjectLegSeller({ projectId, sellerOrganisationId: id }), "Seller updated")} /> : null}
+        {editing === "seller" ? <CancelButton onClick={() => setEditing(null)} /> : null}
+      </PartySlot>
     </div>
   );
 }
 
-function ChainArrow() { return <ArrowRight className="hidden h-5 w-5 shrink-0 self-center text-muted-foreground md:block" aria-hidden="true" />; }
-function PartySlot({ label, party, emphasized = false, href, onPartyClick, className = "", children }: { label: string; party: ProjectPartyRef | null; emphasized?: boolean; href?: string; onPartyClick?: () => void; className?: string; children?: React.ReactNode }) {
-  const partyName = onPartyClick && party ? <button type="button" className="mt-1 block max-w-full truncate text-left text-base font-semibold underline decoration-dotted underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Change buyer ${party.name ?? "company"}`} onClick={onPartyClick}>{party.name ?? "Not assigned"}</button> : <p className="mt-1 truncate text-base font-semibold">{party?.name ?? "Not assigned"}</p>;
-  const card = <div className={`h-full rounded-lg border p-4 ${emphasized ? "border-primary/40 bg-primary/5 shadow-sm" : "bg-card"} ${className}`}><p className="text-sm text-muted-foreground">{label}</p>{partyName}{party ? <div className="mt-2 flex items-center gap-2">{party.code ? <span className="text-xs text-muted-foreground">{party.code}</span> : null}<PersonaBadges personas={party.personas} /></div> : null}{children ? <div className="mt-3 space-y-2">{children}</div> : null}</div>;
-  return href ? <Link href={href} className={`${className} rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}>{card}</Link> : card;
+function PartySlot({ label, party, onEdit, children }: { label: string; party: ProjectPartyRef | null; onEdit?: () => void; children?: React.ReactNode }) {
+  return <div className="min-w-[14rem] flex-1 rounded-lg border bg-card p-4"><p className="text-sm text-muted-foreground">{label}</p><div className="mt-1 flex items-center justify-between gap-3"><p className="truncate text-base font-semibold">{party?.name ?? "Not assigned"}</p>{onEdit ? <Button type="button" size="sm" variant="outline" onClick={onEdit}><Pencil className="h-3.5 w-3.5" /> Edit</Button> : null}</div>{party ? <div className="mt-2 flex items-center gap-2">{party.code ? <span className="text-xs text-muted-foreground">{party.code}</span> : null}<PersonaBadges personas={party.personas} /></div> : null}{children ? <div className="mt-3 space-y-2">{children}</div> : null}</div>;
 }
-function EditButton({ onClick }: { onClick: () => void }) { return <Button type="button" size="sm" variant="outline" onClick={onClick}><Pencil className="h-3.5 w-3.5" /> Edit</Button>; }
+
 function CancelButton({ onClick }: { onClick: () => void }) { return <Button type="button" size="sm" variant="ghost" onClick={onClick}><X className="h-3.5 w-3.5" /> Cancel</Button>; }
 function PartySelect({ placeholder, options, busy, grouped = false, onChange }: { placeholder: string; options: ProjectPartyOption[]; busy: boolean; grouped?: boolean; onChange: (id: string) => void }) {
   const traders = options.filter((option) => option.group === "traders");

@@ -7,8 +7,7 @@
  * the underlying error code and nothing is logged that would separate the
  * cases — a direct URL must not be an existence oracle.
  */
-import { getOrderDeal, type OrderDealView } from "../../orders/services/orderDeals";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getOrderDeal } from "../../orders/services/orderDeals";
 import { projectDealView } from "../../orders/services/dealFields";
 import type { DbClient } from "../../orders/services/dealModel";
 import { isValidUUID } from "../../orders/types";
@@ -16,7 +15,7 @@ import { resolveProjectsActor, resolveProjectsViewer } from "../access";
 import { isPartyOrg, resolveProjectSpineLabel, toProjectDetail, type ProjectionContext } from "../projection";
 import { loadOrgPersonas } from "../services/orgPersonas";
 import { countFilesByDeal, listProjectFiles, listProjectFolders } from "../services/projectFiles";
-import type { ProjectChainParty, ProjectDetail, ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace, ProjectsResult, ProjectsViewer } from "../types";
+import type { ProjectDetail, ProjectLegOption, ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace, ProjectsResult, ProjectsViewer } from "../types";
 import type { DealLineComponentLike } from "../projection";
 
 export type GetProjectResult = ProjectsResult<{
@@ -71,18 +70,10 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   // not_found, so it is still indistinguishable from an unknown id.
   if (!a.isPlatformAdmin && !isPartyOrg(raw, a.orgId)) return { ok: false, deny: "not_found" };
 
-  // A platform admin may land on a protected purchase leg from the chain UI.
-  // Resolve the unique same-spine root sell leg without ever
-  // broadening the projection for ordinary bilateral viewers.
-  const isAdminPurchaseLeg = a.isPlatformAdmin && raw.dealKind === "purchase_only";
-  const buyerProject = isAdminPurchaseLeg
-    ? await resolveRootSellingProject(a.db, a.actor, raw)
-    : null;
-
   const walled = projectDealView(res.data, a.access, a.orgId);
 
   const [personasByOrgId, files, folders, fileCounts, viewer, lineComponents, spineLookup] = await Promise.all([
-    loadOrgPersonas(a.db, [a.orgId, raw.seller.id, raw.buyer.id, raw.customer.id, raw.producer.id, buyerProject?.seller.id, buyerProject?.buyer.id]),
+    loadOrgPersonas(a.db, [a.orgId, raw.seller.id, raw.buyer.id, raw.customer.id, raw.producer.id]),
     listProjectFiles(a.db, projectId, a.isPlatformAdmin || raw.seller.id === a.orgId),
     listProjectFolders(a.db, projectId),
     countFilesByDeal(a.db, [projectId]),
@@ -121,86 +112,41 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     if (label) project.displaySpineCode = label;
   }
 
-  const buyerSource = buyerProject ?? raw;
-  const adminPartyRootAvailable = !isAdminPurchaseLeg || buyerProject !== null;
-  const centerRaw = a.isPlatformAdmin ? (adminPartyRootAvailable ? buyerSource.seller : raw.buyer) : project.direction === "buy" ? raw.buyer : raw.seller;
-  const buyerRaw = a.isPlatformAdmin ? (adminPartyRootAvailable ? buyerSource.buyer : null) : project.direction === "buy" ? null : raw.buyer;
-  const center = partyRef(centerRaw, personasByOrgId);
-  const buyer = buyerRaw ? partyRef(buyerRaw, personasByOrgId) : null;
-  const ownsCenter = a.isPlatformAdmin || (!!a.orgId && centerRaw.id === a.orgId);
-  const canManageChain = adminPartyRootAvailable && ownsCenter && viewer.canCreateProject && (a.isPlatformAdmin || viewer.createRoles.includes("trader"));
-  const canSeeCustomers = a.isPlatformAdmin || a.access.domainVisible("customer_identity");
-  const canSeeSuppliers = a.isPlatformAdmin
-    || a.access.domainVisible("supplier_identity")
-    || (viewer.canCreateProject && viewer.createRoles.includes("trader"));
-
-  let seller: (ProjectPartyRef & { projectId?: string }) | null = project.direction === "buy"
-    ? partyRef(raw.seller, personasByOrgId)
-    : null;
-  let downstreamParties: ProjectChainParty[] | undefined;
-  const chainOrigin = a.isPlatformAdmin ? buyerSource : raw;
-  const spineId = chainOrigin.spineId;
-  const chainIsSellView = a.isPlatformAdmin ? adminPartyRootAvailable && chainOrigin.dealKind !== "purchase_only" : project.direction === "sell";
-  if (chainIsSellView && spineId && centerRaw.id && canSeeSuppliers) {
-    // The query remains constrained to this spine and, for ordinary traders,
-    // to the represented company's adjacent buying leg.
-    const chainDb = createAdminClient();
-    const chain = await loadDownstreamChain(chainDb, spineId, chainOrigin.id, centerRaw.id, a.isPlatformAdmin);
-    if (chain.length > 0) {
-      const orgIds = chain.map((leg) => leg.sellerOrganisationId);
-      // The application permission above is the identity wall. Some legacy
-      // organisation RLS profiles are narrower than the trader capability, so
-      // load only the already-authorised chain identities with the admin client.
-      const [{ data: orgRows }, chainPersonas] = await Promise.all([
-        chainDb.from("organisations").select("id, code, name, is_trader, is_supplier, is_producer").in("id", orgIds),
-        loadOrgPersonas(chainDb, orgIds),
-      ]);
-      const orgById = new Map(((orgRows ?? []) as ChainOrgRow[]).map((row) => [row.id, row]));
-      const projected = chain.flatMap((leg): ProjectChainParty[] => {
-        const org = orgById.get(leg.sellerOrganisationId);
-        if (!org) return [];
-        const ref = partyRef(org, chainPersonas);
-        return ref ? [{ ...ref, projectId: leg.id, group: org.is_trader ? "traders" : "suppliers" }] : [];
-      });
-      seller = projected[0] ?? null;
-      // Ordinary users see only their bilateral adjacent leg. Full-spine chain is
-      // serialized solely for platform admins, whose RLS policy already grants it.
-      if (a.isPlatformAdmin) downstreamParties = projected;
-    }
-  }
-
-  const isDraft = buyerSource.lifecycleStage === "draft";
-  const buyerOptions = canManageChain && canSeeCustomers && buyerRaw !== null && isDraft
-    ? await loadPartyOptions(a.db, a.isPlatformAdmin, centerRaw.id, "buyer")
+  const buyer = partyRef(raw.buyer, personasByOrgId);
+  const seller = partyRef(raw.seller, personasByOrgId);
+  const isDraft = raw.lifecycleStage === "draft";
+  const canEditBuyer = isDraft && raw.dealKind !== "purchase_only"
+    && (a.isPlatformAdmin || (raw.seller.id === a.orgId && viewer.canCreateProject && viewer.createRoles.includes("trader")))
+    && (a.isPlatformAdmin || a.access.domainVisible("customer_identity"));
+  const buyerOptions = canEditBuyer ? await loadPartyOptions(a.db, a.isPlatformAdmin, raw.seller.id, "buyer") : [];
+  const sellerOptions = a.isPlatformAdmin && isDraft
+    ? await loadPartyOptions(a.db, true, raw.buyer.id, "seller")
     : [];
-  const projectedChain = downstreamParties ?? (seller ? [{ ...seller, group: seller.personas.includes("trader") ? "traders" as const : "suppliers" as const, projectId: seller.projectId ?? projectId }] : []);
-  const tradersInChain = 1 + projectedChain.filter((party) => party.group === "traders").length;
-  const terminalParty = projectedChain.at(-1) ?? null;
-  const mayAppend = canManageChain && canSeeSuppliers && (!terminalParty || (a.isPlatformAdmin && terminalParty.group === "traders" && tradersInChain <= 2));
-  const appendFromOrgId = terminalParty?.id ?? centerRaw.id;
-  let sellerOptions = mayAppend
-    ? await loadPartyOptions(a.db, a.isPlatformAdmin, appendFromOrgId, "seller")
+  const mayAppendNextSeller = !a.isPlatformAdmin && isDraft
+    && raw.seller.id === a.orgId
+    && viewer.canCreateProject
+    && viewer.createRoles.includes("trader")
+    && a.access.domainVisible("supplier_identity");
+  const hasNextLeg = mayAppendNextSeller && raw.spineId
+    ? await hasActiveNextLeg(a.db, raw.spineId, raw.seller.id)
+    : false;
+  const nextSellerOptions = mayAppendNextSeller && !hasNextLeg
+    ? await loadPartyOptions(a.db, false, raw.seller.id, "seller")
     : [];
-  // Buyer + at most two traders + final supplier. After Trader 2, only a
-  // manufacturer/supplier may be appended.
-  if (tradersInChain >= 2) sellerOptions = sellerOptions.filter((option) => option.group === "suppliers");
-  const centerOptions = a.isPlatformAdmin && isDraft && chainIsSellView
-    ? await loadPartyOptions(a.db, true, null, "center")
+  const legOptions = a.isPlatformAdmin && raw.spineId
+    ? await loadProjectLegOptions(a.db, raw.spineId, projectId)
     : [];
   const partyWorkspace: ProjectPartyWorkspace = {
-    buyerProjectId: adminPartyRootAvailable ? buyerSource.id : null,
-    chainProjectId: adminPartyRootAvailable ? chainOrigin.id : null,
-    center,
+    buyerProjectId: canEditBuyer ? projectId : null,
     buyer,
     seller,
-    ...(downstreamParties ? { downstreamParties } : {}),
+    ...(legOptions.length > 1 ? { legOptions } : {}),
     buyerOptions,
     sellerOptions,
-    centerOptions,
-    canSetBuyer: buyerOptions.length > 0 && !buyer,
-    canSetSeller: sellerOptions.length > 0,
-    canEditBuyer: buyerOptions.length > 0 && !!buyer,
-    canEditCenter: centerOptions.length > 0,
+    nextSellerOptions,
+    canEditBuyer: buyerOptions.length > 0,
+    canEditSeller: sellerOptions.length > 0 && !!seller,
+    canAppendNextSeller: nextSellerOptions.length > 0,
   };
 
   return { ok: true, project, viewer, partyWorkspace, isRfqCandidate: false };
@@ -246,17 +192,14 @@ async function loadRfqCandidateProject(db: DbClient, projectId: string): Promise
 function emptyPartyWorkspace(): ProjectPartyWorkspace {
   return {
     buyerProjectId: null,
-    chainProjectId: null,
-    center: null,
     buyer: null,
     seller: null,
     buyerOptions: [],
     sellerOptions: [],
-    centerOptions: [],
-    canSetBuyer: false,
-    canSetSeller: false,
+    nextSellerOptions: [],
     canEditBuyer: false,
-    canEditCenter: false,
+    canEditSeller: false,
+    canAppendNextSeller: false,
   };
 }
 
@@ -277,22 +220,6 @@ async function loadLineComponents(db: DbClient, lineIds: string[]): Promise<Deal
     unitCost: Number(row.unit_cost),
     totalCostCents: Number(row.total_cost_cents),
   }));
-}
-
-async function resolveRootSellingProject(
-  db: DbClient,
-  actor: Parameters<typeof getOrderDeal>[1],
-  purchaseLeg: OrderDealView,
-): Promise<OrderDealView | null> {
-  if (!purchaseLeg.spineId) return null;
-  const { data, error } = await db.from("orders").select("id")
-    .eq("spine_id", purchaseLeg.spineId).neq("deal_kind", "purchase_only")
-    .neq("lifecycle_stage", "cancelled").limit(2);
-  const candidates = (data ?? []) as Array<{ id: string }>;
-  if (error || candidates.length !== 1) return null;
-  const root = await getOrderDeal(db, actor, candidates[0]!.id);
-  if (!root.success || root.data.spineId !== purchaseLeg.spineId || root.data.dealKind === "purchase_only") return null;
-  return root.data;
 }
 
 function partyRef(row: { id: string | null; code: string | null; name: string | null }, personas: ReadonlyMap<string, ProjectPartyRef["personas"]>): ProjectPartyRef | null {
@@ -322,28 +249,20 @@ async function loadPartyOptions(
     .map(({ id, code, name, is_trader }) => ({ id, code, name, group: side === "buyer" ? "buyers" : is_trader ? "traders" : "suppliers" }));
 }
 
-interface ChainLegRow { id: string; buyer_organisation_id: string; seller_organisation_id: string; created_at: string }
-interface ChainOrgRow { id: string; code: string | null; name: string | null; is_trader: boolean; is_supplier: boolean; is_producer: boolean }
+async function loadProjectLegOptions(db: DbClient, spineId: string, currentProjectId: string): Promise<ProjectLegOption[]> {
+  const { data, error } = await db.from("orders").select("id, deal_code, code, created_at, lifecycle_stage")
+    .eq("spine_id", spineId).order("created_at", { ascending: true });
+  if (error) throw new Error("Could not load project legs");
+  return ((data ?? []) as Array<{ id: string; deal_code: string | null; code: string; created_at: string; lifecycle_stage: string }>)
+    .filter((leg) => leg.lifecycle_stage !== "cancelled" || leg.id === currentProjectId)
+    .map((leg) => ({ id: leg.id, reference: leg.deal_code ?? leg.code }));
+}
 
-async function loadDownstreamChain(db: DbClient, spineId: string, originId: string, centerOrgId: string, fullSpine: boolean): Promise<Array<{ id: string; sellerOrganisationId: string }>> {
-  let query = db.from("orders").select("id, buyer_organisation_id, seller_organisation_id, created_at")
-    .eq("spine_id", spineId).neq("id", originId).neq("lifecycle_stage", "cancelled").order("created_at", { ascending: true });
-  if (!fullSpine) query = query.eq("buyer_organisation_id", centerOrgId);
-  const { data, error } = await query;
-  if (error) throw new Error("Could not load the project chain");
-  const remaining = [...((data ?? []) as ChainLegRow[])];
-  const chain: Array<{ id: string; sellerOrganisationId: string }> = [];
-  let buyerId = centerOrgId;
-  while (chain.length < 2) {
-    const matches = remaining.filter((leg) => leg.buyer_organisation_id === buyerId);
-    if (matches.length > 1) return [];
-    const index = matches[0] ? remaining.indexOf(matches[0]) : -1;
-    if (index < 0) break;
-    const [leg] = remaining.splice(index, 1);
-    if (!leg?.seller_organisation_id || leg.seller_organisation_id === buyerId) break;
-    chain.push({ id: leg.id, sellerOrganisationId: leg.seller_organisation_id });
-    buyerId = leg.seller_organisation_id;
-  }
-  if (remaining.some((leg) => leg.buyer_organisation_id === buyerId)) return [];
-  return chain;
+async function hasActiveNextLeg(db: DbClient, spineId: string, buyerOrganisationId: string | null): Promise<boolean> {
+  if (!buyerOrganisationId) return true;
+  const { data, error } = await db.from("orders").select("id")
+    .eq("spine_id", spineId).eq("buyer_organisation_id", buyerOrganisationId)
+    .neq("lifecycle_stage", "cancelled").limit(1);
+  if (error) throw new Error("Could not verify the next project leg");
+  return (data ?? []).length > 0;
 }
