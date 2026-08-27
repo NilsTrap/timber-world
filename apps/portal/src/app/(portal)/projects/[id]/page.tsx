@@ -32,5 +32,5 @@ export default async function ProjectDetailPage({
   const candidates = canManageRfq
     ? await getEligibleProjectRfqCandidates(id)
     : null;
-  return <ProjectDetailView project={res.project} viewer={res.viewer} partyWorkspace={res.partyWorkspace} isRfqCandidate={res.isRfqCandidate} initialRfqCandidates={candidates?.success ? candidates.data : []} canManageRfq={canManageRfq} />;
+  return <ProjectDetailView project={res.project} viewer={res.viewer} partyWorkspace={res.partyWorkspace} canEditSpecification={res.canEditSpecification} isRfqCandidate={res.isRfqCandidate} initialRfqCandidates={candidates?.success ? candidates.data : []} canManageRfq={canManageRfq} />;
 }

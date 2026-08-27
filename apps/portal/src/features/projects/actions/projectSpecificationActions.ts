@@ -10,6 +10,7 @@ import { readLineFieldValues } from "../../catalog/services/lineFieldValues";
 import {
   calculateComponentTotalCents,
   canEditProjectSpecification,
+  projectSpecificationEditDenialCode,
 } from "../services/projectSpecification";
 
 const uuid = z.string().uuid();
@@ -55,12 +56,21 @@ async function editableProject(projectId: string): Promise<ActionResult<Editable
     sellerOrganisationId: deal.data.seller.id,
     dealTermsEditable: a.access.domainEditable("deal_terms"),
     lifecycleStage: deal.data.lifecycleStage,
+    dealKind: deal.data.dealKind,
   });
   if (!allowed) {
+    const code = projectSpecificationEditDenialCode({
+      isPlatformAdmin: a.isPlatformAdmin,
+      actorOrganisationId: a.orgId,
+      sellerOrganisationId: deal.data.seller.id,
+      dealTermsEditable: a.access.domainEditable("deal_terms"),
+      lifecycleStage: deal.data.lifecycleStage,
+      dealKind: deal.data.dealKind,
+    }) ?? "FORBIDDEN";
     return {
       success: false,
-      error: deal.data.lifecycleStage === "draft" ? "Not allowed" : "Specification can only be changed while the project is a draft",
-      code: deal.data.lifecycleStage === "draft" ? "FORBIDDEN" : "NOT_DRAFT",
+      error: code === "NOT_DRAFT" ? "Specification can only be changed while the project is a draft" : "Not allowed",
+      code,
     };
   }
   return { success: true, data: { db: a.db, actor: a.actor } };

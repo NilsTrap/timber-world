@@ -15,6 +15,7 @@ import { resolveProjectsActor, resolveProjectsViewer } from "../access";
 import { isPartyOrg, resolveProjectSpineLabel, toProjectDetail, type ProjectionContext } from "../projection";
 import { loadOrgPersonas } from "../services/orgPersonas";
 import { countFilesByDeal, listProjectFiles, listProjectFolders } from "../services/projectFiles";
+import { canEditProjectSpecification } from "../services/projectSpecification";
 import type { ProjectDetail, ProjectLegOption, ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace, ProjectsResult, ProjectsViewer } from "../types";
 import type { DealLineComponentLike } from "../projection";
 
@@ -22,6 +23,7 @@ export type GetProjectResult = ProjectsResult<{
   project: ProjectDetail;
   viewer: ProjectsViewer;
   partyWorkspace: ProjectPartyWorkspace;
+  canEditSpecification: boolean;
   isRfqCandidate: boolean;
 }>;
 
@@ -54,6 +56,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
           createRoles: [],
         },
         partyWorkspace: emptyPartyWorkspace(),
+        canEditSpecification: false,
         isRfqCandidate: true,
       };
     }
@@ -115,6 +118,14 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   const buyer = partyRef(raw.buyer, personasByOrgId);
   const seller = partyRef(raw.seller, personasByOrgId);
   const isDraft = raw.lifecycleStage === "draft";
+  const canEditSpecification = canEditProjectSpecification({
+    isPlatformAdmin: a.isPlatformAdmin,
+    actorOrganisationId: a.orgId,
+    sellerOrganisationId: raw.seller.id,
+    dealTermsEditable: a.access.domainEditable("deal_terms"),
+    lifecycleStage: raw.lifecycleStage,
+    dealKind: raw.dealKind,
+  });
   const canEditBuyer = isDraft && raw.dealKind !== "purchase_only"
     && (a.isPlatformAdmin || (raw.seller.id === a.orgId && viewer.canCreateProject && viewer.createRoles.includes("trader")))
     && (a.isPlatformAdmin || a.access.domainVisible("customer_identity"));
@@ -149,7 +160,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     canAppendNextSeller: nextSellerOptions.length > 0,
   };
 
-  return { ok: true, project, viewer, partyWorkspace, isRfqCandidate: false };
+  return { ok: true, project, viewer, partyWorkspace, canEditSpecification, isRfqCandidate: false };
 }
 
 type CandidateSnapshot = {

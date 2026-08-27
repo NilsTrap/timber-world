@@ -22,6 +22,7 @@ export function ProjectDetailView({
   project,
   viewer,
   partyWorkspace,
+  canEditSpecification,
   isRfqCandidate,
   initialRfqCandidates,
   canManageRfq,
@@ -29,6 +30,7 @@ export function ProjectDetailView({
   project: ProjectDetail;
   viewer: ProjectsViewer;
   partyWorkspace: ProjectPartyWorkspace;
+  canEditSpecification: boolean;
   isRfqCandidate: boolean;
   initialRfqCandidates: Array<{ id: string; name: string }>;
   canManageRfq: boolean;
@@ -64,7 +66,7 @@ export function ProjectDetailView({
         projectId={project.id}
         lines={project.lines}
         currency={currency}
-        canEdit={viewer.canEditTerms && project.stage === "draft"}
+        canEdit={canEditSpecification}
       />
 
       {(canManageRfq || isRfqCandidate) ? (
