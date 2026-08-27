@@ -13,7 +13,7 @@ import { projectDealView } from "../../orders/services/dealFields";
 import type { DbClient } from "../../orders/services/dealModel";
 import { isValidUUID } from "../../orders/types";
 import { resolveProjectsActor, resolveProjectsViewer } from "../access";
-import { isPartyOrg, toProjectDetail, type ProjectionContext } from "../projection";
+import { isPartyOrg, resolveProjectSpineLabel, toProjectDetail, type ProjectionContext } from "../projection";
 import { loadOrgPersonas } from "../services/orgPersonas";
 import { countFilesByDeal, listProjectFiles, listProjectFolders } from "../services/projectFiles";
 import type { ProjectChainParty, ProjectDetail, ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace, ProjectsResult, ProjectsViewer } from "../types";
@@ -81,7 +81,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
 
   const walled = projectDealView(res.data, a.access, a.orgId);
 
-  const [personasByOrgId, files, folders, fileCounts, viewer, lineComponents] = await Promise.all([
+  const [personasByOrgId, files, folders, fileCounts, viewer, lineComponents, spineLookup] = await Promise.all([
     loadOrgPersonas(a.db, [a.orgId, raw.seller.id, raw.buyer.id, raw.customer.id, raw.producer.id, buyerProject?.seller.id, buyerProject?.buyer.id]),
     listProjectFiles(a.db, projectId, a.isPlatformAdmin || raw.seller.id === a.orgId),
     listProjectFolders(a.db, projectId),
@@ -90,6 +90,9 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     a.access.domainVisible("deal_terms")
       ? loadLineComponents(a.db, raw.lineItems.map((line) => line.id).filter((id): id is string => Boolean(id)))
       : Promise.resolve([]),
+    walled.spineId
+      ? a.db.from("spines").select("code").eq("id", walled.spineId).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
 
   const ctx: ProjectionContext = {
@@ -106,6 +109,17 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     folders,
     fileCounts: fileCounts.get(projectId) ?? { total: 0 },
   });
+  // Chain identity is resolved only after the field wall has retained spineId.
+  // Platform admins still get a stable fallback on unlinked legacy deals.
+  if (!spineLookup.error) {
+    const label = resolveProjectSpineLabel(
+      walled.spineId,
+      (spineLookup.data as { code?: string } | null)?.code ?? null,
+      project.reference,
+      a.isPlatformAdmin,
+    );
+    if (label) project.displaySpineCode = label;
+  }
 
   const buyerSource = buyerProject ?? raw;
   const adminPartyRootAvailable = !isAdminPurchaseLeg || buyerProject !== null;

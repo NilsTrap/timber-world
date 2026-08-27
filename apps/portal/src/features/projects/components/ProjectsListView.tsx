@@ -15,7 +15,6 @@ import {
 import { PERSONA_LABEL } from "../personas";
 import type { ProjectListItem, ProjectsViewer } from "../types";
 import type { ProjectListFilters as ProjectListFilterState } from "../types";
-import { PersonaBadges } from "./PersonaBadges";
 import { ProjectStageBadge } from "./ProjectStageBadge";
 import { ProjectsListFilters } from "./ProjectsListFilters";
 
@@ -86,7 +85,7 @@ export function ProjectsListView({
       ) : (
         <div className="rounded-lg border bg-card overflow-x-auto">
           <Table dense className="min-w-[1100px]">
-            <TableHeader>
+            <TableHeader className="bg-muted/70 [&_th]:font-semibold [&_th]:text-foreground">
               <TableRow>
                 <TableHead>Spine ID</TableHead>
                 <TableHead>Project</TableHead>
@@ -100,7 +99,7 @@ export function ProjectsListView({
             </TableHeader>
             <TableBody>
               {items.map((item) => (
-                <TableRow key={item.id}>
+                <TableRow key={item.id} className={item.depth === 0 ? "bg-muted/35 hover:bg-muted/55" : "bg-background hover:bg-muted/30"}>
                   <TableCell className={item.depth > 0 ? "whitespace-nowrap pl-7" : "whitespace-nowrap"}>
                     <Link
                       href={`/projects/${item.id}`}
@@ -111,18 +110,10 @@ export function ProjectsListView({
                   </TableCell>
                   <TableCell className="max-w-[18rem] truncate">{item.name ?? "—"}</TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <span className="flex flex-wrap items-center gap-1">
-                      <span>{item.buyer?.name ?? "—"}</span>
-                      {item.buyer ? (
-                        <PersonaBadges personas={item.buyer.personas} />
-                      ) : null}
-                    </span>
+                    {item.buyer?.name ?? "—"}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <span className="flex flex-wrap items-center gap-1">
-                      <span>{item.seller?.name ?? "—"}</span>
-                      {item.seller ? <PersonaBadges personas={item.seller.personas} /> : null}
-                    </span>
+                    {item.seller?.name ?? "—"}
                   </TableCell>
                   <TableCell>
                     {item.depth === 0 && item.stage ? (

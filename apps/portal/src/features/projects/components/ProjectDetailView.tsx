@@ -33,13 +33,17 @@ export function ProjectDetailView({
 }) {
   const currency = project.currency ?? "";
   const projectName = project.name?.trim();
+  const subtitleParts = [
+    project.displaySpineCode ? `Spine ID: ${project.displaySpineCode}` : null,
+    projectName ? `Leg: ${project.reference}` : null,
+  ].filter(Boolean);
   return (
     <div className="space-y-6">
       <PageHeader
         backHref="/projects"
         backLabel="Back to projects"
         title={projectName || project.reference}
-        subtitle={projectName ? project.reference : undefined}
+        subtitle={subtitleParts.length > 0 ? subtitleParts.join(" · ") : undefined}
         badge={<ProjectStageBadge stage={project.stage} label={project.stageLabel} />}
       />
 

@@ -21,6 +21,7 @@ import { personasForOrg, orgRoleFlagsFromRow, PERSONA_LABEL } from "../personas"
 import {
   toProjectDetail,
   toProjectListItem,
+  resolveProjectSpineLabel,
   type DealHeaderLike,
   type DealLineComponentLike,
   type DealLineLike,
@@ -269,11 +270,16 @@ for (const [label, rendered] of [
 // ── The payload is an allow-list, not a spread ───────────────────────────────
 const ITEM_KEYS = ["id", "reference", "name", "spineCode", "groupKey", "depth", "stage", "stageLabel", "direction", "counterparty",
   "buyer", "seller", "deliveryDeadline", "fileCount", "currency", "valueCents"];
-const DETAIL_KEYS = [...ITEM_KEYS, "otherParties", "terms", "lines", "files", "folders", "fileCounts", "notes"];
+const DETAIL_KEYS = [...ITEM_KEYS, "displaySpineCode", "otherParties", "terms", "lines", "files", "folders", "fileCounts", "notes"];
 ok("list item keys ⊆ whitelist", Object.keys(admin.item).every((k) => ITEM_KEYS.includes(k)),
    Object.keys(admin.item));
 ok("detail keys ⊆ whitelist", Object.keys(admin.detail).every((k) => DETAIL_KEYS.includes(k)),
    Object.keys(admin.detail));
+ok("detail projector does not invent a canonical spine label", !("displaySpineCode" in admin.detail));
+eq("admin linked legs use the persisted spine code", resolveProjectSpineLabel("spine-1", "SP-014", "TIM-BUY-001", true), "SP-014");
+eq("missing readable spine rows fall back to the deal reference", resolveProjectSpineLabel("spine-1", null, "TIM-BUY-001", true), "TIM-BUY-001");
+eq("unlinked admin deals keep a stable reference fallback", resolveProjectSpineLabel(null, null, "ORD-042", true), "ORD-042");
+eq("restricted viewers receive no fallback chain identity", resolveProjectSpineLabel(null, null, "ORD-042", false), undefined);
 ok("party refs expose only id/name/code/personas/role",
    Object.keys(admin.item.counterparty ?? {}).every((k) =>
      ["id", "name", "code", "personas", "role"].includes(k)));

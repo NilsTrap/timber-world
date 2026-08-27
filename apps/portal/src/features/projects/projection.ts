@@ -113,6 +113,17 @@ export interface ProjectionContext {
   personasByOrgId: ReadonlyMap<string, ProjectPersona[]>;
 }
 
+/** Resolve a canonical spine label without crossing the chain visibility wall. */
+export function resolveProjectSpineLabel(
+  visibleSpineId: string | null,
+  persistedCode: string | null,
+  dealReference: string,
+  isPlatformAdmin: boolean,
+): string | undefined {
+  if (visibleSpineId) return persistedCode ?? dealReference;
+  return isPlatformAdmin ? dealReference : undefined;
+}
+
 function partyRef(
   party: DealPartyLike,
   ctx: ProjectionContext,
