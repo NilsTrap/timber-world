@@ -49,6 +49,7 @@ assert.deepEqual(parseCreateProjectLegInput({sourceProjectId:validUuid,buyerOrga
 const migration=readFileSync("../../supabase/migrations/20260826210000_project_supplier_rfqs.sql","utf8");
 const legoMigration=readFileSync("../../supabase/migrations/20260827120000_spine_lego_leg_rfq_award.sql","utf8");
 const stageIndependentRfqMigration=readFileSync("../../supabase/migrations/20260829003000_project_rfq_stage_independence.sql","utf8");
+const stageAutomationMigration=readFileSync("../../supabase/migrations/20260829004000_project_stage_automation.sql","utf8");
 const createDialog=readFileSync("src/features/projects/components/ProjectCreateLegDialog.tsx","utf8");
 assert.match(createDialog,/remainingQuantity>0/);
 assert.match(createDialog,/Remaining quantities are selected by default/);
@@ -91,4 +92,9 @@ assert.match(actions,/lookupError \|\| !rfq/);
 assert.match(stageIndependentRfqMigration,/create_project_rfq stage anchor missing/);
 assert.match(stageIndependentRfqMigration,/award_project_rfq stage anchor missing/);
 assert.match(stageIndependentRfqMigration,/IF NOT FOUND THEN RAISE EXCEPTION ''LEG_NOT_FOUND''/);
+assert.match(stageAutomationMigration,/lifecycle_stage=''request_for_quotation''/);
+assert.match(stageAutomationMigration,/lifecycle_stage=''awarded''/);
+assert.match(stageAutomationMigration,/create_project_rfq return anchor missing/);
+assert.match(stageAutomationMigration,/award_project_rfq update anchor missing/);
+assert.match(readFileSync("src/features/projects/components/ProjectRfqCard.tsx","utf8"),/Quotation requests created[\s\S]*router\.refresh\(\)/);
 console.log("projectRfq.test.ts: passed");

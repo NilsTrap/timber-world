@@ -57,6 +57,7 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
       const result = await requestProjectQuotations({ projectId, candidateIds: selected, deadline: new Date(deadline).toISOString() });
       if (!result.success) { toast.error(result.error); return; }
       toast.success("Quotation requests created");
+      router.refresh();
       await load();
     });
   }
