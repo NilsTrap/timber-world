@@ -62,11 +62,12 @@ function mapFile(row: Record<string, unknown>): ProjectFileMeta {
     cleanupFindingsCount: Number(row.cleanup_findings_count ?? 0),
     shared: !!row.shared_to_order_id,
     sharedInbound: !!row.shared_inbound,
+    officialImagePosition: row.is_thumbnail ? Number(row.thumbnail_sort_order ?? 0) || null : null,
   };
 }
 
 const SAFE_FILE_SELECT =
-  "id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at, cleanup_status";
+  "id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at, cleanup_status, is_thumbnail, thumbnail_sort_order";
 
 /** Original workspace metadata for one visible deal. No storage/source columns. */
 export async function listProjectFiles(db: DbClient, dealId: string, revealCleanup = false): Promise<ProjectFileMeta[]> {

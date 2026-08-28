@@ -13,7 +13,7 @@
  */
 
 export interface ProjectsGateInput {
-  /** TIMBER_PROJECTS_ENABLED === "true" (isTimberProjectsEnabled()). */
+  /** Retained compatibility input; Projects is now always enabled. */
   flagEnabled: boolean;
   /** Whether a portal session exists at all. */
   authenticated: boolean;
@@ -26,7 +26,7 @@ export interface ProjectsGateInput {
 }
 
 export type ProjectsGateDecision =
-  | { ok: true; reason: "admin" | "module" }
+  | { ok: true; reason: "authenticated" }
   | { ok: false; deny: "not_found" | "login" };
 
 /** The module a non-admin needs to reach Projects (exact match, no prefix). */
@@ -35,22 +35,13 @@ export const PROJECTS_MODULE = "projects.view";
 /**
  * Decide whether this viewer may reach Projects. First match wins:
  *
- * 1. flag off                    → not_found  (checked BEFORE auth, so a probe
- *                                  cannot use a /login redirect as an oracle
- *                                  that the area exists)
- * 2. no session                  → login
- * 3. is_platform_admin           → allow
- * 4. no current organisation     → not_found
- * 5. no exact `projects.view`    → not_found  (deliberately `has()`, NOT the
- *                                  nav's prefix-matching `moduleMatches` — an
- *                                  `orders.tab.*`-only user is not admitted)
- * 6. otherwise                   → allow
+ * 1. no session                  → login
+ * 2. platform admin              → allow
+ * 3. active organisation user   → allow (row visibility remains RLS-backed)
  */
 export function evaluateProjectsGate(input: ProjectsGateInput): ProjectsGateDecision {
-  if (!input.flagEnabled) return { ok: false, deny: "not_found" };
   if (!input.authenticated) return { ok: false, deny: "login" };
-  if (input.isPlatformAdmin === true) return { ok: true, reason: "admin" };
+  if (input.isPlatformAdmin === true) return { ok: true, reason: "authenticated" };
   if (!input.orgId) return { ok: false, deny: "not_found" };
-  if (!input.modules.has(PROJECTS_MODULE)) return { ok: false, deny: "not_found" };
-  return { ok: true, reason: "module" };
+  return { ok: true, reason: "authenticated" };
 }

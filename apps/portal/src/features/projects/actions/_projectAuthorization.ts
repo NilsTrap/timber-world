@@ -21,7 +21,7 @@ export type VisibleProjectResult =
  */
 export async function requireVisibleProjectWith(
   projectId: string,
-  write: boolean,
+  write: boolean | "upload",
   dependencies: VisibleProjectDependencies,
 ): Promise<VisibleProjectResult> {
   if (!isValidUUID(projectId)) return { ok: false, error: "Project unavailable", code: "NOT_FOUND" };
@@ -32,7 +32,7 @@ export async function requireVisibleProjectWith(
   if (!actor.isPlatformAdmin && !isPartyOrg(deal.data, actor.orgId)) {
     return { ok: false, error: "Project unavailable", code: "NOT_FOUND" };
   }
-  if (write && !actor.isPlatformAdmin && !actor.profile.actions.has("deal:create")) {
+  if (write === true && !actor.isPlatformAdmin && !actor.profile.actions.has("deal:create")) {
     return { ok: false, error: "Project unavailable", code: "NOT_FOUND" };
   }
   return { ok: true, actor };

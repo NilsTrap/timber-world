@@ -76,12 +76,14 @@ export function ProjectFileWorkspace({
   initialFiles,
   initialFolders,
   canWrite,
+  canUpload = canWrite,
   canManageCleanup,
 }: {
   projectId: string;
   initialFiles: ProjectFileMeta[];
   initialFolders: ProjectFolderMeta[];
   canWrite: boolean;
+  canUpload?: boolean;
   canManageCleanup: boolean;
 }) {
   const [files, setFiles] = useState(initialFiles);
@@ -381,7 +383,7 @@ export function ProjectFileWorkspace({
       <SectionHeader
         title="Files"
         subtitle={`${initialFiles.length} file(s) on this project`}
-        action={canWrite ? (
+        action={canUpload ? (
           <Button
             type="button"
             size="sm"
@@ -398,7 +400,7 @@ export function ProjectFileWorkspace({
           </Button>
         ) : undefined}
       />
-      {canWrite && uploadOpen ? (
+      {canUpload && uploadOpen ? (
         <div
           id="project-file-upload-surface"
           onPointerDown={() => setUploadActivity((activity) => activity + 1)}
@@ -410,22 +412,22 @@ export function ProjectFileWorkspace({
       ) : null}
       {canWrite ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
-          <Button type="button" size="sm" variant="outline" onClick={createFolder}>
+          <Button type="button" size="sm" onClick={createFolder}>
             <FolderPlus className="mr-1.5 h-4 w-4" /> New folder
           </Button>
-          <Button type="button" size="sm" variant="outline" disabled={selectedFileIds.size === 0} onClick={moveSelectedFiles}>
+          <Button type="button" size="sm" disabled={selectedFileIds.size === 0} onClick={moveSelectedFiles}>
             <FolderInput className="mr-1.5 h-4 w-4" /> Move
           </Button>
-          <Button type="button" size="sm" variant="outline" disabled={selectedFileIds.size === 0} onClick={deleteSelectedFiles}>
+          <Button type="button" size="sm" disabled={selectedFileIds.size === 0} onClick={deleteSelectedFiles}>
             <Trash2 className="mr-1.5 h-4 w-4" /> Delete
           </Button>
-          {canManageCleanup ? <><Button type="button" size="sm" variant="outline" disabled={selectedFileIds.size === 0 || cleanupBusy} onClick={cleanSelected}>
+          {canManageCleanup ? <><Button type="button" size="sm" disabled={selectedFileIds.size === 0 || cleanupBusy} onClick={cleanSelected}>
             {cleanupBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />} Clean
           </Button>
-          <Button type="button" size="sm" variant="outline" disabled={selectedFileIds.size === 0} onClick={shareSelected}>
+          <Button type="button" size="sm" disabled={selectedFileIds.size === 0} onClick={shareSelected}>
             <ShieldCheck className="mr-1.5 h-4 w-4" /> Share
           </Button>
-          <Button type="button" size="sm" variant="ghost" disabled={selectedFileIds.size === 0} onClick={unshareSelected}>Unshare</Button></> : null}
+          <Button type="button" size="sm" disabled={selectedFileIds.size === 0} onClick={unshareSelected}>Unshare</Button></> : null}
           {files.length > 0 ? (
             <label className="ml-auto flex items-center gap-2 text-sm">
               <Checkbox

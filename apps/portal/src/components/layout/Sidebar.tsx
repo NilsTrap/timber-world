@@ -167,9 +167,9 @@ export function Sidebar({
       {/* Header */}
       <div className="flex h-14 items-center border-b px-4">
         <Link
-          href="/dashboard"
+          href="/projects"
           className="flex items-center overflow-hidden"
-          aria-label="Go to dashboard"
+          aria-label="Go to projects"
         >
           {isCollapsed ? (
             <span className="text-xl font-bold text-primary">

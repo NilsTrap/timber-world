@@ -25,6 +25,11 @@ const nextConfig: NextConfig = {
         hostname: "psmramegggsciirwldjz.supabase.co",
         pathname: "/storage/v1/object/public/**",
       },
+      {
+        protocol: "https",
+        hostname: "fyzrtqsnmnizoxgcqsjc.supabase.co",
+        pathname: "/storage/v1/object/sign/**",
+      },
     ],
   },
   // Fields / Packaging / Pricing Units moved out of the catalogue into the new

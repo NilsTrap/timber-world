@@ -37,8 +37,9 @@ const LEGACY_HREFS = LEGACY_ADMIN_CHILDREN.map((c) => c.href);
 // ── 1. Nothing orphaned: the admin nav still reaches EXACTLY the same destinations ──
 // (the full pre-E9 destination set — main pages + agent-app + counterparties + settings + the 6 legacy)
 const EXPECTED_ADMIN = new Set<string>([
-  "/dashboard", "/orders", "/counterparties", "/admin/crm", "/admin/shipments",
+  "/orders", "/counterparties", "/admin/crm", "/admin/shipments",
   "/admin/settings", "/admin/organisations",
+  "/admin/settings/project-stages",
   "/admin/organisations?tab=people",
   "/counterparties/clients", "/counterparties/suppliers",
   "/admin/settings/fields", "/admin/settings/gates", "/admin/settings/groups", "/admin/settings/file-cleanup",
@@ -102,7 +103,8 @@ ok("salesperson still sees Counterparties (clients only)",
    salesNav.some((i) => i.href === "/counterparties" && (i.children ?? []).length === 1 && i.children?.[0]?.href === "/counterparties/clients"));
 
 // ── 6. Nav ordering + Catalog promotion (2026-07-02) ────────────────────────
-ok("Dashboard is the FIRST nav item", ADMIN_NAV_ITEMS[0]?.href === "/dashboard", ADMIN_NAV_ITEMS[0]?.href);
+ok("Dashboard is hidden from the admin nav", !ADMIN_NAV_ITEMS.some((item) => item.href === "/dashboard"));
+ok("Dashboard is hidden from the organisation nav", !getOrgUserNavItems().some((item) => item.href === "/dashboard"));
 const catalogItem = ADMIN_NAV_ITEMS.find((i) => i.href === "/admin/catalog");
 ok("Catalogue is a top-level section with Products + Categories (Products first)",
    !!catalogItem && !catalogItem.collapsible && (catalogItem.children ?? []).length === 2 &&
@@ -145,7 +147,7 @@ const orgCrm = getOrgUserNavItems().find((i) => i.href === "/counterparties");
 ok("org-user counterparties hub is also labelled 'Companies'", orgCrm?.label === "Companies");
 ok("org-user nav has no top-level CRM/Shipments",
    !getOrgUserNavItems().some((i) => i.href === "/admin/crm" || i.href === "/shipments"));
-for (const [href, group] of [["/dashboard", "dashboard"], ["/orders", "orders"], ["/counterparties", "deals"]] as const) {
+for (const [href, group] of [["/orders", "orders"], ["/counterparties", "deals"]] as const) {
   const it = ADMIN_NAV_ITEMS.find((i) => i.href === href);
   ok(`${href} carries a colour group (${group})`, it?.group === group, it?.group);
 }
@@ -164,9 +166,7 @@ ok("no static nav list contains /projects",
 ok("withProjectsNav(disabled) changes nothing",
    withProjectsNav(ADMIN_NAV_ITEMS, false) === ADMIN_NAV_ITEMS);
 const adminWithProjects = withProjectsNav(ADMIN_NAV_ITEMS, true);
-ok("withProjectsNav(enabled) inserts Projects right after Orders",
-   adminWithProjects.findIndex((i) => i.href === "/projects") ===
-     adminWithProjects.findIndex((i) => i.href === "/orders") + 1);
+ok("withProjectsNav(enabled) inserts Projects first", adminWithProjects[0]?.href === "/projects");
 ok("withProjectsNav(enabled) adds exactly one entry and drops nothing",
    adminWithProjects.length === ADMIN_NAV_ITEMS.length + 1 &&
    leafHrefs(ADMIN_NAV_ITEMS as ModuleNavItem[]).every((h) =>

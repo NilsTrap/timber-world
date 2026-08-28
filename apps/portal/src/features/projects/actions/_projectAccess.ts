@@ -15,7 +15,7 @@ const productionDependencies: VisibleProjectDependencies = {
 
 export async function requireVisibleProject(
   projectId: string,
-  write = false,
+  write: boolean | "upload" = false,
 ): Promise<VisibleProjectResult> {
   return requireVisibleProjectWith(projectId, write, productionDependencies);
 }

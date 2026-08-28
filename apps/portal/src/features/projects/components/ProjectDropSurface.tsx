@@ -78,7 +78,7 @@ export function ProjectDropSurface({
       </p>
       <p className="mt-1 text-xs text-muted-foreground">Relative folders are kept · 100 MB per file</p>
       <div className="mt-4 flex flex-wrap justify-center gap-2">
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => { setPickerOpen(true); open(); }}>
+        <Button type="button" size="sm" disabled={disabled} onClick={() => { setPickerOpen(true); open(); }}>
           <Upload className="mr-1.5 h-4 w-4" /> Choose files
         </Button>
         <Button

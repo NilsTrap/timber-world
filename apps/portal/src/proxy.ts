@@ -6,7 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
  *
  * Protects routes by checking Supabase session:
  * - Unauthenticated users accessing protected routes → redirect to /login
- * - Authenticated users accessing auth pages → redirect to /dashboard
+ * - Authenticated users accessing auth pages → redirect to /projects
  * - Non-admin users accessing admin routes → redirect to dashboard with access_denied
  * - Users with incomplete setup (status="invited") → redirect to /accept-invite
  */
@@ -56,6 +56,7 @@ export async function proxy(request: NextRequest) {
 
   const isProtectedRoute =
     pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/projects") ||
     pathname.startsWith("/inventory") ||
     pathname.startsWith("/production") ||
     pathname.startsWith("/history") ||
@@ -109,14 +110,14 @@ export async function proxy(request: NextRequest) {
 
   if (isAuthRoute && user) {
     // Redirect authenticated users away from login/register pages
-    const dashboardUrl = new URL("/dashboard", request.url);
-    return NextResponse.redirect(dashboardUrl);
+    const projectsUrl = new URL("/projects", request.url);
+    return NextResponse.redirect(projectsUrl);
   }
 
   if (isRootPath) {
     // Redirect root to appropriate page
     if (user) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      return NextResponse.redirect(new URL("/projects", request.url));
     } else {
       return NextResponse.redirect(new URL("/login", request.url));
     }

@@ -18,7 +18,7 @@ interface NavItem {
  * TODO [i18n]: Replace labels with useTranslations()
  */
 const ADMIN_NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
+  { href: "/projects", label: "Projects", iconName: "Boxes" },
   { href: "/inventory", label: "Inventory", iconName: "Package" },
 ];
 
@@ -27,7 +27,7 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
  * TODO [i18n]: Replace labels with useTranslations()
  */
 const USER_NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
+  { href: "/projects", label: "Projects", iconName: "Boxes" },
   { href: "/inventory", label: "Inventory", iconName: "Package" },
   { href: "/production", label: "Production", iconName: "Factory" },
   { href: "/history", label: "History", iconName: "History" },
@@ -56,9 +56,9 @@ export async function TopNav() {
       <div className="container mx-auto flex h-14 items-center px-4">
         <div className="mr-8">
           <Link
-            href="/dashboard"
+            href="/projects"
             className="flex items-center space-x-2"
-            aria-label="Go to dashboard home"
+            aria-label="Go to projects home"
           >
             <span className="font-semibold text-lg">Nilitto</span>
             <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded">

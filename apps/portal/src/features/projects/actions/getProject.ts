@@ -16,15 +16,22 @@ import { isPartyOrg, resolveProjectSpineLabel, toProjectDetail, type ProjectionC
 import { loadOrgPersonas } from "../services/orgPersonas";
 import { countFilesByDeal, listProjectFiles, listProjectFolders } from "../services/projectFiles";
 import { canEditProjectSpecification } from "../services/projectSpecification";
+import { loadSpineOriginAllocation } from "../services/spineOriginSpecification";
+import { canOfferSellerCompletion, openRfqAvailability } from "../services/projectRfq";
+import { purchaseLegAllowsBuyerEdit, toEligiblePartyOption, type PartyOptionRow } from "../services/projectPartyOptions";
 import type { ProjectDetail, ProjectLegOption, ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace, ProjectsResult, ProjectsViewer } from "../types";
 import type { DealLineComponentLike } from "../projection";
+import { getProjectStageConfiguration, type ProjectStageConfiguration } from "../../project-stages/stages";
 
 export type GetProjectResult = ProjectsResult<{
   project: ProjectDetail;
   viewer: ProjectsViewer;
   partyWorkspace: ProjectPartyWorkspace;
   canEditSpecification: boolean;
+  canManageOfficialImages: boolean;
   isRfqCandidate: boolean;
+  stageConfiguration: ProjectStageConfiguration;
+  stageUpdatedAt: string | null;
 }>;
 
 export async function getProject(projectId: string): Promise<GetProjectResult> {
@@ -39,6 +46,8 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
         listProjectFiles(a.db, projectId, false),
         resolveProjectsViewer(a),
       ]);
+      const stageConfiguration = await getProjectStageConfiguration(a.db, candidateProject.stage, viewer);
+      candidateProject.stageLabel = stageConfiguration.current?.label ?? candidateProject.stageLabel;
       return {
         ok: true,
         project: {
@@ -57,7 +66,10 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
         },
         partyWorkspace: emptyPartyWorkspace(),
         canEditSpecification: false,
+        canManageOfficialImages: false,
         isRfqCandidate: true,
+        stageConfiguration: { current: stageConfiguration.current, selectable: [] },
+        stageUpdatedAt: null,
       };
     }
   }
@@ -85,9 +97,17 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
       ? loadLineComponents(a.db, raw.lineItems.map((line) => line.id).filter((id): id is string => Boolean(id)))
       : Promise.resolve([]),
     walled.spineId
-      ? a.db.from("spines").select("code").eq("id", walled.spineId).maybeSingle()
+      ? a.db.from("spines").select("code,origin_order_id").eq("id", walled.spineId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
   ]);
+  const { data: officialRows } = await a.db.from("order_files").select("id,storage_path")
+    .eq("order_id",projectId).eq("category","project").eq("is_thumbnail",true).order("thumbnail_sort_order");
+  for (const row of (officialRows??[]) as Array<{id:string;storage_path:string}>) {
+    const file = files.find((candidate)=>candidate.id===row.id);
+    if (!file) continue;
+    const { data } = await a.db.storage.from("orders").createSignedUrl(row.storage_path,60*60);
+    file.previewUrl=data?.signedUrl??null;
+  }
 
   const ctx: ProjectionContext = {
     access: a.access,
@@ -118,6 +138,10 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   const buyer = partyRef(raw.buyer, personasByOrgId);
   const seller = partyRef(raw.seller, personasByOrgId);
   const isDraft = raw.lifecycleStage === "draft";
+  const openRfqQuery = isDraft
+    ? await a.db.from("project_rfqs").select("id").eq("order_id", projectId).eq("status", "open").limit(1).maybeSingle()
+    : { data: null, error: null };
+  const openRfqState = openRfqAvailability(openRfqQuery);
   const canEditSpecification = canEditProjectSpecification({
     isPlatformAdmin: a.isPlatformAdmin,
     actorOrganisationId: a.orgId,
@@ -126,11 +150,15 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     lifecycleStage: raw.lifecycleStage,
     dealKind: raw.dealKind,
   });
-  const canEditBuyer = isDraft && raw.dealKind !== "purchase_only"
+  const originOrderId = (spineLookup.data as { origin_order_id?: string | null } | null)?.origin_order_id ?? null;
+  const canManageOfficialImages = originOrderId === projectId
+    && (a.isPlatformAdmin || (raw.seller.id === a.orgId && viewer.personas.includes("trader")));
+  const canEditBuyer = isDraft && purchaseLegAllowsBuyerEdit({ isPlatformAdmin: a.isPlatformAdmin, dealKind: raw.dealKind, buyerMissing: !buyer })
     && (a.isPlatformAdmin || (raw.seller.id === a.orgId && viewer.canCreateProject && viewer.createRoles.includes("trader")))
     && (a.isPlatformAdmin || a.access.domainVisible("customer_identity"));
   const buyerOptions = canEditBuyer ? await loadPartyOptions(a.db, a.isPlatformAdmin, raw.seller.id, "buyer") : [];
-  const sellerOptions = a.isPlatformAdmin && isDraft
+  const mayCompleteSeller = canOfferSellerCompletion({ isDraft, sellerMissing: !seller, openRfq: openRfqState });
+  const sellerOptions = a.isPlatformAdmin && isDraft && openRfqState === "closed" && (seller || mayCompleteSeller)
     ? await loadPartyOptions(a.db, true, raw.buyer.id, "seller")
     : [];
   const mayAppendNextSeller = !a.isPlatformAdmin && isDraft
@@ -147,6 +175,17 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   const legOptions = a.isPlatformAdmin && raw.spineId
     ? await loadProjectLegOptions(a.db, raw.spineId, projectId)
     : [];
+  const traderCanCreateSourcingLeg = Boolean(!a.isPlatformAdmin && isDraft && raw.spineId
+    && raw.seller.id === a.orgId && viewer.personas.includes("trader"));
+  const canCreateSpineLeg = a.isPlatformAdmin || traderCanCreateSourcingLeg;
+  const [createBuyerOptions, createSellerOptions, allocationResult] = canCreateSpineLeg && isDraft && raw.spineId
+    ? await Promise.all([
+      a.isPlatformAdmin ? loadPartyOptions(a.db, true, null, "buyer") : Promise.resolve(seller ? [{ id: seller.id, code: seller.code ?? "TRD", name: seller.name ?? "Trader", group: "buyers" as const }] : []),
+      a.isPlatformAdmin ? loadPartyOptions(a.db, true, null, "seller") : Promise.resolve([]),
+      loadSpineOriginAllocation(a.db, projectId),
+    ])
+    : [[], [], { ok: false as const, error: "unavailable" as const }];
+  const originAllocation = allocationResult.ok ? allocationResult.data : undefined;
   const partyWorkspace: ProjectPartyWorkspace = {
     buyerProjectId: canEditBuyer ? projectId : null,
     buyer,
@@ -156,11 +195,18 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     sellerOptions,
     nextSellerOptions,
     canEditBuyer: buyerOptions.length > 0,
-    canEditSeller: sellerOptions.length > 0 && !!seller,
+    canEditSeller: sellerOptions.length > 0 && (!!seller || mayCompleteSeller),
     canAppendNextSeller: nextSellerOptions.length > 0,
+    canCreateSpineLeg: canCreateSpineLeg && isDraft && !!raw.spineId,
+    createBuyerOptions,
+    createSellerOptions,
+    originAllocation,
+    openRfqState,
   };
+  const stageConfiguration = await getProjectStageConfiguration(a.db, raw.lifecycleStage, viewer);
+  project.stageLabel = stageConfiguration.current?.label ?? project.stageLabel;
 
-  return { ok: true, project, viewer, partyWorkspace, canEditSpecification, isRfqCandidate: false };
+  return { ok: true, project, viewer, partyWorkspace, canEditSpecification, canManageOfficialImages, isRfqCandidate: false, stageConfiguration, stageUpdatedAt: raw.updatedAt };
 }
 
 type CandidateSnapshot = {
@@ -184,6 +230,7 @@ async function loadRfqCandidateProject(db: DbClient, projectId: string): Promise
     name: row.name,
     spineCode: row.reference,
     groupKey: `rfq:${row.id}`,
+    rowKind: "leg",
     depth: 0,
     stage: row.stage,
     stageLabel: row.stage.replaceAll("_", " "),
@@ -244,20 +291,22 @@ async function loadPartyOptions(
   centerOrgId: string | null,
   side: "buyer" | "seller" | "center",
 ): Promise<ProjectPartyOption[]> {
-  if (!centerOrgId && side !== "center") return [];
+  if (!centerOrgId && side === "center") return [];
   let ids: string[] | null = null;
   if (!admin) {
     const { data } = await db.from("organisation_trading_partners").select("partner_organisation_id").eq("organisation_id", centerOrgId as string);
     ids = ((data ?? []) as { partner_organisation_id: string }[]).map((row) => row.partner_organisation_id);
     if (ids.length === 0) return [];
   }
-  let query = db.from("organisations").select("id, code, name, is_customer, is_trader, is_supplier, is_producer").eq("is_active", true).order("name");
+  let query = db.from("organisations").select("id, code, name, is_customer, is_trader, is_supplier, is_producer, is_manufacturer").eq("is_active", true).order("name");
   if (ids) query = query.in("id", ids);
   const { data, error } = await query;
   if (error) throw new Error("Could not load eligible project parties");
-  return ((data ?? []) as Array<ProjectPartyOption & { is_customer: boolean; is_trader: boolean; is_supplier: boolean; is_producer: boolean }>)
-    .filter((row) => row.id !== centerOrgId && (side === "buyer" ? row.is_customer : side === "center" ? row.is_trader : row.is_trader || row.is_supplier || row.is_producer))
-    .map(({ id, code, name, is_trader }) => ({ id, code, name, group: side === "buyer" ? "buyers" : is_trader ? "traders" : "suppliers" }));
+  const optionSide = side === "center" ? "seller" : side;
+  return ((data ?? []) as PartyOptionRow[])
+    .filter((row) => row.id !== centerOrgId && (side !== "center" || row.is_trader))
+    .map((row) => toEligiblePartyOption(row, optionSide))
+    .filter((row): row is ProjectPartyOption => row !== null);
 }
 
 async function loadProjectLegOptions(db: DbClient, spineId: string, currentProjectId: string): Promise<ProjectLegOption[]> {

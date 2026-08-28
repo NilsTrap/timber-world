@@ -76,7 +76,7 @@ export function ProjectRfqCard({ projectId, currency, canManage, initialOptions 
       const result = await awardProjectQuotation({ projectId, rfqId: rfq.id, candidateId: awardTarget.id });
       if (!result.success) { toast.error(result.error); return; }
       setAwardTarget(null);
-      toast.success("Quotation awarded and seller leg created");
+      toast.success("Quotation awarded and seller assigned");
       router.refresh();
       await load();
     });
@@ -147,9 +147,9 @@ export function ProjectRfqCard({ projectId, currency, canManage, initialOptions 
 
     <AlertDialog open={awardTarget !== null} onOpenChange={(open) => !open && !pending && setAwardTarget(null)}>
       <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Award quotation to {awardTarget?.organisationName}?</AlertDialogTitle>
-        <AlertDialogDescription>This creates the committed seller leg. Other candidates remain in sourcing history as not awarded.</AlertDialogDescription>
+        <AlertDialogDescription>This assigns the winner to this same leg. Other candidates remain in sourcing history as not awarded.</AlertDialogDescription>
       </AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
-        <AlertDialogAction disabled={pending} onClick={confirmAward}>Award and create seller leg</AlertDialogAction>
+        <AlertDialogAction disabled={pending} onClick={confirmAward}>Award and assign seller</AlertDialogAction>
       </AlertDialogFooter></AlertDialogContent>
     </AlertDialog>
     <AlertDialog open={confirmCancel} onOpenChange={(open) => !open && !pending && setConfirmCancel(false)}>

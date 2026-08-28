@@ -1,6 +1,5 @@
 import { PageHeader, SectionHeader } from "@timber/ui";
 import type { ProjectDetail, ProjectPartyWorkspace, ProjectsViewer } from "../types";
-import { ProjectStageBadge } from "./ProjectStageBadge";
 import { ProjectFileWorkspace } from "./ProjectFileWorkspace";
 import { ProjectPartiesBlock } from "./ProjectPartiesBlock";
 import { ProjectTermsCard } from "./ProjectTermsCard";
@@ -8,6 +7,9 @@ import { ProjectSpecificationEditor } from "./ProjectSpecificationEditor";
 import { ProjectRfqCard } from "./ProjectRfqCard";
 import { ProjectLegSelector } from "./ProjectLegSelector";
 import { ProjectNextLegControl } from "./ProjectNextLegControl";
+import { ProjectOfficialImages } from "./ProjectOfficialImages";
+import { ProjectStatusSelect } from "./ProjectStatusSelect";
+import type { ProjectStageConfiguration } from "../../project-stages/stages";
 
 /**
  * Project detail (server component).
@@ -23,19 +25,30 @@ export function ProjectDetailView({
   viewer,
   partyWorkspace,
   canEditSpecification,
+  canManageOfficialImages,
   isRfqCandidate,
   initialRfqCandidates,
   canManageRfq,
+  openCreateLeg,
+  stageConfiguration,
+  stageUpdatedAt,
 }: {
   project: ProjectDetail;
   viewer: ProjectsViewer;
   partyWorkspace: ProjectPartyWorkspace;
   canEditSpecification: boolean;
+  canManageOfficialImages: boolean;
   isRfqCandidate: boolean;
   initialRfqCandidates: Array<{ id: string; name: string }>;
   canManageRfq: boolean;
+  openCreateLeg: boolean;
+  stageConfiguration: ProjectStageConfiguration;
+  stageUpdatedAt: string | null;
 }) {
   const currency = project.currency ?? "";
+  const viewerIsSeller = viewer.organisationId != null && viewer.organisationId === partyWorkspace.seller?.id;
+  const sellerIsTrader = Boolean(partyWorkspace.seller?.personas.includes("trader"));
+  const supplierSeller = viewerIsSeller && !sellerIsTrader;
   const projectName = project.name?.trim();
   const subtitleParts = [
     project.displaySpineCode ? `Spine ID: ${project.displaySpineCode}` : null,
@@ -48,15 +61,16 @@ export function ProjectDetailView({
         backLabel="Back to projects"
         title={projectName || project.reference}
         subtitle={subtitleParts.length > 0 ? subtitleParts.join(" · ") : undefined}
-        badge={<ProjectStageBadge stage={project.stage} label={project.stageLabel} />}
+        actions={<><ProjectStatusSelect projectId={project.id} current={stageConfiguration.current} selectable={stageConfiguration.selectable} expectedUpdatedAt={stageUpdatedAt} fallbackLabel={project.stageLabel} />{partyWorkspace.canCreateSpineLeg ? <ProjectNextLegControl projectId={project.id} workspace={partyWorkspace} initialOpen={openCreateLeg} /> : null}</>}
       />
 
       {!isRfqCandidate ? <div className="space-y-3">
         {partyWorkspace.legOptions ? <ProjectLegSelector currentProjectId={project.id} options={partyWorkspace.legOptions} /> : null}
         <SectionHeader title="Parties" />
         <ProjectPartiesBlock projectId={project.id} workspace={partyWorkspace} />
-        {partyWorkspace.canAppendNextSeller ? <ProjectNextLegControl projectId={project.id} options={partyWorkspace.nextSellerOptions} /> : null}
       </div> : null}
+
+      {canManageOfficialImages ? <ProjectOfficialImages projectId={project.id} initialFiles={project.files} /> : null}
 
       {!isRfqCandidate && project.terms ? (
         <ProjectTermsCard projectId={project.id} terms={project.terms} deliveryDeadline={project.deliveryDeadline} canEdit={viewer.canEditTerms} />
@@ -77,8 +91,9 @@ export function ProjectDetailView({
         projectId={project.id}
         initialFiles={project.files}
         initialFolders={project.folders}
-        canWrite={viewer.canWriteFiles}
-        canManageCleanup={viewer.isPlatformAdmin || project.direction === "sell"}
+        canWrite={viewer.canWriteFiles && !supplierSeller}
+        canUpload={viewer.canWriteFiles || supplierSeller}
+        canManageCleanup={viewer.isPlatformAdmin || (viewerIsSeller && sellerIsTrader)}
       />
 
       {project.notes ? (

@@ -6,6 +6,9 @@ export interface ProjectGroupingCandidate {
   spineCode: string | null;
   upstreamDealId: string | null;
   dealKind: string;
+  createdAt?: string;
+  sortOrder?: number | null;
+  spineThumbnailUrl?: string | null;
 }
 
 /** Order already-authorised rows into presentation-only spine groups. */
@@ -28,32 +31,38 @@ export function groupProjectRows(candidates: readonly ProjectGroupingCandidate[]
       group[0];
     if (!parent) continue;
 
-    const ordered: ProjectGroupingCandidate[] = [];
-    const visited = new Set<string>();
-    const childrenOf = (id: string) => group
-      .filter((candidate) => candidate.upstreamDealId === id)
-      .sort((a, b) => a.item.reference.localeCompare(b.item.reference));
-    const visit = (candidate: ProjectGroupingCandidate) => {
-      if (visited.has(candidate.item.id)) return;
-      visited.add(candidate.item.id);
-      ordered.push(candidate);
-      childrenOf(candidate.item.id).forEach(visit);
-    };
-    visit(parent);
-    group.filter((candidate) => !visited.has(candidate.item.id))
-      .sort((a, b) => a.item.reference.localeCompare(b.item.reference))
-      .forEach(visit);
+    const byOrder = (a: ProjectGroupingCandidate, b: ProjectGroupingCandidate) =>
+      (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER)
+      || (a.createdAt ?? "").localeCompare(b.createdAt ?? "")
+      || a.item.reference.localeCompare(b.item.reference);
+    const ordered = [...group].sort(byOrder);
 
     const spineCode = parent.spineCode ?? parent.item.reference;
-    ordered.forEach((candidate, index) => {
+    if (parent.spineId) {
       output.push({
-        ...candidate.item,
+        ...parent.item,
+        rowKind: "spine",
         spineCode,
         groupKey,
-        depth: index === 0 ? 0 : 1,
-        stage: index === 0 ? candidate.item.stage : "",
-        stageLabel: index === 0 ? candidate.item.stageLabel : "",
-        deliveryDeadline: index === 0 ? candidate.item.deliveryDeadline : null,
+        depth: 0,
+        buyer: null,
+        seller: null,
+        counterparty: null,
+        fileCount: 0,
+        valueCents: null,
+        thumbnailUrl: parent.spineThumbnailUrl ?? parent.item.thumbnailUrl ?? null,
+      });
+    }
+    ordered.forEach((candidate) => {
+      output.push({
+        ...candidate.item,
+        rowKind: "leg",
+        spineCode,
+        groupKey,
+        depth: parent.spineId ? 1 : 0,
+        stage: parent.spineId ? "" : candidate.item.stage,
+        stageLabel: parent.spineId ? "" : candidate.item.stageLabel,
+        deliveryDeadline: parent.spineId ? null : candidate.item.deliveryDeadline,
       });
     });
   }

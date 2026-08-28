@@ -68,6 +68,8 @@ export interface DealHeaderLike {
   buyer: DealPartyLike;
   spineId: string | null;
   upstreamDealId: string | null;
+  createdAt?: string;
+  projectSortOrder?: number | null;
 }
 
 export interface DealLineLike {
@@ -220,6 +222,7 @@ export function toProjectListItem(
     name: walled.name,
     spineCode: walled.dealCode ?? walled.code,
     groupKey: walled.id,
+    rowKind: "leg",
     depth: 0,
     stage: walled.lifecycleStage,
     stageLabel: stageLabel(walled.lifecycleStage),

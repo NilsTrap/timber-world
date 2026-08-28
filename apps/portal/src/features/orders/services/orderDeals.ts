@@ -62,6 +62,9 @@ export interface OrderDealView {
   buyer: { id: string | null; code: string | null; name: string | null };
   spineId: string | null;
   upstreamDealId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  projectSortOrder: number | null;
   /** E5: owner margin-approval timestamp (null = not yet approved). */
   marginApprovedAt: string | null;
   lineItems: OrderLineItem[];
@@ -78,7 +81,7 @@ const ORDER_SELECT = `
   delivery_deadline, transport_billing, notes, margin_approved_at,
   seller_signee_name, seller_signee_role, buyer_signee_name, buyer_signee_role,
   customer_organisation_id, seller_organisation_id, producer_organisation_id,
-  buyer_organisation_id, spine_id, upstream_deal_id,
+  buyer_organisation_id, spine_id, upstream_deal_id, created_at, updated_at, project_sort_order,
   customer:organisations!orders_customer_organisation_id_fkey(id, code, name),
   seller:organisations!orders_seller_organisation_id_fkey(id, code, name),
   producer:organisations!orders_producer_organisation_id_fkey(id, code, name),
@@ -117,6 +120,9 @@ function mapOrderDealHeader(row: any): OrderDealSummary {
     buyer: { id: row.buyer_organisation_id ?? null, code: row.buyer?.code ?? null, name: row.buyer?.name ?? null },
     spineId: row.spine_id ?? null,
     upstreamDealId: row.upstream_deal_id ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    projectSortOrder: row.project_sort_order != null ? Number(row.project_sort_order) : null,
     marginApprovedAt: row.margin_approved_at ?? null,
   };
 }

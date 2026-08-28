@@ -72,7 +72,7 @@ interface ExpectedAccess {
   books: CounterpartyBook[];
   recordReadBooks: CounterpartyBook[];
   recordManageBooks: CounterpartyBook[];
-  projectsGate: "admin" | "module" | "login" | "not_found";
+  projectsGate: "authenticated" | "login" | "not_found";
   targetProjectVisible: boolean;
   createRoles: Array<"buyer" | "trader">;
   canCreateProject: boolean;
@@ -105,7 +105,7 @@ const matrix: MatrixActor[] = [
       books: ["clients", "suppliers", "traders"],
       recordReadBooks: ["clients", "suppliers", "traders"],
       recordManageBooks: ["clients", "suppliers", "traders"],
-      projectsGate: "admin", targetProjectVisible: true,
+      projectsGate: "authenticated", targetProjectVisible: true,
       createRoles: ["trader"], canCreateProject: true,
       files: { read: true, write: true }, termsInPayload: true,
     },
@@ -118,7 +118,7 @@ const matrix: MatrixActor[] = [
     modules: [PROJECTS_MODULE], hasDealCreate: true,
     expected: {
       books: ["clients"], recordReadBooks: ["clients"], recordManageBooks: [],
-      projectsGate: "module", targetProjectVisible: true,
+      projectsGate: "authenticated", targetProjectVisible: true,
       createRoles: ["buyer"], canCreateProject: true,
       files: { read: true, write: true }, termsInPayload: false,
     },
@@ -131,7 +131,7 @@ const matrix: MatrixActor[] = [
     modules: [PROJECTS_MODULE], hasDealCreate: true,
     expected: {
       books: ["clients"], recordReadBooks: ["clients"], recordManageBooks: ["clients"],
-      projectsGate: "module", targetProjectVisible: true,
+      projectsGate: "authenticated", targetProjectVisible: true,
       createRoles: ["trader"], canCreateProject: true,
       files: { read: true, write: true }, termsInPayload: false,
     },
@@ -144,7 +144,7 @@ const matrix: MatrixActor[] = [
     modules: [PROJECTS_MODULE], hasDealCreate: true,
     expected: {
       books: ["suppliers"], recordReadBooks: ["suppliers"], recordManageBooks: ["suppliers"],
-      projectsGate: "module", targetProjectVisible: true,
+      projectsGate: "authenticated", targetProjectVisible: true,
       createRoles: ["trader"], canCreateProject: true,
       files: { read: true, write: true }, termsInPayload: false,
     },
@@ -158,7 +158,7 @@ const matrix: MatrixActor[] = [
     expected: {
       books: ["clients", "suppliers"],
       recordReadBooks: ["clients", "suppliers"], recordManageBooks: ["clients", "suppliers"],
-      projectsGate: "module", targetProjectVisible: true,
+      projectsGate: "authenticated", targetProjectVisible: true,
       createRoles: ["trader"], canCreateProject: true,
       files: { read: true, write: true }, termsInPayload: false,
     },
@@ -172,7 +172,7 @@ const matrix: MatrixActor[] = [
     modules: [PROJECTS_MODULE], hasDealCreate: true,
     expected: {
       books: ["suppliers"], recordReadBooks: ["suppliers"], recordManageBooks: [],
-      projectsGate: "module", targetProjectVisible: true,
+      projectsGate: "authenticated", targetProjectVisible: true,
       createRoles: [], canCreateProject: false,
       files: { read: true, write: true }, termsInPayload: false,
     },
@@ -186,7 +186,7 @@ const matrix: MatrixActor[] = [
     modules: [PROJECTS_MODULE], hasDealCreate: true,
     expected: {
       books: ["clients"], recordReadBooks: ["clients"], recordManageBooks: [],
-      projectsGate: "module", targetProjectVisible: true,
+      projectsGate: "authenticated", targetProjectVisible: true,
       createRoles: ["buyer", "trader"], canCreateProject: true,
       files: { read: true, write: true }, termsInPayload: false,
     },
@@ -225,9 +225,9 @@ const matrix: MatrixActor[] = [
     modules: [], hasDealCreate: false,
     expected: {
       books: ["clients"], recordReadBooks: ["clients"], recordManageBooks: [],
-      projectsGate: "not_found", targetProjectVisible: false,
+      projectsGate: "authenticated", targetProjectVisible: true,
       createRoles: ["buyer"], canCreateProject: false,
-      files: { read: false, write: false }, termsInPayload: false,
+      files: { read: true, write: false }, termsInPayload: false,
     },
   },
   {
@@ -238,7 +238,7 @@ const matrix: MatrixActor[] = [
     modules: [PROJECTS_MODULE], hasDealCreate: true,
     expected: {
       books: ["clients"], recordReadBooks: [], recordManageBooks: [],
-      projectsGate: "module", targetProjectVisible: false,
+      projectsGate: "authenticated", targetProjectVisible: false,
       createRoles: ["buyer"], canCreateProject: true,
       files: { read: false, write: false }, termsInPayload: false,
     },
@@ -346,7 +346,7 @@ function projectDeal(
 
 function projectDependencies(actor: MatrixActor): VisibleProjectDependencies {
   const gate = gateLabel(actor);
-  const resolved: ProjectsActor = gate === "admin" || gate === "module"
+  const resolved: ProjectsActor = gate === "authenticated"
     ? allowedActor(actor)
     : { ok: false, deny: gate === "login" ? "login" : "not_found" };
   const rows = new Map([

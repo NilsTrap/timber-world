@@ -100,9 +100,8 @@ export async function loginUser(
   }
 
   // 6. Return redirect path
-  // Note: Both roles redirect to /dashboard - role-specific UI handled in Story 1.4
   return {
     success: true,
-    data: { redirectTo: "/dashboard" },
+    data: { redirectTo: "/projects" },
   };
 }

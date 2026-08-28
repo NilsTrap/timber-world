@@ -84,17 +84,8 @@ export async function completeInvite(
   // 4b. Record a login-history event for this first login (fire-and-forget).
   await logLoginEvent(portalUser.id, user.email ?? "");
 
-  // 5. Determine redirect based on role
-  let redirectTo = "/dashboard";
-
-  if (portalUser.role === "admin") {
-    redirectTo = "/admin/organisations";
-  } else if (portalUser.role === "user") {
-    redirectTo = "/production";
-  }
-
   return {
     success: true,
-    data: { redirectTo },
+    data: { redirectTo: "/projects" },
   };
 }

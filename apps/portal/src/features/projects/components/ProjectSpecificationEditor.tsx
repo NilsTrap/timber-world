@@ -77,7 +77,7 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
     <div className="flex flex-wrap items-center justify-between gap-3">
       <SectionHeader title="Technical specification" subtitle={`${lines.length} line(s) · prices are added only after award`} />
       {canEdit ? <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={openCatalog} disabled={pending}>Add from catalogue</Button>
+        <Button size="sm" onClick={openCatalog} disabled={pending}>Add from catalogue</Button>
         <Button size="sm" onClick={() => { setCatalog([]); setDraft(blank()); }}><Plus className="mr-1 h-4 w-4" />Custom line</Button>
       </div> : null}
     </div>

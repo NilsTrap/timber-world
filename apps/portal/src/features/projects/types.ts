@@ -71,11 +71,20 @@ export interface ProjectPartyWorkspace {
   canEditBuyer: boolean;
   canEditSeller: boolean;
   canAppendNextSeller: boolean;
+  /** Admin-only inputs for independent same-spine Lego legs. */
+  canCreateSpineLeg?: boolean;
+  createBuyerOptions?: ProjectPartyOption[];
+  createSellerOptions?: ProjectPartyOption[];
+  originAllocation?: import("./services/spineOriginSpecification").SpineOriginAllocation[];
+  /** An open sourcing request on a buyer-only placeholder. */
+  openRfqState?: import("./services/projectRfq").OpenRfqAvailability;
 }
 
 /** One visible bilateral deal = one clickable row, optionally grouped by spine. */
 export interface ProjectListItem {
   id: string;
+  /** Presentation-only row identity: a spine header or a bilateral deal. */
+  rowKind: "spine" | "leg";
   /** Deal code (preferred) or the legacy ORD-### code. */
   reference: string;
   name: string | null;
@@ -83,10 +92,11 @@ export interface ProjectListItem {
   spineCode: string;
   /** Presentation-only grouping key. Never identifies an invisible sibling. */
   groupKey: string;
-  /** Visible chain depth: zero for the parent or a standalone row. */
+  /** Visible hierarchy depth: zero for a spine/standalone deal, one for grouped legs. */
   depth: number;
   stage: string;
   stageLabel: string;
+  stageColor?: string;
   /** The deal's framing FROM THIS VIEWER's standpoint (never absolute). */
   direction: "sell" | "buy";
   /** The viewer's own deal partner. null when the viewer is not a party. */
@@ -96,6 +106,7 @@ export interface ProjectListItem {
   deliveryDeadline: string | null;
   /** Files attached to THIS deal only (RLS-filtered); never a chain roll-up. */
   fileCount: number;
+  thumbnailUrl?: string | null;
   /** Temporary sourcing invitation; the viewer is not yet a committed deal party. */
   rfqInvitation?: boolean;
   /** Only for viewers with the `deal_terms` domain. */
@@ -173,6 +184,8 @@ export interface ProjectFileMeta {
   cleanupFindingsCount: number;
   shared: boolean;
   sharedInbound: boolean;
+  officialImagePosition?: number | null;
+  previewUrl?: string | null;
 }
 
 /** Logical workspace folder. It may exist without descendant files. */

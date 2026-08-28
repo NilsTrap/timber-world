@@ -74,7 +74,7 @@ export async function prepareProjectFileUpload(input: {
   mimeType: string | null;
   fileSizeBytes: number;
 }): Promise<ActionResult<PreparedProjectUpload>> {
-  const access = await requireVisibleProject(input.projectId, true);
+  const access = await requireVisibleProject(input.projectId, "upload");
   if (!access.ok) return { success: false, error: access.error, code: access.code };
   const path = normaliseProjectPath(input.relativePath);
   if (!path.ok) return { success: false, error: path.error, code: "INVALID_PATH" };
@@ -150,7 +150,7 @@ export async function finaliseProjectFileUpload(
   if (!isValidUUID(projectId) || !isValidUUID(uploadId)) {
     return { success: false, error: "Upload unavailable", code: "NOT_FOUND" };
   }
-  const access = await requireVisibleProject(projectId, true);
+  const access = await requireVisibleProject(projectId, "upload");
   if (!access.ok) return { success: false, error: access.error, code: access.code };
   const db = access.actor.db;
   const { data: prepared, error: preparedError } = await db
@@ -227,7 +227,7 @@ export async function finaliseProjectFileUpload(
 
 export async function cancelProjectFileUpload(projectId: string, uploadId: string): Promise<void> {
   if (!isValidUUID(projectId) || !isValidUUID(uploadId)) return;
-  const access = await requireVisibleProject(projectId, true);
+  const access = await requireVisibleProject(projectId, "upload");
   if (!access.ok) return;
   await cancelProjectUpload(access.actor.db, projectId, uploadId);
 }

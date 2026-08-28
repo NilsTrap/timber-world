@@ -1,10 +1,16 @@
+"use client";
+
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import Image from "next/image";
+import { GripVertical, ImageIcon, MoreHorizontal, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   Button,
   EmptyState,
-  SummaryCard,
-  SummaryGrid,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Table,
   TableBody,
   TableCell,
@@ -12,11 +18,11 @@ import {
   TableHeader,
   TableRow,
 } from "@timber/ui";
-import { PERSONA_LABEL } from "../personas";
 import type { ProjectListItem, ProjectsViewer } from "../types";
 import type { ProjectListFilters as ProjectListFilterState } from "../types";
 import { ProjectStageBadge } from "./ProjectStageBadge";
 import { ProjectsListFilters } from "./ProjectsListFilters";
+import { reorderProjectLegs } from "../actions/reorderProjectLegs";
 
 const MONEY_FORMATTERS = new Map<string, Intl.NumberFormat>();
 function formatMoney(valueCents: number | null | undefined, currency: string | undefined): string {
@@ -50,9 +56,25 @@ export function ProjectsListView({
   filters: ProjectListFilterState;
   filterOptions: Parameters<typeof ProjectsListFilters>[0]["options"];
 }) {
-  const projectCount = new Set(items.map((item) => item.groupKey)).size;
-  const partyCount = new Set(items.flatMap((item) => [item.buyer?.id, item.seller?.id]).filter(Boolean)).size;
-  const fileCount = items.reduce((sum, i) => sum + i.fileCount, 0);
+  const [displayItems, setDisplayItems] = useState(items);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
+  useEffect(() => setDisplayItems(items), [items]);
+  async function dropLeg(target: ProjectListItem) {
+    if (!draggedId || target.rowKind !== "leg") return;
+    const source = displayItems.find((item) => item.rowKind === "leg" && item.id === draggedId);
+    if (!source || source.groupKey !== target.groupKey || source.id === target.id) return setDraggedId(null);
+    const groupLegs = displayItems.filter((item) => item.groupKey === target.groupKey && item.rowKind === "leg");
+    const moved = groupLegs.filter((item) => item.id !== source.id);
+    moved.splice(moved.findIndex((item) => item.id === target.id), 0, source);
+    const next = displayItems.map((item) => item.groupKey === target.groupKey && item.rowKind === "leg" ? moved.shift()! : item);
+    setDisplayItems(next); setDraggedId(null); setReordering(true);
+    const spineId = target.groupKey.startsWith("spine:") ? target.groupKey.slice(6) : null;
+    if (!spineId) return;
+    const result = await reorderProjectLegs({ spineId, orderIds: next.filter((item) => item.groupKey === target.groupKey && item.rowKind === "leg").map((item) => item.id) });
+    setReordering(false);
+    if (!result.success) { setDisplayItems(items); toast.error(result.error); }
+  }
 
   return (
     <div className="space-y-6">
@@ -63,20 +85,10 @@ export function ProjectsListView({
             Every deal you can see, as a project workspace.
           </p>
         </div>
-        <div className="flex items-start gap-3">
-          <ViewerStrip viewer={viewer} />
-          {viewer.canCreateProject ? (
-            <Button asChild size="sm"><Link href="/projects/new"><Plus className="mr-1.5 h-4 w-4" /> New project</Link></Button>
-          ) : null}
-        </div>
+        {viewer.canCreateProject ? (
+          <Button asChild size="sm"><Link href="/projects/new"><Plus className="mr-1.5 h-4 w-4" /> New project</Link></Button>
+        ) : null}
       </div>
-
-      <SummaryGrid columns={4}>
-        <SummaryCard label="Projects" value={String(projectCount)} />
-        <SummaryCard label="Visible legs" value={String(items.length)} />
-        <SummaryCard label="Counterparties" value={String(partyCount)} />
-        <SummaryCard label="Files" value={String(fileCount)} />
-      </SummaryGrid>
 
       <ProjectsListFilters filters={filters} options={filterOptions} />
 
@@ -87,6 +99,7 @@ export function ProjectsListView({
           <Table dense className="min-w-[1100px]">
             <TableHeader className="bg-muted/70 [&_th]:font-semibold [&_th]:text-foreground">
               <TableRow>
+                <TableHead className="w-24">Image</TableHead>
                 <TableHead>Spine ID</TableHead>
                 <TableHead>Project</TableHead>
                 <TableHead>Buyer</TableHead>
@@ -95,29 +108,34 @@ export function ProjectsListView({
                 <TableHead className="hidden md:table-cell">Delivery</TableHead>
                 <TableHead className="hidden sm:table-cell text-right">Files</TableHead>
                 <TableHead className="text-right">Value</TableHead>
+                <TableHead className="w-12 text-right"><span className="sr-only">Actions</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item) => (
-                <TableRow key={item.id} className={item.depth === 0 ? "border-t-2 border-border bg-muted/50 font-medium hover:bg-muted/65" : "bg-background text-muted-foreground hover:bg-muted/25"}>
+              {displayItems.map((item, index) => {
+                const firstInGroup = index === 0 || displayItems[index - 1]?.groupKey !== item.groupKey;
+                const groupRows = displayItems.filter((candidate) => candidate.groupKey === item.groupKey);
+                const thumbnail = groupRows.find((candidate) => candidate.rowKind === "spine")?.thumbnailUrl ?? groupRows.find((candidate) => candidate.thumbnailUrl)?.thumbnailUrl;
+                return (
+                <TableRow key={`${item.rowKind}:${item.id}`} draggable={!reordering && viewer.isPlatformAdmin && item.rowKind === "leg" && item.depth > 0} onDragStart={()=>setDraggedId(item.id)} onDragEnd={()=>setDraggedId(null)} onDragOver={(event)=>{if(item.rowKind==="leg")event.preventDefault();}} onDrop={()=>void dropLeg(item)} className={item.rowKind === "spine" ? "border-t-2 border-border bg-muted/50 font-medium hover:bg-muted/65" : `bg-background text-muted-foreground hover:bg-muted/25 ${draggedId===item.id?"opacity-50":""}`}>
+                  {firstInGroup ? <TableCell rowSpan={groupRows.length} className="w-24 border-r align-middle"><div className="relative mx-auto h-24 w-20 overflow-hidden rounded-md border bg-muted">{thumbnail ? <Image src={thumbnail} alt="Project thumbnail" fill unoptimized className="object-cover" /> : <ImageIcon className="absolute inset-0 m-auto h-6 w-6 text-muted-foreground/50" />}</div></TableCell> : null}
                   <TableCell className={item.depth > 0 ? "whitespace-nowrap pl-12" : "whitespace-nowrap"}>
+                    {viewer.isPlatformAdmin && item.rowKind === "leg" && item.depth > 0 ? <GripVertical className="mr-1 inline h-4 w-4 cursor-grab text-muted-foreground/50" aria-label={`Drag ${item.reference}`} /> : null}
                     <Link
                       href={`/projects/${item.id}`}
                       className={item.depth > 0 ? "font-normal text-primary/75 hover:text-primary hover:underline" : "font-semibold text-primary hover:underline"}
                     >
-                      {item.depth > 0 ? `↳ ${item.reference}` : item.spineCode}
+                      {item.rowKind === "spine" ? item.spineCode : item.depth > 0 ? `↳ ${item.reference}` : item.reference}
                     </Link>
                   </TableCell>
-                  <TableCell className="max-w-[18rem] truncate">{item.name ?? "—"}</TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {item.buyer?.name ?? "—"}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {item.seller?.name ?? "—"}
-                  </TableCell>
+                  <TableCell colSpan={item.rowKind === "spine" ? 3 : 1} className={item.rowKind === "spine" ? "font-medium" : "max-w-[18rem] truncate"}>{item.rowKind === "spine" || item.depth === 0 ? item.name ?? "—" : ""}</TableCell>
+                  {item.rowKind !== "spine" ? <>
+                    <TableCell className="whitespace-nowrap">{item.buyer?.name ?? "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap">{item.seller?.name ?? "—"}</TableCell>
+                  </> : null}
                   <TableCell>
                     {item.depth === 0 && item.stage ? (
-                    <ProjectStageBadge stage={item.stage} label={item.stageLabel} />
+                    <ProjectStageBadge stage={item.stage} label={item.stageLabel} color={item.stageColor} />
                     ) : "—"}
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
@@ -125,30 +143,29 @@ export function ProjectsListView({
                   </TableCell>
                   <TableCell className="hidden sm:table-cell text-right">{item.fileCount}</TableCell>
                   <TableCell className="whitespace-nowrap text-right font-medium">{formatMoney(item.valueCents, item.currency)}</TableCell>
-                </TableRow>
-              ))}
+                  <TableCell className="text-right">
+                    {viewer.isPlatformAdmin && item.rowKind === "spine" ? (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={`Actions for ${item.spineCode}`}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="end" className="w-48 p-1">
+                          <Button asChild variant="ghost" size="sm" className="w-full justify-start">
+                            <Link href={`/projects/${item.id}?createLeg=1`}>
+                              <Plus className="mr-2 h-4 w-4" /> Add leg
+                            </Link>
+                          </Button>
+                        </PopoverContent>
+                      </Popover>
+                    ) : null}
+                  </TableCell>
+                </TableRow>);})}
             </TableBody>
           </Table>
         </div>
       )}
-    </div>
-  );
-}
-
-/** Who you are looking as — organisation + its persona labels. */
-function ViewerStrip({ viewer }: { viewer: ProjectsViewer }) {
-  return (
-    <div className="text-right">
-      <p className="text-sm font-medium">
-        {viewer.organisationName ?? "Timber World Platform"}
-      </p>
-      <p className="text-xs text-muted-foreground">
-        {viewer.isPlatformAdmin
-          ? "Platform admin"
-          : viewer.personas.length > 0
-            ? viewer.personas.map((p) => PERSONA_LABEL[p]).join(" · ")
-            : "No role assigned"}
-      </p>
     </div>
   );
 }

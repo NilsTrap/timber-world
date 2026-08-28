@@ -1,7 +1,6 @@
 import {
   getSession,
   isSuperAdmin,
-  isPlatformAdmin,
   hasMultipleOrganizations,
   getUserEnabledModules,
 } from "@/lib/auth";
@@ -13,7 +12,6 @@ import {
   withProjectsNav,
 } from "./navItems";
 import { isTimberProjectsEnabled } from "@/features/projects/config";
-import { PROJECTS_MODULE } from "@/features/projects/gate";
 import { getActiveOrganisations } from "@/features/shipments/actions/getActiveOrganisations";
 import type { OrganizationOption } from "./OrganizationSelector";
 import type { OrganizationSwitcherOption } from "./OrganizationSwitcher";
@@ -58,21 +56,9 @@ export async function SidebarWrapper() {
     navItems = filterNavItemsByModules(orgUserItems, enabledModules);
   }
 
-  // Timber Projects (staging-gated). The predicate MIRRORS the route gate
-  // (features/projects/gate.ts): platform admin by is_platform_admin, or an
-  // EXACT `projects.view` in the current org — deliberately not the nav's
-  // prefix-matching moduleMatches, which would advertise a link that 404s.
-  let projectsVisible = false;
-  if (isTimberProjectsEnabled() && session) {
-    if (isPlatformAdmin(session)) {
-      projectsVisible = true;
-    } else if (orgId) {
-      const mods =
-        enabledModules ??
-        (portalUserId ? await getUserEnabledModules(portalUserId, orgId) : new Set<string>());
-      projectsVisible = mods.has(PROJECTS_MODULE);
-    }
-  }
+  // Projects is the current portal home for every authenticated user while
+  // the staged feature flag is enabled. Data visibility remains enforced by RLS.
+  const projectsVisible = isTimberProjectsEnabled() && Boolean(session);
   navItems = withProjectsNav(navItems, projectsVisible);
 
   // Fetch organizations for Super Admin org selector

@@ -4,9 +4,8 @@
  *   src/features/projects/__tests__/projects-gate.test.ts`
  *
  * Proves the fail-closed matrix: the flag beats everything (and denies BEFORE
- * auth, so the redirect cannot be used as an oracle), platform admin is the
- * ONLY admin notion, a non-admin needs a current org AND an exact `projects.view`,
- * and organisation role flags never grant anything.
+ * auth, so the redirect cannot be used as an oracle), while every authenticated
+ * user is admitted and row visibility remains RLS-backed.
  */
 import { evaluateProjectsGate, PROJECTS_MODULE, type ProjectsGateInput } from "../gate";
 import { isTimberProjectsEnabled } from "../config";
@@ -47,13 +46,13 @@ function gate(over: Partial<ProjectsGateInput> = {}) {
   });
 }
 
-// ── 1. The flag ──────────────────────────────────────────────────────────────
-eq("flag off + unauthenticated → not_found (never a login redirect oracle)",
-   gate({ flagEnabled: false, authenticated: false }), { ok: false, deny: "not_found" });
-eq("flag off + platform admin → not_found (admins cannot bypass the flag)",
-   gate({ flagEnabled: false, isPlatformAdmin: true }), { ok: false, deny: "not_found" });
-eq("flag off + projects.view user → not_found",
-   gate({ flagEnabled: false }), { ok: false, deny: "not_found" });
+// ── 1. The retired flag no longer gates the canonical portal home ───────────
+eq("legacy flag false + unauthenticated → login",
+   gate({ flagEnabled: false, authenticated: false }), { ok: false, deny: "login" });
+eq("legacy flag false + platform admin → allowed",
+   gate({ flagEnabled: false, isPlatformAdmin: true }), { ok: true, reason: "authenticated" });
+eq("legacy flag false + organisation user → allowed",
+   gate({ flagEnabled: false }), { ok: true, reason: "authenticated" });
 
 // ── 2. Authentication ────────────────────────────────────────────────────────
 eq("flag on + unauthenticated → login",
@@ -63,27 +62,21 @@ eq("flag on + unauthenticated + no org/modules → login (auth wins over org)",
 
 // ── 3. Platform admin ────────────────────────────────────────────────────────
 eq("platform admin with no org and no modules → allowed",
-   gate({ isPlatformAdmin: true, orgId: null, modules: new Set() }), { ok: true, reason: "admin" });
+   gate({ isPlatformAdmin: true, orgId: null, modules: new Set() }), { ok: true, reason: "authenticated" });
 
-// ── 4. Non-admin: org + exact module ─────────────────────────────────────────
-eq("projects.view in a current org → allowed", gate(), { ok: true, reason: "module" });
-eq("projects.view but no current org → not_found",
+// ── 4. Every authenticated user reaches the current portal home ─────────────
+eq("projects.view in a current org → allowed", gate(), { ok: true, reason: "authenticated" });
+eq("non-admin without a current organisation → not_found",
    gate({ orgId: null }), { ok: false, deny: "not_found" });
-eq("no modules at all → not_found",
-   gate({ modules: new Set() }), { ok: false, deny: "not_found" });
-eq("orders.tab.production only → not_found (exact has(), no prefix leniency)",
-   gate({ modules: new Set(["orders.tab.production"]) }), { ok: false, deny: "not_found" });
-eq("orders.view.something → not_found (no prefix leniency the other way either)",
-   gate({ modules: new Set(["orders.view.something"]) }), { ok: false, deny: "not_found" });
-eq("an unrelated module (counterparties.clients) → not_found",
-   gate({ modules: new Set(["counterparties.clients"]) }), { ok: false, deny: "not_found" });
+eq("authenticated user with no modules → allowed",
+   gate({ modules: new Set() }), { ok: true, reason: "authenticated" });
+eq("an unrelated module does not affect access",
+   gate({ modules: new Set(["counterparties.clients"]) }), { ok: true, reason: "authenticated" });
 
 // A legacy `role === "admin"` session carries isPlatformAdmin === false; it must
 // walk the module path like anybody else.
-eq("legacy role-admin (is_platform_admin false) with no modules → not_found",
-   gate({ isPlatformAdmin: false, modules: new Set() }), { ok: false, deny: "not_found" });
-eq("legacy role-admin WITH projects.view → allowed as a module user, not as admin",
-   gate({ isPlatformAdmin: false }), { ok: true, reason: "module" });
+eq("legacy role-admin (is_platform_admin false) with no modules → allowed",
+   gate({ isPlatformAdmin: false, modules: new Set() }), { ok: true, reason: "authenticated" });
 
 // ── 5. Organisation role flags label, they never grant ───────────────────────
 // Compose the two halves the way access.ts does — personas from the org's role
@@ -107,21 +100,21 @@ eq("the three personas really are different",
    [["buyer"], ["trader"], ["supplier"]]);
 eq("…yet the access decision is identical for all three",
    [buyerViewer.decision, traderViewer.decision, supplierViewer.decision],
-   [{ ok: true, reason: "module" }, { ok: true, reason: "module" }, { ok: true, reason: "module" }]);
-eq("a supplier-flagged organisation without projects.view is still denied",
-   viewer({ isSupplier: true }, new Set()).decision, { ok: false, deny: "not_found" });
-eq("a buyer-flagged organisation without projects.view is still denied",
-   viewer({ isCustomer: true }, new Set()).decision, { ok: false, deny: "not_found" });
+   [{ ok: true, reason: "authenticated" }, { ok: true, reason: "authenticated" }, { ok: true, reason: "authenticated" }]);
+eq("a supplier-flagged organisation without projects.view is allowed",
+   viewer({ isSupplier: true }, new Set()).decision, { ok: true, reason: "authenticated" });
+eq("a buyer-flagged organisation without projects.view is allowed",
+   viewer({ isCustomer: true }, new Set()).decision, { ok: true, reason: "authenticated" });
 eq("an organisation with NO role flag but WITH projects.view is allowed",
-   viewer({}, withModule).decision, { ok: true, reason: "module" });
+   viewer({}, withModule).decision, { ok: true, reason: "authenticated" });
 
-// ── 5b. The flag reader itself (clause #1 of the contract) ───────────────────
+// ── 5b. The compatibility helper is permanently enabled ────────────────────
 const savedFlag = process.env.TIMBER_PROJECTS_ENABLED;
 delete process.env.TIMBER_PROJECTS_ENABLED;
-eq("unset env → disabled", isTimberProjectsEnabled(), false);
+eq("unset env → enabled", isTimberProjectsEnabled(), true);
 for (const v of ["", "false", "TRUE", "True", "1", "yes", " true"]) {
   process.env.TIMBER_PROJECTS_ENABLED = v;
-  eq(`env "${v}" → disabled (strict === "true")`, isTimberProjectsEnabled(), false);
+  eq(`env "${v}" → still enabled`, isTimberProjectsEnabled(), true);
 }
 process.env.TIMBER_PROJECTS_ENABLED = "true";
 eq('env "true" → enabled', isTimberProjectsEnabled(), true);
@@ -153,17 +146,17 @@ ok("disabled → the exact same array is returned (zero nav mutation)", off === 
 ok("disabled → no /projects href", !off.some((i) => i.href === "/projects"));
 
 const on = withProjectsNav(baseNav, true);
-eq("enabled → Projects lands directly after Orders",
-   on.map((i) => i.href), ["/dashboard", "/orders", "/projects", "/counterparties"]);
+eq("enabled → Projects is the first item",
+   on.map((i) => i.href), ["/projects", "/dashboard", "/orders", "/counterparties"]);
 eq("enabled → exactly one Projects entry",
    on.filter((i) => i.href === "/projects").length, 1);
 eq("enabled → the input array is not mutated", baseNav.map((i) => i.href),
    ["/dashboard", "/orders", "/counterparties"]);
 eq("idempotent — a second call adds nothing",
    withProjectsNav(on, true).filter((i) => i.href === "/projects").length, 1);
-eq("no Orders item → Projects follows Dashboard",
+eq("no Orders item → Projects is still first",
    withProjectsNav([{ href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard" }], true)
-     .map((i) => i.href), ["/dashboard", "/projects"]);
+     .map((i) => i.href), ["/projects", "/dashboard"]);
 eq("the injected item carries the shared icon/group contract",
    { icon: PROJECTS_NAV_ITEM.iconName, group: PROJECTS_NAV_ITEM.group, label: PROJECTS_NAV_ITEM.label },
    { icon: "Boxes", group: "deals", label: "Projects" });
@@ -177,22 +170,21 @@ ok("ADMIN_NAV_ITEMS still contains no /projects entry",
 // ── 7. Confirmed Nilitto MVP navigation presets ──────────────────────────
 function navFor(modules: string[]) {
   const filtered = filterNavItemsByModules(getOrgUserNavItems(), new Set(modules));
-  return withProjectsNav(filtered, modules.includes(PROJECTS_MODULE)).map((item) => ({
+  return withProjectsNav(filtered, true).map((item) => ({
     label: item.label,
     children: item.children?.map((child) => child.label) ?? [],
   }));
 }
 
-eq("Buyer sees only Dashboard and Projects",
-   navFor(["dashboard.view", PROJECTS_MODULE]),
-   [{ label: "Dashboard", children: [] }, { label: "Projects", children: [] }]);
-eq("Manufacturer/Supplier sees only Dashboard and Projects",
-   navFor(["dashboard.view", PROJECTS_MODULE]),
-   [{ label: "Dashboard", children: [] }, { label: "Projects", children: [] }]);
-eq("Trader sees Dashboard, Projects and both company books",
-   navFor(["dashboard.view", PROJECTS_MODULE, "counterparties.clients", "counterparties.suppliers"]),
+eq("Buyer sees Projects as the only current home",
+   navFor([]),
+   [{ label: "Projects", children: [] }]);
+eq("Manufacturer/Supplier sees Projects as the only current home",
+   navFor([]),
+   [{ label: "Projects", children: [] }]);
+eq("Trader sees Projects first and both company books",
+   navFor(["counterparties.clients", "counterparties.suppliers"]),
    [
-     { label: "Dashboard", children: [] },
      { label: "Projects", children: [] },
      { label: "Companies", children: ["Clients", "Suppliers"] },
    ]);

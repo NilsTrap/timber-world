@@ -97,7 +97,6 @@ export const LEGACY_ORG_CHILDREN: ModuleNavChild[] = [
  * superseded-but-lingering sections.
  */
 export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
-  { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard", group: "dashboard" },
   { href: "/orders", label: "Orders", iconName: "ShoppingCart", group: "orders" },
   { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", group: "catalog", children: [
     { href: "/admin/catalog/products", label: "Products" },
@@ -115,6 +114,7 @@ export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
   { href: "agent-app", label: "UK Agent app", iconName: "Store", group: "agent", collapsible: true,
     children: AGENT_APP_CHILDREN },
   { href: "/admin/settings", label: "Settings", iconName: "Settings", group: "settings", children: [
+    { href: "/admin/settings/project-stages", label: "Project Stages" },
     { href: "/admin/settings/fields", label: "Fields" },
     { href: "/admin/settings/gates", label: "Deal Gates" },
     { href: "/admin/settings/groups", label: "Access Groups" },
@@ -135,7 +135,6 @@ export const ADMIN_NAV_ITEMS: ModuleNavItem[] = [
  */
 export function getOrgUserNavItems(pendingShipmentCount: number = 0): ModuleNavItem[] {
   return [
-    { href: "/dashboard", label: "Dashboard", iconName: "LayoutDashboard", requiresModule: "dashboard.view", group: "dashboard" },
     { href: "/orders", label: "Orders", iconName: "ShoppingCart", requiresModule: "orders.view", group: "orders" },
     { href: "/admin/catalog", label: "Catalogue", iconName: "Layers", requiresModule: "catalogue.view", group: "catalog", children: [
       { href: "/admin/catalog/products", label: "Products" },
@@ -177,8 +176,7 @@ export const PROJECTS_NAV_ITEM: ModuleNavItem = {
 };
 
 /**
- * Insert the Projects item directly after Orders, or after Dashboard for an
- * MVP role that does not have legacy Orders. Pure: the caller decides `enabled` — it must combine the env
+ * Insert Projects as the first navigation item. Pure: the caller decides `enabled` — it must combine the env
  * flag with the SAME access rule the route enforces (platform admin, or an
  * exact `projects.view`), so the nav can never advertise a page that 404s.
  * Returns the input untouched when disabled; never mutates the input array.
@@ -186,11 +184,8 @@ export const PROJECTS_NAV_ITEM: ModuleNavItem = {
 export function withProjectsNav(items: NavItem[], enabled: boolean): NavItem[] {
   if (!enabled) return items;
   if (items.some((item) => item.href === PROJECTS_NAV_ITEM.href)) return items;
-  const ordersIndex = items.findIndex((item) => item.href === "/orders");
-  const dashboardIndex = items.findIndex((item) => item.href === "/dashboard");
   const out = [...items];
-  const insertAt = ordersIndex >= 0 ? ordersIndex + 1 : dashboardIndex >= 0 ? dashboardIndex + 1 : 0;
-  out.splice(insertAt, 0, PROJECTS_NAV_ITEM);
+  out.unshift(PROJECTS_NAV_ITEM);
   return out;
 }
 

@@ -268,7 +268,7 @@ for (const [label, rendered] of [
 }
 
 // ── The payload is an allow-list, not a spread ───────────────────────────────
-const ITEM_KEYS = ["id", "reference", "name", "spineCode", "groupKey", "depth", "stage", "stageLabel", "direction", "counterparty",
+const ITEM_KEYS = ["id", "rowKind", "reference", "name", "spineCode", "groupKey", "depth", "stage", "stageLabel", "direction", "counterparty",
   "buyer", "seller", "deliveryDeadline", "fileCount", "currency", "valueCents"];
 const DETAIL_KEYS = [...ITEM_KEYS, "displaySpineCode", "otherParties", "terms", "lines", "files", "folders", "fileCounts", "notes"];
 ok("list item keys ⊆ whitelist", Object.keys(admin.item).every((k) => ITEM_KEYS.includes(k)),
