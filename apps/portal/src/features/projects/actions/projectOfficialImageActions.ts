@@ -40,11 +40,9 @@ export async function addProjectOfficialImage(projectId: string, fileId: string)
   if (!project?.spine_id) return { success:false,error:"Official images belong to the original project leg",code:"VALIDATION_ERROR" };
   if ((project.spines as unknown as {origin_order_id:string|null}|null)?.origin_order_id!==projectId) return { success:false,error:"Official images can only be managed on the original project leg",code:"FORBIDDEN" };
   if (!await mayManageOfficialImages(access, project)) return { success:false,error:"Official images can only be managed by the responsible trader",code:"FORBIDDEN" };
-  const { data: file } = await access.actor.db.from("order_files").select("id,mime_type,lifecycle_status")
-    .eq("id",fileId).eq("order_id",projectId).eq("category","project").eq("file_variant","original").maybeSingle();
+  const { data: file } = await access.actor.db.from("order_files").select("id,mime_type,lifecycle_status").eq("id",fileId).eq("order_id",projectId).eq("category","project").eq("file_variant","original").maybeSingle();
   if (!file || file.lifecycle_status!=="ready" || !String(file.mime_type??"").startsWith("image/")) return { success:false,error:"Choose a completed image upload",code:"VALIDATION_ERROR" };
-  const { data: existingData, error: existingError } = await access.actor.db.from("order_files").select("id,thumbnail_sort_order")
-    .eq("order_id",projectId).eq("is_thumbnail",true).order("thumbnail_sort_order");
+  const { data: existingData, error: existingError } = await access.actor.db.from("order_files").select("id,thumbnail_sort_order").eq("order_id",projectId).eq("is_thumbnail",true).order("thumbnail_sort_order");
   if (existingError) return { success:false,error:"Could not check project image availability",code:"UPDATE_FAILED" };
   const existing = (existingData??[]) as Array<{id:string;thumbnail_sort_order:number|null}>;
   if (existing.some((row)=>row.id===fileId)) return { success:true,data:{position:Number(existing.find((row)=>row.id===fileId)?.thumbnail_sort_order??1)} };
@@ -66,6 +64,27 @@ export async function removeProjectOfficialImage(projectId: string, fileId: stri
   if (!await mayManageOfficialImages(access, project)) return { success:false,error:"Official images can only be managed by the responsible trader",code:"FORBIDDEN" };
   const { data: updated,error } = await access.actor.db.from("order_files").update({is_thumbnail:false,thumbnail_sort_order:null}).eq("id",fileId).eq("order_id",projectId).eq("category","project").eq("file_variant","original").eq("is_thumbnail",true).select("id").maybeSingle();
   if (error||!updated) return { success:false,error:"Could not remove official image",code:"UPDATE_FAILED" };
+  const { data: remaining } = await access.actor.db.from("order_files").select("id").eq("order_id",projectId).eq("is_thumbnail",true).order("thumbnail_sort_order").order("created_at");
+  for (const [index, image] of (remaining??[]).entries()) await access.actor.db.from("order_files").update({thumbnail_sort_order:index+1}).eq("id",image.id);
+  revalidatePath(`/projects/${projectId}`); revalidatePath("/projects");
+  return { success:true,data:null };
+}
+
+export async function setProjectOfficialImagePrimary(projectId: string, fileId: string): Promise<ActionResult<null>> {
+  if (!uuid.safeParse(projectId).success || !uuid.safeParse(fileId).success) return { success:false,error:"Image unavailable",code:"NOT_FOUND" };
+  const access = await requireVisibleProject(projectId, true);
+  if (!access.ok) return { success:false,error:access.error,code:access.code };
+  const { data: project } = await access.actor.db.from("orders").select("id,spine_id,seller_organisation_id,spines!orders_spine_id_fkey(origin_order_id)").eq("id",projectId).maybeSingle();
+  if (!project?.spine_id || (project.spines as unknown as {origin_order_id:string|null}|null)?.origin_order_id!==projectId) return { success:false,error:"Official images can only be managed on the original project leg",code:"FORBIDDEN" };
+  if (!await mayManageOfficialImages(access, project)) return { success:false,error:"Official images can only be managed by the responsible trader",code:"FORBIDDEN" };
+  const { data: images, error: readError } = await access.actor.db.from("order_files").select("id").eq("order_id",projectId).eq("category","project").eq("file_variant","original").eq("lifecycle_status","ready").eq("is_thumbnail",true).order("thumbnail_sort_order").order("created_at");
+  const imageRows=(images??[]) as Array<{id:string}>;
+  if (readError || !imageRows.some((image)=>image.id===fileId)) return { success:false,error:"Image unavailable",code:"NOT_FOUND" };
+  const ordered=[imageRows.find((image)=>image.id===fileId)!,...imageRows.filter((image)=>image.id!==fileId)];
+  for (const [index, image] of ordered.entries()) {
+    const { error } = await access.actor.db.from("order_files").update({thumbnail_sort_order:index+1}).eq("id",image.id).eq("order_id",projectId);
+    if (error) return { success:false,error:"Could not change the default image",code:"UPDATE_FAILED" };
+  }
   revalidatePath(`/projects/${projectId}`); revalidatePath("/projects");
   return { success:true,data:null };
 }
