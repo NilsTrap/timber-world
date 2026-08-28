@@ -12,6 +12,7 @@ import {
   Loader2,
   Pencil,
   RotateCcw,
+  Search,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -25,7 +26,13 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  Input,
   SectionHeader,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Table,
   TableBody,
   TableCell,
@@ -56,6 +63,7 @@ import {
   type ProjectTreeNode,
 } from "../filePaths";
 import type { ProjectFileMeta, ProjectFolderMeta } from "../types";
+import { ALL_FILE_TYPES, filterProjectFiles, projectFileExtensions, projectFileTypeLabel } from "../services/projectFileFilters";
 import { ProjectDropSurface } from "./ProjectDropSurface";
 import { ProjectFilePreview, type ProjectPreviewSource } from "./ProjectFilePreview";
 import { ProjectFileTypeIcon } from "./projectFileTypes";
@@ -91,6 +99,8 @@ export function ProjectFileWorkspace({
   const [pending, setPending] = useState<PendingUpload[]>([]);
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [fileSearch, setFileSearch] = useState("");
+  const [fileType, setFileType] = useState(ALL_FILE_TYPES);
   const [message, setMessage] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadActivity, setUploadActivity] = useState(0);
@@ -110,17 +120,16 @@ export function ProjectFileWorkspace({
     }
     return [...paths].sort((a, b) => a.localeCompare(b));
   }, [files, folders]);
-  const visibleFiles = useMemo(
-    () =>
-      selectedFolder == null
-        ? files
-        : files.filter((file) => {
-            const parent = file.relativePath.includes("/") ? file.relativePath.slice(0, file.relativePath.lastIndexOf("/")) : "";
-            return parent === selectedFolder;
-          }),
-    [files, selectedFolder],
-  );
+  const fileExtensions = useMemo(() => projectFileExtensions(files), [files]);
+  const visibleFiles = useMemo(() => filterProjectFiles(files, selectedFolder, fileType, fileSearch), [fileSearch, fileType, files, selectedFolder]);
+  const filtersActive = fileSearch.trim().length > 0 || fileType !== ALL_FILE_TYPES;
+  const emptyFilesCopy = filtersActive ? "No files match these filters." : selectedFolder ? "No files in this folder." : "No files in this workspace.";
   const hasActiveUploads = pending.some((item) => item.status === "uploading") || uploadInteractionActive;
+
+  useEffect(() => setSelectedFileIds(new Set()), [fileSearch, fileType, selectedFolder]);
+  useEffect(() => {
+    if (fileType !== ALL_FILE_TYPES && !fileExtensions.includes(fileType)) setFileType(ALL_FILE_TYPES);
+  }, [fileExtensions, fileType]);
 
   useEffect(() => {
     if (!uploadOpen || hasActiveUploads) return;
@@ -431,14 +440,30 @@ export function ProjectFileWorkspace({
           {files.length > 0 ? (
             <label className="ml-auto flex items-center gap-2 text-sm">
               <Checkbox
-                checked={selectedFileIds.size === files.length ? true : selectedFileIds.size > 0 ? "indeterminate" : false}
-                onCheckedChange={(checked) => setSelectedFileIds(checked === true ? new Set(files.map((file) => file.id)) : new Set())}
+                checked={visibleFiles.length > 0 && selectedFileIds.size === visibleFiles.length ? true : selectedFileIds.size > 0 ? "indeterminate" : false}
+                onCheckedChange={(checked) => setSelectedFileIds(checked === true ? new Set(visibleFiles.map((file) => file.id)) : new Set())}
               />
               Select all
             </label>
           ) : null}
         </div>
       ) : null}
+      <div className="grid gap-2 rounded-lg border bg-card p-2 sm:grid-cols-[minmax(0,1fr)_14rem_auto]">
+        <label className="relative">
+          <span className="sr-only">Search files by name</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="pl-9" type="search" value={fileSearch} onChange={(event) => setFileSearch(event.target.value)} placeholder="Search file name" aria-label="Search files by name" />
+        </label>
+        <Select value={fileType} onValueChange={setFileType}>
+          <SelectTrigger aria-label="Filter by file type"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_FILE_TYPES}>All file types</SelectItem>
+            {fileExtensions.map((extension) => <SelectItem key={extension} value={extension}>{projectFileTypeLabel(extension)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {filtersActive ? <Button type="button" variant="outline" onClick={() => { setFileSearch(""); setFileType(ALL_FILE_TYPES); }}>Clear</Button> : null}
+        <p className="sr-only" aria-live="polite">{visibleFiles.length} file(s) shown</p>
+      </div>
       {pending.length > 0 ? (
         <div className="rounded-lg border bg-card divide-y">
           {pending.map((item) => (
@@ -474,12 +499,13 @@ export function ProjectFileWorkspace({
           <div className="hidden overflow-x-auto rounded-lg border bg-card md:block">
             <Table dense>
               <TableHeader><TableRow><TableHead className="w-10"><span className="sr-only">Select</span></TableHead><TableHead>Name</TableHead><TableHead>Clean</TableHead><TableHead>Shared</TableHead><TableHead>Size</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-              <TableBody>{visibleFiles.map((file) => <WorkspaceRow key={file.id} file={file} selected={selectedFileIds.has(file.id)} onSelected={(checked) => setSelectedFileIds((current) => { const next = new Set(current); if (checked) next.add(file.id); else next.delete(file.id); return next; })} canWrite={canWrite} onInfo={setFileInfo} onPreview={openPreview} onCleanPreview={openCleanPreview} onShared={toggleShared} onDownload={download} onRename={renameFile} onDelete={deleteFile} />)}</TableBody>
+              <TableBody>{visibleFiles.length ? visibleFiles.map((file) => <WorkspaceRow key={file.id} file={file} selected={selectedFileIds.has(file.id)} onSelected={(checked) => setSelectedFileIds((current) => { const next = new Set(current); if (checked) next.add(file.id); else next.delete(file.id); return next; })} canWrite={canWrite} onInfo={setFileInfo} onPreview={openPreview} onCleanPreview={openCleanPreview} onShared={toggleShared} onDownload={download} onRename={renameFile} onDelete={deleteFile} />) : <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">{emptyFilesCopy}</TableCell></TableRow>}</TableBody>
             </Table>
           </div>
           <div className="rounded-lg border bg-card divide-y md:hidden">
-            <MobileFolderRows nodes={tree} canWrite={canWrite} onRename={renameFolder} onMove={moveFolder} onDelete={deleteFolder} />
-            {files.map((file) => (
+            <button type="button" className={`flex min-h-12 w-full items-center gap-2 p-3 text-left text-sm ${selectedFolder === null ? "bg-muted font-medium" : ""}`} onClick={() => setSelectedFolder(null)}><FolderOpen className="h-4 w-4 text-amber-600" /> All files</button>
+            <MobileFolderRows nodes={tree} selected={selectedFolder} onSelect={setSelectedFolder} canWrite={canWrite} onRename={renameFolder} onMove={moveFolder} onDelete={deleteFolder} />
+            {visibleFiles.length === 0 ? <div className="p-6 text-center text-sm text-muted-foreground">{emptyFilesCopy}</div> : visibleFiles.map((file) => (
               <div
                 key={file.id}
                 className={`flex items-center gap-3 p-3 ${isPreviewableProjectFile(file.fileName, file.mimeType) ? "cursor-pointer hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" : ""}`}
@@ -521,8 +547,8 @@ export function ProjectFileWorkspace({
   );
 }
 
-function MobileFolderRows({ nodes, canWrite, onRename, onMove, onDelete, depth = 0 }: { nodes: ProjectTreeNode[]; canWrite: boolean; onRename: (path: string) => void; onMove: (path: string) => void; onDelete: (path: string) => void; depth?: number }) {
-  return <>{nodes.filter((node) => node.kind === "folder").map((node) => <div key={node.path}><div className="flex min-h-12 items-center gap-2 p-2" style={{ paddingLeft: `${8 + depth * 12}px` }}><Folder className="h-4 w-4 shrink-0 text-amber-600" /><p className="min-w-0 flex-1 truncate text-sm font-medium" title={node.path}>{node.name}</p>{canWrite ? <div className="flex shrink-0"><Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={`Rename folder ${node.path}`} onClick={() => onRename(node.path)}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={`Move folder ${node.path}`} onClick={() => onMove(node.path)}><FolderInput className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={`Delete folder ${node.path}`} onClick={() => onDelete(node.path)}><Trash2 className="h-4 w-4" /></Button></div> : null}</div><MobileFolderRows nodes={node.children} canWrite={canWrite} onRename={onRename} onMove={onMove} onDelete={onDelete} depth={depth + 1} /></div>)}</>;
+function MobileFolderRows({ nodes, selected, onSelect, canWrite, onRename, onMove, onDelete, depth = 0 }: { nodes: ProjectTreeNode[]; selected: string | null; onSelect: (path: string) => void; canWrite: boolean; onRename: (path: string) => void; onMove: (path: string) => void; onDelete: (path: string) => void; depth?: number }) {
+  return <>{nodes.filter((node) => node.kind === "folder").map((node) => <div key={node.path}><div className={`flex min-h-12 items-center gap-2 p-2 ${selected === node.path ? "bg-muted" : ""}`} style={{ paddingLeft: `${8 + depth * 12}px` }}><button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => onSelect(node.path)}><Folder className="h-4 w-4 shrink-0 text-amber-600" /><span className="truncate text-sm font-medium" title={node.path}>{node.name}</span></button>{canWrite ? <div className="flex shrink-0"><Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={`Rename folder ${node.path}`} onClick={() => onRename(node.path)}><Pencil className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={`Move folder ${node.path}`} onClick={() => onMove(node.path)}><FolderInput className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" className="h-11 w-11" aria-label={`Delete folder ${node.path}`} onClick={() => onDelete(node.path)}><Trash2 className="h-4 w-4" /></Button></div> : null}</div><MobileFolderRows nodes={node.children} selected={selected} onSelect={onSelect} canWrite={canWrite} onRename={onRename} onMove={onMove} onDelete={onDelete} depth={depth + 1} /></div>)}</>;
 }
 
 function TreeNodes({ nodes, selected, onSelect, canWrite, onRename, onMove, onDelete, depth = 0 }: { nodes: ProjectTreeNode[]; selected: string | null; onSelect: (path: string) => void; canWrite: boolean; onRename: (path: string) => void; onMove: (path: string) => void; onDelete: (path: string) => void; depth?: number }) {

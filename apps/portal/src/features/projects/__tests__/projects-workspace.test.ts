@@ -19,6 +19,7 @@ import {
 } from "../filePaths";
 import { sanitizeProjectHtml } from "../components/viewers/sanitizeProjectHtml";
 import { isValidOcctResult } from "../components/viewers/validateOcctResult";
+import { ALL_FILE_TYPES, filterProjectFiles, NO_FILE_EXTENSION, projectFileExtension, projectFileExtensions, projectFileTypeValue } from "../services/projectFileFilters";
 
 let passed = 0;
 let failed = 0;
@@ -29,6 +30,27 @@ function eq(label: string, actual: unknown, expected: unknown) {
 function ok(label: string, value: boolean) {
   if (value) passed++; else { failed++; console.error(`✗ ${label}`); }
 }
+
+const filterFiles = [
+  { fileName: "Assembly.STEP", relativePath: "CAD/Assembly.STEP" },
+  { fileName: "drawing.dxf", relativePath: "CAD/drawing.dxf" },
+  { fileName: "offer.pdf", relativePath: "Documents/offer.pdf" },
+  { fileName: ".DS_Store", relativePath: "CAD/.DS_Store" },
+];
+eq("file extension matching is case-insensitive", projectFileExtension("Assembly.STEP"), "step");
+eq("dotfiles are treated as having no extension", projectFileExtension(".DS_Store"), null);
+eq("project file extensions are unique and sorted", projectFileExtensions(filterFiles), [projectFileTypeValue("dxf"), projectFileTypeValue("pdf"), projectFileTypeValue("step"), NO_FILE_EXTENSION]);
+eq("file filters combine current folder, type and partial name", filterProjectFiles(filterFiles, "CAD", projectFileTypeValue("step"), "sembl"), [filterFiles[0]]);
+eq("all-types search remains scoped to the selected folder", filterProjectFiles(filterFiles, "Documents", ALL_FILE_TYPES, "off"), [filterFiles[2]]);
+eq("folder scope uses exact immediate parents", filterProjectFiles([...filterFiles, { fileName: "nested.step", relativePath: "CAD/Nested/nested.step" }, { fileName: "other.step", relativePath: "CAD-old/other.step" }], "CAD", ALL_FILE_TYPES, ""), [filterFiles[0], filterFiles[1], filterFiles[3]]);
+eq("root scope includes all descendants", filterProjectFiles(filterFiles, null, ALL_FILE_TYPES, ""), filterFiles);
+eq("multiple dots use the final extension", projectFileExtension("drawing.final.DXF"), "dxf");
+eq("trailing dots have no extension", projectFileExtension("drawing."), null);
+const reservedFiles = [{ fileName: "one.all", relativePath: "one.all" }, { fileName: "two.none", relativePath: "two.none" }, { fileName: "README", relativePath: "README" }];
+eq("reserved values do not collide with real extensions", projectFileExtensions(reservedFiles), [projectFileTypeValue("all"), projectFileTypeValue("none"), NO_FILE_EXTENSION]);
+eq("real all extension filters independently", filterProjectFiles(reservedFiles, null, projectFileTypeValue("all"), ""), [reservedFiles[0]]);
+eq("real none extension filters independently", filterProjectFiles(reservedFiles, null, projectFileTypeValue("none"), ""), [reservedFiles[1]]);
+eq("extensionless filter remains independent", filterProjectFiles(reservedFiles, null, NO_FILE_EXTENSION, ""), [reservedFiles[2]]);
 
 // Creation is rights AND persona gated. Flags alone never grant the action.
 eq("buyer + effective deal:create can create", evaluateProjectCapabilities({ isPlatformAdmin: false, hasDealCreate: true, organisationId: "org", personas: ["buyer"] }), { canWriteFiles: true, canCreateProject: true, createRoles: ["buyer"] });
@@ -161,6 +183,9 @@ ok("abandoned signed uploads expire through a delayed cleanup queue", folderMigr
 ok("the inherited buyer role can create and upload its own project files", buyerAccessMigration.includes("WHERE key = 'client'") && buyerAccessMigration.includes("'action', 'deal', 'create'"));
 ok("shared file-folder namespace is serialized", folderMigration.includes("project_files_namespace_guard") && folderMigration.includes("pg_advisory_xact_lock"));
 ok("workspace exposes create, move and bulk delete controls", workspace.includes("createProjectFolderAction") && workspace.includes("moveProjectFolderAction") && workspace.includes("deleteProjectFilesAction"));
+ok("file filters are outside write-only controls and apply to desktop and mobile results", workspace.includes('aria-label="Search files by name"') && workspace.includes('aria-label="Filter by file type"') && (workspace.match(/visibleFiles\.map/g)?.length ?? 0) >= 3);
+ok("filtered bulk selection is constrained to visible files", workspace.includes("new Set(visibleFiles.map((file) => file.id))") && workspace.includes("setSelectedFileIds(new Set())"));
+ok("mobile folder navigation updates the active folder scope", workspace.includes("<MobileFolderRows nodes={tree} selected={selectedFolder} onSelect={setSelectedFolder}"));
 ok("admin buyer options are not partner-book scoped", projectLoader.includes('if (!admin) {') && !projectLoader.includes('if (!admin || side === "buyer")'));
 ok("selected leg projects its own absolute buyer and seller", projectLoader.includes("const buyer = partyRef(raw.buyer") && projectLoader.includes("const seller = partyRef(raw.seller") && !projectLoader.includes("resolveRootSellingProject") && !projectLoader.includes("downstreamParties"));
 ok("same-spine leg options are loaded only for platform admins", projectLoader.includes("a.isPlatformAdmin && raw.spineId") && projectLoader.includes('eq("spine_id", spineId)') && projectLoader.includes('leg.lifecycle_stage !== "cancelled" || leg.id === currentProjectId'));
