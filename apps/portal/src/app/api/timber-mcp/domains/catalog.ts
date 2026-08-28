@@ -276,7 +276,7 @@ export const catalogTools: ToolDef[] = [
   {
     name: "timber_save_field_assignment",
     description:
-      "Assign a global field to a category (create; omit id) or update its per-category settings (pass id): applies_to ('product' | 'variant' | 'process'), the R6 show flags (show_in_filter / show_in_detail / show_in_price_list), is_required, sort_order. A field already assigned to the category → duplicate error. Admin-only, FULL token.",
+      "Assign a global field to a category (create; omit id) or update its per-category settings (pass id): applies_to ('product' | 'variant'), the R6 show flags (show_in_filter / show_in_detail / show_in_price_list), is_required, sort_order. A field already assigned to the category → duplicate error. Admin-only, FULL token.",
     readOnly: false,
     lifecycle: "catalog",
     inputSchema: {
@@ -285,7 +285,7 @@ export const catalogTools: ToolDef[] = [
         id: { type: "string", description: "Assignment UUID to update. Omit to create." },
         category_id: { type: "string" },
         field_id: { type: "string" },
-        applies_to: { type: "string", enum: ["product", "variant", "process"], description: "Field scope." },
+        applies_to: { type: "string", description: "'product' | 'variant'." },
         show_in_filter: { type: "boolean" },
         show_in_detail: { type: "boolean" },
         show_in_price_list: { type: "boolean" },

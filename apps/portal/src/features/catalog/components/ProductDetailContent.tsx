@@ -42,7 +42,6 @@ interface Props {
   unit: PricingUnit | null;
   categoryDefaultPriceEurCents: number | null;
   productFields: CategoryField[];
-  processFields: CategoryField[];
   variantFields: CategoryField[];
   variants: CatalogVariant[];
   altCurrencies: CatalogCurrency[];
@@ -57,7 +56,6 @@ export function ProductDetailContent({
   unit,
   categoryDefaultPriceEurCents,
   productFields,
-  processFields,
   variantFields,
   variants: initialVariants,
   altCurrencies,
@@ -255,23 +253,6 @@ export function ProductDetailContent({
               <h2 className="font-semibold">Product Attributes</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {productFields.map((field) => (
-                  <DynamicField
-                    key={field.id}
-                    field={field}
-                    value={fieldValues[field.id]}
-                    onChange={(val) => setFieldValues((prev) => ({ ...prev, [field.id]: val }))}
-                    scope="product"
-                    entityId={product.id}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          {processFields.length > 0 && (
-            <div className="rounded-lg border bg-card p-5 space-y-3">
-              <h2 className="font-semibold">Processes</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {processFields.map((field) => (
                   <DynamicField
                     key={field.id}
                     field={field}
@@ -734,3 +715,4 @@ function VariantImageSection({ variantId, initialImages }: { variantId: string; 
     </div>
   );
 }
+

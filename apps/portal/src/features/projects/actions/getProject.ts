@@ -20,7 +20,7 @@ import { loadSpineOriginAllocation } from "../services/spineOriginSpecification"
 import { canOfferSellerCompletion, openRfqAvailability } from "../services/projectRfq";
 import { purchaseLegAllowsBuyerEdit, toEligiblePartyOption, type PartyOptionRow } from "../services/projectPartyOptions";
 import type { ProjectDetail, ProjectLegOption, ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace, ProjectsResult, ProjectsViewer } from "../types";
-import type { DealLineComponentLike, DealProcessRequirementLike } from "../projection";
+import type { DealLineComponentLike } from "../projection";
 import { getProjectStageConfiguration, type ProjectStageConfiguration } from "../../project-stages/stages";
 
 export type GetProjectResult = ProjectsResult<{
@@ -87,7 +87,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
 
   const walled = projectDealView(res.data, a.access, a.orgId);
 
-  const [personasByOrgId, files, folders, fileCounts, viewer, lineComponents, processRequirements, spineLookup] = await Promise.all([
+  const [personasByOrgId, files, folders, fileCounts, viewer, lineComponents, spineLookup] = await Promise.all([
     loadOrgPersonas(a.db, [a.orgId, raw.seller.id, raw.buyer.id, raw.customer.id, raw.producer.id]),
     listProjectFiles(a.db, projectId, a.isPlatformAdmin || raw.seller.id === a.orgId),
     listProjectFolders(a.db, projectId),
@@ -96,7 +96,6 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     a.access.domainVisible("deal_terms")
       ? loadLineComponents(a.db, raw.lineItems.map((line) => line.id).filter((id): id is string => Boolean(id)))
       : Promise.resolve([]),
-    loadProcessRequirements(a.db, raw.lineItems.map((line) => line.id).filter((id): id is string => Boolean(id))),
     walled.spineId
       ? a.db.from("spines").select("code,origin_order_id").eq("id", walled.spineId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -120,7 +119,6 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   const project = toProjectDetail(raw, walled, ctx, {
     lines: walled.lineItems ?? [],
     lineComponents,
-    processRequirements,
     files,
     folders,
     fileCounts: fileCounts.get(projectId) ?? { total: 0 },
@@ -280,36 +278,6 @@ async function loadLineComponents(db: DbClient, lineIds: string[]): Promise<Deal
     unitCost: Number(row.unit_cost),
     totalCostCents: Number(row.total_cost_cents),
   }));
-}
-
-async function loadProcessRequirements(db: DbClient, lineIds: string[]): Promise<DealProcessRequirementLike[]> {
-  if (lineIds.length === 0) return [];
-  const { data: lineRows, error: lineError } = await db.from("order_line_items")
-    .select("id, origin_line_item_id")
-    .in("id", lineIds);
-  if (lineError) throw new Error("Could not resolve process requirement origins");
-  const origins = new Map<string, string>();
-  for (const row of (lineRows ?? []) as Array<{ id: string; origin_line_item_id: string | null }>) {
-    origins.set(row.id, row.origin_line_item_id ?? row.id);
-  }
-  const sourceIds = [...new Set(origins.values())];
-  const { data, error } = await db.from("order_line_item_process_requirements")
-    .select("id, order_line_item_id, field_key, name, value, unit, sort_order")
-    .in("order_line_item_id", sourceIds)
-    .order("sort_order");
-  if (error) throw new Error("Could not load process requirements");
-  return [...origins.entries()].flatMap(([lineId, sourceId]) =>
-    ((data ?? []) as Array<Record<string, unknown>>)
-      .filter((row) => row.order_line_item_id === sourceId)
-      .map((row) => ({
-        id: row.id as string,
-        orderLineItemId: lineId,
-        fieldKey: row.field_key as string,
-        name: row.name as string,
-        value: row.value as string,
-        unit: row.unit as string | null,
-      })),
-  );
 }
 
 function partyRef(row: { id: string | null; code: string | null; name: string | null }, personas: ReadonlyMap<string, ProjectPartyRef["personas"]>): ProjectPartyRef | null {
