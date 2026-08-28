@@ -44,7 +44,7 @@ context: ['_bmad-output/project-context.md']
 - [x] Add atomic RFQ-open and RFQ-award stage changes.
 - [x] Refresh the project header after opening an RFQ.
 - [x] Add regression assertions and run project gates.
-- [x] Apply the migration and deploy staging.
+- [x] Apply the shared database migration; keep the frontend change local until the next approved deployment.
 
 **Acceptance Criteria:**
 - Given a valid RFQ request, when it is created, then the project header and list show Request for quotation.
