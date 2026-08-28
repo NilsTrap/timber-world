@@ -28,7 +28,9 @@ export type GetProjectResult = ProjectsResult<{
   viewer: ProjectsViewer;
   partyWorkspace: ProjectPartyWorkspace;
   canEditSpecification: boolean;
+  canViewOfficialImages: boolean;
   canManageOfficialImages: boolean;
+  canRemoveOfficialImages: boolean;
   isRfqCandidate: boolean;
   stageConfiguration: ProjectStageConfiguration;
   stageUpdatedAt: string | null;
@@ -66,7 +68,9 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
         },
         partyWorkspace: emptyPartyWorkspace(),
         canEditSpecification: false,
+        canViewOfficialImages: false,
         canManageOfficialImages: false,
+        canRemoveOfficialImages: false,
         isRfqCandidate: true,
         stageConfiguration: { current: stageConfiguration.current, selectable: [] },
         stageUpdatedAt: null,
@@ -153,8 +157,11 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     dealKind: raw.dealKind,
   });
   const originOrderId = (spineLookup.data as { origin_order_id?: string | null } | null)?.origin_order_id ?? null;
-  const canManageOfficialImages = originOrderId === projectId
+  const canViewOfficialImages = originOrderId === projectId;
+  const canManageOfficialImages = canViewOfficialImages
     && (a.isPlatformAdmin || (raw.seller.id === a.orgId && viewer.personas.includes("trader")));
+  const canRemoveOfficialImages = canViewOfficialImages
+    && (a.isPlatformAdmin || raw.buyer.id === a.orgId || (raw.seller.id === a.orgId && viewer.personas.includes("trader")));
   const canEditBuyer = isDraft && purchaseLegAllowsBuyerEdit({ isPlatformAdmin: a.isPlatformAdmin, dealKind: raw.dealKind, buyerMissing: !buyer })
     && (a.isPlatformAdmin || (raw.seller.id === a.orgId && viewer.canCreateProject && viewer.createRoles.includes("trader")))
     && (a.isPlatformAdmin || a.access.domainVisible("customer_identity"));
@@ -208,7 +215,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   const stageConfiguration = await getProjectStageConfiguration(a.db, raw.lifecycleStage, viewer);
   project.stageLabel = stageConfiguration.current?.label ?? project.stageLabel;
 
-  return { ok: true, project, viewer, partyWorkspace, canEditSpecification, canManageOfficialImages, isRfqCandidate: false, stageConfiguration, stageUpdatedAt: raw.updatedAt };
+  return { ok: true, project, viewer, partyWorkspace, canEditSpecification, canViewOfficialImages, canManageOfficialImages, canRemoveOfficialImages, isRfqCandidate: false, stageConfiguration, stageUpdatedAt: raw.updatedAt };
 }
 
 type CandidateSnapshot = {

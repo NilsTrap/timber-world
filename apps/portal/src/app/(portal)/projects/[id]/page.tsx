@@ -40,5 +40,5 @@ export default async function ProjectDetailPage({
   const candidates = canManageRfq
     ? await getEligibleProjectRfqCandidates(id)
     : null;
-  return <ProjectDetailView project={res.project} viewer={res.viewer} partyWorkspace={res.partyWorkspace} canEditSpecification={res.canEditSpecification} canManageOfficialImages={res.canManageOfficialImages} isRfqCandidate={res.isRfqCandidate} initialRfqCandidates={candidates?.success ? candidates.data : []} canManageRfq={canManageRfq} openCreateLeg={openCreateLeg} stageConfiguration={res.stageConfiguration} stageUpdatedAt={res.stageUpdatedAt} />;
+  return <ProjectDetailView project={res.project} viewer={res.viewer} partyWorkspace={res.partyWorkspace} canEditSpecification={res.canEditSpecification} canViewOfficialImages={res.canViewOfficialImages} canManageOfficialImages={res.canManageOfficialImages} canRemoveOfficialImages={res.canRemoveOfficialImages} isRfqCandidate={res.isRfqCandidate} initialRfqCandidates={candidates?.success ? candidates.data : []} canManageRfq={canManageRfq} openCreateLeg={openCreateLeg} stageConfiguration={res.stageConfiguration} stageUpdatedAt={res.stageUpdatedAt} />;
 }

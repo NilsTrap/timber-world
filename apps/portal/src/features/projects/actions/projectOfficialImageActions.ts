@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { ActionResult } from "../../orders/types";
 import { requireVisibleProject } from "./_projectAccess";
 import { nextOfficialImagePosition } from "../officialImagePolicy";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const uuid = z.string().uuid();
 
@@ -13,6 +14,13 @@ async function mayManageOfficialImages(access: Extract<Awaited<ReturnType<typeof
   if (!access.actor.orgId || project.seller_organisation_id !== access.actor.orgId) return false;
   const { data } = await access.actor.db.from("organisations").select("is_trader").eq("id", access.actor.orgId).maybeSingle();
   return data?.is_trader === true;
+}
+
+async function mayRemoveOfficialImages(access: Extract<Awaited<ReturnType<typeof requireVisibleProject>>, { ok: true }>, project: { buyer_organisation_id: string | null; seller_organisation_id: string | null }) {
+  if (access.actor.isPlatformAdmin) return true;
+  if (!access.actor.orgId) return false;
+  if (project.buyer_organisation_id === access.actor.orgId) return true;
+  return mayManageOfficialImages(access, project);
 }
 
 export async function checkProjectOfficialImageSlot(projectId: string): Promise<ActionResult<{ position: number }>> {
@@ -56,16 +64,24 @@ export async function addProjectOfficialImage(projectId: string, fileId: string)
 
 export async function removeProjectOfficialImage(projectId: string, fileId: string): Promise<ActionResult<null>> {
   if (!uuid.safeParse(projectId).success || !uuid.safeParse(fileId).success) return { success:false,error:"Image unavailable",code:"NOT_FOUND" };
-  const access = await requireVisibleProject(projectId, true);
+  const access = await requireVisibleProject(projectId, false);
   if (!access.ok) return { success:false,error:access.error,code:access.code };
-  const { data: project } = await access.actor.db.from("orders").select("id,spine_id,seller_organisation_id,spines!orders_spine_id_fkey(origin_order_id)").eq("id",projectId).maybeSingle();
+  const { data: project } = await access.actor.db.from("orders").select("id,spine_id,buyer_organisation_id,seller_organisation_id,spines!orders_spine_id_fkey(origin_order_id)").eq("id",projectId).maybeSingle();
   if (!project?.spine_id) return { success:false,error:"Official images belong to the original project leg",code:"VALIDATION_ERROR" };
   if ((project.spines as unknown as {origin_order_id:string|null}|null)?.origin_order_id!==projectId) return { success:false,error:"Official images can only be managed on the original project leg",code:"FORBIDDEN" };
-  if (!await mayManageOfficialImages(access, project)) return { success:false,error:"Official images can only be managed by the responsible trader",code:"FORBIDDEN" };
-  const { data: updated,error } = await access.actor.db.from("order_files").update({is_thumbnail:false,thumbnail_sort_order:null}).eq("id",fileId).eq("order_id",projectId).eq("category","project").eq("file_variant","original").eq("is_thumbnail",true).select("id").maybeSingle();
+  if (!await mayRemoveOfficialImages(access, project)) return { success:false,error:"Official images can only be removed by the original buyer or responsible trader",code:"FORBIDDEN" };
+  // The authenticated RLS update policy intentionally remains trader-only. Once
+  // the explicit project-role check above passes, use the admin client narrowly
+  // for designation updates so an original buyer can remove without deleting.
+  const mutationDb = createAdminClient() as unknown as typeof access.actor.db;
+  const { data: updated,error } = await mutationDb.from("order_files").update({is_thumbnail:false,thumbnail_sort_order:null}).eq("id",fileId).eq("order_id",projectId).eq("category","project").eq("file_variant","original").eq("is_thumbnail",true).select("id").maybeSingle();
   if (error||!updated) return { success:false,error:"Could not remove official image",code:"UPDATE_FAILED" };
-  const { data: remaining } = await access.actor.db.from("order_files").select("id").eq("order_id",projectId).eq("is_thumbnail",true).order("thumbnail_sort_order").order("created_at");
-  for (const [index, image] of (remaining??[]).entries()) await access.actor.db.from("order_files").update({thumbnail_sort_order:index+1}).eq("id",image.id);
+  const { data: remaining, error: remainingError } = await mutationDb.from("order_files").select("id").eq("order_id",projectId).eq("category","project").eq("file_variant","original").eq("lifecycle_status","ready").eq("is_thumbnail",true).order("thumbnail_sort_order").order("created_at");
+  if (remainingError) return { success:false,error:"The image was removed, but the remaining images could not be reordered",code:"UPDATE_FAILED" };
+  for (const [index, image] of (remaining??[]).entries()) {
+    const { error: reorderError } = await mutationDb.from("order_files").update({thumbnail_sort_order:index+1}).eq("id",image.id).eq("order_id",projectId).eq("category","project").eq("file_variant","original").eq("lifecycle_status","ready").eq("is_thumbnail",true);
+    if (reorderError) return { success:false,error:"The image was removed, but the remaining images could not be reordered",code:"UPDATE_FAILED" };
+  }
   revalidatePath(`/projects/${projectId}`); revalidatePath("/projects");
   return { success:true,data:null };
 }

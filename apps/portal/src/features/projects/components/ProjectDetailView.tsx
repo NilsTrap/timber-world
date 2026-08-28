@@ -25,7 +25,9 @@ export function ProjectDetailView({
   viewer,
   partyWorkspace,
   canEditSpecification,
+  canViewOfficialImages,
   canManageOfficialImages,
+  canRemoveOfficialImages,
   isRfqCandidate,
   initialRfqCandidates,
   canManageRfq,
@@ -37,7 +39,9 @@ export function ProjectDetailView({
   viewer: ProjectsViewer;
   partyWorkspace: ProjectPartyWorkspace;
   canEditSpecification: boolean;
+  canViewOfficialImages: boolean;
   canManageOfficialImages: boolean;
+  canRemoveOfficialImages: boolean;
   isRfqCandidate: boolean;
   initialRfqCandidates: Array<{ id: string; name: string }>;
   canManageRfq: boolean;
@@ -70,7 +74,7 @@ export function ProjectDetailView({
         <ProjectPartiesBlock projectId={project.id} workspace={partyWorkspace} />
       </div> : null}
 
-      {canManageOfficialImages ? <ProjectOfficialImages projectId={project.id} initialFiles={project.files} /> : null}
+      {canViewOfficialImages ? <ProjectOfficialImages projectId={project.id} initialFiles={project.files} canManage={canManageOfficialImages} canRemove={canRemoveOfficialImages} /> : null}
 
       {!isRfqCandidate && project.terms ? (
         <ProjectTermsCard projectId={project.id} terms={project.terms} deliveryDeadline={project.deliveryDeadline} canEdit={viewer.canEditTerms} />
