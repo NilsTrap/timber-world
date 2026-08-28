@@ -6,8 +6,9 @@ import { Button } from "@timber/ui";
 import type { DxfViewer as DxfViewerInstance, LayerInfo } from "dxf-viewer";
 import { PreviewFailure, PreviewLoading } from "../ProjectFilePreview";
 import { PROJECT_PREVIEW_COPY } from "../previewCopy";
+import { canvasToBoundedPng, type RegisterProjectPreviewCapture } from "./projectPreviewCapture";
 
-export function DxfFileViewer({ url, onRetry }: { url: string; onRetry: () => Promise<void> }) {
+export function DxfFileViewer({ url, onRetry, registerCapture }: { url: string; onRetry: () => Promise<void>; registerCapture?: RegisterProjectPreviewCapture }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<DxfViewerInstance | null>(null);
   const [layers, setLayers] = useState<LayerInfo[]>([]);
@@ -49,6 +50,12 @@ export function DxfFileViewer({ url, onRetry }: { url: string; onRetry: () => Pr
         const bounds = viewer.GetBounds();
         if (!bounds || ![bounds.minX, bounds.maxX, bounds.minY, bounds.maxY].every(Number.isFinite)) throw new Error("empty");
         setLayers([...viewer.GetLayers()].sort((a, b) => a.displayName.localeCompare(b.displayName)));
+        registerCapture?.(async () => {
+          const canvas = container.querySelector("canvas");
+          if (!canvas) throw new Error("The drawing preview is not ready to capture.");
+          viewer?.Render();
+          return canvasToBoundedPng(canvas);
+        });
         setLoading(false);
       } catch {
         window.clearTimeout(timeout);
@@ -61,9 +68,10 @@ export function DxfFileViewer({ url, onRetry }: { url: string; onRetry: () => Pr
       disposed = true;
       window.clearTimeout(timeout);
       viewerRef.current = null;
+      registerCapture?.(null);
       try { viewer?.Destroy(); } catch { /* Viewer can already be terminating its worker. */ }
     };
-  }, [url]);
+  }, [registerCapture, url]);
 
   const fitDrawing = () => {
     const viewer = viewerRef.current;

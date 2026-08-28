@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Download,
   Eye,
@@ -17,6 +18,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  Camera,
 } from "lucide-react";
 import {
   Button,
@@ -69,6 +71,8 @@ import { ProjectFilePreview, type ProjectPreviewSource } from "./ProjectFilePrev
 import { ProjectFileTypeIcon } from "./projectFileTypes";
 import { PROJECT_PREVIEW_COPY } from "./previewCopy";
 import { uploadProjectBrowserFile } from "./projectUploadClient";
+import { checkProjectOfficialImageSlot, completeProjectOfficialImage } from "../actions/projectOfficialImageActions";
+import type { ProjectPreviewCapture } from "./viewers/projectPreviewCapture";
 
 interface PendingUpload {
   id: string;
@@ -86,6 +90,7 @@ export function ProjectFileWorkspace({
   canWrite,
   canUpload = canWrite,
   canManageCleanup,
+  canManageOfficialImages = false,
 }: {
   projectId: string;
   initialFiles: ProjectFileMeta[];
@@ -93,7 +98,9 @@ export function ProjectFileWorkspace({
   canWrite: boolean;
   canUpload?: boolean;
   canManageCleanup: boolean;
+  canManageOfficialImages?: boolean;
 }) {
+  const router = useRouter();
   const [files, setFiles] = useState(initialFiles);
   const [folders, setFolders] = useState(initialFolders);
   const [pending, setPending] = useState<PendingUpload[]>([]);
@@ -110,6 +117,8 @@ export function ProjectFileWorkspace({
   const [previewRefreshError, setPreviewRefreshError] = useState<string | null>(null);
   const [cleanPreviewFile, setCleanPreviewFile] = useState<ProjectFileMeta | null>(null);
   const [cleanupBusy, setCleanupBusy] = useState(false);
+  const [screenshotBusy, setScreenshotBusy] = useState(false);
+  const [previewCapture, setPreviewCapture] = useState<ProjectPreviewCapture | null>(null);
   const previewRequestRef = useRef(0);
   const tree = useMemo(() => buildProjectTree(files, folders), [files, folders]);
   const folderPaths = useMemo(() => {
@@ -125,6 +134,7 @@ export function ProjectFileWorkspace({
   const filtersActive = fileSearch.trim().length > 0 || fileType !== ALL_FILE_TYPES;
   const emptyFilesCopy = filtersActive ? "No files match these filters." : selectedFolder ? "No files in this folder." : "No files in this workspace.";
   const hasActiveUploads = pending.some((item) => item.status === "uploading") || uploadInteractionActive;
+  const registerPreviewCapture = useCallback((capture: ProjectPreviewCapture | null) => setPreviewCapture(() => capture), []);
 
   useEffect(() => setSelectedFileIds(new Set()), [fileSearch, fileType, selectedFolder]);
   useEffect(() => {
@@ -295,6 +305,7 @@ export function ProjectFileWorkspace({
 
   const openPreview = async (file: ProjectFileMeta) => {
     const requestId = ++previewRequestRef.current;
+    setPreviewCapture(null);
     setPreviewRefreshError(null);
     const result = file.sharedInbound ? await getCleanProjectFileUrlAction(file.id) : await getProjectFileUrlAction(file.id, "preview");
     if (requestId !== previewRequestRef.current) return;
@@ -318,6 +329,47 @@ export function ProjectFileWorkspace({
       if (current?.fileId !== fileId) return current;
       return { ...current, url: result.data.url, fileName: result.data.fileName, mimeType: result.data.mimeType };
     });
+  };
+
+  const takeScreenshot = async () => {
+    if (!previewCapture || !preview) return;
+    const requestId = previewRequestRef.current;
+    const previewFileId = preview.fileId;
+    setScreenshotBusy(true);
+    setPreviewRefreshError(null);
+    let uploadedId: string | null = null;
+    try {
+      const available = await checkProjectOfficialImageSlot(projectId);
+      if (!available.success) throw new Error(available.error);
+      const blob = await previewCapture();
+      if (requestId !== previewRequestRef.current || previewFileId !== preview.fileId) return;
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const fileName = `Screenshot ${stamp}.png`;
+      const file = new File([blob], fileName, { type: "image/png" });
+      const uploaded = await uploadProjectBrowserFile(projectId, file, `Official images/${crypto.randomUUID()}-${fileName}`, () => {});
+      uploadedId = uploaded.id;
+      if (requestId !== previewRequestRef.current || previewFileId !== preview.fileId) {
+        await deleteProjectFileAction(uploaded.id);
+        return;
+      }
+      const completed = await completeProjectOfficialImage(projectId, uploaded.id);
+      if (!completed.success) throw new Error(completed.error);
+      uploadedId = null;
+      setFiles((current) => [...current.filter((entry) => entry.id !== uploaded.id), { ...uploaded, officialImagePosition: completed.data.position, previewUrl: URL.createObjectURL(blob) }]);
+      setMessage(`Screenshot saved as project image ${completed.data.position}.`);
+      router.refresh();
+    } catch (error) {
+      if (uploadedId) {
+        const cleanup = await deleteProjectFileAction(uploadedId);
+        if (!cleanup.success) {
+          setPreviewRefreshError("The screenshot could not be assigned or removed. Delete the uploaded screenshot before retrying.");
+          return;
+        }
+      }
+      setPreviewRefreshError(error instanceof Error ? error.message : "The screenshot could not be saved. Please try again.");
+    } finally {
+      setScreenshotBusy(false);
+    }
   };
 
   const download = async (file: ProjectFileMeta) => {
@@ -536,10 +588,11 @@ export function ProjectFileWorkspace({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!preview} onOpenChange={(open) => { if (!open) { previewRequestRef.current++; setPreview(null); setCleanPreviewFile(null); setPreviewRefreshError(null); } }}>
+      <Dialog open={!!preview} onOpenChange={(open) => { if (!open) { previewRequestRef.current++; setPreview(null); setCleanPreviewFile(null); setPreviewRefreshError(null); setPreviewCapture(null); } }}>
         <DialogContent className="sm:max-w-6xl">
           <DialogHeader><DialogTitle>{preview?.fileName}</DialogTitle><DialogDescription>{PROJECT_PREVIEW_COPY.description}</DialogDescription></DialogHeader>
-          {preview ? <ProjectFilePreview source={preview} onRetry={refreshPreview} refreshError={previewRefreshError} /> : null}
+          {canManageOfficialImages ? <div className="flex justify-end"><Button type="button" size="sm" disabled={!previewCapture || screenshotBusy} aria-label="Take screenshot of visible preview" onClick={() => void takeScreenshot()}>{screenshotBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Camera className="mr-1.5 h-4 w-4" />} {screenshotBusy ? "Saving screenshot…" : "Take screenshot"}</Button></div> : null}
+          {preview ? <ProjectFilePreview source={preview} onRetry={refreshPreview} refreshError={previewRefreshError} registerCapture={canManageOfficialImages ? registerPreviewCapture : undefined} /> : null}
           {cleanPreviewFile?.cleanupStatus === "needs_review" ? <Button type="button" onClick={approveClean}><ShieldCheck className="mr-1.5 h-4 w-4" /> Approve cleaned file</Button> : null}
         </DialogContent>
       </Dialog>

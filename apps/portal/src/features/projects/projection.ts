@@ -384,6 +384,8 @@ export function toProjectDetail(
       cleanupFindingsCount: f.cleanupFindingsCount,
       shared: f.shared,
       sharedInbound: f.sharedInbound,
+      officialImagePosition: f.officialImagePosition,
+      previewUrl: f.previewUrl,
     })),
     folders: parts.folders.map((folder) => ({
       id: folder.id,

@@ -299,7 +299,7 @@ ok("vatRate is never serialized, not even for an admin",
    !JSON.stringify(admin.detail).includes("vatRate"));
 ok("file metadata exposes only safe workspace and cleanup presentation columns",
    Object.keys(admin.detail.files[0] ?? {}).every((k) =>
-     ["id", "fileName", "relativePath", "mimeType", "fileSizeBytes", "lifecycleStatus", "createdAt", "cleanupStatus", "cleanFileId", "cleanupFindingsCount", "shared", "sharedInbound"].includes(k)));
+     ["id", "fileName", "relativePath", "mimeType", "fileSizeBytes", "lifecycleStatus", "createdAt", "cleanupStatus", "cleanFileId", "cleanupFindingsCount", "shared", "sharedInbound", "officialImagePosition", "previewUrl"].includes(k)));
 
 // ── File counts: a hidden leg's files are never attributed ───────────────────
 const rows = [

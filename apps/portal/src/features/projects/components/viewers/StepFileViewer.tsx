@@ -8,6 +8,7 @@ import { MAX_INTERACTIVE_PROJECT_PREVIEW_BYTES } from "../../filePaths";
 import { PreviewFailure, PreviewLoading } from "../ProjectFilePreview";
 import { PROJECT_PREVIEW_COPY } from "../previewCopy";
 import { isValidOcctResult } from "./validateOcctResult";
+import { canvasToBoundedPng, type RegisterProjectPreviewCapture } from "./projectPreviewCapture";
 
 function parseStepInWorker(buffer: ArrayBuffer, signal: AbortSignal): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -33,7 +34,7 @@ function parseStepInWorker(buffer: ArrayBuffer, signal: AbortSignal): Promise<un
   });
 }
 
-export function StepFileViewer({ url, onRetry }: { url: string; onRetry: () => Promise<void> }) {
+export function StepFileViewer({ url, onRetry, registerCapture }: { url: string; onRetry: () => Promise<void>; registerCapture?: RegisterProjectPreviewCapture }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const fitRef = useRef<(() => void) | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,6 +67,7 @@ export function StepFileViewer({ url, onRetry }: { url: string; onRetry: () => P
       });
       renderer?.dispose();
       renderer?.domElement.remove();
+      registerCapture?.(null);
     };
 
     setLoading(true);
@@ -157,6 +159,11 @@ export function StepFileViewer({ url, onRetry }: { url: string; onRetry: () => P
         resizeObserver = new ResizeObserver(resize);
         resizeObserver.observe(container);
         resize();
+        registerCapture?.(async () => {
+          if (!renderer || !scene || !camera) throw new Error("The model preview is not ready to capture.");
+          renderer.render(scene, camera);
+          return canvasToBoundedPng(renderer.domElement);
+        });
         setLoading(false);
       } catch {
         disposeResources();
@@ -165,7 +172,7 @@ export function StepFileViewer({ url, onRetry }: { url: string; onRetry: () => P
     })();
 
     return () => { controller.abort(); disposed = true; disposeResources(); };
-  }, [url]);
+  }, [registerCapture, url]);
 
   if (failed) return <PreviewFailure message={PROJECT_PREVIEW_COPY.stepError} onRetry={onRetry} />;
   return (

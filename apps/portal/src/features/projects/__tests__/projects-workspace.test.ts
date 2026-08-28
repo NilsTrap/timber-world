@@ -19,6 +19,8 @@ import {
 } from "../filePaths";
 import { sanitizeProjectHtml } from "../components/viewers/sanitizeProjectHtml";
 import { isValidOcctResult } from "../components/viewers/validateOcctResult";
+import { MAX_CAPTURE_DIMENSION, MAX_CAPTURE_PIXELS, boundedCaptureSize, hasVisiblePixelVariation, scaledVisibleCanvasRegion } from "../components/viewers/projectPreviewCapture";
+import { nextOfficialImagePosition } from "../officialImagePolicy";
 import { ALL_FILE_TYPES, filterProjectFiles, NO_FILE_EXTENSION, projectFileExtension, projectFileExtensions, projectFileTypeValue } from "../services/projectFileFilters";
 
 let passed = 0;
@@ -124,12 +126,22 @@ const validMesh = { success: true, meshes: [{ attributes: { position: { array: [
 ok("STEP validation accepts finite triangles", isValidOcctResult(validMesh));
 ok("STEP validation rejects non-finite coordinates", !isValidOcctResult({ ...validMesh, meshes: [{ ...validMesh.meshes[0], attributes: { position: { array: [0, 0, Number.NaN] } } }] }));
 ok("STEP validation rejects out-of-range indices", !isValidOcctResult({ ...validMesh, meshes: [{ ...validMesh.meshes[0], index: { array: [0, 1, 9] } }] }));
+eq("capture dimensions are bounded", boundedCaptureSize(4096, 1024), { width: 2048, height: 512 });
+ok("capture pixel budget is bounded", (() => { const size = boundedCaptureSize(3000, 3000); return size.width * size.height <= MAX_CAPTURE_PIXELS; })());
+eq("capture maximum edge is explicit", MAX_CAPTURE_DIMENSION, 2048);
+eq("scrolled PDF capture maps the visible CSS viewport to backing pixels", scaledVisibleCanvasRegion({canvasWidth:1200,canvasHeight:2400,canvasClientWidth:600,canvasClientHeight:1200,canvasOffsetLeft:8,canvasOffsetTop:8,scrollLeft:8,scrollTop:308,viewportWidth:600,viewportHeight:500}), {x:0,y:600,width:1200,height:1000});
+ok("uniform blank captures are rejected", !hasVisiblePixelVariation(new Uint8ClampedArray([255, 255, 255, 255, 255, 255, 255, 255])));
+ok("visible capture variation is accepted", hasVisiblePixelVariation(new Uint8ClampedArray([255, 255, 255, 255, 20, 20, 20, 255])));
+ok("uniform colored preview content is accepted", hasVisiblePixelVariation(new Uint8ClampedArray([20, 40, 60, 255, 20, 40, 60, 255])));
+eq("official images fill the next available slot", nextOfficialImagePosition([1, 3]), 2);
+eq("a fourth official image has no slot", nextOfficialImagePosition([1, 2, 3]), null);
 
 // Source guards protect the easy-to-regress serialization/direct-ID boundaries.
 const service = readFileSync("src/features/projects/services/projectFiles.ts", "utf8");
 const actions = readFileSync("src/features/projects/actions/projectFileActions.ts", "utf8");
 const create = readFileSync("src/features/projects/actions/createProject.ts", "utf8");
 const projectLoader = readFileSync("src/features/projects/actions/getProject.ts", "utf8");
+const projection = readFileSync("src/features/projects/projection.ts", "utf8");
 const specificationActions = readFileSync("src/features/projects/actions/projectSpecificationActions.ts", "utf8");
 const partyActions = readFileSync("src/features/projects/actions/projectPartyActions.ts", "utf8");
 const projectPage = readFileSync("src/app/(portal)/projects/[id]/page.tsx", "utf8");
@@ -140,11 +152,14 @@ const parties = readFileSync("src/features/projects/components/ProjectPartiesBlo
 const legSelector = readFileSync("src/features/projects/components/ProjectLegSelector.tsx", "utf8");
 const nextLegControl = readFileSync("src/features/projects/components/ProjectNextLegControl.tsx", "utf8");
 const workspace = readFileSync("src/features/projects/components/ProjectFileWorkspace.tsx", "utf8");
+const officialImages = readFileSync("src/features/projects/components/ProjectOfficialImages.tsx", "utf8");
 const dropSurface = readFileSync("src/features/projects/components/ProjectDropSurface.tsx", "utf8");
 const preview = readFileSync("src/features/projects/components/ProjectFilePreview.tsx", "utf8");
 const htmlViewer = readFileSync("src/features/projects/components/viewers/HtmlFileViewer.tsx", "utf8");
 const dxfViewer = readFileSync("src/features/projects/components/viewers/DxfFileViewer.tsx", "utf8");
 const stepViewer = readFileSync("src/features/projects/components/viewers/StepFileViewer.tsx", "utf8");
+const capture = readFileSync("src/features/projects/components/viewers/projectPreviewCapture.ts", "utf8");
+const officialImageActions = readFileSync("src/features/projects/actions/projectOfficialImageActions.ts", "utf8");
 const migration = readFileSync("../../supabase/migrations/20260821211500_project_file_workspace.sql", "utf8");
 const folderMigration = readFileSync("../../supabase/migrations/20260826090000_project_workspace_folders.sql", "utf8");
 const buyerAccessMigration = readFileSync("../../supabase/migrations/20260826130000_buyer_project_workspace_access.sql", "utf8");
@@ -228,8 +243,8 @@ ok("workspace uploader starts behind a header control and collapses only after t
 ok("drop surface reports active drag and file-picker interaction", dropSurface.includes("isDragActive || pickerOpen") && dropSurface.includes("onActivityChange") && dropSurface.includes('window.addEventListener("focus"'));
 ok("workspace replaces the folder column with file information", !workspace.includes("<TableHead>Folder</TableHead>") && workspace.includes("File information") && workspace.includes("Information for ${file.fileName}") && workspace.includes('["Folder", folder]') && workspace.includes('["Uploaded", formatDateTime(file.createdAt)]'));
 ok("heavy engineering viewers are lazy chunks", preview.includes('dynamic(() => import("./viewers/DxfFileViewer")') && preview.includes('dynamic(() => import("./viewers/StepFileViewer")'));
-ok("PDF native viewer is not placed in a scriptless sandbox", preview.includes('const isPdf = classifyProjectFile(source.fileName, source.mimeType) === "pdf"') && preview.includes('{...(isPdf ? {} : { sandbox: "" })}'));
-ok("HTML preview is sanitized and scriptless", htmlViewer.includes("sanitizeProjectHtml") && htmlViewer.includes('sandbox=""'));
+ok("PDF uses the controlled pdfjs canvas viewer", preview.includes('import("pdfjs-dist")') && preview.includes("pdfPage.render") && preview.includes("setPageCount(document.numPages)"));
+ok("HTML preview is sanitized, scriptless, and same-origin capturable", htmlViewer.includes("sanitizeProjectHtml") && htmlViewer.includes('sandbox="allow-same-origin"') && !htmlViewer.includes("allow-scripts") && htmlViewer.includes('import("html2canvas-pro")'));
 ok("DXF parsing uses a dedicated worker and destroys viewer resources", dxfViewer.includes("workerFactory") && dxfViewer.includes("viewer?.Destroy()"));
 ok("STEP parsing uses a terminating local worker and disposes WebGL resources", stepViewer.includes("occt-import-js-worker.js") && stepViewer.includes("worker.terminate()") && stepViewer.includes("renderer?.dispose()"));
 ok("STEP canvas has a stable bounded CSS footprint", stepViewer.includes('renderer.domElement.classList.add("block", "h-full", "w-full")') && stepViewer.includes('className="h-full min-w-0 w-full overflow-hidden"'));
@@ -238,6 +253,13 @@ ok("previewable desktop and mobile rows support pointer and semantic button acti
 ok("unsupported rows remain outside the row preview interaction", workspace.includes('onClick={previewable ? () => onPreview(file) : undefined}') && workspace.includes('onClick={isPreviewableProjectFile(file.fileName, file.mimeType) ? () => openPreview(file) : undefined}'));
 ok("file selection and explicit actions stop row preview propagation", workspace.includes('onClick={(event) => event.stopPropagation()}') && workspace.includes('onKeyDown={(event) => event.stopPropagation()}'));
 ok("STEP refits after its container aspect changes", stepViewer.includes("if (fitRef.current) fitRef.current(); else render()"));
+ok("all controlled viewer families register viewport capture", [preview, htmlViewer, dxfViewer, stepViewer].every((source) => source.includes("registerCapture")) && preview.includes("RasterFileViewer") && preview.includes("PdfFileViewer"));
+ok("capture output is bounded PNG and rejects tainted canvases", capture.includes("MAX_CAPTURE_PIXELS") && capture.includes('toBlob(resolve, "image/png")') && capture.includes("getImageData"));
+ok("screenshot action is capability-hidden and reports readiness", workspace.includes("canManageOfficialImages ?") && workspace.includes("disabled={!previewCapture || screenshotBusy}") && workspace.includes('aria-label="Take screenshot of visible preview"'));
+ok("screenshot preflights the slot before upload", workspace.indexOf("checkProjectOfficialImageSlot(projectId)") < workspace.indexOf("await previewCapture()") && workspace.indexOf("await previewCapture()") < workspace.indexOf("uploadProjectBrowserFile(projectId, file"));
+ok("official image callers clean up only their own failed upload", officialImageActions.includes("completeProjectOfficialImage") && workspace.includes("deleteProjectFileAction(uploadedId)") && officialImages.includes("deleteProjectFileAction(uploadedId)"));
+ok("screenshot success refreshes both project surfaces", workspace.includes("officialImagePosition: completed.data.position") && workspace.includes("router.refresh()") && officialImageActions.includes('revalidatePath("/projects")'));
+ok("project detail preserves official image metadata", projection.includes("officialImagePosition: f.officialImagePosition") && projection.includes("previewUrl: f.previewUrl"));
 
 console.log(`\nprojects-workspace.test.ts: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

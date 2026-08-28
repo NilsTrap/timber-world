@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MAX_INTERACTIVE_PROJECT_PREVIEW_BYTES } from "../../filePaths";
 import { PreviewFailure, PreviewLoading } from "../ProjectFilePreview";
 import { PROJECT_PREVIEW_COPY } from "../previewCopy";
 import { sanitizeProjectHtml } from "./sanitizeProjectHtml";
+import { canvasToBoundedPng, type RegisterProjectPreviewCapture } from "./projectPreviewCapture";
 
-export function HtmlFileViewer({ url, onRetry }: { url: string; onRetry: () => Promise<void> }) {
+export function HtmlFileViewer({ url, onRetry, registerCapture }: { url: string; onRetry: () => Promise<void>; registerCapture?: RegisterProjectPreviewCapture }) {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [html, setHtml] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -32,10 +34,29 @@ export function HtmlFileViewer({ url, onRetry }: { url: string; onRetry: () => P
         window.clearTimeout(timeout);
       }
     })();
-    return () => { disposed = true; window.clearTimeout(timeout); controller.abort(); };
-  }, [url]);
+    return () => { disposed = true; window.clearTimeout(timeout); controller.abort(); registerCapture?.(null); };
+  }, [registerCapture, url]);
 
   if (failed) return <PreviewFailure message={PROJECT_PREVIEW_COPY.htmlError} onRetry={onRetry} />;
   if (!html) return <PreviewLoading label={PROJECT_PREVIEW_COPY.htmlSanitizing} />;
-  return <iframe srcDoc={html} title={PROJECT_PREVIEW_COPY.htmlAria} sandbox="" referrerPolicy="no-referrer" className="h-[70vh] w-full rounded border bg-white" />;
+  return <iframe ref={iframeRef} srcDoc={html} title={PROJECT_PREVIEW_COPY.htmlAria} sandbox="allow-same-origin" referrerPolicy="no-referrer" className="h-[70vh] w-full rounded border bg-white" onLoad={() => {
+    registerCapture?.(async () => {
+      const frameWindow = iframeRef.current?.contentWindow;
+      const documentElement = iframeRef.current?.contentDocument?.documentElement;
+      if (!frameWindow || !documentElement) throw new Error("The HTML preview is not ready to capture.");
+      const { default: html2canvas } = await import("html2canvas-pro");
+      const canvas = await html2canvas(documentElement, {
+        x: frameWindow.scrollX,
+        y: frameWindow.scrollY,
+        width: frameWindow.innerWidth,
+        height: frameWindow.innerHeight,
+        scale: 1,
+        backgroundColor: "#ffffff",
+        useCORS: false,
+        allowTaint: false,
+        logging: false,
+      });
+      return canvasToBoundedPng(canvas);
+    });
+  }} />;
 }
