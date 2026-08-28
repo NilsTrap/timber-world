@@ -264,6 +264,9 @@ export async function saveFieldAssignment(input: SaveFieldAssignmentInput): Prom
     const mods = await getUserEnabledModules(session.portalUserId ?? "", orgId);
     if (!(mods.has("settings.view") || mods.has("catalogue.view"))) return { success: false, error: "Permission denied", code: "FORBIDDEN" };
   }
+  if (!["product", "variant", "process"].includes(input.appliesTo)) {
+    return { success: false, error: "Invalid field scope", code: "VALIDATION_ERROR" };
+  }
 
   const supabase = await createClient();
   const payload = {

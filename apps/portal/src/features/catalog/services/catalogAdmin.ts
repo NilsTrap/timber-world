@@ -446,6 +446,9 @@ export async function deleteFieldOption(db: DbClient, id: string): Promise<Actio
 }
 
 export async function saveFieldAssignment(db: DbClient, input: SaveFieldAssignmentInput): Promise<ActionResult<FieldAssignment>> {
+  if (!["product", "variant", "process"].includes(input.appliesTo)) {
+    return { success: false, error: "Invalid field scope", code: "VALIDATION_ERROR" };
+  }
   const payload = {
     category_id: input.categoryId,
     field_id: input.fieldId,

@@ -69,6 +69,7 @@ function resolveDisplay(row: any): string | null {
 export async function readLineFieldValues(
   db: DbClient,
   ids: { variantId?: string | null; productId?: string | null },
+  options: { strict?: boolean } = {},
 ): Promise<LineFieldValues> {
   const variantId = ids.variantId ?? null;
   const productId = ids.productId ?? null;
@@ -90,6 +91,8 @@ export async function readLineFieldValues(
         : Promise.resolve({ data: [] }),
     ]);
 
+    const readError = prodRes?.error ?? varRes?.error ?? packRes?.error;
+    if (readError) throw readError;
     const fields: Record<string, LineFieldValue> = {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const apply = (rows: any[] | null | undefined) => {
@@ -124,7 +127,8 @@ export async function readLineFieldValues(
       : null;
 
     return { fields, packaging };
-  } catch {
+  } catch (error) {
+    if (options.strict) throw error;
     return EMPTY;
   }
 }

@@ -6,7 +6,8 @@ import type { ActionResult } from "../../orders/types";
 import { getOrderDeal } from "../../orders/services/orderDeals";
 import type { ActorContext, DbClient } from "../../orders/services/dealModel";
 import { resolveProjectsActor } from "../access";
-import { readLineFieldValues } from "../../catalog/services/lineFieldValues";
+import { readLineFieldValues, type LineFieldValues } from "../../catalog/services/lineFieldValues";
+import { buildProcessRequirements, type ProcessAssignmentSnapshot } from "../services/processRequirements";
 import {
   calculateComponentTotalCents,
   canEditProjectSpecification,
@@ -94,6 +95,7 @@ export async function createProjectSpecificationLine(raw: unknown): Promise<Acti
   const ctx = await editableProject(input.projectId);
   if (!ctx.success) return ctx;
   let snapshot: Record<string, unknown> = { product_name: input.productName, unit: input.unit, notes: input.notes || null, is_standard: false };
+  let processRequirements: Array<{ field_key: string; name: string; value: string; unit: string | null; sort_order: number }> = [];
   if (input.catalogVariantId) {
     const { data: variant, error: catalogError } = await ctx.data.db.from("catalog_variants")
       .select("id, product_id, sku, thickness_mm, width_mm, length_mm, is_active, catalog_products!inner(id, name, is_active, category_id, catalog_categories!inner(primary_unit, is_active))")
@@ -104,12 +106,39 @@ export async function createProjectSpecificationLine(raw: unknown): Promise<Acti
     const category = product.catalog_categories as Record<string, unknown>;
     const catalogUnit = lineUnit.safeParse(category.primary_unit);
     if (!catalogUnit.success) return { success: false, error: "Catalogue unit is not supported by project specifications", code: "VALIDATION_ERROR" };
-    const resolvedFields = await readLineFieldValues(ctx.data.db, {
-      productId: row.product_id as string,
-      variantId: row.id as string,
-    });
-    const fieldSnapshot = Object.values(resolvedFields.fields)
-      .map((field) => `${field.label}: ${field.value}`)
+    let resolvedFields: LineFieldValues;
+    let resolvedProductFields: LineFieldValues;
+    try {
+      [resolvedFields, resolvedProductFields] = await Promise.all([
+        readLineFieldValues(ctx.data.db, { productId: row.product_id as string, variantId: row.id as string }, { strict: true }),
+        // Process assignments are product-scoped even if stale variant EAV exists.
+        readLineFieldValues(ctx.data.db, { productId: row.product_id as string }, { strict: true }),
+      ]);
+    } catch {
+      return { success: false, error: "Could not load catalogue field values", code: "FETCH_FAILED" };
+    }
+    const { data: processAssignments, error: processError } = await ctx.data.db
+      .from("catalog_category_field_assignments")
+      .select("sort_order, is_required, catalog_fields!inner(field_key, field_label)")
+      .eq("category_id", product.category_id as string)
+      .eq("applies_to", "process")
+      .order("sort_order");
+    if (processError) return { success: false, error: "Could not load catalogue process fields", code: "FETCH_FAILED" };
+    const processKeys = new Set<string>();
+    const assignments = (processAssignments ?? []) as ProcessAssignmentSnapshot[];
+    try {
+      processRequirements = buildProcessRequirements(assignments, resolvedProductFields.fields);
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Required process value is missing", code: "VALIDATION_ERROR" };
+    }
+    for (const assignment of assignments) {
+      const fieldRow = assignment.catalog_fields as { field_key?: string } | null;
+      const key = fieldRow?.field_key;
+      if (key) processKeys.add(key);
+    }
+    const fieldSnapshot = Object.entries(resolvedFields.fields)
+      .filter(([key]) => !processKeys.has(key))
+      .map(([, field]) => `${field.label}: ${field.value}`)
       .join(" · ");
     const snapshotNotes = [input.notes, fieldSnapshot].filter(Boolean).join(" · ");
     if (snapshotNotes.length > 2000) {
@@ -128,18 +157,16 @@ export async function createProjectSpecificationLine(raw: unknown): Promise<Acti
       is_standard: true,
     };
   }
-  const { data: rows, error: readError } = await ctx.data.db.from("order_line_items").select("line_no").eq("order_id", input.projectId).eq("side", "sell");
-  if (readError) return { success: false, error: readError.message, code: "FETCH_FAILED" };
-  const lineNo = (rows ?? []).reduce((max: number, row: { line_no?: number }) => Math.max(max, row.line_no ?? 0), 0) + 1;
   const resolvedUnit = snapshot.unit as z.infer<typeof lineUnit>;
   const quantity = lineQuantities(resolvedUnit, input.quantity);
-  const { data, error } = await ctx.data.db.from("order_line_items").insert({
-    order_id: input.projectId, side: "sell", line_no: lineNo,
-    ...snapshot, unit_price_cents: null, line_total_cents: null, ...quantity,
-  }).select("id").single();
-  if (error || !data) return { success: false, error: error?.message ?? "Could not add line", code: "INSERT_FAILED" };
+  const { data, error } = await ctx.data.db.rpc("create_project_specification_line_with_processes", {
+    p_order_id: input.projectId,
+    p_line: { ...snapshot, ...quantity },
+    p_requirements: processRequirements,
+  });
+  if (error || !data) return { success: false, error: "Could not add specification line", code: "INSERT_FAILED" };
   refreshProject(input.projectId);
-  return { success: true, data: { id: data.id as string } };
+  return { success: true, data: { id: data as string } };
 }
 
 export type ProjectCatalogOption = { id: string; label: string; unit: string };
