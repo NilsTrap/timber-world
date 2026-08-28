@@ -19,6 +19,31 @@ async function waitForHtmlPreviewAssets(document: Document) {
   await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 }
 
+function drawVisibleHtmlImages(canvas: HTMLCanvasElement, document: Document, viewportWidth: number, viewportHeight: number) {
+  const context = canvas.getContext("2d");
+  if (!context) return;
+  const scaleX = canvas.width / viewportWidth;
+  const scaleY = canvas.height / viewportHeight;
+  for (const image of Array.from(document.images)) {
+    if (!image.complete || image.naturalWidth < 1 || image.naturalHeight < 1) continue;
+    const rect = image.getBoundingClientRect();
+    const left = Math.max(0, rect.left);
+    const top = Math.max(0, rect.top);
+    const right = Math.min(viewportWidth, rect.right);
+    const bottom = Math.min(viewportHeight, rect.bottom);
+    if (right <= left || bottom <= top || rect.width < 1 || rect.height < 1) continue;
+    const sourceX = ((left - rect.left) / rect.width) * image.naturalWidth;
+    const sourceY = ((top - rect.top) / rect.height) * image.naturalHeight;
+    const sourceWidth = ((right - left) / rect.width) * image.naturalWidth;
+    const sourceHeight = ((bottom - top) / rect.height) * image.naturalHeight;
+    try {
+      context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, left * scaleX, top * scaleY, (right - left) * scaleX, (bottom - top) * scaleY);
+    } catch {
+      // Keep the rendered layout when an individual cross-origin image cannot be copied safely.
+    }
+  }
+}
+
 export function HtmlFileViewer({ url, onRetry, registerCapture }: { url: string; onRetry: () => Promise<void>; registerCapture?: RegisterProjectPreviewCapture }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [html, setHtml] = useState<string | null>(null);
@@ -71,6 +96,7 @@ export function HtmlFileViewer({ url, onRetry, registerCapture }: { url: string;
         imageTimeout: 30_000,
         logging: false,
       });
+      drawVisibleHtmlImages(canvas, frameDocument, frameWindow.innerWidth, frameWindow.innerHeight);
       return canvasToBoundedPng(canvas);
     });
   }} />;
