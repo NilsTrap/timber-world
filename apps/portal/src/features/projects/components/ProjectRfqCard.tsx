@@ -14,9 +14,10 @@ import {
   requestProjectQuotations, submitProjectQuotation,
   type ProjectRfqCandidate, type ProjectRfqState,
 } from "../actions/projectRfqActions";
+import type { ProjectLine } from "../types";
 
-export function ProjectRfqCard({ projectId, currency, canManage, initialOptions }: {
-  projectId: string; currency: string; canManage: boolean; initialOptions: Array<{ id: string; name: string }>;
+export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandidateQuotation, initialOptions, lines }: {
+  projectId: string; currency: string; canManage: boolean; canEnterCandidateQuotation:boolean; initialOptions: Array<{ id: string; name: string }>; lines:ProjectLine[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -25,10 +26,11 @@ export function ProjectRfqCard({ projectId, currency, canManage, initialOptions 
   const [options, setOptions] = useState<Array<{ id: string; name: string }>>(initialOptions);
   const [selected, setSelected] = useState<string[]>([]);
   const [deadline, setDeadline] = useState(earliestDeadlineValue());
-  const [total, setTotal] = useState("");
+  const [prices,setPrices]=useState<Record<string,string>>({});
   const [notes, setNotes] = useState("");
   const [awardTarget, setAwardTarget] = useState<ProjectRfqCandidate | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [adminCandidateId,setAdminCandidateId]=useState<string|null>(null);
 
   const loadOptions = useCallback(async () => {
     const choices = await getEligibleProjectRfqCandidates(projectId);
@@ -41,8 +43,7 @@ export function ProjectRfqCard({ projectId, currency, canManage, initialOptions 
     if (!result.success) { toast.error(result.error); setLoaded(true); return; }
     setRfq(result.data);
     const ownCandidate = result.data?.candidates.find((candidate) => candidate.id === result.data?.ownCandidateId);
-    if (ownCandidate?.quoteTotalCents != null) setTotal((ownCandidate.quoteTotalCents / 100).toFixed(2));
-    if (ownCandidate?.quoteNotes) setNotes(ownCandidate.quoteNotes);
+    if (ownCandidate) {setNotes(ownCandidate.quoteNotes??"");setPrices(pricesFromEntries(ownCandidate.quoteEntries));}
     setLoaded(true);
     if (!result.data && canManage) {
       await loadOptions();
@@ -61,11 +62,12 @@ export function ProjectRfqCard({ projectId, currency, canManage, initialOptions 
   }
 
   function submitQuotation() {
-    if (!rfq?.ownCandidateId) return;
+    const candidateId=rfq?.canManage?adminCandidateId:rfq?.ownCandidateId;if(!candidateId)return;
+    const entries=pricingRows(lines).flatMap((row)=>{const unitPrice=Number(prices[row.key]);return Number.isFinite(unitPrice)&&unitPrice>=0?[{targetType:row.targetType,targetId:row.targetId,label:row.label,quantity:row.quantity,unit:row.unit,unitPriceCents:Math.round(unitPrice*100)}]:[]});
     startTransition(async () => {
-      const result = await submitProjectQuotation({ candidateId: rfq.ownCandidateId, total, notes });
+      const result = await submitProjectQuotation({ candidateId, entries, notes });
       if (!result.success) { toast.error(result.error); return; }
-      toast.success("Quotation submitted");
+      toast.success("Quotation submitted");setAdminCandidateId(null);setPrices({});
       await load();
     });
   }
@@ -128,7 +130,7 @@ export function ProjectRfqCard({ projectId, currency, canManage, initialOptions 
           <p className="text-sm capitalize text-muted-foreground">{candidate.status.replace("_", " ")}{candidate.quoteTotalCents != null ? ` · ${formatCents(candidate.quoteTotalCents, currency)}` : ""}</p>
           {candidate.quoteNotes ? <p className="text-sm">{candidate.quoteNotes}</p> : null}
         </div>
-        {rfq.status === "open" && candidate.status === "submitted" ? <Button size="sm" onClick={() => setAwardTarget(candidate)}>Award</Button> : null}
+        <div className="flex gap-2">{rfq.status==="open"&&canEnterCandidateQuotation?<Button variant="outline" size="sm" onClick={()=>{setAdminCandidateId(candidate.id);setPrices(pricesFromEntries(candidate.quoteEntries));setNotes(candidate.quoteNotes??"")}}>Enter quotation</Button>:null}{rfq.status === "open" && candidate.status === "submitted" ? <Button size="sm" onClick={() => setAwardTarget(candidate)}>Award</Button> : null}</div>
       </div>)}
       <div className="flex justify-end gap-2">
         {rfq.status === "open" ? <Button variant="outline" size="sm" onClick={() => setConfirmCancel(true)}>Close request</Button> : null}
@@ -136,13 +138,9 @@ export function ProjectRfqCard({ projectId, currency, canManage, initialOptions 
       </div>
     </div> : null}
 
-    {rfq?.ownCandidateId && !rfq.canManage && rfq.status === "open" ? deadlinePassed
+    {(rfq?.ownCandidateId&&!rfq.canManage||rfq?.canManage&&adminCandidateId) && rfq.status === "open" ? deadlinePassed
       ? <p className="text-sm text-muted-foreground">The quotation deadline has passed.</p>
-      : <div className="grid gap-3 sm:grid-cols-[1fr_2fr_auto] sm:items-end">
-          <Field label={`Total quotation (${currency})`}><Input type="number" min="0" step="0.01" value={total} onChange={(event) => setTotal(event.target.value)} /></Field>
-          <Field label="Notes and exceptions"><Input value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
-          <Button disabled={pending || total.trim() === ""} onClick={submitQuotation}>{pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Submit quotation</Button>
-        </div>
+      : <QuotationEntryForm lines={lines} currency={currency} prices={prices} setPrices={setPrices} notes={notes} setNotes={setNotes} pending={pending} onSubmit={submitQuotation} onCancel={rfq.canManage?()=>setAdminCandidateId(null):undefined}/>
       : null}
 
     <AlertDialog open={awardTarget !== null} onOpenChange={(open) => !open && !pending && setAwardTarget(null)}>
@@ -167,4 +165,8 @@ function earliestDeadlineValue(): string {
   return new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 function formatCents(cents: number, currency: string): string { return `${(cents / 100).toFixed(2)} ${currency}`; }
+type PricingRow={key:string;targetType:"line"|"process";targetId:string;label:string;quantity:number;unit:string};
+function pricesFromEntries(entries:ProjectRfqCandidate["quoteEntries"]):Record<string,string>{return Object.fromEntries(entries.map((entry)=>[`${entry.targetType}:${entry.targetId}`,(entry.unitPriceCents/100).toFixed(2)]))}
+function pricingRows(lines:ProjectLine[]):PricingRow[]{return lines.flatMap((line)=>{if(!line.id)return[];const quantity=Number(line.volumeM3??line.pieces??0);const material=quantity>0?[{key:`line:${line.id}`,targetType:"line" as const,targetId:line.id,label:line.productName??`Line ${line.lineNo}`,quantity,unit:line.unit}]:[];const processes=(line.processRequirements??[]).flatMap((process)=>{const processQuantity=Number(process.value);return processQuantity>0?[{key:`process:${process.id}`,targetType:"process" as const,targetId:process.id,label:`${line.productName??`Line ${line.lineNo}`} · ${process.name}`,quantity:processQuantity,unit:process.unit??"unit"}]:[]});return[...material,...processes]})}
+function QuotationEntryForm({lines,currency,prices,setPrices,notes,setNotes,pending,onSubmit,onCancel}:{lines:ProjectLine[];currency:string;prices:Record<string,string>;setPrices:React.Dispatch<React.SetStateAction<Record<string,string>>>;notes:string;setNotes:(value:string)=>void;pending:boolean;onSubmit:()=>void;onCancel?:()=>void}){const rows=pricingRows(lines);const rowCents=(row:PricingRow)=>Math.round(Number(prices[row.key]||0)*100*row.quantity);const totalCents=rows.reduce((sum,row)=>sum+rowCents(row),0);return <div className="space-y-3 rounded-md border p-3"><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">Requirement</th><th className="p-2 text-right">Quantity</th><th className="p-2">Unit</th><th className="p-2 text-right">Unit price ({currency})</th><th className="p-2 text-right">Total</th></tr></thead><tbody>{rows.map((row)=><tr key={row.key} className="border-b last:border-0"><td className="p-2">{row.label}</td><td className="p-2 text-right">{row.quantity}</td><td className="p-2">{row.unit}</td><td className="p-2"><Input aria-label={`Unit price for ${row.label}`} className="ml-auto w-32 text-right" type="number" min="0" step="0.01" value={prices[row.key]??""} onChange={(event)=>setPrices((current)=>({...current,[row.key]:event.target.value}))}/></td><td className="p-2 text-right">{(rowCents(row)/100).toFixed(2)}</td></tr>)}</tbody></table></div><div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end"><Field label="Notes and exceptions"><Input value={notes} onChange={(event)=>setNotes(event.target.value)}/></Field><p className="pb-2 font-semibold">Total: {(totalCents/100).toFixed(2)} {currency}</p><div className="flex gap-2">{onCancel?<Button variant="outline" onClick={onCancel}>Cancel</Button>:null}<Button disabled={pending||rows.length===0||Object.keys(prices).length===0} onClick={onSubmit}>{pending?<Loader2 className="mr-2 h-4 w-4 animate-spin"/>:null}Submit quotation</Button></div></div></div>}
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="grid gap-1.5"><Label>{label}</Label>{children}</div>; }

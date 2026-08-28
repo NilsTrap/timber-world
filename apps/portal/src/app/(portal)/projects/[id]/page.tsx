@@ -32,7 +32,7 @@ export default async function ProjectDetailPage({
     if (res.deny === "login") redirect("/login");
     notFound();
   }
-  const canManageRfq = res.project.stage === "draft" && !!res.partyWorkspace.buyer && !res.partyWorkspace.seller
+  const canManageRfq = !!res.partyWorkspace.buyer && !res.partyWorkspace.seller
     && (res.viewer.isPlatformAdmin || (
       res.viewer.organisationId === res.partyWorkspace.buyer.id
       && res.viewer.personas.includes("trader")

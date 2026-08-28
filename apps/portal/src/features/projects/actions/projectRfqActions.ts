@@ -6,14 +6,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionResult } from "../../orders/types";
 import { getOrderDeal } from "../../orders/services/orderDeals";
 import { resolveProjectsActor } from "../access";
-import { mapAwardRfqError, mapCreateRfqError, quoteTotalToCents } from "../services/projectRfq";
+import { mapAwardRfqError, mapCreateRfqError } from "../services/projectRfq";
 
 const uuid = z.string().uuid();
 const requestSchema = z.object({ projectId: uuid, candidateIds: z.array(uuid).min(2).max(20), deadline: z.coerce.date().refine((value) => value.getTime() > Date.now(), "Deadline must be in the future") });
-const quoteSchema = z.object({ candidateId: uuid, total: z.coerce.number().finite().nonnegative().max(21474836.47), notes: z.string().trim().max(4000).optional().default("") });
+const quoteEntrySchema=z.object({targetType:z.enum(["line","process"]),targetId:uuid,label:z.string().trim().min(1).max(200),quantity:z.coerce.number().finite().positive(),unit:z.string().trim().max(50),unitPriceCents:z.coerce.number().int().nonnegative().max(2147483647)});
+const quoteSchema = z.object({ candidateId: uuid, entries:z.array(quoteEntrySchema).min(1).max(500), notes: z.string().trim().max(4000).optional().default("") });
 const awardSchema = z.object({ projectId: uuid, rfqId: uuid, candidateId: uuid });
 
-export type ProjectRfqCandidate = { id: string; organisationId: string; organisationName: string; status: "invited"|"submitted"|"awarded"|"not_awarded"; quoteTotalCents: number|null; quoteNotes: string|null; submittedAt: string|null };
+export type ProjectRfqCandidate = { id: string; organisationId: string; organisationName: string; status: "invited"|"submitted"|"awarded"|"not_awarded"; quoteTotalCents: number|null; quoteNotes: string|null; submittedAt: string|null; quoteEntries:ProjectQuoteEntry[] };
+export type ProjectQuoteEntry=z.infer<typeof quoteEntrySchema>;
 export type ProjectRfqState = { id: string; deadline: string; status: "open"|"awarded"|"cancelled"; ownerOrganisationId: string; candidates: ProjectRfqCandidate[]; canManage: boolean; ownCandidateId: string|null };
 
 export async function getEligibleProjectRfqCandidates(projectId: string): Promise<ActionResult<Array<{id:string;name:string}>>> {
@@ -28,7 +30,7 @@ async function requireOwner(projectId: string) {
   const a = await resolveProjectsActor();
   if (!a.ok) return null;
   const project = await getOrderDeal(a.db, a.actor, projectId);
-  if (!project.success || project.data.lifecycleStage !== "draft") return null;
+  if (!project.success) return null;
   if (!project.data.buyer.id || project.data.seller.id) return null;
   if (!a.isPlatformAdmin) {
     if (a.orgId !== project.data.buyer.id) return null;
@@ -48,11 +50,14 @@ export async function getProjectRfqState(projectId: string): Promise<ActionResul
   const row = rfq as Record<string,unknown>;
   const canManage = a.isPlatformAdmin || (a.orgId != null && row.organization_id === a.orgId);
   const candidateDb = canManage ? createAdminClient() : a.db;
-  const { data: candidates, error: candidateError } = await candidateDb.from("project_rfq_candidates").select("id, organization_id, status, quote_total_cents, quote_notes, submitted_at, organisations!inner(name)").eq("rfq_id",row.id).order("created_at");
+  let { data: candidates, error: candidateError } = await candidateDb.from("project_rfq_candidates").select("id, organization_id, status, quote_total_cents, quote_notes, submitted_at, quote_entries, organisations!inner(name)").eq("rfq_id",row.id).order("created_at");
+  if(candidateError?.message.includes("quote_entries")){const legacy=await candidateDb.from("project_rfq_candidates").select("id, organization_id, status, quote_total_cents, quote_notes, submitted_at, organisations!inner(name)").eq("rfq_id",row.id).order("created_at");candidates=legacy.data;candidateError=legacy.error}
   if (candidateError) return { success:false,error:"Could not load RFQ candidates",code:"FETCH_FAILED" };
-  const mapped = ((candidates??[]) as Array<Record<string,unknown>>).map((candidate)=>({ id:candidate.id as string, organisationId:candidate.organization_id as string, organisationName:(candidate.organisations as Record<string,unknown>).name as string, status:candidate.status as ProjectRfqCandidate["status"], quoteTotalCents:candidate.quote_total_cents==null?null:Number(candidate.quote_total_cents), quoteNotes:candidate.quote_notes as string|null, submittedAt:candidate.submitted_at as string|null }));
+  const mapped = ((candidates??[]) as Array<Record<string,unknown>>).map((candidate)=>({ id:candidate.id as string, organisationId:candidate.organization_id as string, organisationName:(candidate.organisations as Record<string,unknown>).name as string, status:candidate.status as ProjectRfqCandidate["status"], quoteTotalCents:candidate.quote_total_cents==null?null:Number(candidate.quote_total_cents), quoteNotes:candidate.quote_notes as string|null, submittedAt:candidate.submitted_at as string|null,quoteEntries:quoteEntries(candidate.quote_entries) }));
   return { success:true,data:{ id:row.id as string, deadline:row.deadline as string, status:row.status as ProjectRfqState["status"], ownerOrganisationId:row.organization_id as string, candidates:mapped, canManage, ownCandidateId:mapped.find((candidate)=>candidate.organisationId===a.orgId)?.id??null } };
 }
+
+function quoteEntries(value:unknown):ProjectQuoteEntry[]{if(!Array.isArray(value))return[];return value.flatMap((entry)=>{const parsed=quoteEntrySchema.safeParse(entry);return parsed.success?[parsed.data]:[]})}
 
 export async function requestProjectQuotations(raw: unknown): Promise<ActionResult<{id:string}>> {
   const parsed=requestSchema.safeParse(raw); if(!parsed.success)return{success:false,error:parsed.error.issues[0]?.message??"Invalid RFQ",code:"VALIDATION_ERROR"};
@@ -63,9 +68,10 @@ export async function requestProjectQuotations(raw: unknown): Promise<ActionResu
 }
 export async function submitProjectQuotation(raw: unknown): Promise<ActionResult<true>> {
   const parsed=quoteSchema.safeParse(raw); if(!parsed.success)return{success:false,error:parsed.error.issues[0]?.message??"Invalid quotation",code:"VALIDATION_ERROR"};
-  const a=await resolveProjectsActor(); if(!a.ok||!a.orgId)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
-  const {error}=await a.db.rpc("submit_project_rfq_quote",{p_candidate_id:parsed.data.candidateId,p_total_cents:quoteTotalToCents(parsed.data.total),p_notes:parsed.data.notes});
-  if(error)return{success:false,error:"Could not submit quotation",code:"SUBMIT_FAILED"}; return{success:true,data:true};
+  const a=await resolveProjectsActor(); if(!a.ok||(!a.orgId&&!a.isPlatformAdmin))return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+  const {error}=await a.db.rpc("submit_project_rfq_quote_entries",{p_candidate_id:parsed.data.candidateId,p_entries:parsed.data.entries,p_notes:parsed.data.notes});
+  if(!error)return{success:true,data:true};
+  return{success:false,error:"Could not submit quotation",code:"SUBMIT_FAILED"};
 }
 export async function awardProjectQuotation(raw: unknown): Promise<ActionResult<{projectId:string}>> {
   const parsed=awardSchema.safeParse(raw); if(!parsed.success)return{success:false,error:"Invalid award",code:"VALIDATION_ERROR"};

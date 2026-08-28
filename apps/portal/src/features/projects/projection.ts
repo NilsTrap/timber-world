@@ -92,6 +92,7 @@ export interface DealLineLike {
   vatRate: number | null;
   lineTotalCents: number | null;
   notes?: string | null;
+  specificationFields?: Array<{ key: string; label: string; value: string }>;
 }
 
 export interface DealLineComponentLike {
@@ -296,6 +297,7 @@ export function toProjectLines(
         value: requirement.value,
         unit: requirement.unit,
       })) ?? [],
+      basicProperties: (li.specificationFields??[]).map((field)=>({key:field.key,label:field.label,value:field.value})),
     };
     if (seeTerms) {
       line.unitPriceCents = li.unitPriceCents;

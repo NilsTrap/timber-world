@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -31,6 +31,7 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
   const [catalog, setCatalog] = useState<ProjectCatalogOption[]>([]);
   const [catalogSearch, setCatalogSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<ProjectLine | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   function openCatalog() {
     startTransition(async () => {
@@ -87,16 +88,22 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
         <Table dense><TableHeader><TableRow>
           <TableHead>#</TableHead><TableHead>Deliverable</TableHead><TableHead>Technical notes</TableHead>
           <TableHead className="text-right">Qty</TableHead><TableHead>Unit</TableHead>{canEdit ? <TableHead /> : null}
-        </TableRow></TableHeader><TableBody>{lines.map((line) => (
-          <TableRow key={line.id ?? line.lineNo}>
-            <TableCell>{line.lineNo}</TableCell><TableCell className="font-medium">{line.productName ?? "—"}</TableCell>
+        </TableRow></TableHeader><TableBody>{lines.map((line) => {
+          const key=line.id??String(line.lineNo);const isExpanded=expanded.has(key);const basics=basicProperties(line);
+          return <Fragment key={key}>
+          <TableRow>
+            <TableCell><Button variant="ghost" size="icon" aria-label={`${isExpanded?"Collapse":"Expand"} ${line.productName??"line"}`} onClick={()=>setExpanded((current)=>{const next=new Set(current);if(next.has(key))next.delete(key);else next.add(key);return next})}>{isExpanded?<ChevronDown className="h-4 w-4"/>:<ChevronRight className="h-4 w-4"/>}</Button></TableCell><TableCell className="font-medium">{line.productName ?? "—"}</TableCell>
             <TableCell><div>{line.notes ?? "—"}</div>{(line.processRequirements ?? []).length > 0 ? <div className="mt-1 text-xs text-muted-foreground"><span className="font-medium">Processes: </span>{(line.processRequirements ?? []).map((requirement) => `${requirement.name}: ${requirement.value}${requirement.unit ? ` ${requirement.unit}` : ""}`).join(" · ")}</div> : null}</TableCell><TableCell className="text-right">{line.volumeM3 ?? line.pieces ?? "—"}</TableCell><TableCell>{line.unit}</TableCell>
             {canEdit ? <TableCell><div className="flex justify-end">
-              <Button variant="ghost" size="icon" aria-label={`Edit ${line.productName ?? "line"}`} onClick={() => { setCatalog([]); setDraft(lineToDraft(line)); }}><Pencil className="h-4 w-4" /></Button>
+              {(line.basicProperties??[]).length===0&&(line.processRequirements??[]).length===0?<Button variant="ghost" size="icon" aria-label={`Edit ${line.productName ?? "line"}`} onClick={() => { setCatalog([]); setDraft(lineToDraft(line)); }}><Pencil className="h-4 w-4" /></Button>:null}
               <Button variant="ghost" size="icon" aria-label={`Delete ${line.productName ?? "line"}`} onClick={() => setDeleteTarget(line)}><Trash2 className="h-4 w-4" /></Button>
             </div></TableCell> : null}
           </TableRow>
-        ))}</TableBody></Table>
+          {isExpanded?<TableRow><TableCell colSpan={canEdit?6:5}><div className="grid gap-4 rounded-md bg-muted/30 p-4 md:grid-cols-2">
+            {basics.length?<SpecificationGroup title="Basic properties" items={basics}/>:null}
+            {(line.processRequirements??[]).length?<SpecificationGroup title="Production processes" items={(line.processRequirements??[]).map((item)=>({label:item.name,value:`${item.value}${item.unit?` ${item.unit}`:""}`}))}/>:null}
+            {!basics.length&&!(line.processRequirements??[]).length?<p className="text-sm text-muted-foreground">No additional structured fields for this line.</p>:null}
+          </div></TableCell></TableRow>:null}</Fragment>})}</TableBody></Table>
       </div>
     )}
 
@@ -152,4 +159,9 @@ function filterCatalog(options: ProjectCatalogOption[], query: string): ProjectC
   if (!normalized) return options.slice(0, 100);
   return options.filter((option) => option.label.toLocaleLowerCase().includes(normalized)).slice(0, 100);
 }
+function basicProperties(line:ProjectLine):Array<{label:string;value:string}>{return [
+  ["Species",line.woodSpecies],["Humidity",line.humidity],["Processing",line.processing],["Quality",line.quality],
+  ["Thickness",line.thickness],["Width",line.width],["Length",line.length],
+].flatMap(([label,value])=>value?[{label:label!,value:value!}]:[]).concat((line.basicProperties??[]).map((field)=>({label:field.label,value:field.value})))}
+function SpecificationGroup({title,items}:{title:string;items:Array<{label:string;value:string}>}){return <section><h3 className="mb-2 text-sm font-semibold">{title}</h3><dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">{items.map((item)=><div key={`${item.label}-${item.value}`} className="contents"><dt className="text-muted-foreground">{item.label}</dt><dd className="text-right font-medium">{item.value}</dd></div>)}</dl></section>}
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="grid gap-1.5"><Label>{label}</Label>{children}</div>; }

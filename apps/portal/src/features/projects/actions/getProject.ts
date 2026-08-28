@@ -240,6 +240,10 @@ function normalizeCandidateLines(lines: unknown[]): ProjectDetail["lines"] {
           unit: typeof requirement.unit === "string" ? requirement.unit : null,
         }];
       }),
+      basicProperties: Array.isArray(line.basicProperties) ? line.basicProperties.flatMap((candidate)=>{
+        if(!candidate||typeof candidate!=="object"||Array.isArray(candidate))return[];const field=candidate as Record<string,unknown>;
+        return typeof field.key==="string"&&typeof field.label==="string"&&typeof field.value==="string"?[{key:field.key,label:field.label,value:field.value}]:[];
+      }) : [],
     } as ProjectDetail["lines"][number]];
   });
 }

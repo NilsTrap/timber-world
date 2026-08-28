@@ -6,7 +6,6 @@ import type { ActionResult } from "../../orders/types";
 import { getOrderDeal } from "../../orders/services/orderDeals";
 import type { ActorContext, DbClient } from "../../orders/services/dealModel";
 import { resolveProjectsActor } from "../access";
-import { readLineFieldValues } from "../../catalog/services/lineFieldValues";
 import { validQuantityForUnit } from "../services/specificationQuantity";
 import {
   calculateComponentTotalCents,
@@ -119,30 +118,7 @@ export async function createProjectSpecificationLine(raw: unknown): Promise<Acti
     const category = product.catalog_categories as Record<string, unknown>;
     const catalogUnit = lineUnit.safeParse(category.primary_unit);
     if (!catalogUnit.success) return { success: false, error: "Catalogue unit is not supported by project specifications", code: "VALIDATION_ERROR" };
-    let resolvedFields;
-    try {
-      resolvedFields = await readLineFieldValues(ctx.data.db, { productId: row.product_id as string, variantId: row.id as string }, { strict: true });
-    } catch {
-      return { success: false, error: "Could not load catalogue field values", code: "FETCH_FAILED" };
-    }
-    const { data: processAssignments, error: processError } = await ctx.data.db
-      .from("catalog_category_field_assignments")
-      .select("catalog_fields!inner(field_key)")
-      .eq("category_id", product.category_id as string)
-      .eq("applies_to", "process")
-      .order("sort_order");
-    if (processError) return { success: false, error: "Could not load catalogue process fields", code: "FETCH_FAILED" };
-    const processKeys = new Set<string>();
-    for (const assignment of (processAssignments ?? []) as Array<{ catalog_fields: { field_key?: string } | null }>) {
-      const fieldRow = assignment.catalog_fields as { field_key?: string } | null;
-      const key = fieldRow?.field_key;
-      if (key) processKeys.add(key);
-    }
-    const fieldSnapshot = Object.entries(resolvedFields.fields)
-      .filter(([key]) => !processKeys.has(key))
-      .map(([, field]) => `${field.label}: ${field.value}`)
-      .join(" · ");
-    const snapshotNotes = [input.notes, fieldSnapshot].filter(Boolean).join(" · ");
+    const snapshotNotes = input.notes;
     if (snapshotNotes.length > 2000) {
       return { success: false, error: "Catalogue details exceed the specification note limit", code: "VALIDATION_ERROR" };
     }
@@ -173,7 +149,7 @@ export async function createProjectSpecificationLine(raw: unknown): Promise<Acti
     refreshProject(input.projectId);
     return { success: true, data: { id: data.id as string } };
   }
-  const { data, error } = await ctx.data.db.rpc("create_project_specification_line_with_processes", {
+  const { data, error } = await ctx.data.db.rpc("create_project_specification_line_with_snapshot", {
     p_order_id: input.projectId,
     p_catalog_variant_id: input.catalogVariantId,
     p_quantity: input.quantity,
@@ -212,6 +188,8 @@ export async function updateProjectSpecificationLine(raw: unknown): Promise<Acti
   const input = parsed.data;
   const ctx = await editableProject(input.projectId);
   if (!ctx.success) return ctx;
+  const {data:existing}=await ctx.data.db.from("order_line_items").select("catalog_product_id").eq("id",input.lineId).eq("order_id",input.projectId).maybeSingle();
+  if(existing?.catalog_product_id)return{success:false,error:"Catalogue snapshots are immutable; replace the line to change it",code:"VALIDATION_ERROR"};
   const quantity = lineQuantities(input.unit, input.quantity);
   const { data, error } = await ctx.data.db.from("order_line_items").update({
     product_name: input.productName, unit: input.unit,

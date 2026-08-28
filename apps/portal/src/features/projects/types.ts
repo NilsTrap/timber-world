@@ -147,6 +147,7 @@ export interface ProjectLine {
   lineTotalCents?: number | null;
   notes: string | null;
   processRequirements: ProjectProcessRequirement[];
+  basicProperties?: Array<{key:string;label:string;value:string}>;
   /** Internal cost build-up. Absent unless the viewer may see deal terms. */
   components?: ProjectLineComponent[];
 }
