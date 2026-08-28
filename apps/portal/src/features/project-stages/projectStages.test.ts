@@ -19,6 +19,7 @@ assert.equal(updateProjectStageDefinitionSchema.safeParse({key:"draft",label:"Dr
 assert.equal(reorderProjectStagesSchema.safeParse({items:[{key:"draft",sortOrder:10},{key:"confirmed",sortOrder:10}]}).success,false);
 
 const migration = readFileSync("../../supabase/migrations/20260828100000_project_stages.sql", "utf8");
+const placeholderCompatibility = readFileSync("../../supabase/migrations/20260828160000_project_stage_placeholder_compatibility.sql", "utf8");
 assert.match(migration, /conrelid = 'public\.orders'::regclass/);
 assert.match(migration, /FOREIGN KEY \(lifecycle_stage\) REFERENCES public\.project_stages\(key\)/);
 assert.match(migration, /PROJECT_STAGE_FORBIDDEN/);
@@ -36,14 +37,20 @@ assert.match(migration, /\('ready_for_dispatch',\s+'Ready for dispatch'/);
 assert.match(migration, /\('in_transit',\s+'In transit'/);
 assert.match(migration, /LEFT JOIN public\.project_stages ps/);
 assert.match(migration, /ORDER BY COALESCE\(ps\.sort_order/);
+assert.match(placeholderCompatibility, /DROP CONSTRAINT IF EXISTS orders_bilateral_or_draft_placeholder_check/);
+assert.match(placeholderCompatibility, /num_nonnulls\(seller_organisation_id, buyer_organisation_id\) BETWEEN 1 AND 2/);
+assert.doesNotMatch(placeholderCompatibility, /lifecycle_stage\s*=\s*'draft'/);
 
 const detail = readFileSync("src/features/projects/components/ProjectDetailView.tsx", "utf8");
 const selector = readFileSync("src/features/projects/components/ProjectStatusSelect.tsx", "utf8");
+const updateAction = readFileSync("src/features/project-stages/actions/updateProjectStage.ts", "utf8");
 const nav = readFileSync("src/components/layout/navItems.ts", "utf8");
 assert.match(detail, /actions={<><ProjectStatusSelect[\s\S]*<ProjectNextLegControl/);
 assert.doesNotMatch(detail, /badge={<ProjectStageBadge/);
 assert.match(selector, /className="h-8 min-w-36"/);
 assert.match(selector, /expectedUpdatedAt/);
+assert.match(updateAction, /viewer\.isPlatformAdmin \? createAdminClient\(\) : access\.actor\.db/);
+assert.match(updateAction, /requireVisibleProject\(parsed\.data\.projectId, true\)/);
 assert.match(nav, /\/admin\/settings\/project-stages/);
 
 console.log("project stages: pure and migration contracts passed");
