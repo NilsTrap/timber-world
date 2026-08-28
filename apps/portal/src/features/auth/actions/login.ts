@@ -38,6 +38,13 @@ export async function loginUser(
   if (error) {
     // TODO: Remove this console.log before production
     console.error("Login error from Supabase:", error.message, error.code);
+    if (error.status === 429 || error.code === "over_request_rate_limit") {
+      return {
+        success: false,
+        error: "Too many login attempts. Please wait a few minutes and try again.",
+        code: "RATE_LIMITED",
+      };
+    }
     // Generic error for security (don't reveal if email exists)
     return {
       success: false,
