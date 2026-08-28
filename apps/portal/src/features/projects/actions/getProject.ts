@@ -96,7 +96,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     a.access.domainVisible("deal_terms")
       ? loadLineComponents(a.db, raw.lineItems.map((line) => line.id).filter((id): id is string => Boolean(id)))
       : Promise.resolve([]),
-    loadProcessRequirements(a.db, raw.lineItems.map((line) => line.id).filter((id): id is string => Boolean(id))),
+    loadProcessRequirements(a.db, (walled.lineItems ?? []).map((line) => line.id).filter((id): id is string => Boolean(id))),
     walled.spineId
       ? a.db.from("spines").select("code,origin_order_id").eq("id", walled.spineId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -307,9 +307,11 @@ async function loadLineComponents(db: DbClient, lineIds: string[]): Promise<Deal
 
 async function loadProcessRequirements(db: DbClient, lineIds: string[]): Promise<DealProcessRequirementLike[]> {
   if (lineIds.length === 0) return [];
-  const { data, error } = await db.rpc("get_project_process_requirements", { p_line_ids: lineIds });
-  if (error) throw new Error("Could not load process requirements");
-  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+  const chunks: string[][] = [];
+  for (let offset = 0; offset < lineIds.length; offset += 200) chunks.push(lineIds.slice(offset, offset + 200));
+  const responses = await Promise.all(chunks.map((p_line_ids) => db.rpc("get_project_process_requirements", { p_line_ids })));
+  if (responses.some(({ error }) => error)) throw new Error("Could not load process requirements");
+  return responses.flatMap(({ data }) => (data ?? []) as Array<Record<string, unknown>>).map((row) => ({
     id: row.id as string,
     orderLineItemId: row.request_line_id as string,
     fieldKey: row.field_key as string,

@@ -91,8 +91,8 @@ export async function readLineFieldValues(
         : Promise.resolve({ data: [] }),
     ]);
 
-    const readError = prodRes?.error ?? varRes?.error ?? packRes?.error;
-    if (readError) throw readError;
+    const fieldReadError = prodRes?.error ?? varRes?.error;
+    if (fieldReadError) throw fieldReadError;
     const fields: Record<string, LineFieldValue> = {};
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const apply = (rows: any[] | null | undefined) => {
@@ -114,7 +114,7 @@ export async function readLineFieldValues(
     apply(prodRes?.data);
     apply(varRes?.data);
 
-    const packRows = (packRes?.data ?? []) as Array<{
+    const packRows = (packRes?.error ? [] : (packRes?.data ?? [])) as Array<{
       is_default?: boolean;
       catalog_packaging_types?: { name?: string | null; pieces_per_package?: number | null } | null;
     }>;

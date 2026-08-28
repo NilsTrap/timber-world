@@ -193,6 +193,16 @@ function fv(
   }
   ok("strict snapshot reads propagate catalogue failures", strictRejected);
 
+  const packagingFailureDb = {
+    from(table: string) {
+      return { select() { return { eq() { return Promise.resolve(table === "catalog_variant_packaging_assignments"
+        ? { data: null, error: { message: "packaging unavailable" } }
+        : { data: table === "catalog_product_field_values" ? [fv("safe", "Safe", "text", { valueText: "kept" })] : [], error: null }); } }; } };
+    },
+  };
+  const strictWithPackagingFailure = await readLineFieldValues(packagingFailureDb, { productId: "p1", variantId: "v1" }, { strict: true });
+  eq("strict field read ignores unrelated packaging failure", strictWithPackagingFailure.fields.safe?.value, "kept");
+
   // ── 9 · product-only linkage (no variant) still resolves ────────────────────
   const prodOnly = await readLineFieldValues(
     fakeDb({

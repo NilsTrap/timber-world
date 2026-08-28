@@ -7,6 +7,7 @@ import { getOrderDeal } from "../../orders/services/orderDeals";
 import type { ActorContext, DbClient } from "../../orders/services/dealModel";
 import { resolveProjectsActor } from "../access";
 import { readLineFieldValues } from "../../catalog/services/lineFieldValues";
+import { validQuantityForUnit } from "../services/specificationQuantity";
 import {
   calculateComponentTotalCents,
   canEditProjectSpecification,
@@ -87,10 +88,24 @@ function lineQuantities(unit: z.infer<typeof lineUnit>, quantity: number) {
     : { pieces: String(quantity), volume_m3: null };
 }
 
+function mapCatalogLineRpcError(message: string): ActionResult<never> {
+  if (message.includes("REQUIRED_PROCESS_VALUE_MISSING")) return { success: false, error: "A required process value is missing from the catalogue product", code: "VALIDATION_ERROR" };
+  if (message.includes("INVALID_QUANTITY_FOR_UNIT")) return { success: false, error: "Quantity is outside the allowed range for this unit", code: "VALIDATION_ERROR" };
+  if (message.includes("CATALOG_UNIT_MISMATCH")) return { success: false, error: "The selected unit does not match the catalogue category", code: "VALIDATION_ERROR" };
+  if (message.includes("UNSUPPORTED_PROCESS_FIELD_TYPE")) return { success: false, error: "This category contains an unsupported process field type", code: "VALIDATION_ERROR" };
+  if (message.includes("TOO_MANY_PROCESS_FIELDS") || message.includes("PROCESS_VALUE_TOO_LONG")) return { success: false, error: "Catalogue process requirements exceed the supported limits", code: "VALIDATION_ERROR" };
+  if (message.includes("CATALOG_VARIANT_INVALID") || message.includes("CATALOG_PRODUCT_INVALID") || message.includes("CATALOG_CATEGORY_INVALID")) return { success: false, error: "Catalogue selection is missing or inactive", code: "VALIDATION_ERROR" };
+  if (message.includes("PROJECT_NOT_DRAFT")) return { success: false, error: "Specification can only be changed while the project is a draft", code: "NOT_DRAFT" };
+  if (message.includes("ROOT_PROJECT_REQUIRED")) return { success: false, error: "Specification lines can only be added to a root project", code: "FORBIDDEN" };
+  if (message.includes("FORBIDDEN")) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
+  return { success: false, error: "Could not add specification line", code: "INSERT_FAILED" };
+}
+
 export async function createProjectSpecificationLine(raw: unknown): Promise<ActionResult<{ id: string }>> {
   const parsed = lineSchema.safeParse(raw);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid line", code: "VALIDATION_ERROR" };
   const input = parsed.data;
+  if (!validQuantityForUnit(input.unit, input.quantity)) return { success: false, error: "Quantity is outside the allowed range for this unit", code: "VALIDATION_ERROR" };
   const ctx = await editableProject(input.projectId);
   if (!ctx.success) return ctx;
   let snapshot: Record<string, unknown> = { product_name: input.productName, unit: input.unit, notes: input.notes || null, is_standard: false };
@@ -161,9 +176,12 @@ export async function createProjectSpecificationLine(raw: unknown): Promise<Acti
   const { data, error } = await ctx.data.db.rpc("create_project_specification_line_with_processes", {
     p_order_id: input.projectId,
     p_catalog_variant_id: input.catalogVariantId,
-    p_line: { ...snapshot, ...quantity },
+    p_quantity: input.quantity,
+    p_unit: resolvedUnit,
+    p_notes: snapshot.notes ?? null,
   });
-  if (error || !data) return { success: false, error: "Could not add specification line", code: "INSERT_FAILED" };
+  if (error) return mapCatalogLineRpcError(error.message ?? "");
+  if (!data) return { success: false, error: "Could not add specification line", code: "INSERT_FAILED" };
   refreshProject(input.projectId);
   return { success: true, data: { id: data as string } };
 }

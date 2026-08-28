@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { validQuantityForUnit } from "../../projects/services/specificationQuantity";
 
 const categoryUi = readFileSync("src/features/catalog/components/CategoryDetailTabs.tsx", "utf8");
 const productUi = readFileSync("src/features/catalog/components/ProductDetailContent.tsx", "utf8");
@@ -33,15 +34,17 @@ assert.match(migration, /create_project_specification_line_with_processes/);
 assert.match(migration, /WHERE id=p_order_id FOR UPDATE/);
 assert.match(migration, /d\.lifecycle_stage<>'draft'/);
 assert.match(migration, /d\.deal_kind NOT IN \('buy_sell','sale_only'\)/);
-assert.match(migration, /p_catalog_variant_id UUID/);
+assert.match(migration, /p_catalog_variant_id UUID,p_quantity NUMERIC,p_unit TEXT,p_notes TEXT/);
 assert.doesNotMatch(migration, /p_requirements/);
 assert.match(migration, /catalog_variants WHERE id=p_catalog_variant_id AND is_active/);
 assert.match(migration, /a\.category_id=category\.id AND a\.applies_to='process'/);
 assert.match(migration, /TOO_MANY_PROCESS_FIELDS/);
-assert.match(migration, /NOT BETWEEN 0\.0001 AND 1000000000/);
+assert.match(migration, /INVALID_QUANTITY_FOR_UNIT/);
 assert.match(migration, /btrim\(value\)<>''/);
 assert.match(migration, /REQUIRED_PROCESS_VALUE_MISSING/);
 assert.match(migration, /WITH RECURSIVE ancestry/);
+assert.match(migration, /INVALID_LINE_ANCESTRY/);
+assert.match(migration, /UNSUPPORTED_PROCESS_FIELD_TYPE/);
 assert.match(migration, /'processRequirements',coalesce/);
 assert.doesNotMatch(migration, /unit_cost|total_cost/);
 
@@ -53,9 +56,17 @@ assert.doesNotMatch(specificationActions, /ROLLBACK_FAILED/);
 assert.match(specificationActions, /strict: true/);
 assert.match(specificationActions, /p_catalog_variant_id: input\.catalogVariantId/);
 assert.doesNotMatch(specificationActions, /p_requirements/);
+assert.match(specificationActions, /p_quantity: input\.quantity/);
 assert.match(projectLoader, /normalizeCandidateLines/);
 assert.match(projectLoader, /Array\.isArray\(line\.processRequirements\)/);
 assert.match(projectEditor, /line\.processRequirements \?\? \[\]/);
 assert.match(packageJson, /test:timber-mvp-gate[^\n]+process-fields\.test\.ts/);
+
+assert.equal(validQuantityForUnit("piece", 1_000_000), true);
+assert.equal(validQuantityForUnit("piece", 1_000_001), false);
+assert.equal(validQuantityForUnit("piece", 1.5), false);
+assert.equal(validQuantityForUnit("m3", 100_000_000), true);
+assert.equal(validQuantityForUnit("m3", 100_000_001), false);
+assert.equal(validQuantityForUnit("crate", 0), false);
 
 console.log("catalog process field tests passed");

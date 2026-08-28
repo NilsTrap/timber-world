@@ -449,6 +449,11 @@ export async function saveFieldAssignment(db: DbClient, input: SaveFieldAssignme
   if (!["product", "variant", "process"].includes(input.appliesTo)) {
     return { success: false, error: "Invalid field scope", code: "VALIDATION_ERROR" };
   }
+  if (input.appliesTo === "process") {
+    const { data: field, error } = await db.from("catalog_fields").select("field_type").eq("id", input.fieldId).single();
+    if (error) return { success: false, error: "Could not validate process field", code: "FETCH_FAILED" };
+    if (["boolean", "file"].includes(field.field_type as string)) return { success: false, error: "Boolean and file fields cannot be process requirements", code: "VALIDATION_ERROR" };
+  }
   const payload = {
     category_id: input.categoryId,
     field_id: input.fieldId,

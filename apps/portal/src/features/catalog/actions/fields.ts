@@ -269,6 +269,12 @@ export async function saveFieldAssignment(input: SaveFieldAssignmentInput): Prom
   }
 
   const supabase = await createClient();
+  if (input.appliesTo === "process") {
+    const { data: field, error: fieldError } = await supabase.from("catalog_fields").select("field_type").eq("id", input.fieldId).single();
+    if (fieldError) return { success: false, error: "Could not validate process field", code: "FETCH_FAILED" };
+    const fieldType = (field as unknown as { field_type: string }).field_type;
+    if (["boolean", "file"].includes(fieldType)) return { success: false, error: "Boolean and file fields cannot be process requirements", code: "VALIDATION_ERROR" };
+  }
   const payload = {
     category_id: input.categoryId,
     field_id: input.fieldId,

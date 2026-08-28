@@ -223,6 +223,7 @@ function FieldsTab({
       showInFilter: patch.showInFilter ?? f.showInFilter,
       showInDetail: patch.showInDetail ?? f.showInDetail,
       showInPriceList: patch.showInPriceList ?? f.showInPriceList,
+      isRequired: patch.isRequired ?? f.isRequired,
       sortOrder: patch.sortOrder ?? f.sortOrder,
     });
 
