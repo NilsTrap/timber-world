@@ -83,7 +83,7 @@ DECLARE d public.orders%ROWTYPE; v public.catalog_variants%ROWTYPE; product publ
  new_id UUID; next_no INTEGER; resolved_value TEXT; assignment RECORD;
 BEGIN
  IF p_unit NOT IN ('m3','m2','piece','linear_m','package','crate','loose_m3') OR length(coalesce(p_notes,''))>2000 THEN RAISE EXCEPTION 'INVALID_LINE'; END IF;
- IF p_quantity IS NULL OR p_quantity<=0 OR p_quantity>CASE WHEN p_unit IN ('piece','package','crate') THEN 1000000 ELSE 100000000 END
+ IF p_quantity IS NULL OR p_quantity<=0 OR p_quantity>(CASE WHEN p_unit IN ('piece','package','crate') THEN 1000000 ELSE 100000000 END)
   OR (p_unit IN ('piece','package','crate') AND trunc(p_quantity)<>p_quantity) THEN RAISE EXCEPTION 'INVALID_QUANTITY_FOR_UNIT'; END IF;
  SELECT * INTO d FROM public.orders WHERE id=p_order_id FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'PROJECT_NOT_FOUND'; END IF;
