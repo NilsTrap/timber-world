@@ -7,6 +7,7 @@ import { getOrderDeal } from "../../orders/services/orderDeals";
 import type { ActorContext, DbClient } from "../../orders/services/dealModel";
 import { resolveProjectsActor } from "../access";
 import { readLineFieldValues } from "../../catalog/services/lineFieldValues";
+import { buildProcessRequirements, type ProcessAssignmentSnapshot } from "../services/processRequirements";
 import {
   calculateComponentTotalCents,
   canEditProjectSpecification,
@@ -94,6 +95,7 @@ export async function createProjectSpecificationLine(raw: unknown): Promise<Acti
   const ctx = await editableProject(input.projectId);
   if (!ctx.success) return ctx;
   let snapshot: Record<string, unknown> = { product_name: input.productName, unit: input.unit, notes: input.notes || null, is_standard: false };
+  let processRequirements: Array<{ field_key: string; name: string; value: string; unit: string | null; sort_order: number }> = [];
   if (input.catalogVariantId) {
     const { data: variant, error: catalogError } = await ctx.data.db.from("catalog_variants")
       .select("id, product_id, sku, thickness_mm, width_mm, length_mm, is_active, catalog_products!inner(id, name, is_active, category_id, catalog_categories!inner(primary_unit, is_active))")
@@ -104,12 +106,34 @@ export async function createProjectSpecificationLine(raw: unknown): Promise<Acti
     const category = product.catalog_categories as Record<string, unknown>;
     const catalogUnit = lineUnit.safeParse(category.primary_unit);
     if (!catalogUnit.success) return { success: false, error: "Catalogue unit is not supported by project specifications", code: "VALIDATION_ERROR" };
-    const resolvedFields = await readLineFieldValues(ctx.data.db, {
-      productId: row.product_id as string,
-      variantId: row.id as string,
-    });
-    const fieldSnapshot = Object.values(resolvedFields.fields)
-      .map((field) => `${field.label}: ${field.value}`)
+    const [resolvedFields, resolvedProductFields] = await Promise.all([
+      readLineFieldValues(ctx.data.db, {
+        productId: row.product_id as string,
+        variantId: row.id as string,
+      }),
+      // Process assignments are edited on the product, not the variant. Keep
+      // their snapshot source product-scoped even if a stale variant EAV row
+      // exists for a field whose assignment was later moved to Process.
+      readLineFieldValues(ctx.data.db, { productId: row.product_id as string }),
+    ]);
+    const { data: processAssignments, error: processError } = await ctx.data.db
+      .from("catalog_category_field_assignments")
+      .select("sort_order, catalog_fields!inner(field_key)")
+      .eq("category_id", product.category_id as string)
+      .eq("applies_to", "process")
+      .order("sort_order");
+    if (processError) return { success: false, error: "Could not load catalogue process fields", code: "FETCH_FAILED" };
+    const processKeys = new Set<string>();
+    const assignments = (processAssignments ?? []) as ProcessAssignmentSnapshot[];
+    processRequirements = buildProcessRequirements(assignments, resolvedProductFields.fields);
+    for (const assignment of assignments) {
+      const fieldRow = assignment.catalog_fields as { field_key?: string } | null;
+      const key = fieldRow?.field_key;
+      if (key) processKeys.add(key);
+    }
+    const fieldSnapshot = Object.entries(resolvedFields.fields)
+      .filter(([key]) => !processKeys.has(key))
+      .map(([, field]) => `${field.label}: ${field.value}`)
       .join(" · ");
     const snapshotNotes = [input.notes, fieldSnapshot].filter(Boolean).join(" · ");
     if (snapshotNotes.length > 2000) {
@@ -138,6 +162,21 @@ export async function createProjectSpecificationLine(raw: unknown): Promise<Acti
     ...snapshot, unit_price_cents: null, line_total_cents: null, ...quantity,
   }).select("id").single();
   if (error || !data) return { success: false, error: error?.message ?? "Could not add line", code: "INSERT_FAILED" };
+  if (processRequirements.length > 0) {
+    const { error: requirementError } = await ctx.data.db.from("order_line_item_process_requirements").insert(
+      processRequirements.map((requirement) => ({ ...requirement, order_line_item_id: data.id as string })),
+    );
+    if (requirementError) {
+      const { error: rollbackError } = await ctx.data.db.from("order_line_items").delete().eq("id", data.id as string);
+      return {
+        success: false,
+        error: rollbackError
+          ? "Could not snapshot catalogue process requirements; the incomplete line could not be removed"
+          : "Could not snapshot catalogue process requirements",
+        code: rollbackError ? "ROLLBACK_FAILED" : "INSERT_FAILED",
+      };
+    }
+  }
   refreshProject(input.projectId);
   return { success: true, data: { id: data.id as string } };
 }
