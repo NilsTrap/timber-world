@@ -5,15 +5,9 @@ import { z } from "zod";
 import type { ActionResult } from "../../orders/types";
 import { getOrderDeal } from "../../orders/services/orderDeals";
 import { resolveProjectsActor } from "../access";
+import { parseCreateProjectLegInput } from "../services/projectLegValidation";
 
 const uuid = z.string().uuid();
-const createSchema = z.object({
-  sourceProjectId: uuid,
-  buyerOrganisationId: uuid.nullable(),
-  sellerOrganisationId: uuid.nullable(),
-  workPackages: z.array(z.object({ originLineItemId: uuid, quantity: z.coerce.number().positive() })).min(1),
-}).refine((value) => value.buyerOrganisationId || value.sellerOrganisationId, "At least one party is required")
-  .refine((value) => !value.buyerOrganisationId || !value.sellerOrganisationId || value.buyerOrganisationId !== value.sellerOrganisationId, "Buyer and seller must differ");
 
 function stableRpcError(message: string): { error: string; code: string } {
   const normalized = message.replaceAll("_", " ");
@@ -26,8 +20,8 @@ function stableRpcError(message: string): { error: string; code: string } {
 }
 
 export async function createSameSpineProjectLeg(raw: unknown): Promise<ActionResult<{ projectId: string }>> {
-  const parsed = createSchema.safeParse(raw);
-  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid project leg", code: "VALIDATION_ERROR" };
+  const parsed = parseCreateProjectLegInput(raw);
+  if (!parsed.success) return parsed;
   const actor = await resolveProjectsActor();
   if (!actor.ok) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
   if (!actor.isPlatformAdmin) {
