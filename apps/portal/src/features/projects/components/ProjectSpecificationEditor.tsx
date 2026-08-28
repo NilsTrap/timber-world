@@ -18,7 +18,7 @@ import {
   type ProjectCatalogOption,
 } from "../actions/projectSpecificationActions";
 
-const LINE_UNITS = ["piece", "m3", "m2", "linear_m", "package", "crate", "loose_m3"] as const;
+const LINE_UNITS = ["kg", "piece", "m3", "m2", "linear_m", "package", "crate", "loose_m3"] as const;
 type Draft = { id?: string; productName: string; quantity: string; unit: string; notes: string; catalogVariantId?: string };
 const blank = (): Draft => ({ productName: "", quantity: "1", unit: "piece", notes: "" });
 

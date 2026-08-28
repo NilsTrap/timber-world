@@ -6,6 +6,9 @@ const categoryUi = readFileSync("src/features/catalog/components/CategoryDetailT
 const productUi = readFileSync("src/features/catalog/components/ProductDetailContent.tsx", "utf8");
 const productPage = readFileSync("src/app/(portal)/admin/catalog/[categoryId]/products/[productId]/page.tsx", "utf8");
 const migration = readFileSync("../../supabase/migrations/20260828140000_catalog_process_fields.sql", "utf8");
+const kgMigration = readFileSync("../../supabase/migrations/20260828150000_project_specification_kg_unit.sql", "utf8");
+const kgConstraintMigration = readFileSync("../../supabase/migrations/20260828151000_order_line_items_kg_unit.sql", "utf8");
+const metalStairsSeed = readFileSync("../../supabase/seeds/metal_stairs_catalog.sql", "utf8");
 const fieldActions = readFileSync("src/features/catalog/actions/fields.ts", "utf8");
 const catalogAdmin = readFileSync("src/features/catalog/services/catalogAdmin.ts", "utf8");
 const specificationActions = readFileSync("src/features/projects/actions/projectSpecificationActions.ts", "utf8");
@@ -60,6 +63,7 @@ assert.match(specificationActions, /p_quantity: input\.quantity/);
 assert.match(projectLoader, /normalizeCandidateLines/);
 assert.match(projectLoader, /Array\.isArray\(line\.processRequirements\)/);
 assert.match(projectEditor, /line\.processRequirements \?\? \[\]/);
+assert.match(projectEditor, /LINE_UNITS = \["kg",/);
 assert.match(packageJson, /test:timber-mvp-gate[^\n]+process-fields\.test\.ts/);
 
 assert.equal(validQuantityForUnit("piece", 1_000_000), true);
@@ -67,6 +71,23 @@ assert.equal(validQuantityForUnit("piece", 1_000_001), false);
 assert.equal(validQuantityForUnit("piece", 1.5), false);
 assert.equal(validQuantityForUnit("m3", 100_000_000), true);
 assert.equal(validQuantityForUnit("m3", 100_000_001), false);
+assert.equal(validQuantityForUnit("kg", 7_223.56), true);
 assert.equal(validQuantityForUnit("crate", 0), false);
+
+assert.match(kgMigration, /p_unit NOT IN \('kg','m3'/);
+assert.match(kgConstraintMigration, /CHECK \(unit IN \('kg', 'm3'/);
+for (const slug of [
+  "metal-sheets", "round-tube", "square-tube", "rectangular-tube",
+  "flat-bar", "angle-profile", "channel-profile", "structural-profile",
+]) assert.match(metalStairsSeed, new RegExp(`'${slug}'`));
+for (const scope of ["product", "variant", "process"]) {
+  assert.match(metalStairsSeed, new RegExp(`'${scope}'`));
+}
+assert.match(metalStairsSeed, /'Custom dimensions'/);
+assert.match(metalStairsSeed, /price_eur_cents[\s\S]+NULL/);
+assert.doesNotMatch(metalStairsSeed, /net_weight_kg|gross_weight_kg/);
+assert.doesNotMatch(metalStairsSeed, /ON CONFLICT \(field_key\) DO UPDATE/);
+assert.doesNotMatch(metalStairsSeed, /ON CONFLICT \(category_id, field_id\) DO UPDATE/);
+assert.match(metalStairsSeed, /pg_advisory_xact_lock/);
 
 console.log("catalog process field tests passed");

@@ -15,7 +15,7 @@ import {
 } from "../services/projectSpecification";
 
 const uuid = z.string().uuid();
-const lineUnit = z.enum(["m3", "m2", "piece", "linear_m", "package", "crate", "loose_m3"]);
+const lineUnit = z.enum(["kg", "m3", "m2", "piece", "linear_m", "package", "crate", "loose_m3"]);
 const componentType = z.enum(["material", "process", "service"]);
 const positiveNumber = z.coerce.number().finite().positive();
 const nonNegativeNumber = z.coerce.number().finite().nonnegative();

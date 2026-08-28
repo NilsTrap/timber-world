@@ -1,4 +1,4 @@
-export type SpecificationUnit = "m3" | "m2" | "piece" | "linear_m" | "package" | "crate" | "loose_m3";
+export type SpecificationUnit = "kg" | "m3" | "m2" | "piece" | "linear_m" | "package" | "crate" | "loose_m3";
 
 const MAX_DISCRETE_QUANTITY = 1_000_000;
 const MAX_MEASURED_QUANTITY = 100_000_000;
