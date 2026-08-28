@@ -146,8 +146,17 @@ export interface ProjectLine {
   unitPriceCents?: number | null;
   lineTotalCents?: number | null;
   notes: string | null;
+  processRequirements: ProjectProcessRequirement[];
   /** Internal cost build-up. Absent unless the viewer may see deal terms. */
   components?: ProjectLineComponent[];
+}
+
+export interface ProjectProcessRequirement {
+  id: string;
+  fieldKey: string;
+  name: string;
+  value: string;
+  unit: string | null;
 }
 
 export interface ProjectLineComponent {

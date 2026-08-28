@@ -39,6 +39,7 @@ export default async function ProductDetailPage({ params }: Props) {
 
   const allFields = fieldsResult.success ? fieldsResult.data : [];
   const productFields = allFields.filter((f: any) => f.appliesTo === "product");
+  const processFields = allFields.filter((f) => f.appliesTo === "process");
   const variantFields = allFields.filter((f: any) => f.appliesTo === "variant");
   const units = unitsResult.success ? unitsResult.data : [];
   const unit = units.find((u) => u.code === catResult.data.primaryUnit) ?? null;
@@ -60,6 +61,7 @@ export default async function ProductDetailPage({ params }: Props) {
       unit={unit}
       categoryDefaultPriceEurCents={catResult.data.defaultPriceEurCents}
       productFields={productFields}
+      processFields={processFields}
       variantFields={variantFields}
       variants={variants}
       altCurrencies={altCurrencies}

@@ -25,6 +25,7 @@ import {
   type DealHeaderLike,
   type DealLineComponentLike,
   type DealLineLike,
+  type DealProcessRequirementLike,
   type ProjectionContext,
 } from "../projection";
 import { summariseFileCounts } from "../services/projectFiles";
@@ -139,6 +140,10 @@ const COMPONENTS: DealLineComponentLike[] = [{
   id: "component-1", orderLineItemId: "li-1", type: "process", name: "Cutting",
   quantity: 207.73, unit: "kg", unitCost: 0.39, totalCostCents: 8101,
 }];
+const PROCESS_REQUIREMENTS: DealProcessRequirementLike[] = [{
+  id: "process-1", orderLineItemId: "li-1", fieldKey: "cutting",
+  name: "Cutting", value: "12", unit: "mm",
+}];
 
 /** Run the real pipeline: field wall → projectors. */
 function render(p: AccessProfile, viewerOrgId: string | null, isPlatformAdmin = false) {
@@ -154,7 +159,8 @@ function render(p: AccessProfile, viewerOrgId: string | null, isPlatformAdmin = 
   return {
     item: toProjectListItem(rawHeader, walled, ctx, COUNTS.total),
     detail: toProjectDetail(rawHeader, walled, ctx, {
-      lines: walled.lineItems ?? [], lineComponents: COMPONENTS, files: FILES, folders: [], fileCounts: COUNTS,
+      lines: walled.lineItems ?? [], lineComponents: COMPONENTS, processRequirements: PROCESS_REQUIREMENTS,
+      files: FILES, folders: [], fileCounts: COUNTS,
     }),
   };
 }
@@ -242,6 +248,12 @@ ok("client: line rows carry NO price keys",
    Object.keys(client.detail.lines[0] ?? {}));
 ok("client: internal cost components are absent",
    !("components" in client.detail.lines[0]!), Object.keys(client.detail.lines[0] ?? {}));
+eq("client: price-free process snapshots remain visible",
+   client.detail.lines[0]?.processRequirements,
+   [{ id: "process-1", fieldKey: "cutting", name: "Cutting", value: "12", unit: "mm" }]);
+ok("client: process snapshots never acquire commercial fields",
+   Object.keys(client.detail.lines[0]?.processRequirements[0] ?? {}).every((key) =>
+     ["id", "fieldKey", "name", "value", "unit"].includes(key)));
 ok("client: the producer is not serialized at all",
    !client.detail.otherParties.some((p) => p.id === PRODUCER), client.detail.otherParties);
 ok("client: no third party of any kind is serialized",

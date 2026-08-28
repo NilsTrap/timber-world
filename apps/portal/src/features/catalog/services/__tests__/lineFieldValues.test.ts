@@ -185,6 +185,14 @@ function fv(
   eq("db failure → empty fields (never blocks generation)", safe.fields, {});
   eq("db failure → null packaging", safe.packaging, null);
 
+  let strictRejected = false;
+  try {
+    await readLineFieldValues(throwingDb, { variantId: "v1", productId: "p1" }, { strict: true });
+  } catch (error) {
+    strictRejected = error instanceof Error && error.message === "boom";
+  }
+  ok("strict snapshot reads propagate catalogue failures", strictRejected);
+
   // ── 9 · product-only linkage (no variant) still resolves ────────────────────
   const prodOnly = await readLineFieldValues(
     fakeDb({
