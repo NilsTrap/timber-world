@@ -386,6 +386,9 @@ importers:
       jspdf-autotable:
         specifier: ^5.0.7
         version: 5.0.7(jspdf@4.2.0)
+      jszip:
+        specifier: 3.10.1
+        version: 3.10.1
       lodash:
         specifier: ^4.18.1
         version: 4.18.1

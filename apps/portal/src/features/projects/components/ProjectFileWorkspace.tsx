@@ -70,7 +70,7 @@ import { ProjectDropSurface } from "./ProjectDropSurface";
 import { ProjectFilePreview, type ProjectPreviewSource } from "./ProjectFilePreview";
 import { ProjectFileTypeIcon } from "./projectFileTypes";
 import { PROJECT_PREVIEW_COPY } from "./previewCopy";
-import { uploadProjectBrowserFile } from "./projectUploadClient";
+import { uploadProjectBrowserArchive, uploadProjectBrowserFile } from "./projectUploadClient";
 import { checkProjectOfficialImageSlot, completeProjectOfficialImage } from "../actions/projectOfficialImageActions";
 import type { ProjectPreviewCapture } from "./viewers/projectPreviewCapture";
 
@@ -112,6 +112,7 @@ export function ProjectFileWorkspace({
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadActivity, setUploadActivity] = useState(0);
   const [uploadInteractionActive, setUploadInteractionActive] = useState(false);
+  const [archiveProgress, setArchiveProgress] = useState<number | null>(null);
   const [fileInfo, setFileInfo] = useState<ProjectFileMeta | null>(null);
   const [preview, setPreview] = useState<ProjectPreviewSource | null>(null);
   const [previewRefreshError, setPreviewRefreshError] = useState<string | null>(null);
@@ -192,6 +193,30 @@ export function ProjectFileWorkspace({
       }
     };
     void Promise.all(Array.from({ length: Math.min(3, next.length) }, () => worker()));
+  };
+
+  const uploadArchive = async (file: File) => {
+    setArchiveProgress(1);
+    setMessage(null);
+    try {
+      const saved = await uploadProjectBrowserArchive(projectId, file, selectedFolder ?? "", setArchiveProgress);
+      setFiles((current) => [...current, ...saved]);
+      const extractedFolders = new Set<string>();
+      for (const item of saved) {
+        const parts = item.relativePath.split("/");
+        parts.slice(0, -1).forEach((_, index) => extractedFolders.add(parts.slice(0, index + 1).join("/")));
+      }
+      setFolders((current) => {
+        const occupied = new Set(current.map((folder) => projectPathKey(folder.relativePath)));
+        return [...current, ...[...extractedFolders].filter((path) => !occupied.has(projectPathKey(path))).map((relativePath) => ({ id: `archive:${relativePath}`, relativePath, createdAt: new Date().toISOString() }))];
+      });
+      setMessage(`${saved.length} file(s) extracted from ${file.name}.`);
+      router.refresh();
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setArchiveProgress(null);
+    }
   };
 
   const createFolder = async () => {
@@ -468,9 +493,13 @@ export function ProjectFileWorkspace({
           onKeyDown={() => setUploadActivity((activity) => activity + 1)}
           onDragEnter={() => setUploadActivity((activity) => activity + 1)}
         >
-          <ProjectDropSurface onFiles={addFiles} onError={setMessage} onActivityChange={setUploadInteractionActive} />
+          <ProjectDropSurface disabled={archiveProgress !== null} onFiles={addFiles} onArchive={(file) => void uploadArchive(file)} onError={setMessage} onActivityChange={setUploadInteractionActive} />
         </div>
       ) : null}
+      {archiveProgress !== null ? <div className="rounded-lg border bg-card p-3">
+        <div className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Uploading and extracting archive… {archiveProgress}%</div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={archiveProgress} aria-valuemin={0} aria-valuemax={100}><div className="h-full bg-primary transition-[width]" style={{ width: `${archiveProgress}%` }} /></div>
+      </div> : null}
       {canWrite ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
           <Button type="button" size="sm" onClick={createFolder}>

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import JSZip from "jszip";
 import { sanitizeStorageFileName } from "@/lib/utils/storage";
 import type { ActionResult } from "../../orders/types";
 import { isValidUUID } from "../../orders/types";
@@ -40,6 +41,14 @@ export interface PreparedProjectUpload {
   uploadId: string;
 }
 
+export interface PreparedProjectArchiveUpload {
+  signedUrl: string;
+  storagePath: string;
+}
+
+const MAX_ARCHIVE_FILES = 1_000;
+const MAX_ARCHIVE_EXPANDED_BYTES = 250 * 1024 * 1024;
+
 const PREPARED_FILE_SELECT =
   "id, order_id, file_name, relative_path, mime_type, file_size_bytes, storage_path, lifecycle_status, created_at";
 
@@ -66,6 +75,136 @@ function publicFile(row: Record<string, unknown>): ProjectFileMeta {
     shared: false,
     sharedInbound: false,
   };
+}
+
+export async function prepareProjectArchiveUpload(input: {
+  projectId: string;
+  fileName: string;
+  fileSizeBytes: number;
+}): Promise<ActionResult<PreparedProjectArchiveUpload>> {
+  const access = await requireVisibleProject(input.projectId, "upload");
+  if (!access.ok) return { success: false, error: access.error, code: access.code };
+  const name = normaliseProjectName(input.fileName);
+  if (!name || !name.toLowerCase().endsWith(".zip")) {
+    return { success: false, error: "Choose a ZIP archive", code: "INVALID_FILE_TYPE" };
+  }
+  if (!Number.isSafeInteger(input.fileSizeBytes) || input.fileSizeBytes <= 0 || input.fileSizeBytes > MAX_PROJECT_FILE_BYTES) {
+    return { success: false, error: "Archive too large. Maximum size: 100MB", code: "FILE_TOO_LARGE" };
+  }
+  const storagePath = `${input.projectId}/archives/${crypto.randomUUID()}_${sanitizeStorageFileName(name)}`;
+  const { data, error } = await access.actor.db.storage.from("orders").createSignedUploadUrl(storagePath, { upsert: false });
+  if (error || !data) return { success: false, error: "Archive upload could not start", code: "UPLOAD_FAILED" };
+  return { success: true, data: { signedUrl: data.signedUrl, storagePath } };
+}
+
+export async function extractProjectArchiveUpload(input: {
+  projectId: string;
+  storagePath: string;
+  targetFolder: string;
+}): Promise<ActionResult<{ files: ProjectFileMeta[] }>> {
+  const access = await requireVisibleProject(input.projectId, "upload");
+  if (!access.ok) return { success: false, error: access.error, code: access.code };
+  const archivePrefix = `${input.projectId}/archives/`;
+  if (!input.storagePath.startsWith(archivePrefix) || input.storagePath.slice(archivePrefix.length).includes("/") || !input.storagePath.toLowerCase().endsWith(".zip")) {
+    return { success: false, error: "Archive unavailable", code: "NOT_FOUND" };
+  }
+  const target = input.targetFolder ? normaliseProjectPath(input.targetFolder) : null;
+  if (target && !target.ok) return { success: false, error: "Target folder unavailable", code: "INVALID_PATH" };
+  const db = access.actor.db;
+  const createdIds: string[] = [];
+  const createdStoragePaths: string[] = [];
+  const createdFolderPaths: string[] = [];
+  try {
+    const { data: archive, error: downloadError } = await db.storage.from("orders").download(input.storagePath);
+    if (downloadError || !archive) return { success: false, error: "Archive could not be opened", code: "UPLOAD_FAILED" };
+    if (archive.size <= 0 || archive.size > MAX_PROJECT_FILE_BYTES) {
+      return { success: false, error: "Archive too large. Maximum size: 100MB", code: "FILE_TOO_LARGE" };
+    }
+    let zip: JSZip;
+    try { zip = await JSZip.loadAsync(await archive.arrayBuffer()); }
+    catch { return { success: false, error: "ZIP archive is damaged or unsupported", code: "INVALID_FILE_TYPE" }; }
+    const entries = Object.values(zip.files).filter((entry) => !entry.dir);
+    if (entries.length === 0) return { success: false, error: "ZIP archive contains no files", code: "VALIDATION_ERROR" };
+    if (entries.length > MAX_ARCHIVE_FILES) return { success: false, error: `ZIP archive contains more than ${MAX_ARCHIVE_FILES} files`, code: "VALIDATION_ERROR" };
+
+    const existingFiles = await listInternalProjectFiles(db, input.projectId);
+    const existingFolders = await listInternalProjectFolders(db, input.projectId);
+    const fileKeys = new Set(existingFiles.map((file) => projectPathKey(file.relative_path)));
+    const folderKeys = new Set(existingFolders.map((folder) => projectPathKey(folder.relative_path)));
+    const archiveKeys = new Set<string>();
+    const archiveFolderKeys = new Set<string>();
+    const extracted: Array<{ path: string; segments: string[]; bytes: Uint8Array }> = [];
+    let expandedBytes = 0;
+    for (const entry of entries) {
+      const unsafeName = (entry as JSZip.JSZipObject & { unsafeOriginalName?: string }).unsafeOriginalName ?? entry.name;
+      const parsed = normaliseProjectPath(unsafeName);
+      if (!parsed.ok) return { success: false, error: `Unsafe archive path: ${entry.name}`, code: "INVALID_PATH" };
+      const combined = normaliseProjectPath(target?.ok ? `${target.path}/${parsed.path}` : parsed.path);
+      if (!combined.ok) return { success: false, error: `Unsafe archive path: ${entry.name}`, code: "INVALID_PATH" };
+      const key = projectPathKey(combined.path);
+      const ancestors = combined.segments.slice(0, -1).map((_, index) => projectPathKey(combined.segments.slice(0, index + 1).join("/")));
+      if (archiveKeys.has(key) || archiveFolderKeys.has(key) || fileKeys.has(key) || folderKeys.has(key) || ancestors.some((ancestor) => fileKeys.has(ancestor) || archiveKeys.has(ancestor))) {
+        return { success: false, error: `Archive path already exists: ${combined.path}`, code: "DUPLICATE_PATH" };
+      }
+      const bytes = await entry.async("uint8array");
+      expandedBytes += bytes.byteLength;
+      if (bytes.byteLength > MAX_PROJECT_FILE_BYTES || expandedBytes > MAX_ARCHIVE_EXPANDED_BYTES) {
+        return { success: false, error: "Expanded archive is too large", code: "FILE_TOO_LARGE" };
+      }
+      archiveKeys.add(key);
+      ancestors.forEach((ancestor) => archiveFolderKeys.add(ancestor));
+      extracted.push({ path: combined.path, segments: combined.segments, bytes });
+    }
+
+    for (const item of extracted) {
+      item.segments.slice(0, -1).forEach((_, index) => {
+        const path = item.segments.slice(0, index + 1).join("/");
+        if (!folderKeys.has(projectPathKey(path)) && !createdFolderPaths.includes(path)) createdFolderPaths.push(path);
+      });
+    }
+
+    const saved: ProjectFileMeta[] = [];
+    for (const item of extracted) {
+      const folderResult = await ensureProjectFolders(db, input.projectId, item.path, access.actor.portalUserId);
+      if (!folderResult.success) throw new Error(folderResult.error);
+      const fileName = item.segments.at(-1)!;
+      const storagePath = `${input.projectId}/project/${crypto.randomUUID()}_${sanitizeStorageFileName(fileName)}`;
+      const mimeType = archiveEntryMimeType(fileName);
+      const { error: uploadError } = await db.storage.from("orders").upload(storagePath, item.bytes, { contentType: mimeType, upsert: false });
+      if (uploadError) throw new Error("An extracted file could not be stored");
+      createdStoragePaths.push(storagePath);
+      const { data, error } = await db.from("order_files").insert({
+        order_id: input.projectId,
+        category: "project",
+        file_name: fileName,
+        relative_path: item.path,
+        storage_path: storagePath,
+        mime_type: mimeType,
+        file_size_bytes: item.bytes.byteLength,
+        uploaded_by: access.actor.portalUserId,
+        file_variant: "original",
+        source_file_id: null,
+        lifecycle_status: "ready",
+      }).select(PREPARED_FILE_SELECT).single();
+      if (error || !data) throw new Error("An extracted file could not be registered");
+      createdIds.push(data.id as string);
+      saved.push(publicFile(data as Record<string, unknown>));
+    }
+    revalidatePath(`/projects/${input.projectId}`);
+    return { success: true, data: { files: saved } };
+  } catch (error) {
+    if (createdIds.length) await db.from("order_files").delete().in("id", createdIds);
+    if (createdStoragePaths.length) await db.storage.from("orders").remove(createdStoragePaths);
+    if (createdFolderPaths.length) await db.from("project_folders").delete().eq("order_id", input.projectId).in("relative_path", [...createdFolderPaths].sort((a, b) => b.length - a.length));
+    return { success: false, error: error instanceof Error ? error.message : "Archive extraction failed", code: "EXTRACTION_FAILED" };
+  } finally {
+    await db.storage.from("orders").remove([input.storagePath]);
+  }
+}
+
+function archiveEntryMimeType(fileName: string): string {
+  const extension = fileName.split(".").at(-1)?.toLowerCase();
+  return ({ pdf: "application/pdf", html: "text/html", htm: "text/html", dxf: "application/dxf", step: "model/step", stp: "model/step", nc1: "text/plain", xml: "application/xml", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", svg: "image/svg+xml", csv: "text/csv", txt: "text/plain" } as Record<string, string>)[extension ?? ""] ?? "application/octet-stream";
 }
 
 export async function prepareProjectFileUpload(input: {

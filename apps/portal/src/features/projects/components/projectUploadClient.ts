@@ -2,7 +2,9 @@
 
 import {
   cancelProjectFileUpload,
+  extractProjectArchiveUpload,
   finaliseProjectFileUpload,
+  prepareProjectArchiveUpload,
   prepareProjectFileUpload,
 } from "../actions/projectFileActions";
 import type { ProjectFileMeta } from "../types";
@@ -35,6 +37,23 @@ function putSignedFile(
     body.append("", file);
     xhr.send(body);
   });
+}
+
+export async function uploadProjectBrowserArchive(
+  projectId: string,
+  file: File,
+  targetFolder: string,
+  onProgress: (progress: number) => void,
+): Promise<ProjectFileMeta[]> {
+  onProgress(1);
+  const prepared = await prepareProjectArchiveUpload({ projectId, fileName: file.name, fileSizeBytes: file.size });
+  if (!prepared.success) throw new Error(prepared.error);
+  await putSignedFile(prepared.data.signedUrl, file, onProgress);
+  onProgress(96);
+  const extracted = await extractProjectArchiveUpload({ projectId, storagePath: prepared.data.storagePath, targetFolder });
+  if (!extracted.success) throw new Error(extracted.error);
+  onProgress(100);
+  return extracted.data.files;
 }
 export async function uploadProjectBrowserFile(
   projectId: string,

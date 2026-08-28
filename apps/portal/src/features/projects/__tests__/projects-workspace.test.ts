@@ -182,7 +182,11 @@ ok("file-id actions collapse denial to File unavailable", actions.includes('erro
 ok("creation delegates idempotency to createDeal", create.includes("idempotencyKey: `project-${input.idempotencyKey}`"));
 ok("download asks storage for the persisted filename", actions.includes('{ download: found.file.file_name }'));
 ok("prepared upload response never exposes a storage path", /interface PreparedProjectUpload\s*{[^}]*signedUrl: string;[^}]*uploadId: string;[^}]*}/.test(actions));
-ok("preparation persists an uploading row before signing", actions.indexOf('lifecycle_status: "uploading"') < actions.indexOf(".createSignedUploadUrl(storagePath"));
+const ordinaryUploadAction = actions.slice(actions.indexOf("export async function prepareProjectFileUpload"), actions.indexOf("export async function finaliseProjectFileUpload"));
+ok("preparation persists an uploading row before signing", ordinaryUploadAction.indexOf('lifecycle_status: "uploading"') < ordinaryUploadAction.indexOf(".createSignedUploadUrl(storagePath"));
+ok("ZIP archives upload once and extract on the server", actions.includes("prepareProjectArchiveUpload") && actions.includes("extractProjectArchiveUpload") && actions.includes("JSZip.loadAsync"));
+ok("archive extraction preserves safe paths and limits expansion", actions.includes("normaliseProjectPath(unsafeName)") && actions.includes("MAX_ARCHIVE_FILES") && actions.includes("MAX_ARCHIVE_EXPANDED_BYTES"));
+ok("archive UI has a dedicated picker and extraction progress", workspace.includes("uploadProjectBrowserArchive") && workspace.includes("Uploading and extracting archive"));
 ok("finalisation is bound to project and upload IDs", actions.includes('.eq("id", uploadId)') && actions.includes('.eq("order_id", projectId)'));
 ok("finalisation reads actual storage metadata size", actions.includes("validateStoredProjectUploadSize(object, expectedSize)"));
 ok("finalisation verifies stored MIME metadata", actions.includes("storedProjectMimeType(object)"));
