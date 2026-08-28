@@ -105,15 +105,6 @@ export interface DealLineComponentLike {
   totalCostCents: number;
 }
 
-export interface DealProcessRequirementLike {
-  id: string;
-  orderLineItemId: string;
-  fieldKey: string;
-  name: string;
-  value: string;
-  unit: string | null;
-}
-
 export interface ProjectionContext {
   /** Resolved from the viewer's access profile (full profile for admins). */
   access: FieldAccess;
@@ -256,16 +247,9 @@ export function toProjectLines(
   walledLines: readonly DealLineLike[],
   ctx: ProjectionContext,
   components: readonly DealLineComponentLike[] = [],
-  requirements: readonly DealProcessRequirementLike[] = [],
 ): ProjectLine[] {
   const seeTerms = ctx.access.domainVisible("deal_terms");
   const componentsByLine = new Map<string, DealLineComponentLike[]>();
-  const requirementsByLine = new Map<string, DealProcessRequirementLike[]>();
-  for (const requirement of requirements) {
-    const current = requirementsByLine.get(requirement.orderLineItemId) ?? [];
-    current.push(requirement);
-    requirementsByLine.set(requirement.orderLineItemId, current);
-  }
   if (seeTerms) {
     for (const component of components) {
       const current = componentsByLine.get(component.orderLineItemId) ?? [];
@@ -289,13 +273,6 @@ export function toProjectLines(
       volumeM3: li.volumeM3,
       unit: li.unit,
       notes: li.notes ?? null,
-      processRequirements: (li.id ? requirementsByLine.get(li.id) : undefined)?.map((requirement) => ({
-        id: requirement.id,
-        fieldKey: requirement.fieldKey,
-        name: requirement.name,
-        value: requirement.value,
-        unit: requirement.unit,
-      })) ?? [],
     };
     if (seeTerms) {
       line.unitPriceCents = li.unitPriceCents;
@@ -317,7 +294,6 @@ export function toProjectLines(
 export interface ProjectDetailParts {
   lines: readonly DealLineLike[];
   lineComponents?: readonly DealLineComponentLike[];
-  processRequirements?: readonly DealProcessRequirementLike[];
   files: readonly ProjectFileMeta[];
   folders: readonly ProjectFolderMeta[];
   fileCounts: ProjectFileCounts;
@@ -370,7 +346,7 @@ export function toProjectDetail(
     direction,
     counterparty,
     otherParties,
-    lines: toProjectLines(parts.lines, ctx, parts.lineComponents, parts.processRequirements),
+    lines: toProjectLines(parts.lines, ctx, parts.lineComponents),
     files: parts.files.map((f) => ({
       id: f.id,
       fileName: f.fileName,

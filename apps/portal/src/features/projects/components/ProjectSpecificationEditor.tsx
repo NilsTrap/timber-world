@@ -90,7 +90,7 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
         </TableRow></TableHeader><TableBody>{lines.map((line) => (
           <TableRow key={line.id ?? line.lineNo}>
             <TableCell>{line.lineNo}</TableCell><TableCell className="font-medium">{line.productName ?? "—"}</TableCell>
-            <TableCell><div>{line.notes ?? "—"}</div>{(line.processRequirements ?? []).length > 0 ? <div className="mt-1 text-xs text-muted-foreground"><span className="font-medium">Processes: </span>{(line.processRequirements ?? []).map((requirement) => `${requirement.name}: ${requirement.value}${requirement.unit ? ` ${requirement.unit}` : ""}`).join(" · ")}</div> : null}</TableCell><TableCell className="text-right">{line.volumeM3 ?? line.pieces ?? "—"}</TableCell><TableCell>{line.unit}</TableCell>
+            <TableCell>{line.notes ?? "—"}</TableCell><TableCell className="text-right">{line.volumeM3 ?? line.pieces ?? "—"}</TableCell><TableCell>{line.unit}</TableCell>
             {canEdit ? <TableCell><div className="flex justify-end">
               <Button variant="ghost" size="icon" aria-label={`Edit ${line.productName ?? "line"}`} onClick={() => { setCatalog([]); setDraft(lineToDraft(line)); }}><Pencil className="h-4 w-4" /></Button>
               <Button variant="ghost" size="icon" aria-label={`Delete ${line.productName ?? "line"}`} onClick={() => setDeleteTarget(line)}><Trash2 className="h-4 w-4" /></Button>

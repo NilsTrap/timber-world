@@ -6,7 +6,7 @@ export type ActionResult<T> =
 export type PrimaryUnit = string;
 export type CalcMethod = "per_piece" | "area" | "volume" | "length";
 export type FieldType = "select" | "number" | "text" | "boolean" | "file";
-export type AppliesTo = "product" | "variant" | "process";
+export type AppliesTo = "product" | "variant";
 export type DimensionRole = "width" | "length" | "thickness";
 export type StockUnit = "piece" | "package";
 

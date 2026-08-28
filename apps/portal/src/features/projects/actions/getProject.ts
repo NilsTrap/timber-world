@@ -20,7 +20,7 @@ import { loadSpineOriginAllocation } from "../services/spineOriginSpecification"
 import { canOfferSellerCompletion, openRfqAvailability } from "../services/projectRfq";
 import { purchaseLegAllowsBuyerEdit, toEligiblePartyOption, type PartyOptionRow } from "../services/projectPartyOptions";
 import type { ProjectDetail, ProjectLegOption, ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace, ProjectsResult, ProjectsViewer } from "../types";
-import type { DealLineComponentLike, DealProcessRequirementLike } from "../projection";
+import type { DealLineComponentLike } from "../projection";
 import { getProjectStageConfiguration, type ProjectStageConfiguration } from "../../project-stages/stages";
 
 export type GetProjectResult = ProjectsResult<{
@@ -87,7 +87,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
 
   const walled = projectDealView(res.data, a.access, a.orgId);
 
-  const [personasByOrgId, files, folders, fileCounts, viewer, lineComponents, processRequirements, spineLookup] = await Promise.all([
+  const [personasByOrgId, files, folders, fileCounts, viewer, lineComponents, spineLookup] = await Promise.all([
     loadOrgPersonas(a.db, [a.orgId, raw.seller.id, raw.buyer.id, raw.customer.id, raw.producer.id]),
     listProjectFiles(a.db, projectId, a.isPlatformAdmin || raw.seller.id === a.orgId),
     listProjectFolders(a.db, projectId),
@@ -96,7 +96,6 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     a.access.domainVisible("deal_terms")
       ? loadLineComponents(a.db, raw.lineItems.map((line) => line.id).filter((id): id is string => Boolean(id)))
       : Promise.resolve([]),
-    loadProcessRequirements(a.db, raw.lineItems.map((line) => line.id).filter((id): id is string => Boolean(id))),
     walled.spineId
       ? a.db.from("spines").select("code,origin_order_id").eq("id", walled.spineId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -120,7 +119,6 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   const project = toProjectDetail(raw, walled, ctx, {
     lines: walled.lineItems ?? [],
     lineComponents,
-    processRequirements,
     files,
     folders,
     fileCounts: fileCounts.get(projectId) ?? { total: 0 },
@@ -218,31 +216,8 @@ type CandidateSnapshot = {
   stage: string;
   deliveryDeadline: string | null;
   currency: string;
-  lines: unknown[];
+  lines: ProjectDetail["lines"];
 };
-
-function normalizeCandidateLines(lines: unknown[]): ProjectDetail["lines"] {
-  return lines.flatMap((value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-    const line = value as Record<string, unknown>;
-    const requirements = Array.isArray(line.processRequirements) ? line.processRequirements : [];
-    return [{
-      ...line,
-      processRequirements: requirements.flatMap((candidate) => {
-        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return [];
-        const requirement = candidate as Record<string, unknown>;
-        if (![requirement.id, requirement.fieldKey, requirement.name, requirement.value].every((item) => typeof item === "string")) return [];
-        return [{
-          id: requirement.id as string,
-          fieldKey: requirement.fieldKey as string,
-          name: requirement.name as string,
-          value: requirement.value as string,
-          unit: typeof requirement.unit === "string" ? requirement.unit : null,
-        }];
-      }),
-    } as ProjectDetail["lines"][number]];
-  });
-}
 
 async function loadRfqCandidateProject(db: DbClient, projectId: string): Promise<Omit<ProjectDetail, "files" | "folders" | "fileCount" | "fileCounts"> | null> {
   const { data, error } = await db.rpc("get_project_rfq_candidate_snapshot", { p_order_id: projectId });
@@ -267,7 +242,7 @@ async function loadRfqCandidateProject(db: DbClient, projectId: string): Promise
     currency: row.currency,
     rfqInvitation: true,
     otherParties: [],
-    lines: normalizeCandidateLines(row.lines),
+    lines: row.lines,
     notes: null,
   };
 }
@@ -302,20 +277,6 @@ async function loadLineComponents(db: DbClient, lineIds: string[]): Promise<Deal
     unit: row.unit as string,
     unitCost: Number(row.unit_cost),
     totalCostCents: Number(row.total_cost_cents),
-  }));
-}
-
-async function loadProcessRequirements(db: DbClient, lineIds: string[]): Promise<DealProcessRequirementLike[]> {
-  if (lineIds.length === 0) return [];
-  const { data, error } = await db.rpc("get_project_process_requirements", { p_line_ids: lineIds });
-  if (error) throw new Error("Could not load process requirements");
-  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-    id: row.id as string,
-    orderLineItemId: row.request_line_id as string,
-    fieldKey: row.field_key as string,
-    name: row.name as string,
-    value: row.value as string,
-    unit: row.unit as string | null,
   }));
 }
 

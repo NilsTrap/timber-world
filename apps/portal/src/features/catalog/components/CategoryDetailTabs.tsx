@@ -236,7 +236,7 @@ function FieldsTab({
     if (!res.success) toast.error(res.error);
   };
 
-  // Persist a new full ordering (product, variant, then process) — every row's
+  // Persist a new full ordering (product group then variant group) — every row's
   // applies_to + sort_order — so drag-reorder and cross-group moves both stick.
   const applyOrdering = async (combined: CategoryField[]) => {
     const withOrder = combined.map((f, i) => ({ ...f, sortOrder: i }));
@@ -251,26 +251,19 @@ function FieldsTab({
     const moved = { ...field, appliesTo };
     const prods = others.filter((f) => f.appliesTo === "product");
     const vars = others.filter((f) => f.appliesTo === "variant");
-    const processes = others.filter((f) => f.appliesTo === "process");
-    if (appliesTo === "product") prods.push(moved);
-    else if (appliesTo === "variant") vars.push(moved);
-    else processes.push(moved);
-    applyOrdering([...prods, ...vars, ...processes]);
+    if (appliesTo === "product") prods.push(moved); else vars.push(moved);
+    applyOrdering([...prods, ...vars]);
   };
 
   // Reorder within one group (from a drag) → recombine both groups + persist.
   const reorderGroup = (which: AppliesTo, newGroup: CategoryField[]) => {
     const prods = fields.filter((f) => f.appliesTo === "product");
     const vars = fields.filter((f) => f.appliesTo === "variant");
-    const processes = fields.filter((f) => f.appliesTo === "process");
-    if (which === "product") applyOrdering([...newGroup, ...vars, ...processes]);
-    else if (which === "variant") applyOrdering([...prods, ...newGroup, ...processes]);
-    else applyOrdering([...prods, ...vars, ...newGroup]);
+    applyOrdering(which === "product" ? [...newGroup, ...vars] : [...prods, ...newGroup]);
   };
 
   const productFields = fields.filter((f) => f.appliesTo === "product");
   const variantFields = fields.filter((f) => f.appliesTo === "variant");
-  const processFields = fields.filter((f) => f.appliesTo === "process");
   const assignedFieldIds = new Set(fields.map((f) => f.id));
   const availableFields = allGlobalFields.filter((f) => !assignedFieldIds.has(f.id));
 
@@ -307,7 +300,6 @@ function FieldsTab({
                   <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={assignAppliesTo} onChange={(e) => setAssignAppliesTo(e.target.value as AppliesTo)}>
                     <option value="product">Product</option>
                     <option value="variant">Variant</option>
-                    <option value="process">Process</option>
                   </select>
                 </div>
               </div>
@@ -377,13 +369,6 @@ function FieldsTab({
             <FieldGroup
               title="Variant fields" which="variant" groupFields={variantFields}
               onReorder={(g) => reorderGroup("variant", g)} onChangeAppliesTo={changeAppliesTo}
-              onRemove={handleRemoveAssignment} expandedId={expandedId} setExpandedId={setExpandedId}
-              onFieldUpdate={(u) => onFieldsChange(fields.map((f) => (f.id === u.id ? u : f)))}
-              onToggleFlag={toggleFlag}
-            />
-            <FieldGroup
-              title="Process fields" which="process" groupFields={processFields}
-              onReorder={(g) => reorderGroup("process", g)} onChangeAppliesTo={changeAppliesTo}
               onRemove={handleRemoveAssignment} expandedId={expandedId} setExpandedId={setExpandedId}
               onFieldUpdate={(u) => onFieldsChange(fields.map((f) => (f.id === u.id ? u : f)))}
               onToggleFlag={toggleFlag}
@@ -491,7 +476,6 @@ function FieldGroup({
                 >
                   <option value="product">Product</option>
                   <option value="variant">Variant</option>
-                  <option value="process">Process</option>
                 </select>
                 <Button asChild variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Edit the field definition (Settings → Fields)">
                   <Link href="/admin/settings/fields"><Pencil className="h-3.5 w-3.5" /></Link>
