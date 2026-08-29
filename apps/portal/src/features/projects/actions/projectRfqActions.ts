@@ -13,10 +13,20 @@ const requestSchema = z.object({ projectId: uuid, candidateIds: z.array(uuid).mi
 const quoteEntrySchema=z.object({targetType:z.enum(["line","process"]),targetId:uuid,label:z.string().trim().min(1).max(200),quantity:z.coerce.number().finite().positive(),unit:z.string().trim().max(50),unitPriceCents:z.coerce.number().int().nonnegative().max(2147483647)});
 const quoteSchema = z.object({ candidateId: uuid, entries:z.array(quoteEntrySchema).min(1).max(500), notes: z.string().trim().max(4000).optional().default("") });
 const awardSchema = z.object({ projectId: uuid, rfqId: uuid, candidateId: uuid });
+const marginSchema = z.object({
+  projectId: uuid,
+  mode: z.enum(["amount", "percentage"]),
+  value: z.coerce.number().finite().nonnegative(),
+}).superRefine((input, context) => {
+  if (input.mode === "percentage" && input.value > 99.99) {
+    context.addIssue({ code: "custom", path: ["value"], message: "Margin percentage must not exceed 99.99%" });
+  }
+});
 
 export type ProjectRfqCandidate = { id: string; organisationId: string; organisationName: string; status: "invited"|"submitted"|"awarded"|"not_awarded"; quoteTotalCents: number|null; quoteNotes: string|null; submittedAt: string|null; quoteEntries:ProjectQuoteEntry[] };
 export type ProjectQuoteEntry=z.infer<typeof quoteEntrySchema>;
-export type ProjectRfqState = { id: string; deadline: string; status: "open"|"awarded"|"cancelled"; ownerOrganisationId: string; candidates: ProjectRfqCandidate[]; canManage: boolean; ownCandidateId: string|null };
+export type ProjectCommercialPricing = { purchaseCostCents:number; marginAmountCents:number|null; marginPercent:number|null; salesAmountCents:number|null };
+export type ProjectRfqState = { id: string; deadline: string; status: "open"|"awarded"|"cancelled"; ownerOrganisationId: string; candidates: ProjectRfqCandidate[]; canManage: boolean; ownCandidateId: string|null; commercialPricing?:ProjectCommercialPricing };
 
 export async function getEligibleProjectRfqCandidates(projectId: string): Promise<ActionResult<Array<{id:string;name:string}>>> {
   const owner=await requireOwner(projectId); if(!owner)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
@@ -54,7 +64,14 @@ export async function getProjectRfqState(projectId: string): Promise<ActionResul
   if(candidateError?.message.includes("quote_entries")){const legacy=await candidateDb.from("project_rfq_candidates").select("id, organization_id, status, quote_total_cents, quote_notes, submitted_at, organisations!inner(name)").eq("rfq_id",row.id).order("created_at");candidates=legacy.data;candidateError=legacy.error}
   if (candidateError) return { success:false,error:"Could not load RFQ candidates",code:"FETCH_FAILED" };
   const mapped = ((candidates??[]) as Array<Record<string,unknown>>).map((candidate)=>({ id:candidate.id as string, organisationId:candidate.organization_id as string, organisationName:(candidate.organisations as Record<string,unknown>).name as string, status:candidate.status as ProjectRfqCandidate["status"], quoteTotalCents:candidate.quote_total_cents==null?null:Number(candidate.quote_total_cents), quoteNotes:candidate.quote_notes as string|null, submittedAt:candidate.submitted_at as string|null,quoteEntries:quoteEntries(candidate.quote_entries) }));
-  return { success:true,data:{ id:row.id as string, deadline:row.deadline as string, status:row.status as ProjectRfqState["status"], ownerOrganisationId:row.organization_id as string, candidates:mapped, canManage, ownCandidateId:mapped.find((candidate)=>candidate.organisationId===a.orgId)?.id??null } };
+  let commercialPricing:ProjectCommercialPricing|undefined;
+  if(canManage&&row.status==="awarded"){
+    const winner=mapped.find((candidate)=>candidate.status==="awarded");
+    const {data:order,error:pricingError}=await candidateDb.from("orders").select("margin_amount_cents,margin_percent,resale_value_cents").eq("id",projectId).maybeSingle();
+    if(pricingError)return{success:false,error:"Could not load trader margin",code:"FETCH_FAILED"};
+    if(winner?.quoteTotalCents!=null&&order)commercialPricing={purchaseCostCents:winner.quoteTotalCents,marginAmountCents:order.margin_amount_cents==null?null:Number(order.margin_amount_cents),marginPercent:order.margin_percent==null?null:Number(order.margin_percent),salesAmountCents:order.resale_value_cents==null?null:Number(order.resale_value_cents)};
+  }
+  return { success:true,data:{ id:row.id as string, deadline:row.deadline as string, status:row.status as ProjectRfqState["status"], ownerOrganisationId:row.organization_id as string, candidates:mapped, canManage, ownCandidateId:mapped.find((candidate)=>candidate.organisationId===a.orgId)?.id??null,...(commercialPricing?{commercialPricing}:{}) } };
 }
 
 function quoteEntries(value:unknown):ProjectQuoteEntry[]{if(!Array.isArray(value))return[];return value.flatMap((entry)=>{const parsed=quoteEntrySchema.safeParse(entry);return parsed.success?[parsed.data]:[]})}
@@ -80,6 +97,34 @@ export async function awardProjectQuotation(raw: unknown): Promise<ActionResult<
   if (lookupError || !rfq) return { success:false,error:"Quotation request not found",code:"NOT_FOUND" };
   const {data,error}=await owner.a.db.rpc("award_project_rfq",{p_rfq_id:parsed.data.rfqId,p_candidate_id:parsed.data.candidateId});
   if(error)return{success:false,...mapAwardRfqError(error.message)}; revalidatePath(`/projects/${parsed.data.projectId}`); return{success:true,data:{projectId:data as string}};
+}
+
+export async function saveProjectAwardedMargin(raw: unknown): Promise<ActionResult<ProjectCommercialPricing>> {
+  const parsed=marginSchema.safeParse(raw);
+  if(!parsed.success)return{success:false,error:parsed.error.issues[0]?.message??"Invalid margin",code:"VALIDATION_ERROR"};
+  const a=await resolveProjectsActor();
+  if(!a.ok)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+  const project=await getOrderDeal(a.db,a.actor,parsed.data.projectId);
+  if(!project.success||!project.data.buyer.id)return{success:false,error:"Project leg not found",code:"NOT_FOUND"};
+  const buyerId=project.data.buyer.id;
+  if(!a.isPlatformAdmin&&a.orgId!==buyerId)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+  if(!a.isPlatformAdmin){
+    const {data:buyer}=await a.db.from("organisations").select("is_active,is_trader").eq("id",buyerId).maybeSingle();
+    if(!buyer?.is_active||!buyer.is_trader)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+  }
+  const rpcValue=parsed.data.mode==="amount"?Math.round(parsed.data.value*100):parsed.data.value;
+  if(!Number.isSafeInteger(rpcValue)&&parsed.data.mode==="amount")return{success:false,error:"Margin is too large",code:"VALIDATION_ERROR"};
+  const {data,error}=await a.db.rpc("set_project_awarded_margin",{p_order_id:parsed.data.projectId,p_mode:parsed.data.mode,p_value:rpcValue});
+  if(error){
+    if(/forbidden/i.test(error.message))return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+    if(/awarded quotation required/i.test(error.message.replaceAll("_"," ")))return{success:false,error:"An awarded quotation is required",code:"CONFLICT"};
+    return{success:false,error:/margin/i.test(error.message)?"Enter a valid margin":"Could not save trader margin",code:"VALIDATION_ERROR"};
+  }
+  const result=data as Record<string,unknown>;
+  const commercialPricing={purchaseCostCents:Number(result.purchaseCostCents),marginAmountCents:Number(result.marginAmountCents),marginPercent:Number(result.marginPercent),salesAmountCents:Number(result.salesAmountCents)};
+  revalidatePath(`/projects/${parsed.data.projectId}`);
+  revalidatePath("/projects");
+  return{success:true,data:commercialPricing};
 }
 
 export async function cancelProjectQuotationRequest(raw: unknown): Promise<ActionResult<true>> {

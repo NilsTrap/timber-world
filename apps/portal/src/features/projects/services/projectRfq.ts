@@ -3,6 +3,43 @@ export function quoteTotalToCents(total: number): number {
   return Math.round(total * 100);
 }
 
+export type ProjectMarginMode = "amount" | "percentage";
+
+export interface ProjectMarginCalculation {
+  marginAmountCents: number;
+  marginPercent: number;
+  salesAmountCents: number;
+}
+
+export function calculateProjectMargin(
+  purchaseCostCents: number,
+  mode: ProjectMarginMode,
+  value: number,
+): ProjectMarginCalculation {
+  if (!Number.isSafeInteger(purchaseCostCents) || purchaseCostCents < 0) {
+    throw new Error("Invalid purchase cost");
+  }
+  if (!Number.isFinite(value) || value < 0) throw new Error("Invalid margin");
+
+  let marginAmountCents: number;
+  let salesAmountCents: number;
+  if (mode === "percentage") {
+    if (value > 99.99) throw new Error("Margin percentage must not exceed 99.99%");
+    salesAmountCents = Math.round(purchaseCostCents / (1 - value / 100));
+    marginAmountCents = salesAmountCents - purchaseCostCents;
+  } else {
+    marginAmountCents = Math.round(value);
+    salesAmountCents = purchaseCostCents + marginAmountCents;
+  }
+  if (!Number.isSafeInteger(salesAmountCents) || !Number.isSafeInteger(marginAmountCents)) {
+    throw new Error("Margin is too large");
+  }
+  const marginPercent = salesAmountCents === 0
+    ? 0
+    : Math.round((marginAmountCents / salesAmountCents) * 1_000_000) / 10_000;
+  return { marginAmountCents, marginPercent, salesAmountCents };
+}
+
 export function canManageProjectRfq(input: { isPlatformAdmin:boolean; actorOrganisationId:string|null; ownerOrganisationId:string; lifecycleStage:string }): boolean {
   return input.lifecycleStage === "draft" && (input.isPlatformAdmin || input.actorOrganisationId === input.ownerOrganisationId);
 }

@@ -11,9 +11,10 @@ import {
 } from "@timber/ui";
 import {
   awardProjectQuotation, cancelProjectQuotationRequest, getEligibleProjectRfqCandidates, getProjectRfqState,
-  requestProjectQuotations, submitProjectQuotation,
-  type ProjectRfqCandidate, type ProjectRfqState,
+  requestProjectQuotations, saveProjectAwardedMargin, submitProjectQuotation,
+  type ProjectCommercialPricing, type ProjectRfqCandidate, type ProjectRfqState,
 } from "../actions/projectRfqActions";
+import { calculateProjectMargin, type ProjectMarginMode } from "../services/projectRfq";
 import type { ProjectLine } from "../types";
 
 export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandidateQuotation, initialOptions, lines }: {
@@ -104,6 +105,7 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
   }
 
   if (!loaded) return <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading quotation requests…</div>;
+  if (!rfq && !canManage) return null;
   const deadlinePassed = Boolean(rfq && new Date(rfq.deadline).getTime() <= Date.now());
 
   return <div className="space-y-3 rounded-lg border bg-card p-4">
@@ -139,6 +141,13 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
       </div>
     </div> : null}
 
+    {rfq?.canManage && rfq.status === "awarded" && rfq.commercialPricing ? <TraderMarginCard
+      projectId={projectId}
+      currency={currency}
+      pricing={rfq.commercialPricing}
+      onSaved={(commercialPricing) => setRfq((current) => current ? { ...current, commercialPricing } : current)}
+    /> : null}
+
     {(rfq?.ownCandidateId&&!rfq.canManage||rfq?.canManage&&adminCandidateId) && rfq.status === "open" ? deadlinePassed
       ? <p className="text-sm text-muted-foreground">The quotation deadline has passed.</p>
       : <QuotationEntryForm lines={lines} currency={currency} prices={prices} setPrices={setPrices} notes={notes} setNotes={setNotes} pending={pending} onSubmit={submitQuotation} onCancel={rfq.canManage?()=>setAdminCandidateId(null):undefined}/>
@@ -166,6 +175,26 @@ function earliestDeadlineValue(): string {
   return new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 function formatCents(cents: number, currency: string): string { return `${(cents / 100).toFixed(2)} ${currency}`; }
+function TraderMarginCard({projectId,currency,pricing,onSaved}:{projectId:string;currency:string;pricing:ProjectCommercialPricing;onSaved:(pricing:ProjectCommercialPricing)=>void}){
+  const [mode,setMode]=useState<ProjectMarginMode>(pricing.marginAmountCents==null?"percentage":"amount");
+  const [value,setValue]=useState(pricing.marginAmountCents==null?(pricing.marginPercent==null?"":String(pricing.marginPercent)):(pricing.marginAmountCents/100).toFixed(2));
+  const [saving,startSaving]=useTransition();
+  useEffect(()=>{setValue(mode==="percentage"?(pricing.marginPercent==null?"":String(pricing.marginPercent)):(pricing.marginAmountCents==null?"":(pricing.marginAmountCents/100).toFixed(2)))},[mode,pricing.marginAmountCents,pricing.marginPercent]);
+  const numericValue=Number(value);
+  let calculation:ReturnType<typeof calculateProjectMargin>|null=null;
+  try{if(value!=="")calculation=calculateProjectMargin(pricing.purchaseCostCents,mode,mode==="amount"?Math.round(numericValue*100):numericValue)}catch{calculation=null}
+  const save=()=>{if(!calculation)return;startSaving(async()=>{const result=await saveProjectAwardedMargin({projectId,mode,value:numericValue});if(!result.success){toast.error(result.error);return}onSaved(result.data);toast.success("Trader margin saved")})};
+  return <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+    <div><p className="font-medium">Trader margin</p><p className="text-sm text-muted-foreground">Purchase cost: {formatCents(pricing.purchaseCostCents,currency)}</p></div>
+    <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant={mode==="percentage"?"default":"outline"} onClick={()=>setMode("percentage")}>Percentage</Button><Button type="button" size="sm" variant={mode==="amount"?"default":"outline"} onClick={()=>setMode("amount")}>Amount</Button></div>
+    <div className="grid gap-3 sm:grid-cols-[minmax(180px,1fr)_auto_auto_auto] sm:items-end">
+      <Field label={mode==="percentage"?"Gross margin (%)":`Margin amount (${currency})`}><Input aria-label={mode==="percentage"?"Gross margin percentage":"Margin amount"} type="number" min="0" max={mode==="percentage"?"99.99":undefined} step={mode==="percentage"?"0.01":"0.01"} value={value} onChange={(event)=>setValue(event.target.value)}/></Field>
+      <p className="pb-2 text-sm"><span className="text-muted-foreground">Margin</span><br/><strong>{calculation?formatCents(calculation.marginAmountCents,currency):"—"}</strong>{calculation?` (${calculation.marginPercent.toFixed(2)}%)`:""}</p>
+      <p className="pb-2 text-sm"><span className="text-muted-foreground">Sales amount</span><br/><strong>{calculation?formatCents(calculation.salesAmountCents,currency):"—"}</strong></p>
+      <Button type="button" disabled={saving||!calculation} onClick={save}>{saving?<Loader2 className="mr-2 h-4 w-4 animate-spin"/>:null}Save margin</Button>
+    </div>
+  </div>
+}
 type PricingRow={key:string;targetType:"line"|"process";targetId:string;label:string;quantity:number;unit:string};
 function pricesFromEntries(entries:ProjectRfqCandidate["quoteEntries"]):Record<string,string>{return Object.fromEntries(entries.map((entry)=>[`${entry.targetType}:${entry.targetId}`,(entry.unitPriceCents/100).toFixed(2)]))}
 function pricingRows(lines:ProjectLine[]):PricingRow[]{return lines.flatMap((line)=>{if(!line.id)return[];const quantity=Number(line.volumeM3??line.pieces??0);const material=quantity>0?[{key:`line:${line.id}`,targetType:"line" as const,targetId:line.id,label:line.productName??`Line ${line.lineNo}`,quantity,unit:line.unit}]:[];const processes=(line.processRequirements??[]).flatMap((process)=>{const processQuantity=Number(process.value);return processQuantity>0?[{key:`process:${process.id}`,targetType:"process" as const,targetId:process.id,label:`${line.productName??`Line ${line.lineNo}`} · ${process.name}`,quantity:processQuantity,unit:process.unit??"unit"}]:[]});return[...material,...processes]})}

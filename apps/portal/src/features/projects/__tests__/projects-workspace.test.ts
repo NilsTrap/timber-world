@@ -187,6 +187,9 @@ ok("preparation persists an uploading row before signing", ordinaryUploadAction.
 ok("ZIP archives upload once and extract on the server", actions.includes("prepareProjectArchiveUpload") && actions.includes("extractProjectArchiveUpload") && actions.includes("JSZip.loadAsync"));
 ok("archive extraction preserves safe paths and limits expansion", actions.includes("normaliseProjectPath(unsafeName)") && actions.includes("MAX_ARCHIVE_FILES") && actions.includes("MAX_ARCHIVE_EXPANDED_BYTES"));
 ok("archive UI has a dedicated picker and extraction progress", workspace.includes("uploadProjectBrowserArchive") && workspace.includes("Uploading and extracting archive"));
+ok("awarded margin crosses the client boundary only for RFQ managers", rfqActions.includes('if(canManage&&row.status==="awarded")') && rfqActions.includes('...(commercialPricing?{commercialPricing}:{})'));
+ok("awarded margin is editable through a dedicated trader card", rfqCard.includes("Trader margin") && rfqCard.includes("saveProjectAwardedMargin") && rfqCard.includes("Sales amount"));
+ok("persisted awarded margin reloads from exact cents", rfqCard.includes('pricing.marginAmountCents==null?"percentage":"amount"'));
 ok("finalisation is bound to project and upload IDs", actions.includes('.eq("id", uploadId)') && actions.includes('.eq("order_id", projectId)'));
 ok("finalisation reads actual storage metadata size", actions.includes("validateStoredProjectUploadSize(object, expectedSize)"));
 ok("finalisation verifies stored MIME metadata", actions.includes("storedProjectMimeType(object)"));

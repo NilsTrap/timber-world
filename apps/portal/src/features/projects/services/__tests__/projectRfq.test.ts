@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { canManageProjectRfq, canOfferSellerCompletion, candidateCanSee, mapAwardRfqError, mapCreateRfqError, openRfqAvailability, quoteTotalToCents } from "../projectRfq";
+import { calculateProjectMargin, canManageProjectRfq, canOfferSellerCompletion, candidateCanSee, mapAwardRfqError, mapCreateRfqError, openRfqAvailability, quoteTotalToCents } from "../projectRfq";
 import { parseSpineOriginAllocation } from "../spineOriginSpecification";
 import { purchaseLegAllowsBuyerEdit, toEligiblePartyOption } from "../projectPartyOptions";
 import { buildDefaultLegQuantities, buildLegWorkPackages, reconcileLegQuantities } from "../projectLegDraft";
@@ -8,6 +8,11 @@ import { parseCreateProjectLegInput } from "../projectLegValidation";
 
 assert.equal(quoteTotalToCents(12.345), 1235);
 assert.throws(() => quoteTotalToCents(-1));
+assert.deepEqual(calculateProjectMargin(800000,"percentage",20),{marginAmountCents:200000,marginPercent:20,salesAmountCents:1000000});
+assert.deepEqual(calculateProjectMargin(800000,"amount",150000),{marginAmountCents:150000,marginPercent:15.7895,salesAmountCents:950000});
+assert.throws(()=>calculateProjectMargin(800000,"percentage",100));
+assert.throws(()=>calculateProjectMargin(800000,"percentage",99.991));
+assert.throws(()=>calculateProjectMargin(800000,"amount",-1));
 assert.equal(canManageProjectRfq({isPlatformAdmin:false,actorOrganisationId:"owner",ownerOrganisationId:"owner",lifecycleStage:"draft"}),true);
 assert.equal(canManageProjectRfq({isPlatformAdmin:false,actorOrganisationId:"candidate",ownerOrganisationId:"owner",lifecycleStage:"draft"}),false);
 assert.equal(canManageProjectRfq({isPlatformAdmin:true,actorOrganisationId:null,ownerOrganisationId:"owner",lifecycleStage:"confirmed"}),false);
@@ -50,6 +55,7 @@ const migration=readFileSync("../../supabase/migrations/20260826210000_project_s
 const legoMigration=readFileSync("../../supabase/migrations/20260827120000_spine_lego_leg_rfq_award.sql","utf8");
 const stageIndependentRfqMigration=readFileSync("../../supabase/migrations/20260829003000_project_rfq_stage_independence.sql","utf8");
 const stageAutomationMigration=readFileSync("../../supabase/migrations/20260829004000_project_stage_automation.sql","utf8");
+const marginMigration=readFileSync("../../supabase/migrations/20260829010000_project_awarded_quotation_margin.sql","utf8");
 const createDialog=readFileSync("src/features/projects/components/ProjectCreateLegDialog.tsx","utf8");
 assert.match(createDialog,/remainingQuantity>0/);
 assert.match(createDialog,/Remaining quantities are selected by default/);
@@ -96,5 +102,15 @@ assert.match(stageAutomationMigration,/lifecycle_stage=''request_for_quotation''
 assert.match(stageAutomationMigration,/lifecycle_stage=''awarded''/);
 assert.match(stageAutomationMigration,/create_project_rfq return anchor missing/);
 assert.match(stageAutomationMigration,/award_project_rfq update anchor missing/);
-assert.match(readFileSync("src/features/projects/components/ProjectRfqCard.tsx","utf8"),/Quotation requests created[\s\S]*router\.refresh\(\)/);
+assert.match(marginMigration,/set_project_awarded_margin/);
+assert.match(marginMigration,/current_user_in_org\(v_order\.buyer_organisation_id\)/);
+assert.match(marginMigration,/rfq\.status = 'awarded'/);
+assert.match(marginMigration,/margin_amount_cents = v_margin[\s\S]*resale_value_cents = v_sales/);
+assert.doesNotMatch(marginMigration,/UPDATE public\.orders SET\s+value_cents\s*=/);
+const rfqCard=readFileSync("src/features/projects/components/ProjectRfqCard.tsx","utf8");
+assert.match(rfqCard,/Quotation requests created[\s\S]*router\.refresh\(\)/);
+assert.match(rfqCard,/Trader margin/);
+assert.match(rfqCard,/Gross margin/);
+assert.match(actions,/canManage&&row\.status==="awarded"/);
+assert.match(actions,/saveProjectAwardedMargin/);
 console.log("projectRfq.test.ts: passed");

@@ -87,9 +87,7 @@ export function ProjectDetailView({
         canEdit={canEditSpecification}
       />
 
-      {(canManageRfq || isRfqCandidate) ? (
-        <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={canManageRfq} canEnterCandidateQuotation={viewer.isPlatformAdmin} initialOptions={initialRfqCandidates} lines={project.lines} />
-      ) : null}
+      <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={canManageRfq} canEnterCandidateQuotation={viewer.isPlatformAdmin} initialOptions={initialRfqCandidates} lines={project.lines} />
 
       <ProjectFileWorkspace
         projectId={project.id}
