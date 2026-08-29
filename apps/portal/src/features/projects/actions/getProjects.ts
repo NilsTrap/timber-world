@@ -21,6 +21,10 @@ import { loadOrgPersonas } from "../services/orgPersonas";
 import { countFilesByDeal } from "../services/projectFiles";
 import type { ProjectListItem, ProjectsResult, ProjectsViewer } from "../types";
 import { getProjectStages } from "../../project-stages/stages";
+import { createAdminClient as createTypedAdminClient } from "@/lib/supabase/admin";
+import type { DbClient } from "../../orders/services/dealModel";
+
+const createAdminClient=()=>createTypedAdminClient() as unknown as DbClient;
 
 /** Newest-first cap. Matches the deal service's own ceiling. */
 const LIST_LIMIT = 200;
@@ -76,6 +80,8 @@ export async function listProjects(): Promise<ListProjectsResult> {
   }
 
   const primaryThumbnailByOrder = new Map<string, string>();
+  const primaryThumbnailBySpine = new Map<string,string>();
+  if(visibleSpineIds.length){const admin=createAdminClient();const{data}=await admin.from("spine_project_images").select("spine_id,order_files!inner(storage_path,lifecycle_status)").in("spine_id",visibleSpineIds).eq("position",1);for(const row of data??[]){const file=row.order_files as unknown as{storage_path:string;lifecycle_status:string};if(file.lifecycle_status!=="ready")continue;const{data:signed}=await admin.storage.from("orders").createSignedUrl(file.storage_path,60*60);if(signed?.signedUrl)primaryThumbnailBySpine.set(row.spine_id,signed.signedUrl)}}
   const thumbnailOrderIds = [...new Set([
     ...visibleIds.filter((id, index) => !walledRows[index]?.spineId),
     ...originOrderBySpineId.values(),
@@ -123,7 +129,7 @@ export async function listProjects(): Promise<ListProjectsResult> {
       createdAt: raw.createdAt,
       sortOrder: raw.projectSortOrder,
       spineThumbnailUrl: walled.spineId
-        ? primaryThumbnailByOrder.get(originOrderBySpineId.get(walled.spineId) ?? "") ?? null
+        ? primaryThumbnailBySpine.get(walled.spineId)??primaryThumbnailByOrder.get(originOrderBySpineId.get(walled.spineId) ?? "") ?? null
         : null,
     };
   }));

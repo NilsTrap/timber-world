@@ -2,8 +2,8 @@
 title: 'Quotation workbench, line-item commercial roll-up, and spine images'
 type: 'feature'
 created: '2026-08-29'
-status: 'ready-for-dev'
-baseline_commit: '83cedf64'
+status: 'done'
+baseline_commit: 'e351148ad0cc8038fb4ffbc58499b4b81496a489'
 context:
   - '../project-context.md'
   - '../../docs/Timber_World_Trading_Platform_Specification.pdf'
@@ -103,15 +103,22 @@ context:
   - canonical origin line, selected quantity;
   - snapshotted source amount cents and source update/version marker;
   - created by/at.
-- Add target-leg commercial state/version fields sufficient to distinguish `draft`, `confirmed`, and `stale` roll-ups.
+- A source is eligible only when its buyer is the target leg's seller (`source.buyer_organisation_id = target.seller_organisation_id`), it is on the same non-null spine, it has an awarded or confirmed selling price, and it is not the target itself. This prevents reversed, circular, or unrelated commercial provenance.
+- Only platform admin or a trader user with the target seller organisation's deal-create right may load private source identities/costs or save its roll-up.
+- Add target-leg commercial state/version fields sufficient to distinguish `draft`, `confirmed`, and `stale` roll-ups plus an explicit offer scope of `full` or `partial`.
+- `full` confirmation requires exact coverage of every target line quantity. `partial` confirmation allows an intentional non-empty subset and stores/displays that label; neither mode permits over-coverage.
+- Persist buyer-safe offered values per canonical origin line. Material and process quote entries are first grouped under their parent canonical line. Partial source quantities scale that line's source cost proportionally. Target additional cost and margin are allocated proportionally by line purchase cost using largest-remainder rounding so line cents equal the target total exactly; when all purchase costs are zero, allocation falls back to selected quantity.
 - Extend private target-leg pricing with aggregated purchase cost, optional adjustments, trader margin, and sales amount. Preserve the already implemented `orders.margin_*` and `resale_value_cents` fields rather than creating a second margin model.
-- Add a transactional RPC to preview/validate and save the complete roll-up. It locks target/source/relevant origin lines in deterministic order and rejects cross-spine, unauthorized, non-awarded, duplicate, stale, over-quantity, or currency-mismatched input.
+- Add a transactional RPC to preview/validate and save the complete roll-up. It rejects null/empty/duplicate input, locks the target then source orders/candidates/origin lines in sorted UUID order, validates the client-reviewed candidate `updated_at` marker, and rejects cross-spine, unauthorized, wrong-direction, non-awarded, stale, over/under-coverage, currency-mismatched, or overflow input.
+- Reopening a saved roll-up loads its selected quantities, scope, additional cost, margin mode/value, line offers, and state. Saving refreshes the UI from the canonical result rather than resetting to an empty builder.
 
 ### Spine images
 
-- Reuse the existing MVP convention: the spine's `origin_order_id` owns the three canonical `order_files` image designations. Do not introduce a second gallery table unless implementation proves the origin convention insufficient.
-- Image loaders and actions resolve any viewed order to `spines.origin_order_id`, authorize the actor against the viewed spine, and read/mutate that one canonical gallery. Signed preview URLs are created server-side only after this authorization.
-- Preserve ordinary file ownership and leg-local file workspaces; only the three gallery designations are spine-wide.
+- The first implementation proved that order-level thumbnail columns cannot enforce three unique positions across a spine without moving files. Add a small `spine_project_images(spine_id, order_file_id, position)` designation table with unique spine positions and unique file linkage.
+- Image loaders and actions resolve any viewed order to its spine, authorize the actor against the viewed spine and the approved gallery role, and read/mutate only the designation rows. Signed preview URLs are created server-side only after this authorization.
+- Preserve every `order_files.order_id`, storage path, and leg-local file workspace. Upload/screenshot from a sibling stays owned by that sibling file workspace while its designation appears in the shared gallery.
+- Legacy migration selects at most three distinct storage paths deterministically, preferring the origin order's positions and then sibling designations. It does not move or duplicate file bytes.
+- Slot allocation/make-default/removal run under a spine-scoped lock, and every sibling detail route is invalidated through tag-based or equivalent spine-level cache invalidation.
 
 ## I/O and Edge Cases
 
@@ -119,10 +126,10 @@ context:
 |---|---|
 | Manager opens submitted or awarded candidate | Full quotation detail is visible, including line/process breakdown and total |
 | Supplier opens awarded quote | Full own quotation remains visible but has no editable controls |
-| Admin corrects awarded unit price | Current quotation and purchase cost update; saved margin/sales and dependent roll-ups become stale pending explicit reconfirmation |
+| Admin corrects awarded unit price | Current quotation and purchase cost update; bilateral `value_cents` is preserved; saved margin/sales and dependent roll-ups become stale pending explicit reconfirmation |
 | RFQ covers 2 of 5 lines | Candidate sees and quotes only those 2 work-package lines/processes |
 | Two supplier legs cover metal and wood | Target trader selects both; roll-up groups their contributions by canonical line and calculates one target purchase cost |
-| Two sources overlap beyond required quantity | Confirmation is rejected atomically with a line-specific error |
+| Two sources overlap beyond required quantity | Confirmation is rejected atomically with a line-specific error; valid partial quantities can be entered in the builder |
 | One source price changes later | Existing target amount remains; UI shows stale-source warning and offers explicit refresh/reconfirm |
 | Viewer opens any sibling leg | Same three spine images, same order, same default thumbnail |
 | Legacy images exist on several legs | Deterministic migration keeps at most three without duplicating files |
@@ -130,16 +137,16 @@ context:
 
 ## Implementation Plan
 
-1. **Quotation read model** — expose current structured entries and update metadata through a role-filtered server projection; remove UI conditions that hide quotation detail after submission/award.
-2. **Quotation workbench UI** — add view/edit modal or expandable panel, supplier lifecycle lock, admin candidate selection, and clear submitted/awarded states.
-3. **Correction transaction** — keep supplier submission open/unexpired only; add a separate admin correction RPC that replaces the current snapshot and applies post-award stale-pricing hooks.
-4. **Line-item source model** — add explicit target/source/canonical-line snapshot rows and target commercial state/version.
-5. **Build selling price workflow** — add eligible-source query, cumulative line coverage, target adjustments, margin calculation, confirmation, and stale-source warnings.
-6. **Role-safe projections** — manager/admin receive private cost and margin; downstream parties receive only confirmed offered line values and total; suppliers never receive competitors.
-7. **Spine image projection and actions** — resolve the canonical origin gallery from every leg, update upload/screenshot/default/remove/list behavior, and use the same gallery in all legs and the Projects list.
-8. **Automated tests** — database/RPC authorization, award lock, admin correction, aggregation/rounding, overlap/coverage/staleness, cross-spine rejection, and spine-image access.
-9. **UI acceptance pass** — test platform admin, two suppliers, trader 1, trader 2, buyer, and unrelated user; verify desktop/mobile rendering and reload persistence.
-10. **Migration/deployment gate** — apply locally first, run the complete Projects/type-check gates, then apply to staging and deploy only after implementation review passes.
+- [x] **Quotation read model** — expose current structured entries and update metadata through a role-filtered server projection; remove UI conditions that hide quotation detail after submission/award.
+- [x] **Quotation workbench UI** — add view/edit modal or expandable panel, supplier lifecycle lock, admin candidate selection, and clear submitted/awarded states.
+- [x] **Correction transaction** — keep supplier submission open/unexpired only; add a separate admin correction RPC that replaces the current snapshot, preserves bilateral value, and applies post-award stale-pricing hooks.
+- [x] **Line-item source model** — add explicit target/source/canonical-line cost and offered-value snapshots, scope, state, and version markers.
+- [x] **Build selling price workflow** — add privately eligible source query, editable source quantities, exact coverage validation, target adjustments, deterministic line allocation, margin calculation, confirmation, reload, and stale-source warnings.
+- [x] **Role-safe projections** — manager/admin receive private cost and margin; downstream parties receive only confirmed offered line values and total; suppliers never receive competitors.
+- [x] **Spine image designation** — add spine-level designation rows without moving files; update upload/screenshot/default/remove/list behavior and Projects thumbnail projection.
+- [x] **Automated tests** — execute database/RPC authorization, award lock, admin correction, aggregation/rounding, direction/privacy, overlap/coverage/staleness, cross-spine/currency rejection, overflow/null input, and spine-image access/migration cases.
+- [x] **UI acceptance pass** — validate the live admin workflow and deterministic 11-actor role matrix; verify reload persistence and sibling-leg gallery parity.
+- [x] **Migration/deployment gate** — replay the full migration chain in isolation, run complete Projects/type-check gates, apply staging schema, then deploy after review passes.
 
 ## Acceptance Criteria
 
@@ -171,11 +178,53 @@ context:
 6. Upload/capture three images from one leg; verify identical gallery/default thumbnail from every sibling leg and Projects list.
 7. Repeat visibility checks as buyer, trader 1, trader 2, both suppliers, platform admin, and unrelated user.
 
-## Review Questions
+## Approved MVP Defaults
 
-1. Should a buyer-facing offer be allowed to contain only a deliberate subset of the spine specification if it is explicitly labelled `Partial offer` (recommended), or must buyer-facing offers always cover the full spine?
-2. Should target-leg additional costs be one total adjustment for MVP (recommended), or allocated individually to specification lines?
+- Buyer-facing offers may contain an intentional subset when explicitly labelled `Partial offer`; `Full offer` requires exact target-line coverage.
+- Target-leg additional costs use one total adjustment and are allocated deterministically across offered lines.
+
+## Spec Change Log
+
+- 2026-08-29 review loop 1 — Rejected the first implementation because it exposed unrelated upstream identities/costs, lacked line-level offered-value snapshots and full/partial coverage semantics, accepted unsafe null/currency/stale inputs, and moved ordinary files between leg workspaces. Amended the technical plan with seller-owned source direction, exact role checks, deterministic per-line allocation, explicit scope/coverage, sorted locks/version checks, and a designation-only spine gallery. KEEP: persistent quotation viewing, supplier lock after award, admin current-snapshot correction without history, stale propagation, explicit source selection, and shared three-image UX.
 
 ## Suggested Review Order
 
-Authorization and privacy boundaries; quotation correction semantics; line-item roll-up/coverage model; stale-source behavior; spine image ownership; UI workflow; tests and migration safety.
+**Commercial boundary and data model**
+
+- Start with the atomic schema, source direction, coverage, staleness, and spine gallery design.
+  [`20260829130000_project_quotation_rollup_spine_gallery.sql:1`](../../supabase/migrations/20260829130000_project_quotation_rollup_spine_gallery.sql#L1)
+
+- Review server-side privacy projection and canonical reload behavior.
+  [`projectCommercialActions.ts:17`](../../apps/portal/src/features/projects/actions/projectCommercialActions.ts#L17)
+
+- Check deterministic cent allocation before reviewing UI totals.
+  [`projectCommercialRollup.ts:1`](../../apps/portal/src/features/projects/services/projectCommercialRollup.ts#L1)
+
+**Quotation workbench**
+
+- Inspect admin correction and safe error mapping at the action boundary.
+  [`projectRfqActions.ts:84`](../../apps/portal/src/features/projects/actions/projectRfqActions.ts#L84)
+
+- Review persistent quotation detail, editing, award lock, and margin presentation.
+  [`ProjectRfqCard.tsx:138`](../../apps/portal/src/features/projects/components/ProjectRfqCard.tsx#L138)
+
+**Selling offer workflow**
+
+- Verify explicit source selection, exact-coverage feedback, margin preview, and confirmation.
+  [`ProjectCommercialRollup.tsx:9`](../../apps/portal/src/features/projects/components/ProjectCommercialRollup.tsx#L9)
+
+**Spine images**
+
+- Confirm sibling legs load the same authorized designations without exposing storage paths.
+  [`getProject.ts:112`](../../apps/portal/src/features/projects/actions/getProject.ts#L112)
+
+- Confirm project-list thumbnails resolve from the same spine designation.
+  [`getProjects.ts:84`](../../apps/portal/src/features/projects/actions/getProjects.ts#L84)
+
+**Verification**
+
+- Review commercial arithmetic and boundary cases.
+  [`projectCommercialRollup.test.ts:1`](../../apps/portal/src/features/projects/services/__tests__/projectCommercialRollup.test.ts#L1)
+
+- Review migration, privacy, correction, and UI contract assertions.
+  [`projectRfq.test.ts:111`](../../apps/portal/src/features/projects/services/__tests__/projectRfq.test.ts#L111)

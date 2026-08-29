@@ -1,106 +1,21 @@
 "use server";
-
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { createAdminClient as createTypedAdminClient } from "@/lib/supabase/admin";
+import type { DbClient } from "../../orders/services/dealModel";
 import type { ActionResult } from "../../orders/types";
 import { requireVisibleProject } from "./_projectAccess";
 import { nextOfficialImagePosition } from "../officialImagePolicy";
-import { createAdminClient } from "@/lib/supabase/admin";
-
-const uuid = z.string().uuid();
-
-async function mayManageOfficialImages(access: Extract<Awaited<ReturnType<typeof requireVisibleProject>>, { ok: true }>, project: { seller_organisation_id: string | null }) {
-  if (access.actor.isPlatformAdmin) return true;
-  if (!access.actor.orgId || project.seller_organisation_id !== access.actor.orgId) return false;
-  const { data } = await access.actor.db.from("organisations").select("is_trader").eq("id", access.actor.orgId).maybeSingle();
-  return data?.is_trader === true;
-}
-
-async function mayRemoveOfficialImages(access: Extract<Awaited<ReturnType<typeof requireVisibleProject>>, { ok: true }>, project: { buyer_organisation_id: string | null; seller_organisation_id: string | null }) {
-  if (access.actor.isPlatformAdmin) return true;
-  if (!access.actor.orgId) return false;
-  if (project.buyer_organisation_id === access.actor.orgId) return true;
-  return mayManageOfficialImages(access, project);
-}
-
-export async function checkProjectOfficialImageSlot(projectId: string): Promise<ActionResult<{ position: number }>> {
-  if (!uuid.safeParse(projectId).success) return { success:false,error:"Image unavailable",code:"NOT_FOUND" };
-  const access = await requireVisibleProject(projectId, true);
-  if (!access.ok) return { success:false,error:access.error,code:access.code };
-  const { data: project } = await access.actor.db.from("orders").select("id,spine_id,seller_organisation_id,spines!orders_spine_id_fkey(origin_order_id)").eq("id",projectId).maybeSingle();
-  if (!project?.spine_id || (project.spines as unknown as {origin_order_id:string|null}|null)?.origin_order_id!==projectId) return { success:false,error:"Official images can only be managed on the original project leg",code:"FORBIDDEN" };
-  if (!await mayManageOfficialImages(access, project)) return { success:false,error:"Official images can only be managed by the responsible trader",code:"FORBIDDEN" };
-  const { data, error } = await access.actor.db.from("order_files").select("thumbnail_sort_order").eq("order_id",projectId).eq("is_thumbnail",true);
-  if (error) return { success:false,error:"Could not check project image availability",code:"UPDATE_FAILED" };
-  const position = nextOfficialImagePosition((data??[]).map((row: {thumbnail_sort_order:number|null})=>row.thumbnail_sort_order));
-  return position ? { success:true,data:{position} } : { success:false,error:"A project can have up to three official images",code:"LIMIT_REACHED" };
-}
-
-export async function completeProjectOfficialImage(projectId: string, fileId: string): Promise<ActionResult<{ position: number }>> {
-  return addProjectOfficialImage(projectId, fileId);
-}
-
-export async function addProjectOfficialImage(projectId: string, fileId: string): Promise<ActionResult<{ position: number }>> {
-  if (!uuid.safeParse(projectId).success || !uuid.safeParse(fileId).success) return { success:false,error:"Image unavailable",code:"NOT_FOUND" };
-  const access = await requireVisibleProject(projectId, true);
-  if (!access.ok) return { success:false,error:access.error,code:access.code };
-  const { data: project } = await access.actor.db.from("orders").select("id,spine_id,seller_organisation_id,spines!orders_spine_id_fkey(origin_order_id)").eq("id",projectId).maybeSingle();
-  if (!project?.spine_id) return { success:false,error:"Official images belong to the original project leg",code:"VALIDATION_ERROR" };
-  if ((project.spines as unknown as {origin_order_id:string|null}|null)?.origin_order_id!==projectId) return { success:false,error:"Official images can only be managed on the original project leg",code:"FORBIDDEN" };
-  if (!await mayManageOfficialImages(access, project)) return { success:false,error:"Official images can only be managed by the responsible trader",code:"FORBIDDEN" };
-  const { data: file } = await access.actor.db.from("order_files").select("id,mime_type,lifecycle_status").eq("id",fileId).eq("order_id",projectId).eq("category","project").eq("file_variant","original").maybeSingle();
-  if (!file || file.lifecycle_status!=="ready" || !String(file.mime_type??"").startsWith("image/")) return { success:false,error:"Choose a completed image upload",code:"VALIDATION_ERROR" };
-  const { data: existingData, error: existingError } = await access.actor.db.from("order_files").select("id,thumbnail_sort_order").eq("order_id",projectId).eq("is_thumbnail",true).order("thumbnail_sort_order");
-  if (existingError) return { success:false,error:"Could not check project image availability",code:"UPDATE_FAILED" };
-  const existing = (existingData??[]) as Array<{id:string;thumbnail_sort_order:number|null}>;
-  if (existing.some((row)=>row.id===fileId)) return { success:true,data:{position:Number(existing.find((row)=>row.id===fileId)?.thumbnail_sort_order??1)} };
-  const position = nextOfficialImagePosition(existing.map((row)=>row.thumbnail_sort_order));
-  if (!position) return { success:false,error:"A project can have up to three official images",code:"LIMIT_REACHED" };
-  const { data: updated, error } = await access.actor.db.from("order_files").update({is_thumbnail:true,thumbnail_sort_order:position}).eq("id",fileId).eq("order_id",projectId).eq("category","project").eq("file_variant","original").select("id").maybeSingle();
-  if (error||!updated) return { success:false,error:"Could not add official image",code:"UPDATE_FAILED" };
-  revalidatePath(`/projects/${projectId}`); revalidatePath("/projects");
-  return { success:true,data:{position} };
-}
-
-export async function removeProjectOfficialImage(projectId: string, fileId: string): Promise<ActionResult<null>> {
-  if (!uuid.safeParse(projectId).success || !uuid.safeParse(fileId).success) return { success:false,error:"Image unavailable",code:"NOT_FOUND" };
-  const access = await requireVisibleProject(projectId, false);
-  if (!access.ok) return { success:false,error:access.error,code:access.code };
-  const { data: project } = await access.actor.db.from("orders").select("id,spine_id,buyer_organisation_id,seller_organisation_id,spines!orders_spine_id_fkey(origin_order_id)").eq("id",projectId).maybeSingle();
-  if (!project?.spine_id) return { success:false,error:"Official images belong to the original project leg",code:"VALIDATION_ERROR" };
-  if ((project.spines as unknown as {origin_order_id:string|null}|null)?.origin_order_id!==projectId) return { success:false,error:"Official images can only be managed on the original project leg",code:"FORBIDDEN" };
-  if (!await mayRemoveOfficialImages(access, project)) return { success:false,error:"Official images can only be removed by the original buyer or responsible trader",code:"FORBIDDEN" };
-  // The authenticated RLS update policy intentionally remains trader-only. Once
-  // the explicit project-role check above passes, use the admin client narrowly
-  // for designation updates so an original buyer can remove without deleting.
-  const mutationDb = createAdminClient() as unknown as typeof access.actor.db;
-  const { data: updated,error } = await mutationDb.from("order_files").update({is_thumbnail:false,thumbnail_sort_order:null}).eq("id",fileId).eq("order_id",projectId).eq("category","project").eq("file_variant","original").eq("is_thumbnail",true).select("id").maybeSingle();
-  if (error||!updated) return { success:false,error:"Could not remove official image",code:"UPDATE_FAILED" };
-  const { data: remaining, error: remainingError } = await mutationDb.from("order_files").select("id").eq("order_id",projectId).eq("category","project").eq("file_variant","original").eq("lifecycle_status","ready").eq("is_thumbnail",true).order("thumbnail_sort_order").order("created_at");
-  if (remainingError) return { success:false,error:"The image was removed, but the remaining images could not be reordered",code:"UPDATE_FAILED" };
-  for (const [index, image] of (remaining??[]).entries()) {
-    const { error: reorderError } = await mutationDb.from("order_files").update({thumbnail_sort_order:index+1}).eq("id",image.id).eq("order_id",projectId).eq("category","project").eq("file_variant","original").eq("lifecycle_status","ready").eq("is_thumbnail",true);
-    if (reorderError) return { success:false,error:"The image was removed, but the remaining images could not be reordered",code:"UPDATE_FAILED" };
-  }
-  revalidatePath(`/projects/${projectId}`); revalidatePath("/projects");
-  return { success:true,data:null };
-}
-
-export async function setProjectOfficialImagePrimary(projectId: string, fileId: string): Promise<ActionResult<null>> {
-  if (!uuid.safeParse(projectId).success || !uuid.safeParse(fileId).success) return { success:false,error:"Image unavailable",code:"NOT_FOUND" };
-  const access = await requireVisibleProject(projectId, true);
-  if (!access.ok) return { success:false,error:access.error,code:access.code };
-  const { data: project } = await access.actor.db.from("orders").select("id,spine_id,seller_organisation_id,spines!orders_spine_id_fkey(origin_order_id)").eq("id",projectId).maybeSingle();
-  if (!project?.spine_id || (project.spines as unknown as {origin_order_id:string|null}|null)?.origin_order_id!==projectId) return { success:false,error:"Official images can only be managed on the original project leg",code:"FORBIDDEN" };
-  if (!await mayManageOfficialImages(access, project)) return { success:false,error:"Official images can only be managed by the responsible trader",code:"FORBIDDEN" };
-  const { data: images, error: readError } = await access.actor.db.from("order_files").select("id").eq("order_id",projectId).eq("category","project").eq("file_variant","original").eq("lifecycle_status","ready").eq("is_thumbnail",true).order("thumbnail_sort_order").order("created_at");
-  const imageRows=(images??[]) as Array<{id:string}>;
-  if (readError || !imageRows.some((image)=>image.id===fileId)) return { success:false,error:"Image unavailable",code:"NOT_FOUND" };
-  const ordered=[imageRows.find((image)=>image.id===fileId)!,...imageRows.filter((image)=>image.id!==fileId)];
-  for (const [index, image] of ordered.entries()) {
-    const { error } = await access.actor.db.from("order_files").update({thumbnail_sort_order:index+1}).eq("id",image.id).eq("order_id",projectId);
-    if (error) return { success:false,error:"Could not change the default image",code:"UPDATE_FAILED" };
-  }
-  revalidatePath(`/projects/${projectId}`); revalidatePath("/projects");
-  return { success:true,data:null };
-}
+const uuid=z.string().uuid();const admin=()=>createTypedAdminClient() as unknown as DbClient;
+type Access=Extract<Awaited<ReturnType<typeof requireVisibleProject>>,{ok:true}>;
+type ProjectRow={id:string;spine_id:string|null;buyer_organisation_id:string|null;seller_organisation_id:string|null};
+async function context(projectId:string,write:boolean){const access=await requireVisibleProject(projectId,write);if(!access.ok)return null;const{data}=await access.actor.db.from("orders").select("id,spine_id,buyer_organisation_id,seller_organisation_id").eq("id",projectId).maybeSingle();return data?.spine_id?{access,project:data as ProjectRow}:null}
+async function mayManage(access:Access,project:ProjectRow){if(access.actor.isPlatformAdmin)return true;if(!access.actor.orgId||project.seller_organisation_id!==access.actor.orgId)return false;const{data}=await access.actor.db.from("organisations").select("is_active,is_trader").eq("id",access.actor.orgId).maybeSingle();return data?.is_active===true&&data.is_trader===true}
+async function mayRemove(access:Access,project:ProjectRow){return access.actor.isPlatformAdmin||Boolean(access.actor.orgId&&(project.buyer_organisation_id===access.actor.orgId||await mayManage(access,project)))}
+async function refresh(spineId:string){const{data}=await admin().from("orders").select("id").eq("spine_id",spineId);for(const row of data??[])revalidatePath(`/projects/${row.id}`);revalidatePath("/projects")}
+async function mutate(ctx:{access:Access;project:ProjectRow},fileId:string,action:"add"|"remove"|"default"):Promise<ActionResult<number|null>>{const{data,error}=await admin().rpc("mutate_spine_project_image",{p_spine_id:ctx.project.spine_id,p_file_id:fileId,p_action:action,p_created_by:ctx.access.actor.portalUserId});if(error)return{success:false,error:error.message.includes("IMAGE_LIMIT")?"A project can have up to three official images":"Could not update project image",code:"UPDATE_FAILED"};await refresh(ctx.project.spine_id!);return{success:true,data:data==null?null:Number(data)}}
+export async function checkProjectOfficialImageSlot(projectId:string):Promise<ActionResult<{position:number}>>{if(!uuid.safeParse(projectId).success)return{success:false,error:"Image unavailable",code:"NOT_FOUND"};const ctx=await context(projectId,true);if(!ctx||!await mayManage(ctx.access,ctx.project))return{success:false,error:"Not allowed",code:"FORBIDDEN"};const{data,error}=await admin().from("spine_project_images").select("position").eq("spine_id",ctx.project.spine_id);if(error)return{success:false,error:"Could not check project image availability",code:"UPDATE_FAILED"};const position=nextOfficialImagePosition((data??[]).map((row:{position:number})=>row.position));return position?{success:true,data:{position}}:{success:false,error:"A project can have up to three official images",code:"LIMIT_REACHED"}}
+export async function completeProjectOfficialImage(projectId:string,fileId:string){return addProjectOfficialImage(projectId,fileId)}
+export async function addProjectOfficialImage(projectId:string,fileId:string):Promise<ActionResult<{position:number}>>{if(!uuid.safeParse(projectId).success||!uuid.safeParse(fileId).success)return{success:false,error:"Image unavailable",code:"NOT_FOUND"};const ctx=await context(projectId,true);if(!ctx||!await mayManage(ctx.access,ctx.project))return{success:false,error:"Not allowed",code:"FORBIDDEN"};const{data:file,error:fileError}=await admin().from("order_files").select("id").eq("id",fileId).eq("order_id",projectId).eq("category","project").eq("file_variant","original").eq("lifecycle_status","ready").like("mime_type","image/%").maybeSingle();if(fileError||!file)return{success:false,error:"Image unavailable",code:"NOT_FOUND"};const result=await mutate(ctx,fileId,"add");return result.success&&result.data?{success:true,data:{position:result.data}}:result.success?{success:false,error:"Could not add project image",code:"UPDATE_FAILED"}:result}
+export async function removeProjectOfficialImage(projectId:string,fileId:string):Promise<ActionResult<null>>{if(!uuid.safeParse(projectId).success||!uuid.safeParse(fileId).success)return{success:false,error:"Image unavailable",code:"NOT_FOUND"};const ctx=await context(projectId,false);if(!ctx||!await mayRemove(ctx.access,ctx.project))return{success:false,error:"Not allowed",code:"FORBIDDEN"};const result=await mutate(ctx,fileId,"remove");return result.success?{success:true,data:null}:result}
+export async function setProjectOfficialImagePrimary(projectId:string,fileId:string):Promise<ActionResult<null>>{if(!uuid.safeParse(projectId).success||!uuid.safeParse(fileId).success)return{success:false,error:"Image unavailable",code:"NOT_FOUND"};const ctx=await context(projectId,true);if(!ctx||!await mayManage(ctx.access,ctx.project))return{success:false,error:"Not allowed",code:"FORBIDDEN"};const result=await mutate(ctx,fileId,"default");return result.success?{success:true,data:null}:result}

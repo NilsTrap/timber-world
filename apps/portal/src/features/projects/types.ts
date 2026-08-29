@@ -218,6 +218,8 @@ export interface ProjectDetail extends ProjectListItem {
   terms?: ProjectTerms;
   lines: ProjectLine[];
   files: ProjectFileMeta[];
+  /** Spine gallery projection. Never merged into the selected leg's file workspace. */
+  officialImages: ProjectFileMeta[];
   folders: ProjectFolderMeta[];
   fileCounts: ProjectFileCounts;
   notes: string | null;

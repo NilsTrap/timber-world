@@ -23,7 +23,7 @@ const marginSchema = z.object({
   }
 });
 
-export type ProjectRfqCandidate = { id: string; organisationId: string; organisationName: string; status: "invited"|"submitted"|"awarded"|"not_awarded"; quoteTotalCents: number|null; quoteNotes: string|null; submittedAt: string|null; quoteEntries:ProjectQuoteEntry[] };
+export type ProjectRfqCandidate = { id: string; organisationId: string; organisationName: string; status: "invited"|"submitted"|"awarded"|"not_awarded"; quoteTotalCents: number|null; quoteNotes: string|null; submittedAt: string|null; updatedAt:string|null; submitterName:string|null; quoteEnteredAsAdmin:boolean; quoteEntries:ProjectQuoteEntry[] };
 export type ProjectQuoteEntry=z.infer<typeof quoteEntrySchema>;
 export type ProjectCommercialPricing = { purchaseCostCents:number; marginAmountCents:number|null; marginPercent:number|null; salesAmountCents:number|null };
 export type ProjectRfqState = { id: string; deadline: string; status: "open"|"awarded"|"cancelled"; ownerOrganisationId: string; candidates: ProjectRfqCandidate[]; canManage: boolean; ownCandidateId: string|null; commercialPricing?:ProjectCommercialPricing };
@@ -60,10 +60,12 @@ export async function getProjectRfqState(projectId: string): Promise<ActionResul
   const row = rfq as Record<string,unknown>;
   const canManage = a.isPlatformAdmin || (a.orgId != null && row.organization_id === a.orgId);
   const candidateDb = canManage ? createAdminClient() : a.db;
-  let { data: candidates, error: candidateError } = await candidateDb.from("project_rfq_candidates").select("id, organization_id, status, quote_total_cents, quote_notes, submitted_at, quote_entries, organisations!inner(name)").eq("rfq_id",row.id).order("created_at");
+  let { data: candidates, error: candidateError } = await candidateDb.from("project_rfq_candidates").select("id, organization_id, status, quote_total_cents, quote_notes, submitted_at, updated_at, quote_entered_by, quote_entered_as_admin, quote_entries, organisations!inner(name)").eq("rfq_id",row.id).order("created_at");
   if(candidateError?.message.includes("quote_entries")){const legacy=await candidateDb.from("project_rfq_candidates").select("id, organization_id, status, quote_total_cents, quote_notes, submitted_at, organisations!inner(name)").eq("rfq_id",row.id).order("created_at");candidates=legacy.data;candidateError=legacy.error}
   if (candidateError) return { success:false,error:"Could not load RFQ candidates",code:"FETCH_FAILED" };
-  const mapped = ((candidates??[]) as Array<Record<string,unknown>>).map((candidate)=>({ id:candidate.id as string, organisationId:candidate.organization_id as string, organisationName:(candidate.organisations as Record<string,unknown>).name as string, status:candidate.status as ProjectRfqCandidate["status"], quoteTotalCents:candidate.quote_total_cents==null?null:Number(candidate.quote_total_cents), quoteNotes:candidate.quote_notes as string|null, submittedAt:candidate.submitted_at as string|null,quoteEntries:quoteEntries(candidate.quote_entries) }));
+  const enteredByIds=[...new Set(((candidates??[]) as Array<Record<string,unknown>>).map((candidate)=>candidate.quote_entered_by).filter((id):id is string=>typeof id==="string"))];
+  const submitterNames=new Map<string,string>();if(enteredByIds.length){const{data:users}=await createAdminClient().from("portal_users").select("id,name").in("id",enteredByIds);for(const user of (users??[]) as Array<{id:string;name:string|null}>)if(user.name)submitterNames.set(user.id,user.name)}
+  const mapped = ((candidates??[]) as Array<Record<string,unknown>>).map((candidate)=>({ id:candidate.id as string, organisationId:candidate.organization_id as string, organisationName:(candidate.organisations as Record<string,unknown>).name as string, status:candidate.status as ProjectRfqCandidate["status"], quoteTotalCents:candidate.quote_total_cents==null?null:Number(candidate.quote_total_cents), quoteNotes:candidate.quote_notes as string|null, submittedAt:candidate.submitted_at as string|null,updatedAt:candidate.updated_at as string|null,submitterName:typeof candidate.quote_entered_by==="string"?submitterNames.get(candidate.quote_entered_by)??null:null,quoteEnteredAsAdmin:candidate.quote_entered_as_admin===true,quoteEntries:quoteEntries(candidate.quote_entries) }));
   let commercialPricing:ProjectCommercialPricing|undefined;
   if(canManage&&row.status==="awarded"){
     const winner=mapped.find((candidate)=>candidate.status==="awarded");
@@ -89,6 +91,12 @@ export async function submitProjectQuotation(raw: unknown): Promise<ActionResult
   const {error}=await a.db.rpc("submit_project_rfq_quote_entries",{p_candidate_id:parsed.data.candidateId,p_entries:parsed.data.entries,p_notes:parsed.data.notes});
   if(!error)return{success:true,data:true};
   return{success:false,error:"Could not submit quotation",code:"SUBMIT_FAILED"};
+}
+export async function correctProjectQuotation(raw:unknown):Promise<ActionResult<true>>{
+  const parsed=quoteSchema.safeParse(raw);if(!parsed.success)return{success:false,error:parsed.error.issues[0]?.message??"Invalid quotation",code:"VALIDATION_ERROR"};
+  const a=await resolveProjectsActor();if(!a.ok||!a.isPlatformAdmin)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+  const{error}=await a.db.rpc("correct_project_rfq_quote_entries",{p_candidate_id:parsed.data.candidateId,p_entries:parsed.data.entries,p_notes:parsed.data.notes});
+  if(error)return{success:false,error:"Could not correct quotation",code:"UPDATE_FAILED"};return{success:true,data:true};
 }
 export async function awardProjectQuotation(raw: unknown): Promise<ActionResult<{projectId:string}>> {
   const parsed=awardSchema.safeParse(raw); if(!parsed.success)return{success:false,error:"Invalid award",code:"VALIDATION_ERROR"};

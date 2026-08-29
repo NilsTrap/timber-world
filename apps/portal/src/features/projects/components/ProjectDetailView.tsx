@@ -10,6 +10,7 @@ import { ProjectNextLegControl } from "./ProjectNextLegControl";
 import { ProjectOfficialImages } from "./ProjectOfficialImages";
 import { ProjectStatusSelect } from "./ProjectStatusSelect";
 import type { ProjectStageConfiguration } from "../../project-stages/stages";
+import { ProjectCommercialRollup } from "./ProjectCommercialRollup";
 
 /**
  * Project detail (server component).
@@ -74,7 +75,7 @@ export function ProjectDetailView({
         <ProjectPartiesBlock projectId={project.id} workspace={partyWorkspace} />
       </div> : null}
 
-      {canViewOfficialImages ? <ProjectOfficialImages projectId={project.id} initialFiles={project.files} canManage={canManageOfficialImages} canRemove={canRemoveOfficialImages} /> : null}
+      {canViewOfficialImages ? <ProjectOfficialImages projectId={project.id} initialFiles={project.officialImages} canManage={canManageOfficialImages} canRemove={canRemoveOfficialImages} /> : null}
 
       {!isRfqCandidate && project.terms ? (
         <ProjectTermsCard projectId={project.id} terms={project.terms} deliveryDeadline={project.deliveryDeadline} canEdit={viewer.canEditTerms} />
@@ -88,6 +89,7 @@ export function ProjectDetailView({
       />
 
       <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={canManageRfq} canEnterCandidateQuotation={viewer.isPlatformAdmin} initialOptions={initialRfqCandidates} lines={project.lines} />
+      {!isRfqCandidate ? <ProjectCommercialRollup projectId={project.id} currency={currency || "EUR"} /> : null}
 
       <ProjectFileWorkspace
         projectId={project.id}

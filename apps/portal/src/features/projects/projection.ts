@@ -389,6 +389,7 @@ export function toProjectDetail(
       officialImagePosition: f.officialImagePosition,
       previewUrl: f.previewUrl,
     })),
+    officialImages: [],
     folders: parts.folders.map((folder) => ({
       id: folder.id,
       relativePath: folder.relativePath,
