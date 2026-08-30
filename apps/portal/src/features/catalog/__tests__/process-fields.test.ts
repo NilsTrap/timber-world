@@ -14,6 +14,7 @@ const catalogAdmin = readFileSync("src/features/catalog/services/catalogAdmin.ts
 const specificationActions = readFileSync("src/features/projects/actions/projectSpecificationActions.ts", "utf8");
 const projectLoader = readFileSync("src/features/projects/actions/getProject.ts", "utf8");
 const projectEditor = readFileSync("src/features/projects/components/ProjectSpecificationEditor.tsx", "utf8");
+const projectTables = readFileSync("src/features/projects/components/ProjectSpecificationTables.tsx", "utf8");
 const packageJson = readFileSync("package.json", "utf8");
 
 assert.match(categoryUi, /option value="process">Process/);
@@ -61,7 +62,7 @@ assert.doesNotMatch(specificationActions, /p_requirements/);
 assert.match(specificationActions, /p_quantity: input\.quantity/);
 assert.match(projectLoader, /normalizeCandidateLines/);
 assert.match(projectLoader, /Array\.isArray\(line\.processRequirements\)/);
-assert.match(projectEditor, /line\.processRequirements \?\? \[\]/);
+assert.match(projectTables, /line\.processRequirements \?\? \[\]/);
 assert.match(projectEditor, /LINE_UNITS = \["kg",/);
 assert.match(packageJson, /test:timber-mvp-gate[^\n]+process-fields\.test\.ts/);
 

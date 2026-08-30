@@ -40,10 +40,10 @@ assert.match(migration, /BASIC_SNAPSHOT_TOO_LARGE/);
 assert.match(migration, /vv\.value_file_name/);
 assert.match(migration, /'allowedOptions'/);
 
-const editor = readFileSync("src/features/projects/components/ProjectSpecificationEditor.tsx", "utf8");
-assert.match(editor, /useEffect\(\(\)=>/);
-assert.match(editor, /field\.type==="file"/);
-assert.match(editor, /field\.allowedOptions\.map/);
-assert.match(editor, /version:line\.structuredValuesVersion/);
+const tables = readFileSync("src/features/projects/components/ProjectSpecificationTables.tsx", "utf8");
+assert.match(tables, /useEffect\(\(\) =>/);
+assert.match(tables, /field\.type === "file"/);
+assert.match(tables, /field\.allowedOptions\.map/);
+assert.match(tables, /version: line\.structuredValuesVersion/);
 
 console.log("specification structured values tests passed");
