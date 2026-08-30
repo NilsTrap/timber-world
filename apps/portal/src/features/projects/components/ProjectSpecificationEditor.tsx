@@ -77,7 +77,7 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
 
   return <div className="space-y-3">
     <ProjectSectionCard>
-      <ProjectSectionHeader title="Technical specification" subtitle={`${lines.length} line(s) · prices are added only after award`} actions={canEdit ? <>
+      <ProjectSectionHeader title="Technical specification" subtitle={`${lines.length} line(s) · prices are added only after award`} reserveDisclosureSpace actions={canEdit ? <>
         <Button size="sm" onClick={openCatalog} disabled={pending}><Library className="h-4 w-4" /> Add from catalogue</Button>
         <Button size="sm" onClick={() => { setCatalog([]); setDraft(blank()); }}><Plus className="h-4 w-4" /> Custom line</Button>
       </> : undefined} />

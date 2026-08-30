@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowRight, Loader2, Pencil, X } from "lucide-react";
+import { ArrowRight, Loader2, MousePointerClick, X } from "lucide-react";
 import { Button, Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@timber/ui";
 import { toast } from "sonner";
 import type { ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace } from "../types";
@@ -46,7 +46,7 @@ export function ProjectPartiesBlock({ projectId, workspace }: { projectId: strin
 }
 
 function PartySlot({ label, party, emptyLabel, onEdit, children }: { label: string; party: ProjectPartyRef | null; emptyLabel?: string; onEdit?: () => void; children?: React.ReactNode }) {
-  return <div className="min-w-[14rem] flex-1 rounded-md border bg-background p-4"><p className="text-sm text-muted-foreground">{label}</p><div className="mt-1 flex items-center justify-between gap-3"><p className="truncate text-base font-semibold">{party?.name ?? emptyLabel ?? "Not assigned"}</p>{onEdit ? <Button type="button" size="sm" onClick={onEdit}><Pencil className="h-3.5 w-3.5" /> Edit</Button> : null}</div>{party ? <div className="mt-2 flex items-center gap-2">{party.code ? <span className="text-xs text-muted-foreground">{party.code}</span> : null}<PersonaBadges personas={party.personas} /></div> : null}{children ? <div className="mt-3 space-y-2">{children}</div> : null}</div>;
+  return <div className="min-w-[14rem] flex-1 rounded-md border bg-background p-4"><p className="text-sm text-muted-foreground">{label}</p><div className="mt-1 flex items-center justify-between gap-3"><p className="truncate text-base font-semibold">{party?.name ?? emptyLabel ?? "Not assigned"}</p>{onEdit ? <Button type="button" size="sm" variant="outline" className="border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary" onClick={onEdit}><MousePointerClick className="h-3.5 w-3.5" /> Select</Button> : null}</div>{party ? <div className="mt-2 flex items-center gap-2">{party.code ? <span className="text-xs text-muted-foreground">{party.code}</span> : null}<PersonaBadges personas={party.personas} /></div> : null}{children ? <div className="mt-3 space-y-2">{children}</div> : null}</div>;
 }
 
 function CancelButton({ onClick }: { onClick: () => void }) { return <Button type="button" size="sm" variant="ghost" onClick={onClick}><X className="h-3.5 w-3.5" /> Cancel</Button>; }
