@@ -212,6 +212,8 @@ export interface ProjectFileCounts {
 export interface ProjectDetail extends ProjectListItem {
   /** Canonical spine label for viewers allowed to see chain identity. */
   displaySpineCode?: string;
+  canEditSpineTitle?: boolean;
+  spineTitleToken?: string | null;
   /** Parties beyond the viewer's own counterparty, ONLY when the field wall
    *  let them through (a hidden party yields no entry at all). */
   otherParties: ProjectPartyRef[];

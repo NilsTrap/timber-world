@@ -1,11 +1,8 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@timber/ui";
+import Link from "next/link";
+import { cn } from "@timber/ui";
 import type { ProjectLegOption } from "../types";
 
 export function ProjectLegSelector({ currentProjectId, options }: { currentProjectId: string; options: ProjectLegOption[] }) {
-  const router = useRouter();
   if (options.length < 2) return null;
-  return <div className="max-w-md space-y-1.5"><label className="text-sm font-medium" htmlFor="project-leg-selector">Project leg</label><Select value={currentProjectId} onValueChange={(id) => router.push(`/projects/${id}`)}><SelectTrigger id="project-leg-selector" aria-label="Project leg" className="bg-white"><SelectValue /></SelectTrigger><SelectContent>{options.map((leg) => <SelectItem key={leg.id} value={leg.id}>{leg.reference}</SelectItem>)}</SelectContent></Select></div>;
+  return <nav aria-label="Project legs" className="flex flex-wrap gap-2">{options.map((leg) => { const active = leg.id === currentProjectId; return <Link key={leg.id} href={`/projects/${leg.id}`} aria-current={active ? "page" : undefined} className={cn("rounded-md border bg-white px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground", active && "border-primary bg-primary/10 text-primary shadow-sm")}>{leg.reference}</Link>; })}</nav>;
 }

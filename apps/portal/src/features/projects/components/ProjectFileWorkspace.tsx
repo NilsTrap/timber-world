@@ -369,9 +369,19 @@ export function ProjectFileWorkspace({
       const blob = await previewCapture();
       if (requestId !== previewRequestRef.current || previewFileId !== preview.fileId) return;
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const fileName = `Screenshot ${stamp}.png`;
-      const file = new File([blob], fileName, { type: "image/png" });
-      const uploaded = await uploadProjectBrowserFile(projectId, file, `Official images/${crypto.randomUUID()}-${fileName}`, () => {});
+      let uploaded: ProjectFileMeta | null = null;
+      for (let attempt = 0; attempt < 3 && !uploaded; attempt += 1) {
+        const suffix = attempt === 0 ? "" : `-${attempt + 1}`;
+        const fileName = `Screenshot ${stamp}${suffix}.png`;
+        const file = new File([blob], fileName, { type: "image/png" });
+        try {
+          uploaded = await uploadProjectBrowserFile(projectId, file, `Screenshots/${fileName}`, () => {});
+        } catch (error) {
+          const duplicate = error instanceof Error && error.message.includes("already exists");
+          if (!duplicate || attempt === 2) throw error;
+        }
+      }
+      if (!uploaded) throw new Error("The screenshot could not be uploaded.");
       uploadedId = uploaded.id;
       if (requestId !== previewRequestRef.current || previewFileId !== preview.fileId) {
         await deleteProjectFileAction(uploaded.id);

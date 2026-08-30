@@ -106,7 +106,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
       : Promise.resolve([]),
     loadProcessRequirements(a.db, (walled.lineItems ?? []).map((line) => line.id).filter((id): id is string => Boolean(id))),
     walled.spineId
-      ? a.db.from("spines").select("code,origin_order_id").eq("id", walled.spineId).maybeSingle()
+      ? a.db.from("spines").select("code,title,created_by,origin_order_id").eq("id", walled.spineId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
   ]);
   const officialImages:ProjectDetail["officialImages"]=[];
@@ -138,6 +138,10 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
       a.isPlatformAdmin,
     );
     if (label) project.displaySpineCode = label;
+    const spine = spineLookup.data as { title?: string | null; created_by?: string | null } | null;
+    if (spine?.title?.trim()) project.name = spine.title.trim();
+    project.canEditSpineTitle = Boolean(a.isPlatformAdmin || (a.portalUserId && spine?.created_by === a.portalUserId));
+    project.spineTitleToken = spine?.title ?? null;
   }
 
   const buyer = partyRef(raw.buyer, personasByOrgId);
@@ -177,7 +181,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   const nextSellerOptions = mayAppendNextSeller && !hasNextLeg
     ? await loadPartyOptions(a.db, false, raw.seller.id, "seller")
     : [];
-  const legOptions = a.isPlatformAdmin && raw.spineId
+  const legOptions = raw.spineId
     ? await loadProjectLegOptions(a.db, raw.spineId, projectId)
     : [];
   const traderCanCreateSourcingLeg = Boolean(!a.isPlatformAdmin && isDraft && raw.spineId

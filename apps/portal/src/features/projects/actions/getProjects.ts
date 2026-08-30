@@ -69,12 +69,14 @@ export async function listProjects(): Promise<ListProjectsResult> {
   );
   const visibleSpineIds = [...new Set(walledRows.map((row) => row.spineId).filter((id): id is string => Boolean(id)))];
   const spineCodeById = new Map<string, string>();
+  const spineTitleById = new Map<string, string>();
   const originOrderBySpineId = new Map<string, string>();
   if (visibleSpineIds.length > 0) {
-    const { data, error } = await a.db.from("spines").select("id, code, origin_order_id").in("id", visibleSpineIds);
+    const { data, error } = await a.db.from("spines").select("id, code, title, origin_order_id").in("id", visibleSpineIds);
     if (error) return { ok: false, deny: "not_found" };
-    for (const row of (data ?? []) as Array<{ id: string; code: string; origin_order_id: string | null }>) {
+    for (const row of (data ?? []) as Array<{ id: string; code: string; title: string | null; origin_order_id: string | null }>) {
       spineCodeById.set(row.id, row.code);
+      if (row.title?.trim()) spineTitleById.set(row.id, row.title.trim());
       if (row.origin_order_id) originOrderBySpineId.set(row.id, row.origin_order_id);
     }
   }
@@ -119,6 +121,7 @@ export async function listProjects(): Promise<ListProjectsResult> {
   const committedItems = groupProjectRows(raws.map((raw, index) => {
     const walled = walledRows[index]!;
     const item = toProjectListItem(raw as DealHeaderLike, walled as DealHeaderLike, ctx, fileCounts.get(raw.id)?.total ?? 0);
+    if (walled.spineId && spineTitleById.has(walled.spineId)) item.name = spineTitleById.get(walled.spineId)!;
     item.thumbnailUrl = primaryThumbnailByOrder.get(raw.id) ?? null;
     return {
       item,
