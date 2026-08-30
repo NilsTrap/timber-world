@@ -245,11 +245,19 @@ function normalizeCandidateLines(lines: unknown[]): ProjectDetail["lines"] {
           name: requirement.name as string,
           value: requirement.value as string,
           unit: typeof requirement.unit === "string" ? requirement.unit : null,
+          fieldType: "number" as const,
+          required: requirement.required === true,
         }];
       }),
       basicProperties: Array.isArray(line.basicProperties) ? line.basicProperties.flatMap((candidate)=>{
         if(!candidate||typeof candidate!=="object"||Array.isArray(candidate))return[];const field=candidate as Record<string,unknown>;
-        return typeof field.key==="string"&&typeof field.label==="string"&&typeof field.value==="string"?[{key:field.key,label:field.label,value:field.value}]:[];
+        const type=field.type??"text";
+        return typeof field.key==="string"&&typeof field.label==="string"&&typeof field.value==="string"&&
+          (type==="select"||type==="number"||type==="text"||type==="boolean"||type==="file")?[{
+            key:field.key,label:field.label,type,unit:typeof field.unit==="string"?field.unit:null,
+            value:field.value,sortOrder:typeof field.sortOrder==="number"?field.sortOrder:0,required:field.required===true,
+            allowedOptions:Array.isArray(field.allowedOptions)?field.allowedOptions.filter((option):option is string=>typeof option==="string"):[],
+          }]:[];
       }) : [],
     } as ProjectDetail["lines"][number]];
   });
@@ -330,6 +338,8 @@ async function loadProcessRequirements(db: DbClient, lineIds: string[]): Promise
     name: row.name as string,
     value: row.value as string,
     unit: row.unit as string | null,
+    fieldType: "number" as const,
+    required: row.is_required === true,
   }));
 }
 

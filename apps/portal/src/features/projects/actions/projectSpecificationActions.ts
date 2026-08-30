@@ -13,6 +13,10 @@ import {
   projectSpecificationEditDenialCode,
 } from "../services/projectSpecification";
 import { specificationLineUpdate } from "../services/specificationLineEdit";
+import {
+  structuredSpecificationPayload,
+  structuredSpecificationValuesSchema,
+} from "../services/specificationStructuredValues";
 
 const uuid = z.string().uuid();
 const lineUnit = z.enum(["kg", "m3", "m2", "piece", "linear_m", "package", "crate", "loose_m3"]);
@@ -89,6 +93,7 @@ function lineQuantities(unit: z.infer<typeof lineUnit>, quantity: number) {
 }
 
 function mapCatalogLineRpcError(message: string): ActionResult<never> {
+  if (message.includes("BASIC_SNAPSHOT_TOO_LARGE")) return { success: false, error: "Catalogue field values exceed the supported limits", code: "VALIDATION_ERROR" };
   if (message.includes("REQUIRED_PROCESS_VALUE_MISSING")) return { success: false, error: "A required process value is missing from the catalogue product", code: "VALIDATION_ERROR" };
   if (message.includes("INVALID_QUANTITY_FOR_UNIT")) return { success: false, error: "Quantity is outside the allowed range for this unit", code: "VALIDATION_ERROR" };
   if (message.includes("CATALOG_UNIT_MISMATCH")) return { success: false, error: "The selected unit does not match the catalogue category", code: "VALIDATION_ERROR" };
@@ -99,6 +104,16 @@ function mapCatalogLineRpcError(message: string): ActionResult<never> {
   if (message.includes("ROOT_PROJECT_REQUIRED")) return { success: false, error: "Specification lines can only be added to a root project", code: "FORBIDDEN" };
   if (message.includes("FORBIDDEN")) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
   return { success: false, error: "Could not add specification line", code: "INSERT_FAILED" };
+}
+
+function mapStructuredValueRpcError(message: string): ActionResult<never> {
+  if (message.includes("PROJECT_NOT_DRAFT")) return { success: false, error: "Specification can only be changed while the project is a draft", code: "NOT_DRAFT" };
+  if (message.includes("ROOT_PROJECT_REQUIRED") || message.includes("LINE_NOT_EDITABLE")) return { success: false, error: "Only catalogue fields on the original specification can be changed", code: "FORBIDDEN" };
+  if (message.includes("STALE_SPECIFICATION")) return { success: false, error: "The specification changed; refresh and try again", code: "CONFLICT" };
+  if (message.includes("BASIC_SNAPSHOT_TOO_LARGE")) return { success: false, error: "Catalogue field values exceed the supported limits", code: "VALIDATION_ERROR" };
+  if (message.includes("FORBIDDEN")) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
+  if (message.includes("INVALID_")) return { success: false, error: "Structured specification values are invalid or out of date", code: "VALIDATION_ERROR" };
+  return { success: false, error: "Could not update specification fields", code: "UPDATE_FAILED" };
 }
 
 export async function createProjectSpecificationLine(raw: unknown): Promise<ActionResult<{ id: string }>> {
@@ -220,6 +235,20 @@ export async function updateProjectSpecificationLine(raw: unknown): Promise<Acti
   if (!data) return { success: false, error: "Line changed; refresh and try again", code: "CONFLICT" };
   refreshProject(input.projectId);
   return { success: true, data: { id: input.lineId } };
+}
+
+export async function updateProjectSpecificationStructuredValues(raw: unknown): Promise<ActionResult<{ id: string }>> {
+  const parsed = structuredSpecificationValuesSchema.safeParse(raw);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid specification fields", code: "VALIDATION_ERROR" };
+  const ctx = await editableProject(parsed.data.projectId);
+  if (!ctx.success) return ctx;
+  const { error } = await ctx.data.db.rpc(
+    "update_project_specification_structured_values",
+    structuredSpecificationPayload(parsed.data),
+  );
+  if (error) return mapStructuredValueRpcError(error.message ?? "");
+  refreshProject(parsed.data.projectId);
+  return { success: true, data: { id: parsed.data.lineId } };
 }
 
 export async function deleteProjectSpecificationLine(raw: unknown): Promise<ActionResult<{ id: string }>> {

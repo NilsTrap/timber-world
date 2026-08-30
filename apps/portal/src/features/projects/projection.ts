@@ -92,7 +92,11 @@ export interface DealLineLike {
   vatRate: number | null;
   lineTotalCents: number | null;
   notes?: string | null;
-  specificationFields?: Array<{ key: string; label: string; value: string }>;
+  updatedAt?: string;
+  specificationFields?: Array<{
+    key: string; label: string; type?: "select" | "number" | "text" | "boolean" | "file";
+    unit?: string | null; value: string; sortOrder?: number; required?: boolean; allowedOptions?: string[];
+  }>;
   catalogProductId: string | null;
 }
 
@@ -114,6 +118,8 @@ export interface DealProcessRequirementLike {
   name: string;
   value: string;
   unit: string | null;
+  fieldType?: "number";
+  required?: boolean;
 }
 
 export interface ProjectionContext {
@@ -297,8 +303,14 @@ export function toProjectLines(
         name: requirement.name,
         value: requirement.value,
         unit: requirement.unit,
+        fieldType: requirement.fieldType ?? "number",
+        required: requirement.required ?? false,
       })) ?? [],
-      basicProperties: (li.specificationFields??[]).map((field)=>({key:field.key,label:field.label,value:field.value})),
+      basicProperties: (li.specificationFields??[]).map((field)=>({
+        key:field.key,label:field.label,type:field.type ?? "text",unit:field.unit ?? null,value:field.value,
+        sortOrder:field.sortOrder ?? 0,required:field.required ?? false,allowedOptions:field.allowedOptions ?? [],
+      })),
+      structuredValuesVersion: li.updatedAt ?? "",
       isCatalogSnapshot: Boolean(li.catalogProductId),
     };
     if (seeTerms) {

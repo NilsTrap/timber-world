@@ -80,7 +80,11 @@ export interface OrderLineItem {
   catalogProductId: string | null;
   catalogVariantId: string | null;
   isStandard: boolean;
-  specificationFields?: Array<{ key: string; label: string; value: string }>;
+  updatedAt?: string;
+  specificationFields?: Array<{
+    key: string; label: string; type?: "select" | "number" | "text" | "boolean" | "file";
+    unit?: string | null; value: string; sortOrder?: number; required?: boolean; allowedOptions?: string[];
+  }>;
 }
 
 export type OrderExternalRefType =
@@ -179,6 +183,7 @@ export function mapLineItem(row: any): OrderLineItem {
     catalogProductId: row.catalog_product_id ?? null,
     catalogVariantId: row.catalog_variant_id ?? null,
     isStandard: row.is_standard ?? false,
+    updatedAt: row.updated_at as string | undefined,
     specificationFields: Array.isArray(row.specification_fields) ? row.specification_fields : [],
   };
 }

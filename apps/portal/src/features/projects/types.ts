@@ -147,7 +147,9 @@ export interface ProjectLine {
   lineTotalCents?: number | null;
   notes: string | null;
   processRequirements: ProjectProcessRequirement[];
-  basicProperties?: Array<{key:string;label:string;value:string}>;
+  basicProperties?: ProjectSpecificationField[];
+  /** Optimistic concurrency token for structured specification edits. */
+  structuredValuesVersion: string;
   /** True when product identity and structured fields were snapshotted from the catalogue. */
   isCatalogSnapshot: boolean;
   /** Internal cost build-up. Absent unless the viewer may see deal terms. */
@@ -160,6 +162,19 @@ export interface ProjectProcessRequirement {
   name: string;
   value: string;
   unit: string | null;
+  fieldType: "number";
+  required: boolean;
+}
+
+export interface ProjectSpecificationField {
+  key: string;
+  label: string;
+  type: "select" | "number" | "text" | "boolean" | "file";
+  unit: string | null;
+  value: string;
+  sortOrder: number;
+  required: boolean;
+  allowedOptions: string[];
 }
 
 export interface ProjectLineComponent {

@@ -250,10 +250,10 @@ ok("client: internal cost components are absent",
    !("components" in client.detail.lines[0]!), Object.keys(client.detail.lines[0] ?? {}));
 eq("client: price-free process snapshots remain visible",
    client.detail.lines[0]?.processRequirements,
-   [{ id: "process-1", fieldKey: "cutting", name: "Cutting", value: "12", unit: "mm" }]);
+   [{ id: "process-1", fieldKey: "cutting", name: "Cutting", value: "12", unit: "mm", fieldType: "number", required: false }]);
 ok("client: process snapshots never acquire commercial fields",
    Object.keys(client.detail.lines[0]?.processRequirements[0] ?? {}).every((key) =>
-     ["id", "fieldKey", "name", "value", "unit"].includes(key)));
+     ["id", "fieldKey", "name", "value", "unit", "fieldType", "required"].includes(key)));
 ok("client: the producer is not serialized at all",
    !client.detail.otherParties.some((p) => p.id === PRODUCER), client.detail.otherParties);
 ok("client: no third party of any kind is serialized",

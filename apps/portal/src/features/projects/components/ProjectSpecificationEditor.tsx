@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, useTransition } from "react";
+import { Fragment, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, ChevronRight, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -14,7 +14,7 @@ import {
 import type { ProjectLine } from "../types";
 import {
   createProjectSpecificationLine, deleteProjectSpecificationLine,
-  getProjectCatalogOptions, updateProjectSpecificationLine,
+  getProjectCatalogOptions, updateProjectSpecificationLine, updateProjectSpecificationStructuredValues,
   type ProjectCatalogOption,
 } from "../actions/projectSpecificationActions";
 
@@ -89,7 +89,7 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
           <TableHead>#</TableHead><TableHead>Deliverable</TableHead><TableHead>Technical notes</TableHead>
           <TableHead className="text-right">Qty</TableHead><TableHead>Unit</TableHead>{canEdit ? <TableHead /> : null}
         </TableRow></TableHeader><TableBody>{lines.map((line) => {
-          const key=line.id??String(line.lineNo);const isExpanded=expanded.has(key);const basics=basicProperties(line);
+          const key=line.id??String(line.lineNo);const isExpanded=expanded.has(key);const basics=legacyBasicProperties(line);
           return <Fragment key={key}>
           <TableRow>
             <TableCell><Button variant="ghost" size="icon" aria-label={`${isExpanded?"Collapse":"Expand"} ${line.productName??"line"}`} onClick={()=>setExpanded((current)=>{const next=new Set(current);if(next.has(key))next.delete(key);else next.add(key);return next})}>{isExpanded?<ChevronDown className="h-4 w-4"/>:<ChevronRight className="h-4 w-4"/>}</Button></TableCell><TableCell className="font-medium">{line.productName ?? "—"}</TableCell>
@@ -100,9 +100,11 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
             </div></TableCell> : null}
           </TableRow>
           {isExpanded?<TableRow><TableCell colSpan={canEdit?6:5}><div className="grid gap-4 rounded-md bg-muted/30 p-4 md:grid-cols-2">
-            {basics.length?<SpecificationGroup title="Basic properties" items={basics}/>:null}
-            {(line.processRequirements??[]).length?<SpecificationGroup title="Production processes" items={(line.processRequirements??[]).map((item)=>({label:item.name,value:`${item.value}${item.unit?` ${item.unit}`:""}`}))}/>:null}
-            {!basics.length&&!(line.processRequirements??[]).length?<p className="text-sm text-muted-foreground">No additional structured fields for this line.</p>:null}
+            {basics.length?<SpecificationGroup title="Core properties" items={basics}/>:null}
+            {line.id && ((line.basicProperties??[]).length || (line.processRequirements??[]).length)
+              ? <StructuredSpecificationEditor projectId={projectId} line={line} canEdit={canEdit&&line.isCatalogSnapshot}/>
+              : null}
+            {!basics.length&&!(line.basicProperties??[]).length&&!(line.processRequirements??[]).length?<p className="text-sm text-muted-foreground">No additional structured fields for this line.</p>:null}
           </div></TableCell></TableRow>:null}</Fragment>})}</TableBody></Table>
       </div>
     )}
@@ -160,9 +162,44 @@ function filterCatalog(options: ProjectCatalogOption[], query: string): ProjectC
   return options.filter((option) => option.label.toLocaleLowerCase().includes(normalized)).slice(0, 100);
 }
 function isDiscreteUnit(unit: string): boolean { return unit === "piece" || unit === "package" || unit === "crate"; }
-function basicProperties(line:ProjectLine):Array<{label:string;value:string}>{return [
+function legacyBasicProperties(line:ProjectLine):Array<{label:string;value:string}>{return [
   ["Species",line.woodSpecies],["Humidity",line.humidity],["Processing",line.processing],["Quality",line.quality],
   ["Thickness",line.thickness],["Width",line.width],["Length",line.length],
-].flatMap(([label,value])=>value?[{label:label!,value:value!}]:[]).concat((line.basicProperties??[]).map((field)=>({label:field.label,value:field.value})))}
+].flatMap(([label,value])=>value?[{label:label!,value:value!}]:[])}
 function SpecificationGroup({title,items}:{title:string;items:Array<{label:string;value:string}>}){return <section><h3 className="mb-2 text-sm font-semibold">{title}</h3><dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">{items.map((item)=><div key={`${item.label}-${item.value}`} className="contents"><dt className="text-muted-foreground">{item.label}</dt><dd className="text-right font-medium">{item.value}</dd></div>)}</dl></section>}
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="grid gap-1.5"><Label>{label}</Label>{children}</div>; }
+
+function StructuredSpecificationEditor({projectId,line,canEdit}:{projectId:string;line:ProjectLine;canEdit:boolean}) {
+  const router=useRouter();
+  const [pending,startTransition]=useTransition();
+  const [basicValues,setBasicValues]=useState<Record<string,string>>(()=>Object.fromEntries((line.basicProperties??[]).map((field)=>[field.key,field.value])));
+  const [processValues,setProcessValues]=useState<Record<string,string>>(()=>Object.fromEntries((line.processRequirements??[]).map((field)=>[field.fieldKey,field.value])));
+  const basics=line.basicProperties??[];const processes=line.processRequirements??[];
+  useEffect(()=>{
+    setBasicValues(Object.fromEntries((line.basicProperties??[]).map((field)=>[field.key,field.value])));
+    setProcessValues(Object.fromEntries((line.processRequirements??[]).map((field)=>[field.fieldKey,field.value])));
+  },[line.basicProperties,line.processRequirements,line.structuredValuesVersion]);
+  function save(){if(!line.id)return;startTransition(async()=>{
+    const result=await updateProjectSpecificationStructuredValues({
+      projectId,lineId:line.id,version:line.structuredValuesVersion,
+      basicValues:basics.map((field)=>({key:field.key,value:basicValues[field.key]??""})),
+      processValues:processes.map((field)=>({key:field.fieldKey,value:processValues[field.fieldKey]??"0"})),
+    });
+    if(!result.success){toast.error(result.error);return;}toast.success("Specification fields saved");router.refresh();
+  })}
+  if(!canEdit)return <>
+    {basics.length?<SpecificationGroup title="Basic properties" items={basics.map((field)=>({label:field.unit?`${field.label} (${field.unit})`:field.label,value:field.value||"—"}))}/>:null}
+    {processes.length?<SpecificationGroup title="Production processes" items={processes.map((field)=>({label:field.name,value:`${field.value}${field.unit?` ${field.unit}`:""}`}))}/>:null}
+  </>;
+  return <section className="space-y-4 md:col-span-2">
+    <div className="grid gap-4 md:grid-cols-2">
+      {basics.length?<div><h3 className="mb-2 text-sm font-semibold">Basic properties</h3><div className="grid gap-3 sm:grid-cols-2">{basics.map((field)=><Field key={field.key} label={`${field.label}${field.unit?` (${field.unit})`:""}`}>
+        {field.type==="file"?<Input value={field.value||"No file"} disabled aria-label={`${field.label} file`}/>
+          :field.type==="select"?<select className="h-9 rounded-md border bg-background px-3" value={basicValues[field.key]??""} onChange={(event)=>setBasicValues({...basicValues,[field.key]:event.target.value})}><option value="">—</option>{field.allowedOptions.map((option)=><option key={option} value={option}>{option}</option>)}</select>
+          :field.type==="boolean"?<select className="h-9 rounded-md border bg-background px-3" value={basicValues[field.key]??""} onChange={(event)=>setBasicValues({...basicValues,[field.key]:event.target.value})}><option value="">—</option><option value="true">Yes</option><option value="false">No</option></select>
+          :<Input type={field.type==="number"?"number":"text"} value={basicValues[field.key]??""} onChange={(event)=>setBasicValues({...basicValues,[field.key]:event.target.value})}/>}</Field>)}</div></div>:null}
+      {processes.length?<div><h3 className="mb-2 text-sm font-semibold">Production processes</h3><div className="grid gap-3 sm:grid-cols-2">{processes.map((field)=><Field key={field.fieldKey} label={`${field.name}${field.unit?` (${field.unit})`:""}`}><Input type="number" min="0" step="any" value={processValues[field.fieldKey]??"0"} onChange={(event)=>setProcessValues({...processValues,[field.fieldKey]:event.target.value})}/></Field>)}</div></div>:null}
+    </div>
+    <div className="flex justify-end"><Button size="sm" disabled={pending} onClick={save}>{pending?<Loader2 className="mr-2 h-4 w-4 animate-spin"/>:null}Save fields</Button></div>
+  </section>;
+}
