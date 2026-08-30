@@ -1,22 +1,7 @@
 /** Timber Projects creation/path/tree/security contract (pure + source guards). */
 import { readFileSync } from "node:fs";
 import { evaluateProjectCapabilities } from "../capabilities";
-import {
-  MAX_INTERACTIVE_PROJECT_PREVIEW_BYTES,
-  MAX_PROJECT_FILE_BYTES,
-  buildProjectTree,
-  classifyProjectFile,
-  getProjectPreviewKind,
-  isPreviewableProjectFile,
-  normaliseProjectMimeType,
-  normaliseProjectName,
-  normaliseProjectPath,
-  pathFromBrowserFile,
-  projectPathKey,
-  replacePathPrefix,
-  storedProjectMimeType,
-  validateStoredProjectUploadSize,
-} from "../filePaths";
+import { MAX_INTERACTIVE_PROJECT_PREVIEW_BYTES, MAX_PROJECT_FILE_BYTES, buildProjectTree, classifyProjectFile, getProjectPreviewKind, isPreviewableProjectFile, normaliseProjectMimeType, normaliseProjectName, normaliseProjectPath, pathFromBrowserFile, projectPathKey, replacePathPrefix, storedProjectMimeType, validateStoredProjectUploadSize } from "../filePaths";
 import { sanitizeProjectHtml } from "../components/viewers/sanitizeProjectHtml";
 import { isValidOcctResult } from "../components/viewers/validateOcctResult";
 import { MAX_CAPTURE_DIMENSION, MAX_CAPTURE_PIXELS, boundedCaptureSize, hasVisiblePixelVariation, scaledVisibleCanvasRegion } from "../components/viewers/projectPreviewCapture";
@@ -27,10 +12,17 @@ let passed = 0;
 let failed = 0;
 function eq(label: string, actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) === JSON.stringify(expected)) passed++;
-  else { failed++; console.error(`✗ ${label}\n expected ${JSON.stringify(expected)}\n actual ${JSON.stringify(actual)}`); }
+  else {
+    failed++;
+    console.error(`✗ ${label}\n expected ${JSON.stringify(expected)}\n actual ${JSON.stringify(actual)}`);
+  }
 }
 function ok(label: string, value: boolean) {
-  if (value) passed++; else { failed++; console.error(`✗ ${label}`); }
+  if (value) passed++;
+  else {
+    failed++;
+    console.error(`✗ ${label}`);
+  }
 }
 
 const filterFiles = [
@@ -48,29 +40,123 @@ eq("folder scope uses exact immediate parents", filterProjectFiles([...filterFil
 eq("root scope includes all descendants", filterProjectFiles(filterFiles, null, ALL_FILE_TYPES, ""), filterFiles);
 eq("multiple dots use the final extension", projectFileExtension("drawing.final.DXF"), "dxf");
 eq("trailing dots have no extension", projectFileExtension("drawing."), null);
-const reservedFiles = [{ fileName: "one.all", relativePath: "one.all" }, { fileName: "two.none", relativePath: "two.none" }, { fileName: "README", relativePath: "README" }];
+const reservedFiles = [
+  { fileName: "one.all", relativePath: "one.all" },
+  { fileName: "two.none", relativePath: "two.none" },
+  { fileName: "README", relativePath: "README" },
+];
 eq("reserved values do not collide with real extensions", projectFileExtensions(reservedFiles), [projectFileTypeValue("all"), projectFileTypeValue("none"), NO_FILE_EXTENSION]);
 eq("real all extension filters independently", filterProjectFiles(reservedFiles, null, projectFileTypeValue("all"), ""), [reservedFiles[0]]);
 eq("real none extension filters independently", filterProjectFiles(reservedFiles, null, projectFileTypeValue("none"), ""), [reservedFiles[1]]);
 eq("extensionless filter remains independent", filterProjectFiles(reservedFiles, null, NO_FILE_EXTENSION, ""), [reservedFiles[2]]);
 
 // Creation is rights AND persona gated. Flags alone never grant the action.
-eq("buyer + effective deal:create can create", evaluateProjectCapabilities({ isPlatformAdmin: false, hasDealCreate: true, organisationId: "org", personas: ["buyer"] }), { canWriteFiles: true, canCreateProject: true, createRoles: ["buyer"] });
-eq("trader + effective deal:create can create", evaluateProjectCapabilities({ isPlatformAdmin: false, hasDealCreate: true, organisationId: "org", personas: ["trader"] }), { canWriteFiles: true, canCreateProject: true, createRoles: ["trader"] });
-eq("dual-role org must choose one of two roles", evaluateProjectCapabilities({ isPlatformAdmin: false, hasDealCreate: true, organisationId: "org", personas: ["buyer", "trader"] }).createRoles, ["buyer", "trader"]);
-eq("buyer flag without the action cannot create", evaluateProjectCapabilities({ isPlatformAdmin: false, hasDealCreate: false, organisationId: "org", personas: ["buyer"] }).canCreateProject, false);
-eq("supplier cannot create even with deal:create", evaluateProjectCapabilities({ isPlatformAdmin: false, hasDealCreate: true, organisationId: "org", personas: ["supplier"] }).canCreateProject, false);
-eq("supplier with explicit write right may edit its visible deal only", evaluateProjectCapabilities({ isPlatformAdmin: false, hasDealCreate: true, organisationId: "org", personas: ["supplier"] }).canWriteFiles, true);
-eq("admin without an org uses the platform trader binding", evaluateProjectCapabilities({ isPlatformAdmin: true, hasDealCreate: false, organisationId: null, personas: [] }), { canWriteFiles: true, canCreateProject: true, createRoles: ["trader"] });
+eq(
+  "buyer + effective deal:create can create",
+  evaluateProjectCapabilities({
+    isPlatformAdmin: false,
+    hasDealCreate: true,
+    organisationId: "org",
+    personas: ["buyer"],
+  }),
+  { canWriteFiles: true, canCreateProject: true, createRoles: ["buyer"] },
+);
+eq(
+  "trader + effective deal:create can create",
+  evaluateProjectCapabilities({
+    isPlatformAdmin: false,
+    hasDealCreate: true,
+    organisationId: "org",
+    personas: ["trader"],
+  }),
+  { canWriteFiles: true, canCreateProject: true, createRoles: ["trader"] },
+);
+eq(
+  "dual-role org must choose one of two roles",
+  evaluateProjectCapabilities({
+    isPlatformAdmin: false,
+    hasDealCreate: true,
+    organisationId: "org",
+    personas: ["buyer", "trader"],
+  }).createRoles,
+  ["buyer", "trader"],
+);
+eq(
+  "buyer flag without the action cannot create",
+  evaluateProjectCapabilities({
+    isPlatformAdmin: false,
+    hasDealCreate: false,
+    organisationId: "org",
+    personas: ["buyer"],
+  }).canCreateProject,
+  false,
+);
+eq(
+  "supplier cannot create even with deal:create",
+  evaluateProjectCapabilities({
+    isPlatformAdmin: false,
+    hasDealCreate: true,
+    organisationId: "org",
+    personas: ["supplier"],
+  }).canCreateProject,
+  false,
+);
+eq(
+  "supplier with explicit write right may edit its visible deal only",
+  evaluateProjectCapabilities({
+    isPlatformAdmin: false,
+    hasDealCreate: true,
+    organisationId: "org",
+    personas: ["supplier"],
+  }).canWriteFiles,
+  true,
+);
+eq(
+  "admin without an org uses the platform trader binding",
+  evaluateProjectCapabilities({
+    isPlatformAdmin: true,
+    hasDealCreate: false,
+    organisationId: null,
+    personas: [],
+  }),
+  { canWriteFiles: true, canCreateProject: true, createRoles: ["trader"] },
+);
 
 // Strict path boundary + browser-friendly tree persistence.
 for (const bad of ["", "/root/a.pdf", "C:/a.pdf", "../a.pdf", "a/../b.pdf", "a//b.pdf", "a/./b.pdf", "a/ "]) {
   ok(`reject invalid path ${JSON.stringify(bad)}`, !normaliseProjectPath(bad).ok);
 }
-eq("normalise Windows separators", normaliseProjectPath("drawings\\final\\A.pdf"), { ok: true, path: "drawings/final/A.pdf", segments: ["drawings", "final", "A.pdf"] });
-eq("react-dropzone single-file marker is removed", pathFromBrowserFile({ name: "quote.pdf", path: "./quote.pdf", webkitRelativePath: "" } as File & { path: string }), { ok: true, path: "quote.pdf", segments: ["quote.pdf"] });
-eq("dropped folder leading slash is removed", pathFromBrowserFile({ name: "quote.pdf", path: "/drawings/quote.pdf", webkitRelativePath: "" } as File & { path: string }), { ok: true, path: "drawings/quote.pdf", segments: ["drawings", "quote.pdf"] });
-ok("parent traversal is not treated as a browser marker", !pathFromBrowserFile({ name: "quote.pdf", path: "../quote.pdf", webkitRelativePath: "" } as File & { path: string }).ok);
+eq("normalise Windows separators", normaliseProjectPath("drawings\\final\\A.pdf"), {
+  ok: true,
+  path: "drawings/final/A.pdf",
+  segments: ["drawings", "final", "A.pdf"],
+});
+eq(
+  "react-dropzone single-file marker is removed",
+  pathFromBrowserFile({
+    name: "quote.pdf",
+    path: "./quote.pdf",
+    webkitRelativePath: "",
+  } as File & { path: string }),
+  { ok: true, path: "quote.pdf", segments: ["quote.pdf"] },
+);
+eq(
+  "dropped folder leading slash is removed",
+  pathFromBrowserFile({
+    name: "quote.pdf",
+    path: "/drawings/quote.pdf",
+    webkitRelativePath: "",
+  } as File & { path: string }),
+  { ok: true, path: "drawings/quote.pdf", segments: ["drawings", "quote.pdf"] },
+);
+ok(
+  "parent traversal is not treated as a browser marker",
+  !pathFromBrowserFile({
+    name: "quote.pdf",
+    path: "../quote.pdf",
+    webkitRelativePath: "",
+  } as File & { path: string }).ok,
+);
 eq("case-insensitive duplicate key", projectPathKey("Drawings/A.PDF"), projectPathKey("drawings/a.pdf"));
 eq("reject blank file name", normaliseProjectName("  "), null);
 eq("reject separators in a rename", normaliseProjectName("folder/name"), null);
@@ -87,8 +173,19 @@ const tree = buildProjectTree([
   { id: "2", relativePath: "drawings/source/b.dwg" },
   { id: "3", relativePath: "readme.txt" },
 ]);
-eq("reopened tree keeps top-level names", tree.map((node) => [node.kind, node.name]), [["folder", "drawings"], ["file", "readme.txt"]]);
-eq("nested folders are reconstructed", tree[0]?.children.map((node) => node.name), ["final", "source"]);
+eq(
+  "reopened tree keeps top-level names",
+  tree.map((node) => [node.kind, node.name]),
+  [
+    ["folder", "drawings"],
+    ["file", "readme.txt"],
+  ],
+);
+eq(
+  "nested folders are reconstructed",
+  tree[0]?.children.map((node) => node.name),
+  ["final", "source"],
+);
 eq("deep file path is preserved", tree[0]?.children[0]?.children[0]?.path, "drawings/final/a.pdf");
 const treeWithEmptyFolder = buildProjectTree([], [{ relativePath: "empty/nested" }]);
 eq("persisted empty folder survives without files", treeWithEmptyFolder[0]?.children[0]?.path, "empty/nested");
@@ -122,14 +219,63 @@ ok("HTML sanitizer strips scripts and event handlers", !hostileHtml.includes("<s
 ok("HTML sanitizer strips interactive forms", !hostileHtml.includes("<form") && !hostileHtml.includes("<input"));
 ok("HTML sanitizer retains inline styles and data images", hostileHtml.includes(".ok{color:green}") && hostileHtml.includes("data:image/png;base64,AA=="));
 ok("HTML sanitizer injects a restrictive CSP", hostileHtml.includes("Content-Security-Policy") && hostileHtml.includes("default-src 'none'"));
-const validMesh = { success: true, meshes: [{ attributes: { position: { array: [0, 0, 0, 1, 0, 0, 0, 1, 0] } }, index: { array: [0, 1, 2] } }] };
+const validMesh = {
+  success: true,
+  meshes: [
+    {
+      attributes: { position: { array: [0, 0, 0, 1, 0, 0, 0, 1, 0] } },
+      index: { array: [0, 1, 2] },
+    },
+  ],
+};
 ok("STEP validation accepts finite triangles", isValidOcctResult(validMesh));
-ok("STEP validation rejects non-finite coordinates", !isValidOcctResult({ ...validMesh, meshes: [{ ...validMesh.meshes[0], attributes: { position: { array: [0, 0, Number.NaN] } } }] }));
-ok("STEP validation rejects out-of-range indices", !isValidOcctResult({ ...validMesh, meshes: [{ ...validMesh.meshes[0], index: { array: [0, 1, 9] } }] }));
-eq("capture dimensions are bounded", boundedCaptureSize(4096, 1024), { width: 2048, height: 512 });
-ok("capture pixel budget is bounded", (() => { const size = boundedCaptureSize(3000, 3000); return size.width * size.height <= MAX_CAPTURE_PIXELS; })());
+ok(
+  "STEP validation rejects non-finite coordinates",
+  !isValidOcctResult({
+    ...validMesh,
+    meshes: [
+      {
+        ...validMesh.meshes[0],
+        attributes: { position: { array: [0, 0, Number.NaN] } },
+      },
+    ],
+  }),
+);
+ok(
+  "STEP validation rejects out-of-range indices",
+  !isValidOcctResult({
+    ...validMesh,
+    meshes: [{ ...validMesh.meshes[0], index: { array: [0, 1, 9] } }],
+  }),
+);
+eq("capture dimensions are bounded", boundedCaptureSize(4096, 1024), {
+  width: 2048,
+  height: 512,
+});
+ok(
+  "capture pixel budget is bounded",
+  (() => {
+    const size = boundedCaptureSize(3000, 3000);
+    return size.width * size.height <= MAX_CAPTURE_PIXELS;
+  })(),
+);
 eq("capture maximum edge is explicit", MAX_CAPTURE_DIMENSION, 2048);
-eq("scrolled PDF capture maps the visible CSS viewport to backing pixels", scaledVisibleCanvasRegion({canvasWidth:1200,canvasHeight:2400,canvasClientWidth:600,canvasClientHeight:1200,canvasOffsetLeft:8,canvasOffsetTop:8,scrollLeft:8,scrollTop:308,viewportWidth:600,viewportHeight:500}), {x:0,y:600,width:1200,height:1000});
+eq(
+  "scrolled PDF capture maps the visible CSS viewport to backing pixels",
+  scaledVisibleCanvasRegion({
+    canvasWidth: 1200,
+    canvasHeight: 2400,
+    canvasClientWidth: 600,
+    canvasClientHeight: 1200,
+    canvasOffsetLeft: 8,
+    canvasOffsetTop: 8,
+    scrollLeft: 8,
+    scrollTop: 308,
+    viewportWidth: 600,
+    viewportHeight: 500,
+  }),
+  { x: 0, y: 600, width: 1200, height: 1000 },
+);
 ok("uniform blank captures are rejected", !hasVisiblePixelVariation(new Uint8ClampedArray([255, 255, 255, 255, 255, 255, 255, 255])));
 ok("visible capture variation is accepted", hasVisiblePixelVariation(new Uint8ClampedArray([255, 255, 255, 255, 20, 20, 20, 255])));
 ok("uniform colored preview content is accepted", hasVisiblePixelVariation(new Uint8ClampedArray([20, 40, 60, 255, 20, 40, 60, 255])));
@@ -163,6 +309,7 @@ const officialImageActions = readFileSync("src/features/projects/actions/project
 const spineActions = readFileSync("src/features/projects/actions/projectSpineActions.ts", "utf8");
 const spineTitle = readFileSync("src/features/projects/components/ProjectSpineTitle.tsx", "utf8");
 const createView = readFileSync("src/features/projects/components/ProjectCreateView.tsx", "utf8");
+const termsCard = readFileSync("src/features/projects/components/ProjectTermsCard.tsx", "utf8");
 const portalLayout = readFileSync("src/app/(portal)/layout.tsx", "utf8");
 const migration = readFileSync("../../supabase/migrations/20260821211500_project_file_workspace.sql", "utf8");
 const folderMigration = readFileSync("../../supabase/migrations/20260826090000_project_workspace_folders.sql", "utf8");
@@ -185,17 +332,25 @@ ok("workspace reads only category=project", service.includes('.eq("category", PR
 ok("workspace reads originals only", service.includes('.eq("file_variant", ORIGINAL_VARIANT)'));
 ok("file-id actions collapse denial to File unavailable", actions.includes('error: "File unavailable"'));
 ok("creation delegates idempotency to createDeal", create.includes("idempotencyKey: `project-${input.idempotencyKey}`"));
-ok("download asks storage for the persisted filename", actions.includes('{ download: found.file.file_name }'));
+ok("terms start collapsed and empty terms expose an expand action", termsCard.includes("useState(false)") && termsCard.includes("Set terms") && termsCard.includes("setOpen(true)"));
+ok("files use a collapsible bordered card with a persistent live count", workspace.includes("Collapse files") && workspace.includes("workspaceOpen") && workspace.includes("{files.length} file(s) on this project"));
+ok("image upload control immediately precedes the disclosure chevron", /\{uploadControl\}\s*<Button/.test(officialImages) && officialImages.includes("Collapse images"));
+ok("complete creation replaces the screen with the origin project route", createView.includes("if (failures === 0)") && createView.includes("router.replace(`/projects/${created.id}`)") && /if \(complete && created && !creating && !hadSaveFailure\)/.test(createView));
+ok("creation failures stay sticky until a fully successful submit", createView.includes("hadSaveFailure") && createView.includes("setHadSaveFailure(true)") && createView.includes("setHadSaveFailure(false)") && createView.includes("!hadSaveFailure") && !createView.includes("Open {created.reference}"));
+ok("file disclosure cannot collapse active work or dialogs", workspace.includes("collapseBlocked") && workspace.includes("hasActiveUploads || archiveProgress !== null") && workspace.includes("fileInfo !== null") && workspace.includes("preview !== null") && workspace.includes("disabled={collapseBlocked}") && workspace.includes("aria-controls={workspaceBodyId}"));
+ok("upload action opens a closed workspace predictably", workspace.includes("workspaceOpen ? !current : true") && workspace.includes("setWorkspaceOpen(true)"));
+ok("official image state resets per project and opens after upload", officialImages.includes("[initialFiles, projectId]") && officialImages.includes("setOpen(initialFiles.some") && officialImages.includes("setOpen(true)"));
+ok("download asks storage for the persisted filename", actions.includes("{ download: found.file.file_name }"));
 ok("prepared upload response never exposes a storage path", /interface PreparedProjectUpload\s*{[^}]*signedUrl: string;[^}]*uploadId: string;[^}]*}/.test(actions));
 const ordinaryUploadAction = actions.slice(actions.indexOf("export async function prepareProjectFileUpload"), actions.indexOf("export async function finaliseProjectFileUpload"));
 ok("preparation persists an uploading row before signing", ordinaryUploadAction.indexOf('lifecycle_status: "uploading"') < ordinaryUploadAction.indexOf(".createSignedUploadUrl(storagePath"));
 ok("ZIP archives upload once and extract on the server", actions.includes("prepareProjectArchiveUpload") && actions.includes("extractProjectArchiveUpload") && actions.includes("JSZip.loadAsync"));
 ok("archive extraction preserves safe paths and limits expansion", actions.includes("normaliseProjectPath(unsafeName)") && actions.includes("MAX_ARCHIVE_FILES") && actions.includes("MAX_ARCHIVE_EXPANDED_BYTES"));
 ok("ZIP files are auto-routed without a dedicated archive picker", dropSurface.includes("onArchives") && dropSurface.includes('endsWith(".zip")') && !dropSurface.includes("Upload archive"));
-ok("archive extraction works in existing and new projects", workspace.includes("uploadProjectBrowserArchive") && workspace.includes("Uploading and extracting archive") && createView.includes("uploadProjectBrowserArchive") && createView.includes('kind: "archive"'));
+ok("archive extraction works in existing and new projects", workspace.includes("uploadProjectBrowserArchive") && /Uploading and\s+extracting archive/.test(workspace) && createView.includes("uploadProjectBrowserArchive") && /kind:\s*"archive"/.test(createView));
 ok("existing-project archive failures remain retryable without stopping the queue", workspace.includes("interface FailedArchive") && workspace.includes("failedCount += 1") && workspace.includes("Retry") && workspace.includes("for (const [archiveIndex, file] of archives.entries())"));
 ok("portal confines scrolling to its main content region", portalLayout.includes('className="fixed inset-0 flex min-h-0 bg-background"') && portalLayout.includes('className="min-h-0 flex-1 overflow-y-auto"'));
-ok("awarded margin crosses the client boundary only for RFQ managers", rfqActions.includes('if(canManage&&row.status==="awarded")') && rfqActions.includes('...(commercialPricing?{commercialPricing}:{})'));
+ok("awarded margin crosses the client boundary only for RFQ managers", rfqActions.includes('if(canManage&&row.status==="awarded")') && rfqActions.includes("...(commercialPricing?{commercialPricing}:{})"));
 ok("awarded margin is editable through a dedicated trader card", rfqCard.includes("Trader margin") && rfqCard.includes("saveProjectAwardedMargin") && rfqCard.includes("Sales amount"));
 ok("persisted awarded margin reloads from exact cents", rfqCard.includes('pricing.marginAmountCents==null?"percentage":"amount"'));
 ok("finalisation is bound to project and upload IDs", actions.includes('.eq("id", uploadId)') && actions.includes('.eq("order_id", projectId)'));
@@ -204,10 +359,10 @@ ok("finalisation verifies stored MIME metadata", actions.includes("storedProject
 ok("signed reads require a ready file", actions.includes('found.file.lifecycle_status !== "ready"'));
 ok("signed preview checks persisted name and MIME together", actions.includes("getProjectPreviewKind(found.file.file_name, mimeType)"));
 ok("server caps interactive previews below upload size", actions.includes("MAX_INTERACTIVE_PROJECT_PREVIEW_BYTES") && actions.includes('code: "PREVIEW_TOO_LARGE"'));
-ok("invalid stored objects are removed before retry", actions.includes("if (!storedSize.ok)") && actions.includes('.remove([storagePath])'));
+ok("invalid stored objects are removed before retry", actions.includes("if (!storedSize.ok)") && actions.includes(".remove([storagePath])"));
 ok("orders bucket rejects uploads over 100 MB", migration.includes("file_size_limit = LEAST(COALESCE(file_size_limit, 104857600), 104857600)"));
-ok("narrow workspace renders folders", workspace.includes('<MobileFolderRows nodes={tree}'));
-ok("mobile folder actions stay visible and touch-safe", workspace.includes('aria-label={`Rename folder ${node.path}`}') && workspace.includes('aria-label={`Delete folder ${node.path}`}') && workspace.includes('className="h-11 w-11"'));
+ok("narrow workspace renders folders", /<MobileFolderRows\s+nodes=\{tree\}/.test(workspace));
+ok("mobile folder actions stay visible and touch-safe", workspace.includes("aria-label={`Rename folder ${node.path}`}") && workspace.includes("aria-label={`Delete folder ${node.path}`}") && workspace.includes('className="h-11 w-11"'));
 ok("empty folders have an RLS-walled persistence table", folderMigration.includes("CREATE TABLE IF NOT EXISTS public.project_folders") && folderMigration.includes("public.can_write_project_files(order_id)"));
 ok("folder moves update folder and file descendants transactionally", folderMigration.includes("move_project_workspace_folder") && folderMigration.includes("UPDATE public.project_folders") && folderMigration.includes("UPDATE public.order_files"));
 ok("folder delete metadata is transactional", folderMigration.includes("delete_project_workspace_folder") && folderMigration.includes("p_expected_file_ids"));
@@ -218,12 +373,12 @@ ok("shared file-folder namespace is serialized", folderMigration.includes("proje
 ok("workspace exposes create, move and bulk delete controls", workspace.includes("createProjectFolderAction") && workspace.includes("moveProjectFolderAction") && workspace.includes("deleteProjectFilesAction"));
 ok("file filters are outside write-only controls and apply to desktop and mobile results", workspace.includes('aria-label="Search files by name"') && workspace.includes('aria-label="Filter by file type"') && (workspace.match(/visibleFiles\.map/g)?.length ?? 0) >= 3);
 ok("filtered bulk selection is constrained to visible files", workspace.includes("new Set(visibleFiles.map((file) => file.id))") && workspace.includes("setSelectedFileIds(new Set())"));
-ok("mobile folder navigation updates the active folder scope", workspace.includes("<MobileFolderRows nodes={tree} selected={selectedFolder} onSelect={setSelectedFolder}"));
-ok("admin buyer options are not partner-book scoped", projectLoader.includes('if (!admin) {') && !projectLoader.includes('if (!admin || side === "buyer")'));
+ok("mobile folder navigation updates the active folder scope", /<MobileFolderRows[\s\S]*?nodes=\{tree\}[\s\S]*?selected=\{selectedFolder\}[\s\S]*?onSelect=\{setSelectedFolder\}/.test(workspace));
+ok("admin buyer options are not partner-book scoped", projectLoader.includes("if (!admin) {") && !projectLoader.includes('if (!admin || side === "buyer")'));
 ok("selected leg projects its own absolute buyer and seller", projectLoader.includes("const buyer = partyRef(raw.buyer") && projectLoader.includes("const seller = partyRef(raw.seller") && !projectLoader.includes("resolveRootSellingProject") && !projectLoader.includes("downstreamParties"));
 ok("same-spine leg options are loaded for every authorized viewer", projectLoader.includes("const legOptions = raw.spineId") && projectLoader.includes('eq("spine_id", spineId)') && projectLoader.includes('leg.lifecycle_stage !== "cancelled" || leg.id === currentProjectId'));
-ok("ordinary payload has no sibling option key", projectLoader.includes('...(legOptions.length > 1 ? { legOptions } : {})'));
-ok("leg navigation exposes ordered links and marks only the current leg", legSelector.includes('href={`/projects/${leg.id}`}') && legSelector.includes('aria-current={active ? "page" : undefined}') && legSelector.includes("leg.reference") && !legSelector.includes("SelectTrigger"));
+ok("ordinary payload has no sibling option key", projectLoader.includes("...(legOptions.length > 1 ? { legOptions } : {})"));
+ok("leg navigation exposes ordered links and marks only the current leg", legSelector.includes("href={`/projects/${leg.id}`}") && legSelector.includes('aria-current={active ? "page" : undefined}') && legSelector.includes("leg.reference") && !legSelector.includes("SelectTrigger"));
 ok("ordinary buyer mutations still require a trading-partner link", partyActions.includes("if (!a.isPlatformAdmin) {") && partyActions.includes("Selected company is not this trader's trading partner") && adminBuyerMigration.includes("IF NOT public.is_current_user_platform_admin()") && adminBuyerMigration.includes("Buyer is not a trading partner"));
 ok("admin buyer mutation retains active-customer and self-deal guards", adminBuyerMigration.includes("is_active AND is_customer") && adminBuyerMigration.includes("Buyer and seller must differ"));
 ok("platform admins bypass only the buyer trading-partner check", partyActions.includes("if (!a.isPlatformAdmin) {") && adminBuyerMigration.includes("IF NOT public.is_current_user_platform_admin()") && adminBuyerMigration.includes("is_active AND is_customer") && adminBuyerMigration.includes("Buyer and seller must differ"));
@@ -240,7 +395,7 @@ ok("Mills sample is an explicit development seed, not deployable schema", specif
 ok("bilateral party block renders exactly Buyer and Seller edit slots", parties.includes('<PartySlot label="Buyer"') && parties.includes('<PartySlot label="Seller"') && !parties.includes("downstreamParties") && !parties.includes("Next party"));
 ok("buyer corrections target the projected root project", parties.includes("projectId: workspace.buyerProjectId"));
 ok("seller correction is separate from append-next-party", parties.includes("correctProjectLegSeller") && partyActions.includes('a.db.rpc("correct_project_leg_seller"') && !parties.includes("setProjectSeller"));
-ok("ordinary trader next-leg eligibility is server-derived without sibling serialization", projectLoader.includes("mayAppendNextSeller = !a.isPlatformAdmin") && projectLoader.includes("viewer.createRoles.includes(\"trader\")") && projectLoader.includes("hasActiveNextLeg") && projectLoader.includes("nextSellerOptions") && !nextLegControl.includes("legOptions") && !nextLegControl.includes("sibling"));
+ok("ordinary trader next-leg eligibility is server-derived without sibling serialization", projectLoader.includes("mayAppendNextSeller = !a.isPlatformAdmin") && projectLoader.includes('viewer.createRoles.includes("trader")') && projectLoader.includes("hasActiveNextLeg") && projectLoader.includes("nextSellerOptions") && !nextLegControl.includes("legOptions") && !nextLegControl.includes("sibling"));
 ok("admin same-spine creation remains separate from bilateral party cards", detail.includes("<ProjectNextLegControl") && nextLegControl.includes("ProjectCreateLegDialog") && !parties.includes("createSameSpineProjectLeg") && !nextLegControl.includes("PartySlot"));
 ok("seller correction dropdown groups traders before suppliers and manufacturers", parties.indexOf("<SelectLabel>Traders</SelectLabel>") < parties.indexOf("<SelectLabel>Suppliers / Manufacturers</SelectLabel>"));
 ok("seller correction is admin-only and Draft-only at both boundaries", partyActions.includes("Only a platform admin can correct a seller") && partyActions.includes('leg.data.lifecycleStage !== "draft"') && legCorrectionMigration.includes("is_current_user_platform_admin") && legCorrectionMigration.includes("v_order.lifecycle_stage <> 'draft'"));
@@ -250,7 +405,7 @@ ok("leg references track current bilateral parties while preserving their suffix
 ok("failed spine attachment is surfaced and cleaned up", orderDeals.includes("spineError") && orderDeals.includes('delete().eq("id", orderId)') && orderDeals.includes('code: "CONFLICT"'));
 ok("seller correction validates active eligibility and both self-deal edges", legCorrectionMigration.includes("is_active AND (is_trader OR is_supplier OR is_producer)") && legCorrectionMigration.includes("p_seller_id = v_order.buyer_organisation_id") && legCorrectionMigration.includes("v_link.seller_organisation_id = p_seller_id"));
 ok("seller correction cannot repeat an organisation elsewhere in the active spine", legCorrectionMigration.includes("Seller already belongs to this project spine") && legCorrectionMigration.includes("buyer_organisation_id = p_seller_id OR seller_organisation_id = p_seller_id"));
-ok("workspace exposes concise cleanup and sharing controls", workspace.includes("> Move") && workspace.includes("> Delete") && workspace.includes("} Clean") && workspace.includes("> Share") && workspace.includes(">Unshare<") && workspace.includes("Approve cleaned file") && workspace.includes("Shared status for") && !workspace.includes("Move selected") && !workspace.includes("Delete selected") && !workspace.includes("Clean selected") && !workspace.includes("Share with next party") && !workspace.includes("Unshare selected"));
+ok("workspace exposes concise cleanup and sharing controls", />\s*Move/.test(workspace) && />\s*Delete/.test(workspace) && /}\s*Clean/.test(workspace) && />\s*Share/.test(workspace) && />\s*Unshare\s*</.test(workspace) && /Approve\s+cleaned\s+file/.test(workspace) && workspace.includes("Shared status for") && !workspace.includes("Move selected") && !workspace.includes("Delete selected") && !workspace.includes("Clean selected") && !workspace.includes("Share with next party") && !workspace.includes("Unshare selected"));
 ok("closed upload control uses the primary button style", workspace.includes('variant={uploadOpen ? "secondary" : "default"}'));
 ok("successful cleanup deselects only files actually cleaned", workspace.includes("filter((id) => !updates.has(id))") && workspace.indexOf("filter((id) => !updates.has(id))", workspace.indexOf("const cleanSelected")) < workspace.indexOf("} catch", workspace.indexOf("const cleanSelected")));
 ok("clean derivatives are linked and downstream reads require approval", cleanupMigration.includes("source_file_id") && cleanupMigration.includes("shared_to_order_id") && cleanupMigration.includes("cleanup_status='approved'"));
@@ -268,22 +423,22 @@ ok("DXF parsing uses a dedicated worker and destroys viewer resources", dxfViewe
 ok("STEP parsing uses a terminating local worker and disposes WebGL resources", stepViewer.includes("occt-import-js-worker.js") && stepViewer.includes("worker.terminate()") && stepViewer.includes("renderer?.dispose()"));
 ok("STEP canvas has a stable bounded CSS footprint", stepViewer.includes('renderer.domElement.classList.add("block", "h-full", "w-full")') && stepViewer.includes('className="h-full min-w-0 w-full overflow-hidden"'));
 ok("STEP camera fitting respects horizontal and vertical field of view", stepViewer.includes("horizontalFov") && stepViewer.includes("limitingFov") && stepViewer.includes("sphere.radius"));
-ok("previewable desktop and mobile rows support pointer and semantic button activation", workspace.includes('onClick={previewable ? () => onPreview(file) : undefined}') && workspace.includes('className="flex w-full min-w-0 items-center gap-2 text-left') && workspace.includes('className="flex min-w-0 flex-1 items-center gap-3 text-left"'));
-ok("unsupported rows remain outside the row preview interaction", workspace.includes('onClick={previewable ? () => onPreview(file) : undefined}') && workspace.includes('onClick={isPreviewableProjectFile(file.fileName, file.mimeType) ? () => openPreview(file) : undefined}'));
-ok("file selection and explicit actions stop row preview propagation", workspace.includes('onClick={(event) => event.stopPropagation()}') && workspace.includes('onKeyDown={(event) => event.stopPropagation()}'));
+ok("previewable desktop and mobile rows support pointer and semantic button activation", /onClick=\{previewable\s*\?\s*\(\)\s*=>\s*onPreview\(file\)\s*:\s*undefined\}/.test(workspace) && workspace.includes('className="flex w-full min-w-0 items-center gap-2 text-left') && workspace.includes('className="flex min-w-0 flex-1 items-center gap-3 text-left"'));
+ok("unsupported rows remain outside the row preview interaction", /onClick=\{previewable\s*\?\s*\(\)\s*=>\s*onPreview\(file\)\s*:\s*undefined\}/.test(workspace) && /onClick=\{\s*isPreviewableProjectFile\(file\.fileName, file\.mimeType\)[\s\S]*?\?\s*\(\)\s*=>\s*openPreview\(file\)[\s\S]*?:\s*undefined/.test(workspace));
+ok("file selection and explicit actions stop row preview propagation", workspace.includes("onClick={(event) => event.stopPropagation()}") && workspace.includes("onKeyDown={(event) => event.stopPropagation()}"));
 ok("STEP refits after its container aspect changes", stepViewer.includes("if (fitRef.current) fitRef.current(); else render()"));
 ok("all controlled viewer families register viewport capture", [preview, htmlViewer, dxfViewer, stepViewer].every((source) => source.includes("registerCapture")) && preview.includes("RasterFileViewer") && preview.includes("PdfFileViewer"));
 ok("capture output is bounded PNG and rejects tainted canvases", capture.includes("MAX_CAPTURE_PIXELS") && capture.includes('toBlob(resolve, "image/png")') && capture.includes("getImageData"));
 ok("screenshot action is capability-hidden and reports readiness", workspace.includes("canManageOfficialImages ?") && workspace.includes("disabled={!previewCapture || screenshotBusy}") && workspace.includes('aria-label="Take screenshot of visible preview"'));
-ok("screenshot preflights the slot before upload", workspace.indexOf("checkProjectOfficialImageSlot(projectId)") < workspace.indexOf("await previewCapture()") && workspace.indexOf("await previewCapture()") < workspace.indexOf("uploadProjectBrowserFile(projectId, file"));
-ok("screenshots use a readable timestamp name inside a dedicated folder", workspace.includes('const fileName = `Screenshot ${stamp}${suffix}.png`') && workspace.includes('`Screenshots/${fileName}`') && !workspace.includes('`Screenshots/${crypto.randomUUID()}'));
+ok("screenshot preflights the slot before upload", workspace.search(/checkProjectOfficialImageSlot\(projectId\)/) < workspace.search(/await\s+previewCapture\(\)/) && workspace.search(/await\s+previewCapture\(\)/) < workspace.search(/uploadProjectBrowserFile\(\s*projectId,\s*file/));
+ok("screenshots use a readable timestamp name inside a dedicated folder", workspace.includes("const fileName = `Screenshot ${stamp}${suffix}.png`") && workspace.includes("`Screenshots/${fileName}`") && !workspace.includes("`Screenshots/${crypto.randomUUID()}"));
 ok("official image callers clean up only their own failed upload", officialImageActions.includes("completeProjectOfficialImage") && workspace.includes("deleteProjectFileAction(uploadedId)") && officialImages.includes("deleteProjectFileAction(uploadedId)"));
 ok("official image cards hide storage filenames and expose a default-image action", officialImages.includes("Make default") && officialImages.includes("Default project image") && !officialImages.includes("{file.fileName}</span>"));
 ok("default image changes use the spine-image manager gate and resequence designations", officialImageActions.includes("setProjectOfficialImagePrimary") && officialImageActions.includes("mayManage(ctx.access,ctx.project)") && officialImageActions.includes("spine_project_images"));
 ok("gallery projection separates view, manage, and remove capabilities", projectLoader.includes("canViewOfficialImages") && projectLoader.includes("canManageOfficialImages") && projectLoader.includes("canRemoveOfficialImages") && detail.includes("canRemove={canRemoveOfficialImages}"));
-ok("gallery images are contained and open an accessible preview", officialImages.includes('className="object-contain"') && officialImages.includes("<Dialog open={preview !== null}") && officialImages.includes("Preview project image"));
-ok("gallery controls reveal on hover or keyboard focus and removal is confirmed", officialImages.includes("group-hover:opacity-100") && officialImages.includes("group-focus-within:opacity-100") && officialImages.includes("<AlertDialog open={removeTarget !== null}") && officialImages.includes("Remove project image {removeTarget?.officialImagePosition}?"));
-ok("populated gallery uses a compact label without explanatory or collapsible header chrome", officialImages.includes('images.length > 0 ? <section className="space-y-3">') && !officialImages.includes("Up to three project images") && officialImages.includes("No images uploaded"));
+ok("gallery images are contained and open an accessible preview", officialImages.includes('className="object-contain"') && /<Dialog\s+open=\{preview !== null\}/.test(officialImages) && officialImages.includes("Preview project image"));
+ok("gallery controls reveal on hover or keyboard focus and removal is confirmed", officialImages.includes("group-hover:opacity-100") && officialImages.includes("group-focus-within:opacity-100") && /<AlertDialog\s+open=\{removeTarget !== null\}/.test(officialImages) && officialImages.includes("Remove project image {removeTarget?.officialImagePosition}?"));
+ok("populated gallery remains inside the collapsible bordered card", officialImages.includes("images.length > 0 || canManage") && officialImages.includes('id="project-images-content"') && officialImages.includes("Collapse images"));
 ok("buyer removal uses a read visibility gate and mutates only the spine designation", officialImageActions.includes("context(projectId,false)") && officialImageActions.includes("project.buyer_organisation_id===access.actor.orgId") && officialImageActions.includes('mutate(ctx,fileId,"remove")'));
 ok("specification rows expand into basic properties and production processes", specificationEditor.includes("Basic properties") && specificationEditor.includes("Production processes") && specificationEditor.includes("md:grid-cols-2"));
 ok("catalogue specification lines allow quantity and notes edits without mutating their snapshot", specificationEditor.includes("isCatalogSnapshot") && specificationEditor.includes("Catalogue fields and unit stay unchanged") && specificationActions.includes("specificationLineUpdate") && specificationActions.includes('.not("catalog_product_id", "is", null)') && !specificationActions.includes("Catalogue snapshots are immutable; replace the line"));

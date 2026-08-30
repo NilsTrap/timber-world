@@ -1,34 +1,278 @@
 "use client";
-import { useEffect,useId,useState,useTransition } from "react";
-import { Button,Input,Label } from "@timber/ui";
-import { Loader2 } from "lucide-react";
+import { useEffect, useId, useState, useTransition } from "react";
+import { Button, Input, Label } from "@timber/ui";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { getProjectCommercialRollup,saveProjectCommercialRollup,type CommercialRollupState } from "../actions/projectCommercialActions";
+import { getProjectCommercialRollup, saveProjectCommercialRollup, type CommercialRollupState } from "../actions/projectCommercialActions";
 import { calculateCommercialRollup } from "../services/projectCommercialRollup";
 
-export function ProjectCommercialRollup({projectId,currency}:{projectId:string;currency:string}){
-  const[state,setState]=useState<CommercialRollupState|null>(null);
-  const[loadError,setLoadError]=useState<string|null>(null);
-  const[selected,setSelected]=useState<Record<string,string>>({});
-  const[scope,setScope]=useState<"full"|"partial">("full");
-  const[marginMode,setMarginMode]=useState<"amount"|"percentage">("percentage");
-  const marginModeName=useId();
-  const[adjustment,setAdjustment]=useState("0");const[margin,setMargin]=useState("0");
-  const[pending,startTransition]=useTransition();
-  const load=()=>{setLoadError(null);void getProjectCommercialRollup(projectId).then((result)=>{if(!result.success){setLoadError(result.error);return}setState(result.data);setScope(result.data.scope??"full");setAdjustment(String((result.data.adjustmentCents??0)/100));const mode=result.data.marginMode??"percentage";setMarginMode(mode);setMargin(String(mode==="amount"?(result.data.marginAmountCents??0)/100:result.data.marginPercent??0));setSelected(Object.fromEntries((result.data.savedSelections??[]).map((item)=>[`${item.sourceOrderId}:${item.originLineItemId}`,String(item.selectedQuantity)])))}).catch(()=>setLoadError("Could not load commercial offer"))};
-  useEffect(load,[projectId]);
-  if(loadError)return <section className="flex items-center justify-between rounded-lg border border-destructive/40 bg-card p-4 text-sm"><span>{loadError}</span><Button size="sm" variant="outline" onClick={load}>Retry</Button></section>;
-  if(!state)return <section className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">Loading commercial offer…</section>;
-  const format=(cents:number|null|undefined)=>cents==null?"—":`${(cents/100).toFixed(2)} ${currency}`;
-  const contributions=(state.sources??[]).flatMap((source)=>source.lines.flatMap((line)=>{const value=Number(selected[`${source.sourceOrderId}:${line.originLineItemId}`]);return value>0?[{sourceOrderId:source.sourceOrderId,originLineItemId:line.originLineItemId,selectedQuantity:value,sourceVersion:source.sourceVersion,sourceUpdatedAt:source.sourceUpdatedAt}]:[]}));
-  const selectedByLine=contributions.reduce<Record<string,number>>((totals,item)=>({...totals,[item.originLineItemId]:(totals[item.originLineItemId]??0)+item.selectedQuantity}),{});
-  const missing=(state.requiredLines??[]).map((line)=>({...line,missingQuantity:line.requiredQuantity-(selectedByLine[line.originLineItemId]??0)})).filter((line)=>Math.abs(line.missingQuantity)>1e-9);
-  let preview:ReturnType<typeof calculateCommercialRollup>|null=null;
-  if(contributions.length>0){try{preview=calculateCommercialRollup({scope,requirements:(state.requiredLines??[]).map(({originLineItemId,requiredQuantity})=>({originLineItemId,requiredQuantity})),contributions:contributions.map((item)=>{const source=state.sources?.find((candidate)=>candidate.sourceOrderId===item.sourceOrderId);const line=source?.lines.find((candidate)=>candidate.originLineItemId===item.originLineItemId);return{...item,sourceCandidateId:source?.sourceCandidateId??null,availableQuantity:line?.availableQuantity??0,availableAmountCents:line?.sourceAmountCents??0}}),adjustmentCents:Math.round(Number(adjustment)*100),marginMode,marginValue:marginMode==="amount"?Math.round(Number(margin)*100):Number(margin)})}catch{preview=null}}
-  const save=()=>startTransition(async()=>{
-    const result=await saveProjectCommercialRollup({projectId,scope,sources:contributions,adjustmentCents:Math.round(Number(adjustment)*100),marginMode,marginValue:marginMode==="amount"?Math.round(Number(margin)*100):Number(margin)});
-    if(!result.success){toast.error(result.error);return}
-    setState(result.data);toast.success("Selling price confirmed");
-  });
-  return <section className="space-y-3 rounded-lg border bg-card p-4"><div><h3 className="text-lg font-semibold">Commercial offer</h3><p className="text-sm text-muted-foreground">{state.state}{state.scope?` · ${state.scope} offer`:""}{state.state==="stale"?" · source changed; review and reconfirm":""}</p></div>{state.canBuild?<><div className="space-y-2">{state.sources?.map((source)=><div key={source.sourceOrderId} className="rounded border p-2"><p className="font-medium">{source.reference} · {source.sellerName}</p>{source.lines.map((line)=>{const key=`${source.sourceOrderId}:${line.originLineItemId}`;return <div key={key} className="grid grid-cols-[1fr_8rem_auto] items-center gap-3 py-1 text-sm"><label><input className="mr-2" type="checkbox" checked={selected[key]!=null} onChange={(event)=>setSelected((current)=>{const next={...current};if(event.target.checked)next[key]=String(line.availableQuantity);else delete next[key];return next})}/>{line.originLineItemId.slice(0,8)}</label><Input aria-label="Selected source quantity" type="number" min="0" max={line.availableQuantity} step="any" disabled={selected[key]==null} value={selected[key]??""} onChange={(event)=>setSelected((current)=>({...current,[key]:event.target.value}))}/><span>{format(line.sourceAmountCents)}</span></div>})}</div>)}</div>{scope==="full"&&missing.length>0?<div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><p className="font-medium">Full offer is missing coverage:</p>{missing.map((line)=><p key={line.originLineItemId}>{line.label}: {line.missingQuantity>0?`${line.missingQuantity} missing`:`${Math.abs(line.missingQuantity)} over`}</p>)}</div>:null}<fieldset className="flex flex-wrap gap-2"><legend className="sr-only">Commercial offer margin entry mode</legend><label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-muted"><input className="h-4 w-4 accent-primary" type="radio" name={marginModeName} value="percentage" checked={marginMode==="percentage"} onChange={()=>setMarginMode("percentage")}/>Percentage</label><label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-muted"><input className="h-4 w-4 accent-primary" type="radio" name={marginModeName} value="amount" checked={marginMode==="amount"} onChange={()=>setMarginMode("amount")}/>Amount</label></fieldset><div className="grid gap-3 sm:grid-cols-4"><label className="grid gap-1"><Label>Offer scope</Label><select className="h-10 rounded-md border bg-background px-3" value={scope} onChange={(event)=>setScope(event.target.value as typeof scope)}><option value="full">Full offer</option><option value="partial">Partial offer</option></select></label><label className="grid gap-1"><Label>Additional cost ({currency})</Label><Input type="number" min="0" step="0.01" value={adjustment} onChange={(event)=>setAdjustment(event.target.value)}/></label><label className="grid gap-1"><Label>{marginMode==="amount"?`Margin amount (${currency})`:"Gross margin (%)"}</Label><Input type="number" min="0" max={marginMode==="percentage"?"99.99":undefined} step="0.01" value={margin} onChange={(event)=>setMargin(event.target.value)}/></label><Button className="self-end" disabled={pending||!preview||(scope==="full"&&missing.length>0)} onClick={save}>{pending?<Loader2 className="mr-2 h-4 w-4 animate-spin"/>:null}Confirm selling price</Button></div>{preview?<div className="rounded-md border bg-muted/30 p-3 text-sm"><div className="grid gap-1 sm:grid-cols-4"><span>Purchase: {format(preview.purchaseCostCents)}</span><span>Additional: {format(Math.round(Number(adjustment)*100))}</span><span>Margin: {format(preview.marginAmountCents)}</span><strong>Total: {format(preview.salesAmountCents)}</strong></div>{preview.lines.map((line)=><div className="mt-1 flex justify-between" key={line.originLineItemId}><span>{line.originLineItemId.slice(0,8)} · {line.offeredQuantity}</span><span>{format(line.offeredValueCents)}</span></div>)}</div>:null}</>:null}{state.salesAmountCents!=null?<div className="border-t pt-3"><p className="font-semibold">Offered total: {format(state.salesAmountCents)}</p><div className="mt-2 grid gap-1 text-sm">{state.lines.map((line)=><div key={line.originLineItemId} className="flex justify-between"><span>{line.originLineItemId.slice(0,8)} · {line.offeredQuantity}</span><span>{format(line.offeredValueCents)}</span></div>)}</div></div>:null}</section>;
+export function ProjectCommercialRollup({ projectId, currency }: { projectId: string; currency: string }) {
+  const [state, setState] = useState<CommercialRollupState | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Record<string, string>>({});
+  const [scope, setScope] = useState<"full" | "partial">("full");
+  const [marginMode, setMarginMode] = useState<"amount" | "percentage">("percentage");
+  const marginModeName = useId();
+  const [adjustment, setAdjustment] = useState("0");
+  const [margin, setMargin] = useState("0");
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const bodyId = `project-commercial-offer-${projectId}`;
+  useEffect(() => setOpen(false), [projectId]);
+  const load = () => {
+    setLoadError(null);
+    void getProjectCommercialRollup(projectId)
+      .then((result) => {
+        if (!result.success) {
+          setLoadError(result.error);
+          return;
+        }
+        setState(result.data);
+        setScope(result.data.scope ?? "full");
+        setAdjustment(String((result.data.adjustmentCents ?? 0) / 100));
+        const mode = result.data.marginMode ?? "percentage";
+        setMarginMode(mode);
+        setMargin(String(mode === "amount" ? (result.data.marginAmountCents ?? 0) / 100 : (result.data.marginPercent ?? 0)));
+        setSelected(Object.fromEntries((result.data.savedSelections ?? []).map((item) => [`${item.sourceOrderId}:${item.originLineItemId}`, String(item.selectedQuantity)])));
+      })
+      .catch(() => setLoadError("Could not load commercial offer"));
+  };
+  useEffect(load, [projectId]);
+  if (loadError)
+    return (
+      <section className="flex items-center justify-between rounded-lg border border-destructive/40 bg-card p-4 text-sm">
+        <span>{loadError}</span>
+        <Button size="sm" variant="outline" onClick={load}>
+          Retry
+        </Button>
+      </section>
+    );
+  if (!state) return <section className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">Loading commercial offer…</section>;
+  const format = (cents: number | null | undefined) => (cents == null ? "—" : `${(cents / 100).toFixed(2)} ${currency}`);
+  const contributions = (state.sources ?? []).flatMap((source) =>
+    source.lines.flatMap((line) => {
+      const value = Number(selected[`${source.sourceOrderId}:${line.originLineItemId}`]);
+      return value > 0
+        ? [
+            {
+              sourceOrderId: source.sourceOrderId,
+              originLineItemId: line.originLineItemId,
+              selectedQuantity: value,
+              sourceVersion: source.sourceVersion,
+              sourceUpdatedAt: source.sourceUpdatedAt,
+            },
+          ]
+        : [];
+    }),
+  );
+  const selectedByLine = contributions.reduce<Record<string, number>>(
+    (totals, item) => ({
+      ...totals,
+      [item.originLineItemId]: (totals[item.originLineItemId] ?? 0) + item.selectedQuantity,
+    }),
+    {},
+  );
+  const missing = (state.requiredLines ?? [])
+    .map((line) => ({
+      ...line,
+      missingQuantity: line.requiredQuantity - (selectedByLine[line.originLineItemId] ?? 0),
+    }))
+    .filter((line) => Math.abs(line.missingQuantity) > 1e-9);
+  let preview: ReturnType<typeof calculateCommercialRollup> | null = null;
+  if (contributions.length > 0) {
+    try {
+      preview = calculateCommercialRollup({
+        scope,
+        requirements: (state.requiredLines ?? []).map(({ originLineItemId, requiredQuantity }) => ({
+          originLineItemId,
+          requiredQuantity,
+        })),
+        contributions: contributions.map((item) => {
+          const source = state.sources?.find((candidate) => candidate.sourceOrderId === item.sourceOrderId);
+          const line = source?.lines.find((candidate) => candidate.originLineItemId === item.originLineItemId);
+          return {
+            ...item,
+            sourceCandidateId: source?.sourceCandidateId ?? null,
+            availableQuantity: line?.availableQuantity ?? 0,
+            availableAmountCents: line?.sourceAmountCents ?? 0,
+          };
+        }),
+        adjustmentCents: Math.round(Number(adjustment) * 100),
+        marginMode,
+        marginValue: marginMode === "amount" ? Math.round(Number(margin) * 100) : Number(margin),
+      });
+    } catch {
+      preview = null;
+    }
+  }
+  const save = () =>
+    startTransition(async () => {
+      const result = await saveProjectCommercialRollup({
+        projectId,
+        scope,
+        sources: contributions,
+        adjustmentCents: Math.round(Number(adjustment) * 100),
+        marginMode,
+        marginValue: marginMode === "amount" ? Math.round(Number(margin) * 100) : Number(margin),
+      });
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      setState(result.data);
+      toast.success("Selling price confirmed");
+    });
+  const summary = [state.state === "stale" ? "Source changed; review and reconfirm" : state.state === "confirmed" ? "Confirmed" : "Draft", state.scope ? `${state.scope === "full" ? "Full" : "Partial"} offer` : null, state.salesAmountCents != null ? `Buyer total ${format(state.salesAmountCents)}` : null, state.marginAmountCents != null ? `Margin ${format(state.marginAmountCents)}${state.marginPercent != null ? ` (${state.marginPercent.toFixed(2)}%)` : ""}` : null].filter(Boolean).join(" · ");
+  return (
+    <section className="rounded-lg border bg-card">
+      <div className="flex items-center justify-between gap-3 p-4">
+        <div>
+          <h3 className="text-lg font-semibold">Commercial offer</h3>
+          <p className="text-sm text-muted-foreground">{summary}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {state.canBuild && !open ? (
+            <Button type="button" size="sm" onClick={() => setOpen(true)}>
+              Configure offer
+            </Button>
+          ) : null}
+          <Button type="button" size="icon" variant="ghost" aria-label={open ? "Collapse commercial offer" : "Expand commercial offer"} aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((current) => !current)}>
+            <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
+          </Button>
+        </div>
+      </div>
+      {open ? (
+        <div id={bodyId} className="space-y-3 border-t p-4">
+          {state.state === "stale" ? <p className="text-sm text-amber-700">Source changed; review and reconfirm.</p> : null}
+          {state.canBuild ? (
+            <>
+              <div className="space-y-2">
+                {state.sources?.map((source) => (
+                  <div key={source.sourceOrderId} className="rounded border p-2">
+                    <p className="font-medium">
+                      {source.reference} · {source.sellerName}
+                    </p>
+                    {source.lines.map((line) => {
+                      const key = `${source.sourceOrderId}:${line.originLineItemId}`;
+                      return (
+                        <div key={key} className="grid grid-cols-[1fr_8rem_auto] items-center gap-3 py-1 text-sm">
+                          <label>
+                            <input
+                              className="mr-2"
+                              type="checkbox"
+                              checked={selected[key] != null}
+                              onChange={(event) =>
+                                setSelected((current) => {
+                                  const next = { ...current };
+                                  if (event.target.checked) next[key] = String(line.availableQuantity);
+                                  else delete next[key];
+                                  return next;
+                                })
+                              }
+                            />
+                            {line.originLineItemId.slice(0, 8)}
+                          </label>
+                          <Input
+                            aria-label="Selected source quantity"
+                            type="number"
+                            min="0"
+                            max={line.availableQuantity}
+                            step="any"
+                            disabled={selected[key] == null}
+                            value={selected[key] ?? ""}
+                            onChange={(event) =>
+                              setSelected((current) => ({
+                                ...current,
+                                [key]: event.target.value,
+                              }))
+                            }
+                          />
+                          <span>{format(line.sourceAmountCents)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+              {scope === "full" && missing.length > 0 ? (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p className="font-medium">Full offer is missing coverage:</p>
+                  {missing.map((line) => (
+                    <p key={line.originLineItemId}>
+                      {line.label}: {line.missingQuantity > 0 ? `${line.missingQuantity} missing` : `${Math.abs(line.missingQuantity)} over`}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              <fieldset className="flex flex-wrap gap-2">
+                <legend className="sr-only">Commercial offer margin entry mode</legend>
+                <label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-muted">
+                  <input className="h-4 w-4 accent-primary" type="radio" name={marginModeName} value="percentage" checked={marginMode === "percentage"} onChange={() => setMarginMode("percentage")} />
+                  Percentage
+                </label>
+                <label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-muted">
+                  <input className="h-4 w-4 accent-primary" type="radio" name={marginModeName} value="amount" checked={marginMode === "amount"} onChange={() => setMarginMode("amount")} />
+                  Amount
+                </label>
+              </fieldset>
+              <div className="grid gap-3 sm:grid-cols-4">
+                <label className="grid gap-1">
+                  <Label>Offer scope</Label>
+                  <select className="h-10 rounded-md border bg-background px-3" value={scope} onChange={(event) => setScope(event.target.value as typeof scope)}>
+                    <option value="full">Full offer</option>
+                    <option value="partial">Partial offer</option>
+                  </select>
+                </label>
+                <label className="grid gap-1">
+                  <Label>Additional cost ({currency})</Label>
+                  <Input type="number" min="0" step="0.01" value={adjustment} onChange={(event) => setAdjustment(event.target.value)} />
+                </label>
+                <label className="grid gap-1">
+                  <Label>{marginMode === "amount" ? `Margin amount (${currency})` : "Gross margin (%)"}</Label>
+                  <Input type="number" min="0" max={marginMode === "percentage" ? "99.99" : undefined} step="0.01" value={margin} onChange={(event) => setMargin(event.target.value)} />
+                </label>
+                <Button className="self-end" disabled={pending || !preview || (scope === "full" && missing.length > 0)} onClick={save}>
+                  {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Confirm selling price
+                </Button>
+              </div>
+              {preview ? (
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  <div className="grid gap-1 sm:grid-cols-4">
+                    <span>Purchase: {format(preview.purchaseCostCents)}</span>
+                    <span>Additional: {format(Math.round(Number(adjustment) * 100))}</span>
+                    <span>Margin: {format(preview.marginAmountCents)}</span>
+                    <strong>Total: {format(preview.salesAmountCents)}</strong>
+                  </div>
+                  {preview.lines.map((line) => (
+                    <div className="mt-1 flex justify-between" key={line.originLineItemId}>
+                      <span>
+                        {line.originLineItemId.slice(0, 8)} · {line.offeredQuantity}
+                      </span>
+                      <span>{format(line.offeredValueCents)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+          {state.salesAmountCents != null ? (
+            <div className="border-t pt-3">
+              <p className="font-semibold">Offered total: {format(state.salesAmountCents)}</p>
+              <div className="mt-2 grid gap-1 text-sm">
+                {state.lines.map((line) => (
+                  <div key={line.originLineItemId} className="flex justify-between">
+                    <span>
+                      {line.originLineItemId.slice(0, 8)} · {line.offeredQuantity}
+                    </span>
+                    <span>{format(line.offeredValueCents)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
 }

@@ -8,149 +8,342 @@ import { parseCreateProjectLegInput } from "../projectLegValidation";
 
 assert.equal(quoteTotalToCents(12.345), 1235);
 assert.throws(() => quoteTotalToCents(-1));
-assert.deepEqual(calculateProjectMargin(800000,"percentage",20),{marginAmountCents:200000,marginPercent:20,salesAmountCents:1000000});
-assert.deepEqual(calculateProjectMargin(800000,"amount",150000),{marginAmountCents:150000,marginPercent:15.7895,salesAmountCents:950000});
-assert.throws(()=>calculateProjectMargin(800000,"percentage",100));
-assert.throws(()=>calculateProjectMargin(800000,"percentage",99.991));
-assert.throws(()=>calculateProjectMargin(800000,"amount",-1));
-assert.equal(canManageProjectRfq({isPlatformAdmin:false,actorOrganisationId:"owner",ownerOrganisationId:"owner",lifecycleStage:"draft"}),true);
-assert.equal(canManageProjectRfq({isPlatformAdmin:false,actorOrganisationId:"candidate",ownerOrganisationId:"owner",lifecycleStage:"draft"}),false);
-assert.equal(canManageProjectRfq({isPlatformAdmin:true,actorOrganisationId:null,ownerOrganisationId:"owner",lifecycleStage:"confirmed"}),false);
-assert.equal(candidateCanSee("supplier-a","supplier-a"),true);
-assert.equal(candidateCanSee("supplier-b","supplier-a"),false);
-assert.equal(openRfqAvailability({data:{id:"rfq"},error:null}),"open");
-assert.equal(openRfqAvailability({data:null,error:null}),"closed");
-assert.equal(openRfqAvailability({data:null,error:{message:"denied"}}),"unavailable");
-assert.equal(canOfferSellerCompletion({isDraft:true,sellerMissing:true,openRfq:"open"}),false);
-assert.equal(canOfferSellerCompletion({isDraft:true,sellerMissing:true,openRfq:"closed"}),true);
-assert.deepEqual(mapCreateRfqError("RFQ_ALREADY_OPEN"),{error:"A quotation request cannot be opened for this leg",code:"CONFLICT"});
-assert.deepEqual(mapAwardRfqError("RFQ_EXPIRED"),{error:"The quotation deadline has passed",code:"CONFLICT"});
-assert.notEqual(mapCreateRfqError("opaque database detail").error,"opaque database detail");
-assert.notEqual(mapAwardRfqError("opaque database detail").error,"opaque database detail");
-const dualRole={id:"dual",code:"DUA",name:"Dual",is_customer:true,is_trader:false,is_supplier:true,is_producer:false,is_manufacturer:false};
-assert.equal(toEligiblePartyOption(dualRole,"buyer")?.group,"buyers");
-assert.equal(toEligiblePartyOption(dualRole,"seller")?.group,"suppliers");
-assert.equal(toEligiblePartyOption({...dualRole,id:"maker",is_customer:false,is_supplier:false,is_manufacturer:true},"seller")?.group,"suppliers");
-assert.equal(purchaseLegAllowsBuyerEdit({isPlatformAdmin:true,dealKind:"purchase_only",buyerMissing:true}),true);
-assert.equal(purchaseLegAllowsBuyerEdit({isPlatformAdmin:true,dealKind:"purchase_only",buyerMissing:false}),false);
-assert.equal(purchaseLegAllowsBuyerEdit({isPlatformAdmin:false,dealKind:"purchase_only",buyerMissing:true}),false);
-assert.equal(purchaseLegAllowsBuyerEdit({isPlatformAdmin:false,dealKind:"buy_sell",buyerMissing:false}),true);
-assert.deepEqual(parseSpineOriginAllocation(null),{ok:false,error:"unavailable"});
-assert.deepEqual(parseSpineOriginAllocation([{originLineItemId:"line",lineNo:1,productName:"Oak",unit:"m3",requiredQuantity:null,requestedQuantity:0,awardedQuantity:0,remainingQuantity:null}]),{ok:false,error:"unavailable"});
-assert.equal(parseSpineOriginAllocation([{originLineItemId:"line",lineNo:1,productName:"Oak",unit:"m3",requiredQuantity:10,requestedQuantity:4,awardedQuantity:2,remainingQuantity:8}]).ok,true);
-const legAllocation=[{originLineItemId:"line",lineNo:1,productName:"Oak",unit:"m3",requiredQuantity:10,requestedQuantity:4,awardedQuantity:2,remainingQuantity:8}];
-assert.deepEqual(buildDefaultLegQuantities(legAllocation),{line:8});
-assert.deepEqual(buildDefaultLegQuantities([{...legAllocation[0]!,remainingQuantity:0}]),{});
-assert.deepEqual(buildLegWorkPackages(legAllocation,{line:3}),[{originLineItemId:"line",quantity:3}]);
-assert.deepEqual(buildLegWorkPackages(legAllocation,{line:Number.NaN}),[]);
-assert.deepEqual(buildLegWorkPackages(legAllocation,{line:9}),[]);
-assert.deepEqual(buildLegWorkPackages([...legAllocation,{...legAllocation[0]!,originLineItemId:"second",remainingQuantity:2}],{line:9,second:1}),[{originLineItemId:"second",quantity:1}]);
-assert.deepEqual(reconcileLegQuantities(legAllocation,{line:3}),{line:3});
-assert.deepEqual(reconcileLegQuantities(legAllocation,{line:99}),{line:8});
-assert.deepEqual(reconcileLegQuantities(legAllocation,{line:0}),{line:0});
-assert.deepEqual(reconcileLegQuantities([...legAllocation,{...legAllocation[0]!,originLineItemId:"second",remainingQuantity:2}],{line:3}),{line:3,second:2});
-const validUuid="00000000-0000-4000-8000-000000000001";
-assert.deepEqual(parseCreateProjectLegInput({sourceProjectId:validUuid,buyerOrganisationId:validUuid,sellerOrganisationId:null,workPackages:[]}),{success:false,error:"Select at least one available work package with a valid positive quantity",code:"VALIDATION_ERROR"});
-const migration=readFileSync("../../supabase/migrations/20260826210000_project_supplier_rfqs.sql","utf8");
-const legoMigration=readFileSync("../../supabase/migrations/20260827120000_spine_lego_leg_rfq_award.sql","utf8");
-const stageIndependentRfqMigration=readFileSync("../../supabase/migrations/20260829003000_project_rfq_stage_independence.sql","utf8");
-const stageAutomationMigration=readFileSync("../../supabase/migrations/20260829004000_project_stage_automation.sql","utf8");
-const marginMigration=readFileSync("../../supabase/migrations/20260829010000_project_awarded_quotation_margin.sql","utf8");
-const rollupMigration=readFileSync("../../supabase/migrations/20260829130000_project_quotation_rollup_spine_gallery.sql","utf8");
-const createDialog=readFileSync("src/features/projects/components/ProjectCreateLegDialog.tsx","utf8");
-assert.match(createDialog,/remainingQuantity>0/);
-assert.match(createDialog,/Remaining quantities are selected by default/);
-assert.match(createDialog,/workPackages\.length===0/);
-assert.match(createDialog,/All specification quantities have already been allocated/);
-const actions=readFileSync("src/features/projects/actions/projectRfqActions.ts","utf8");
-const editor=readFileSync("src/features/projects/components/ProjectSpecificationEditor.tsx","utf8");
-assert.match(migration,/project_rfq_candidates_select/);
-assert.match(migration,/FOR UPDATE/);
-assert.match(migration,/status=CASE WHEN id=c\.id THEN 'awarded' ELSE 'not_awarded'/);
-assert.match(migration,/get_project_rfq_candidate_snapshot/);
-assert.doesNotMatch(migration,/CREATE POLICY orders_rfq_candidate_select/);
-assert.doesNotMatch(migration,/CREATE POLICY order_lines_rfq_candidate_select/);
-assert.match(migration,/r\.deadline>now\(\)/);
-assert.match(migration,/UPDATE public\.orders SET upstream_deal_id=v_leg WHERE id=o\.id/);
-assert.doesNotMatch(migration,/INSERT INTO public\.orders\(id,code,name,organisation_id,/);
-assert.match(migration,/INSERT INTO public\.orders\([^)]*customer_organisation_id,seller_organisation_id,buyer_organisation_id/);
-assert.match(migration,/current_user_can_create_deal_in_org/);
-assert.doesNotMatch(editor,/Unit price|Margin|Cost build-up|unitPrice/);
-assert.match(legoMigration,/deal_kind IN \('buy_sell','sale_only'\)/);
-assert.match(legoMigration,/origin_line_item_id/);
-assert.match(legoMigration,/unit_price_cents,line_total_cents[\s\S]*NULL,NULL/);
-assert.match(legoMigration,/ORDER BY origin\.id FOR UPDATE/);
-assert.match(legoMigration,/ORDER BY wp\.origin_line_item_id,wp\.id FOR UPDATE/);
-assert.match(legoMigration,/IF r\.deadline<=now\(\) THEN RAISE EXCEPTION 'RFQ_EXPIRED'/);
-assert.match(legoMigration,/SELECT \* INTO o FROM public\.orders WHERE id=r\.order_id FOR UPDATE;[\s\S]*pg_advisory_xact_lock[\s\S]*ORDER BY origin\.id FOR UPDATE/);
-assert.match(legoMigration,/ORIGIN_QUANTITY_UNAVAILABLE/);
-assert.doesNotMatch(legoMigration,/origin\.volume_m3[\s\S]{0,180},1\)/);
-assert.match(legoMigration,/orders_one_legacy_outgoing_leg_per_spine_buyer[\s\S]*NOT is_manual_spine_leg/);
-assert.match(legoMigration,/SELECT spine_id INTO v_spine[\s\S]*pg_advisory_xact_lock[\s\S]*WHERE id=p_source_order_id FOR UPDATE[\s\S]*SOURCE_NOT_DRAFT/);
-assert.match(legoMigration,/is_manual_spine_leg[\s\S]*public\.current_portal_user_id\(\),true/);
-assert.match(legoMigration,/CREATE OR REPLACE FUNCTION public\.create_project_rfq[\s\S]*WORK_PACKAGE_REQUIRED/);
-assert.match(legoMigration,/UPDATE public\.orders SET seller_organisation_id=c\.organization_id/);
-assert.doesNotMatch(legoMigration,/award_project_rfq[\s\S]*INSERT INTO public\.orders/);
-assert.match(legoMigration,/conrelid = 'public\.order_line_items'::regclass/);
-assert.match(legoMigration,/complete_project_leg_party/);
-assert.match(createDialog,/DialogDescription/);
-assert.match(createDialog,/defaultBuyerId/);
-assert.match(actions,/lookupError \|\| !rfq/);
-assert.match(stageIndependentRfqMigration,/create_project_rfq stage anchor missing/);
-assert.match(stageIndependentRfqMigration,/award_project_rfq stage anchor missing/);
-assert.match(stageIndependentRfqMigration,/IF NOT FOUND THEN RAISE EXCEPTION ''LEG_NOT_FOUND''/);
-assert.match(stageAutomationMigration,/lifecycle_stage=''request_for_quotation''/);
-assert.match(stageAutomationMigration,/lifecycle_stage=''awarded''/);
-assert.match(stageAutomationMigration,/create_project_rfq return anchor missing/);
-assert.match(stageAutomationMigration,/award_project_rfq update anchor missing/);
-assert.match(marginMigration,/set_project_awarded_margin/);
-assert.match(marginMigration,/current_user_in_org\(v_order\.buyer_organisation_id\)/);
-assert.match(marginMigration,/rfq\.status = 'awarded'/);
-assert.match(marginMigration,/margin_amount_cents = v_margin[\s\S]*resale_value_cents = v_sales/);
-assert.doesNotMatch(marginMigration,/UPDATE public\.orders SET\s+value_cents\s*=/);
-const rfqCard=readFileSync("src/features/projects/components/ProjectRfqCard.tsx","utf8");
-const commercialAction=readFileSync("src/features/projects/actions/projectCommercialActions.ts","utf8");
-const commercialCard=readFileSync("src/features/projects/components/ProjectCommercialRollup.tsx","utf8");
-assert.match(rfqCard,/Quotation requests created[\s\S]*router\.refresh\(\)/);
-assert.match(rfqCard,/Trader margin/);
-assert.match(rfqCard,/Gross margin/);
-assert.match(actions,/canManage&&row\.status==="awarded"/);
-assert.match(actions,/saveProjectAwardedMargin/);
-assert.match(rollupMigration,/source\.buyer_organisation_id = target\.seller_organisation_id|s\.buyer_organisation_id=target\.seller_organisation_id/);
-assert.match(rollupMigration,/current_user_can_create_deal_in_org\(p_order\.seller_organisation_id\)/);
-assert.match(rollupMigration,/x\.is_active AND x\.is_trader/);
-assert.match(rollupMigration,/commercial_offer_scope[\s\S]*full[\s\S]*partial/);
-assert.match(rollupMigration,/STALE_OR_INVALID_SOURCE/);
-assert.match(rollupMigration,/INCOMPLETE_COVERAGE line=% missing_quantity=%/);
-assert.match(rollupMigration,/OVER_COVERAGE/);
-assert.match(rollupMigration,/CIRCULAR_SOURCE/);
-assert.match(rollupMigration,/WITH RECURSIVE affected/);
-assert.match(rollupMigration,/coalesce\(l\.origin_line_item_id,l\.id\) origin_id/);
-assert.match(rollupMigration,/sum\(coalesce\(l\.work_package_quantity,public\.project_origin_required_quantity/);
-assert.match(rollupMigration,/CREATE TEMP TABLE target_requirements/);
-assert.match(rollupMigration,/pg_advisory_xact_lock\(hashtextextended/);
-assert.match(rollupMigration,/commercial_margin_mode=p_margin_mode/);
-assert.match(rollupMigration,/CASE WHEN EXISTS\(SELECT 1 FROM rollup_lines WHERE cost>0\) THEN cost ELSE qty END/);
-assert.match(rollupMigration,/source->>'currency' IS DISTINCT FROM target\.currency/);
-assert.match(rollupMigration,/spine_project_images/);
-assert.match(rollupMigration,/PARTITION BY o\.spine_id,f\.storage_path/);
-assert.match(rollupMigration,/p_action='add' AND NOT EXISTS/);
-assert.doesNotMatch(rollupMigration,/UPDATE public\.order_files SET order_id/);
-assert.match(rollupMigration,/correct_project_rfq_quote_entries/);
-assert.match(rollupMigration,/commercial_confirmed_at IS NULL AND resale_value_cents IS NULL/);
-assert.doesNotMatch(rollupMigration,/correct_project_rfq_quote_entries[\s\S]*margin_amount_cents\s*=\s*NULL/);
-assert.match(rollupMigration,/t\.side='sell'/);
-assert.match(rollupMigration,/CREATE OR REPLACE FUNCTION public\.set_project_awarded_margin/);
-assert.match(rollupMigration,/commercial_rollup_state='confirmed'[\s\S]*commercial_margin_mode=p_mode[\s\S]*commercial_version=commercial_version\+1/);
-assert.doesNotMatch(commercialAction,/error\.message\.replaceAll/);
-assert.match(commercialAction,/mapRollupError/);
-assert.match(commercialAction,/commercial_rollup_state==="confirmed"[\s\S]*sourceCount/);
-assert.match(commercialAction,/canViewPrivate=canBuild/);
-assert.match(commercialAction,/state:canViewOffer\?/);
-assert.match(commercialAction,/project_rfqs_awarded_candidate_fk/);
-assert.match(commercialCard,/calculateCommercialRollup/);
-assert.match(commercialCard,/Purchase:[\s\S]*Additional:[\s\S]*Margin:[\s\S]*Total:/);
-assert.match(commercialCard,/catch\(\(\)=>setLoadError\("Could not load commercial offer"\)\)/);
-assert.doesNotMatch(rfqCard,/find\(\(candidate\)=>candidate\.id===viewCandidateId\)!/);
-assert.match(rfqCard,/View quotation/);
+assert.deepEqual(calculateProjectMargin(800000, "percentage", 20), {
+  marginAmountCents: 200000,
+  marginPercent: 20,
+  salesAmountCents: 1000000,
+});
+assert.deepEqual(calculateProjectMargin(800000, "amount", 150000), {
+  marginAmountCents: 150000,
+  marginPercent: 15.7895,
+  salesAmountCents: 950000,
+});
+assert.throws(() => calculateProjectMargin(800000, "percentage", 100));
+assert.throws(() => calculateProjectMargin(800000, "percentage", 99.991));
+assert.throws(() => calculateProjectMargin(800000, "amount", -1));
+assert.equal(
+  canManageProjectRfq({
+    isPlatformAdmin: false,
+    actorOrganisationId: "owner",
+    ownerOrganisationId: "owner",
+    lifecycleStage: "draft",
+  }),
+  true,
+);
+assert.equal(
+  canManageProjectRfq({
+    isPlatformAdmin: false,
+    actorOrganisationId: "candidate",
+    ownerOrganisationId: "owner",
+    lifecycleStage: "draft",
+  }),
+  false,
+);
+assert.equal(
+  canManageProjectRfq({
+    isPlatformAdmin: true,
+    actorOrganisationId: null,
+    ownerOrganisationId: "owner",
+    lifecycleStage: "confirmed",
+  }),
+  false,
+);
+assert.equal(candidateCanSee("supplier-a", "supplier-a"), true);
+assert.equal(candidateCanSee("supplier-b", "supplier-a"), false);
+assert.equal(openRfqAvailability({ data: { id: "rfq" }, error: null }), "open");
+assert.equal(openRfqAvailability({ data: null, error: null }), "closed");
+assert.equal(openRfqAvailability({ data: null, error: { message: "denied" } }), "unavailable");
+assert.equal(
+  canOfferSellerCompletion({
+    isDraft: true,
+    sellerMissing: true,
+    openRfq: "open",
+  }),
+  false,
+);
+assert.equal(
+  canOfferSellerCompletion({
+    isDraft: true,
+    sellerMissing: true,
+    openRfq: "closed",
+  }),
+  true,
+);
+assert.deepEqual(mapCreateRfqError("RFQ_ALREADY_OPEN"), {
+  error: "A quotation request cannot be opened for this leg",
+  code: "CONFLICT",
+});
+assert.deepEqual(mapAwardRfqError("RFQ_EXPIRED"), {
+  error: "The quotation deadline has passed",
+  code: "CONFLICT",
+});
+assert.notEqual(mapCreateRfqError("opaque database detail").error, "opaque database detail");
+assert.notEqual(mapAwardRfqError("opaque database detail").error, "opaque database detail");
+const dualRole = {
+  id: "dual",
+  code: "DUA",
+  name: "Dual",
+  is_customer: true,
+  is_trader: false,
+  is_supplier: true,
+  is_producer: false,
+  is_manufacturer: false,
+};
+assert.equal(toEligiblePartyOption(dualRole, "buyer")?.group, "buyers");
+assert.equal(toEligiblePartyOption(dualRole, "seller")?.group, "suppliers");
+assert.equal(
+  toEligiblePartyOption(
+    {
+      ...dualRole,
+      id: "maker",
+      is_customer: false,
+      is_supplier: false,
+      is_manufacturer: true,
+    },
+    "seller",
+  )?.group,
+  "suppliers",
+);
+assert.equal(
+  purchaseLegAllowsBuyerEdit({
+    isPlatformAdmin: true,
+    dealKind: "purchase_only",
+    buyerMissing: true,
+  }),
+  true,
+);
+assert.equal(
+  purchaseLegAllowsBuyerEdit({
+    isPlatformAdmin: true,
+    dealKind: "purchase_only",
+    buyerMissing: false,
+  }),
+  false,
+);
+assert.equal(
+  purchaseLegAllowsBuyerEdit({
+    isPlatformAdmin: false,
+    dealKind: "purchase_only",
+    buyerMissing: true,
+  }),
+  false,
+);
+assert.equal(
+  purchaseLegAllowsBuyerEdit({
+    isPlatformAdmin: false,
+    dealKind: "buy_sell",
+    buyerMissing: false,
+  }),
+  true,
+);
+assert.deepEqual(parseSpineOriginAllocation(null), {
+  ok: false,
+  error: "unavailable",
+});
+assert.deepEqual(
+  parseSpineOriginAllocation([
+    {
+      originLineItemId: "line",
+      lineNo: 1,
+      productName: "Oak",
+      unit: "m3",
+      requiredQuantity: null,
+      requestedQuantity: 0,
+      awardedQuantity: 0,
+      remainingQuantity: null,
+    },
+  ]),
+  { ok: false, error: "unavailable" },
+);
+assert.equal(
+  parseSpineOriginAllocation([
+    {
+      originLineItemId: "line",
+      lineNo: 1,
+      productName: "Oak",
+      unit: "m3",
+      requiredQuantity: 10,
+      requestedQuantity: 4,
+      awardedQuantity: 2,
+      remainingQuantity: 8,
+    },
+  ]).ok,
+  true,
+);
+const legAllocation = [
+  {
+    originLineItemId: "line",
+    lineNo: 1,
+    productName: "Oak",
+    unit: "m3",
+    requiredQuantity: 10,
+    requestedQuantity: 4,
+    awardedQuantity: 2,
+    remainingQuantity: 8,
+  },
+];
+assert.deepEqual(buildDefaultLegQuantities(legAllocation), { line: 8 });
+assert.deepEqual(buildDefaultLegQuantities([{ ...legAllocation[0]!, remainingQuantity: 0 }]), {});
+assert.deepEqual(buildLegWorkPackages(legAllocation, { line: 3 }), [{ originLineItemId: "line", quantity: 3 }]);
+assert.deepEqual(buildLegWorkPackages(legAllocation, { line: Number.NaN }), []);
+assert.deepEqual(buildLegWorkPackages(legAllocation, { line: 9 }), []);
+assert.deepEqual(
+  buildLegWorkPackages(
+    [
+      ...legAllocation,
+      {
+        ...legAllocation[0]!,
+        originLineItemId: "second",
+        remainingQuantity: 2,
+      },
+    ],
+    { line: 9, second: 1 },
+  ),
+  [{ originLineItemId: "second", quantity: 1 }],
+);
+assert.deepEqual(reconcileLegQuantities(legAllocation, { line: 3 }), {
+  line: 3,
+});
+assert.deepEqual(reconcileLegQuantities(legAllocation, { line: 99 }), {
+  line: 8,
+});
+assert.deepEqual(reconcileLegQuantities(legAllocation, { line: 0 }), {
+  line: 0,
+});
+assert.deepEqual(
+  reconcileLegQuantities(
+    [
+      ...legAllocation,
+      {
+        ...legAllocation[0]!,
+        originLineItemId: "second",
+        remainingQuantity: 2,
+      },
+    ],
+    { line: 3 },
+  ),
+  { line: 3, second: 2 },
+);
+const validUuid = "00000000-0000-4000-8000-000000000001";
+assert.deepEqual(
+  parseCreateProjectLegInput({
+    sourceProjectId: validUuid,
+    buyerOrganisationId: validUuid,
+    sellerOrganisationId: null,
+    workPackages: [],
+  }),
+  {
+    success: false,
+    error: "Select at least one available work package with a valid positive quantity",
+    code: "VALIDATION_ERROR",
+  },
+);
+const migration = readFileSync("../../supabase/migrations/20260826210000_project_supplier_rfqs.sql", "utf8");
+const legoMigration = readFileSync("../../supabase/migrations/20260827120000_spine_lego_leg_rfq_award.sql", "utf8");
+const stageIndependentRfqMigration = readFileSync("../../supabase/migrations/20260829003000_project_rfq_stage_independence.sql", "utf8");
+const stageAutomationMigration = readFileSync("../../supabase/migrations/20260829004000_project_stage_automation.sql", "utf8");
+const marginMigration = readFileSync("../../supabase/migrations/20260829010000_project_awarded_quotation_margin.sql", "utf8");
+const rollupMigration = readFileSync("../../supabase/migrations/20260829130000_project_quotation_rollup_spine_gallery.sql", "utf8");
+const createDialog = readFileSync("src/features/projects/components/ProjectCreateLegDialog.tsx", "utf8");
+assert.match(createDialog, /remainingQuantity>0/);
+assert.match(createDialog, /Remaining quantities are selected by default/);
+assert.match(createDialog, /workPackages\.length===0/);
+assert.match(createDialog, /All specification quantities have already been allocated/);
+const actions = readFileSync("src/features/projects/actions/projectRfqActions.ts", "utf8");
+const editor = readFileSync("src/features/projects/components/ProjectSpecificationEditor.tsx", "utf8");
+assert.match(migration, /project_rfq_candidates_select/);
+assert.match(migration, /FOR UPDATE/);
+assert.match(migration, /status=CASE WHEN id=c\.id THEN 'awarded' ELSE 'not_awarded'/);
+assert.match(migration, /get_project_rfq_candidate_snapshot/);
+assert.doesNotMatch(migration, /CREATE POLICY orders_rfq_candidate_select/);
+assert.doesNotMatch(migration, /CREATE POLICY order_lines_rfq_candidate_select/);
+assert.match(migration, /r\.deadline>now\(\)/);
+assert.match(migration, /UPDATE public\.orders SET upstream_deal_id=v_leg WHERE id=o\.id/);
+assert.doesNotMatch(migration, /INSERT INTO public\.orders\(id,code,name,organisation_id,/);
+assert.match(migration, /INSERT INTO public\.orders\([^)]*customer_organisation_id,seller_organisation_id,buyer_organisation_id/);
+assert.match(migration, /current_user_can_create_deal_in_org/);
+assert.doesNotMatch(editor, /Unit price|Margin|Cost build-up|unitPrice/);
+assert.match(legoMigration, /deal_kind IN \('buy_sell','sale_only'\)/);
+assert.match(legoMigration, /origin_line_item_id/);
+assert.match(legoMigration, /unit_price_cents,line_total_cents[\s\S]*NULL,NULL/);
+assert.match(legoMigration, /ORDER BY origin\.id FOR UPDATE/);
+assert.match(legoMigration, /ORDER BY wp\.origin_line_item_id,wp\.id FOR UPDATE/);
+assert.match(legoMigration, /IF r\.deadline<=now\(\) THEN RAISE EXCEPTION 'RFQ_EXPIRED'/);
+assert.match(legoMigration, /SELECT \* INTO o FROM public\.orders WHERE id=r\.order_id FOR UPDATE;[\s\S]*pg_advisory_xact_lock[\s\S]*ORDER BY origin\.id FOR UPDATE/);
+assert.match(legoMigration, /ORIGIN_QUANTITY_UNAVAILABLE/);
+assert.doesNotMatch(legoMigration, /origin\.volume_m3[\s\S]{0,180},1\)/);
+assert.match(legoMigration, /orders_one_legacy_outgoing_leg_per_spine_buyer[\s\S]*NOT is_manual_spine_leg/);
+assert.match(legoMigration, /SELECT spine_id INTO v_spine[\s\S]*pg_advisory_xact_lock[\s\S]*WHERE id=p_source_order_id FOR UPDATE[\s\S]*SOURCE_NOT_DRAFT/);
+assert.match(legoMigration, /is_manual_spine_leg[\s\S]*public\.current_portal_user_id\(\),true/);
+assert.match(legoMigration, /CREATE OR REPLACE FUNCTION public\.create_project_rfq[\s\S]*WORK_PACKAGE_REQUIRED/);
+assert.match(legoMigration, /UPDATE public\.orders SET seller_organisation_id=c\.organization_id/);
+assert.doesNotMatch(legoMigration, /award_project_rfq[\s\S]*INSERT INTO public\.orders/);
+assert.match(legoMigration, /conrelid = 'public\.order_line_items'::regclass/);
+assert.match(legoMigration, /complete_project_leg_party/);
+assert.match(createDialog, /DialogDescription/);
+assert.match(createDialog, /defaultBuyerId/);
+assert.match(actions, /lookupError \|\| !rfq/);
+assert.match(stageIndependentRfqMigration, /create_project_rfq stage anchor missing/);
+assert.match(stageIndependentRfqMigration, /award_project_rfq stage anchor missing/);
+assert.match(stageIndependentRfqMigration, /IF NOT FOUND THEN RAISE EXCEPTION ''LEG_NOT_FOUND''/);
+assert.match(stageAutomationMigration, /lifecycle_stage=''request_for_quotation''/);
+assert.match(stageAutomationMigration, /lifecycle_stage=''awarded''/);
+assert.match(stageAutomationMigration, /create_project_rfq return anchor missing/);
+assert.match(stageAutomationMigration, /award_project_rfq update anchor missing/);
+assert.match(marginMigration, /set_project_awarded_margin/);
+assert.match(marginMigration, /current_user_in_org\(v_order\.buyer_organisation_id\)/);
+assert.match(marginMigration, /rfq\.status = 'awarded'/);
+assert.match(marginMigration, /margin_amount_cents = v_margin[\s\S]*resale_value_cents = v_sales/);
+assert.doesNotMatch(marginMigration, /UPDATE public\.orders SET\s+value_cents\s*=/);
+const rfqCard = readFileSync("src/features/projects/components/ProjectRfqCard.tsx", "utf8");
+const commercialAction = readFileSync("src/features/projects/actions/projectCommercialActions.ts", "utf8");
+const commercialCard = readFileSync("src/features/projects/components/ProjectCommercialRollup.tsx", "utf8");
+assert.match(rfqCard, /Quotation requests created[\s\S]*router\.refresh\(\)/);
+assert.match(rfqCard, /Trader margin/);
+assert.match(rfqCard, /Gross margin/);
+assert.match(actions, /canManage&&row\.status==="awarded"/);
+assert.match(actions, /saveProjectAwardedMargin/);
+assert.match(rollupMigration, /source\.buyer_organisation_id = target\.seller_organisation_id|s\.buyer_organisation_id=target\.seller_organisation_id/);
+assert.match(rollupMigration, /current_user_can_create_deal_in_org\(p_order\.seller_organisation_id\)/);
+assert.match(rollupMigration, /x\.is_active AND x\.is_trader/);
+assert.match(rollupMigration, /commercial_offer_scope[\s\S]*full[\s\S]*partial/);
+assert.match(rollupMigration, /STALE_OR_INVALID_SOURCE/);
+assert.match(rollupMigration, /INCOMPLETE_COVERAGE line=% missing_quantity=%/);
+assert.match(rollupMigration, /OVER_COVERAGE/);
+assert.match(rollupMigration, /CIRCULAR_SOURCE/);
+assert.match(rollupMigration, /WITH RECURSIVE affected/);
+assert.match(rollupMigration, /coalesce\(l\.origin_line_item_id,l\.id\) origin_id/);
+assert.match(rollupMigration, /sum\(coalesce\(l\.work_package_quantity,public\.project_origin_required_quantity/);
+assert.match(rollupMigration, /CREATE TEMP TABLE target_requirements/);
+assert.match(rollupMigration, /pg_advisory_xact_lock\(hashtextextended/);
+assert.match(rollupMigration, /commercial_margin_mode=p_margin_mode/);
+assert.match(rollupMigration, /CASE WHEN EXISTS\(SELECT 1 FROM rollup_lines WHERE cost>0\) THEN cost ELSE qty END/);
+assert.match(rollupMigration, /source->>'currency' IS DISTINCT FROM target\.currency/);
+assert.match(rollupMigration, /spine_project_images/);
+assert.match(rollupMigration, /PARTITION BY o\.spine_id,f\.storage_path/);
+assert.match(rollupMigration, /p_action='add' AND NOT EXISTS/);
+assert.doesNotMatch(rollupMigration, /UPDATE public\.order_files SET order_id/);
+assert.match(rollupMigration, /correct_project_rfq_quote_entries/);
+assert.match(rollupMigration, /commercial_confirmed_at IS NULL AND resale_value_cents IS NULL/);
+assert.doesNotMatch(rollupMigration, /correct_project_rfq_quote_entries[\s\S]*margin_amount_cents\s*=\s*NULL/);
+assert.match(rollupMigration, /t\.side='sell'/);
+assert.match(rollupMigration, /CREATE OR REPLACE FUNCTION public\.set_project_awarded_margin/);
+assert.match(rollupMigration, /commercial_rollup_state='confirmed'[\s\S]*commercial_margin_mode=p_mode[\s\S]*commercial_version=commercial_version\+1/);
+assert.doesNotMatch(commercialAction, /error\.message\.replaceAll/);
+assert.match(commercialAction, /mapRollupError/);
+assert.match(commercialAction, /commercial_rollup_state==="confirmed"[\s\S]*sourceCount/);
+assert.match(commercialAction, /canViewPrivate=canBuild/);
+assert.match(commercialAction, /state:canViewOffer\?/);
+assert.match(commercialAction, /project_rfqs_awarded_candidate_fk/);
+assert.match(commercialCard, /calculateCommercialRollup/);
+assert.match(commercialCard, /useState\(false\)/);
+assert.match(commercialCard, /Configure offer/);
+assert.match(commercialCard, /Buyer total/);
+assert.match(commercialCard, /marginPercent\.toFixed\(2\)/);
+assert.match(commercialCard, /useEffect\(\(\) => setOpen\(false\), \[projectId\]\)/);
+assert.match(commercialCard, /aria-controls=\{bodyId\}/);
+assert.match(commercialCard, /Purchase:[\s\S]*Additional:[\s\S]*Margin:[\s\S]*Total:/);
+assert.match(commercialCard, /catch\(\(\)\s*=>\s*setLoadError\("Could not load commercial offer"\)\)/);
+assert.doesNotMatch(rfqCard, /find\(\(candidate\)=>candidate\.id===viewCandidateId\)!/);
+assert.match(rfqCard, /View quotation/);
 console.log("projectRfq.test.ts: passed");
