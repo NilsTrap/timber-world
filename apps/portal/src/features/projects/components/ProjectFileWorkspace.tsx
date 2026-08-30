@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Eye, Folder, FolderInput, FolderPlus, FolderOpen, Info, Loader2, Pencil, RotateCcw, Search, ShieldCheck, Sparkles, Trash2, Upload, Camera, ChevronDown } from "lucide-react";
+import { Download, Eye, Folder, FolderInput, FolderPlus, FolderOpen, Info, Loader2, Pencil, RotateCcw, Search, ShieldCheck, Sparkles, Trash2, Upload, Camera } from "lucide-react";
 import { Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@timber/ui";
 import { formatDateTime } from "@/lib/utils";
 import { createProjectFolderAction, deleteProjectFileAction, deleteProjectFilesAction, deleteProjectFolderAction, getProjectFileUrlAction, moveProjectFileAction, moveProjectFolderAction, renameProjectFileAction, renameProjectFolderAction } from "../actions/projectFileActions";
@@ -17,6 +17,8 @@ import { PROJECT_PREVIEW_COPY } from "./previewCopy";
 import { uploadProjectBrowserArchive, uploadProjectBrowserFile } from "./projectUploadClient";
 import { checkProjectOfficialImageSlot, completeProjectOfficialImage } from "../actions/projectOfficialImageActions";
 import type { ProjectPreviewCapture } from "./viewers/projectPreviewCapture";
+import { ProjectSectionBody, ProjectSectionCard, ProjectSectionHeader } from "./ProjectSectionCard";
+import { ProjectDisclosureButton } from "./ProjectDisclosureButton";
 
 interface PendingUpload {
   id: string;
@@ -574,13 +576,8 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
   };
 
   return (
-    <section className="rounded-lg border bg-card">
-      <div className="flex items-center justify-between gap-3 p-4">
-        <div>
-          <h2 className="text-lg font-semibold">Files</h2>
-          <p className="text-sm text-muted-foreground">{files.length} file(s) on this project</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+    <ProjectSectionCard>
+      <ProjectSectionHeader title="Files" subtitle={`${files.length} file(s) on this project`} actions={<>
           {canUpload ? (
             <Button
               type="button"
@@ -598,13 +595,10 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
               {uploadOpen ? "Close upload" : "Upload files"}
             </Button>
           ) : null}
-          <Button type="button" size="icon" variant="ghost" aria-label={workspaceOpen ? "Collapse files" : "Expand files"} aria-expanded={workspaceOpen} aria-controls={workspaceBodyId} disabled={collapseBlocked} onClick={() => setWorkspaceOpen((current) => !current)}>
-            <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${workspaceOpen ? "rotate-180" : ""}`} aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
+          <ProjectDisclosureButton open={workspaceOpen} controls={workspaceBodyId} disabled={collapseBlocked} expandLabel="Expand files" collapseLabel="Collapse files" onToggle={() => setWorkspaceOpen((current) => !current)} />
+      </>} />
       {workspaceOpen ? (
-        <div id={workspaceBodyId} className="space-y-3 border-t p-4">
+        <ProjectSectionBody id={workspaceBodyId} className="space-y-3">
           {canUpload && uploadOpen ? (
             <div id="project-file-upload-surface" onPointerDown={() => setUploadActivity((activity) => activity + 1)} onKeyDown={() => setUploadActivity((activity) => activity + 1)} onDragEnter={() => setUploadActivity((activity) => activity + 1)}>
               <ProjectDropSurface disabled={archiveProgress !== null} onFiles={addFiles} onArchives={(files) => void uploadArchives(files)} onError={setMessage} onActivityChange={setUploadInteractionActive} />
@@ -921,9 +915,9 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
               ) : null}
             </DialogContent>
           </Dialog>
-        </div>
+        </ProjectSectionBody>
       ) : null}
-    </section>
+    </ProjectSectionCard>
   );
 }
 

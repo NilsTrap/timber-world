@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { Button, SectionHeader } from "@timber/ui";
+import { Button } from "@timber/ui";
 import type { ProjectDetail, ProjectPartyWorkspace, ProjectsViewer } from "../types";
 import { ProjectFileWorkspace } from "./ProjectFileWorkspace";
 import { ProjectPartiesBlock } from "./ProjectPartiesBlock";
@@ -14,6 +14,7 @@ import { ProjectStatusSelect } from "./ProjectStatusSelect";
 import type { ProjectStageConfiguration } from "../../project-stages/stages";
 import { ProjectCommercialRollup } from "./ProjectCommercialRollup";
 import { ProjectSpineTitle } from "./ProjectSpineTitle";
+import { ProjectSectionBody, ProjectSectionCard, ProjectSectionHeader } from "./ProjectSectionCard";
 
 /**
  * Project detail (server component).
@@ -67,8 +68,7 @@ export function ProjectDetailView({
 
       {!isRfqCandidate ? <div className="space-y-3">
         {partyWorkspace.legOptions ? <ProjectLegSelector currentProjectId={project.id} options={partyWorkspace.legOptions} /> : null}
-        <SectionHeader title="Parties" />
-        <ProjectPartiesBlock projectId={project.id} workspace={partyWorkspace} />
+        <ProjectSectionCard><ProjectSectionHeader title="Parties" /><ProjectSectionBody><ProjectPartiesBlock projectId={project.id} workspace={partyWorkspace} /></ProjectSectionBody></ProjectSectionCard>
       </div> : null}
 
       {canViewOfficialImages ? <ProjectOfficialImages projectId={project.id} initialFiles={project.officialImages} canManage={canManageOfficialImages} canRemove={canRemoveOfficialImages} /> : null}
@@ -98,12 +98,12 @@ export function ProjectDetailView({
       />
 
       {project.notes ? (
-        <div className="space-y-3">
-          <SectionHeader title="Notes" />
-          <div className="rounded-lg border bg-card p-4 text-sm whitespace-pre-wrap">
+        <ProjectSectionCard>
+          <ProjectSectionHeader title="Notes" />
+          <ProjectSectionBody className="text-sm whitespace-pre-wrap">
             {project.notes}
-          </div>
-        </div>
+          </ProjectSectionBody>
+        </ProjectSectionCard>
       ) : null}
     </div>
   );

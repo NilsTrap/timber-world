@@ -2,13 +2,13 @@
 
 import { Fragment, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, ChevronRight, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Library, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-  EmptyState, Input, Label, SectionHeader, Table, TableBody, TableCell,
+  EmptyState, Input, Label, Table, TableBody, TableCell,
   TableHead, TableHeader, TableRow,
 } from "@timber/ui";
 import type { ProjectLine } from "../types";
@@ -17,6 +17,7 @@ import {
   getProjectCatalogOptions, updateProjectSpecificationLine, updateProjectSpecificationStructuredValues,
   type ProjectCatalogOption,
 } from "../actions/projectSpecificationActions";
+import { ProjectSectionBody, ProjectSectionCard, ProjectSectionHeader } from "./ProjectSectionCard";
 
 const LINE_UNITS = ["kg", "piece", "m3", "m2", "linear_m", "package", "crate", "loose_m3"] as const;
 type Draft = { id?: string; productName: string; quantity: string; unit: string; notes: string; catalogVariantId?: string; isCatalogSnapshot?: boolean };
@@ -75,16 +76,15 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
   }
 
   return <div className="space-y-3">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <SectionHeader title="Technical specification" subtitle={`${lines.length} line(s) · prices are added only after award`} />
-      {canEdit ? <div className="flex gap-2">
-        <Button size="sm" onClick={openCatalog} disabled={pending}>Add from catalogue</Button>
-        <Button size="sm" onClick={() => { setCatalog([]); setDraft(blank()); }}><Plus className="mr-1 h-4 w-4" />Custom line</Button>
-      </div> : null}
-    </div>
+    <ProjectSectionCard>
+      <ProjectSectionHeader title="Technical specification" subtitle={`${lines.length} line(s) · prices are added only after award`} actions={canEdit ? <>
+        <Button size="sm" onClick={openCatalog} disabled={pending}><Library className="h-4 w-4" /> Add from catalogue</Button>
+        <Button size="sm" onClick={() => { setCatalog([]); setDraft(blank()); }}><Plus className="h-4 w-4" /> Custom line</Button>
+      </> : undefined} />
+      <ProjectSectionBody className="p-0">
 
     {lines.length === 0 ? <EmptyState message="No specification lines yet." /> : (
-      <div className="overflow-x-auto rounded-lg border bg-card">
+      <div className="overflow-x-auto">
         <Table dense><TableHeader><TableRow>
           <TableHead>#</TableHead><TableHead>Deliverable</TableHead><TableHead>Technical notes</TableHead>
           <TableHead className="text-right">Qty</TableHead><TableHead>Unit</TableHead>{canEdit ? <TableHead /> : null}
@@ -108,6 +108,8 @@ export function ProjectSpecificationEditor({ projectId, lines, canEdit }: {
           </div></TableCell></TableRow>:null}</Fragment>})}</TableBody></Table>
       </div>
     )}
+      </ProjectSectionBody>
+    </ProjectSectionCard>
 
     <Dialog open={draft !== null} onOpenChange={(open) => !open && !pending && setDraft(null)}>
       <DialogContent><DialogHeader><DialogTitle>{draft?.catalogVariantId ? "Add catalogue snapshot" : draft?.id ? "Edit specification line" : "Add custom line"}</DialogTitle>

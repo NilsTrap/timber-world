@@ -3,13 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, ChevronUp, ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
+import { Check, ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@timber/ui";
 import { toast } from "sonner";
 import type { ProjectFileMeta } from "../types";
 import { uploadProjectBrowserFile } from "./projectUploadClient";
 import { checkProjectOfficialImageSlot, completeProjectOfficialImage, removeProjectOfficialImage, setProjectOfficialImagePrimary } from "../actions/projectOfficialImageActions";
 import { deleteProjectFileAction } from "../actions/projectFileActions";
+import { ProjectSectionBody, ProjectSectionCard, ProjectSectionHeader } from "./ProjectSectionCard";
+import { ProjectDisclosureButton } from "./ProjectDisclosureButton";
 
 type Props = {
   projectId: string;
@@ -209,30 +211,19 @@ export function ProjectOfficialImages({ projectId, initialFiles, canManage, canR
   return (
     <>
       {images.length > 0 || canManage ? (
-        <section className="overflow-hidden rounded-lg border bg-card">
-          <div className="flex flex-wrap items-center gap-3 p-4">
-            <button type="button" className="min-w-52 flex-1 text-left" aria-expanded={open} aria-controls="project-images-content" onClick={() => setOpen((current) => !current)}>
-              <span className="block text-xl font-semibold">Images</span>
-              <span className="block text-sm text-muted-foreground">{images.length > 0 ? `${images.length} image(s)` : "No images uploaded"}</span>
-            </button>
-            <div className="ml-auto flex shrink-0 items-center gap-2">
+        <ProjectSectionCard>
+          <ProjectSectionHeader title="Images" subtitle={images.length > 0 ? `${images.length} image(s)` : "No images uploaded"} actions={<>
               {uploadControl}
-              <Button type="button" size="icon" variant="ghost" aria-label={open ? "Collapse images" : "Expand images"} aria-expanded={open} aria-controls="project-images-content" onClick={() => setOpen((current) => !current)}>
-                {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-              </Button>
-            </div>
-          </div>
+              <ProjectDisclosureButton open={open} controls="project-images-content" expandLabel="Expand images" collapseLabel="Collapse images" onToggle={() => setOpen((current) => !current)} />
+          </>} />
           {open ? (
-            <div id="project-images-content" className="border-t p-4">
+            <ProjectSectionBody id="project-images-content">
               {gallery}
-            </div>
+            </ProjectSectionBody>
           ) : null}
-        </section>
+        </ProjectSectionCard>
       ) : (
-        <section className="rounded-lg border bg-card p-4">
-          <p className="text-xl font-semibold">Images</p>
-          <p className="text-sm text-muted-foreground">No images uploaded</p>
-        </section>
+        <ProjectSectionCard><ProjectSectionHeader title="Images" subtitle="No images uploaded" /></ProjectSectionCard>
       )}
       <Dialog open={preview !== null} onOpenChange={(nextOpen) => !nextOpen && setPreview(null)}>
         <DialogContent className="max-w-[90vw] sm:max-w-5xl">

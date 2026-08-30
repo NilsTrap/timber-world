@@ -341,7 +341,7 @@ assert.match(commercialCard, /Configure offer/);
 assert.match(commercialCard, /Buyer total/);
 assert.match(commercialCard, /marginPercent\.toFixed\(2\)/);
 assert.match(commercialCard, /useEffect\(\(\) => setOpen\(false\), \[projectId\]\)/);
-assert.match(commercialCard, /aria-controls=\{bodyId\}/);
+assert.match(commercialCard, /controls=\{bodyId\}/);
 assert.match(commercialCard, /Purchase:[\s\S]*Additional:[\s\S]*Margin:[\s\S]*Total:/);
 assert.match(commercialCard, /catch\(\(\)\s*=>\s*setLoadError\("Could not load commercial offer"\)\)/);
 assert.doesNotMatch(rfqCard, /find\(\(candidate\)=>candidate\.id===viewCandidateId\)!/);

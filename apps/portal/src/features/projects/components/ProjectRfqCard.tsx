@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-  Button, Input, Label, SectionHeader,
+  Button, Input, Label,
 } from "@timber/ui";
 import {
   awardProjectQuotation, cancelProjectQuotationRequest, getEligibleProjectRfqCandidates, getProjectRfqState,
@@ -16,6 +16,7 @@ import {
 } from "../actions/projectRfqActions";
 import { calculateProjectMargin, type ProjectMarginMode } from "../services/projectRfq";
 import type { ProjectLine } from "../types";
+import { ProjectSectionBody, ProjectSectionCard, ProjectSectionHeader } from "./ProjectSectionCard";
 
 export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandidateQuotation, initialOptions, lines }: {
   projectId: string; currency: string; canManage: boolean; canEnterCandidateQuotation:boolean; initialOptions: Array<{ id: string; name: string }>; lines:ProjectLine[];
@@ -111,16 +112,17 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
     void loadOptions();
   }
 
-  if (!loaded) return <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading quotation requests…</div>;
+  if (!loaded) return <ProjectSectionCard><ProjectSectionHeader title="Supplier quotations" subtitle="Loading quotation requests…" /></ProjectSectionCard>;
   if (!rfq && !canManage) return null;
   const deadlinePassed = Boolean(rfq && new Date(rfq.deadline).getTime() <= Date.now());
 
   const viewedCandidate=viewCandidateId?rfq?.candidates.find((candidate)=>candidate.id===viewCandidateId)??null:null;
   const ownReadOnlyCandidate=rfq?.ownCandidateId?rfq.candidates.find((candidate)=>candidate.id===rfq.ownCandidateId)??null:null;
-  return <div className="space-y-3 rounded-lg border bg-card p-4">
-    <SectionHeader title="Supplier quotations" subtitle={rfq
+  return <ProjectSectionCard>
+    <ProjectSectionHeader title="Supplier quotations" subtitle={rfq
       ? `${rfq.status === "open" && deadlinePassed ? "closed" : rfq.status} · deadline ${new Date(rfq.deadline).toLocaleString()}`
       : "Invite several candidates without committing them to the seller chain"} />
+    <ProjectSectionBody className="space-y-3">
 
     {!rfq && canManage ? <div className="space-y-3">
       {options.length ? <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{options.map((option) =>
@@ -179,7 +181,8 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
         <AlertDialogAction disabled={pending} onClick={cancelRequest}>Close request</AlertDialogAction>
       </AlertDialogFooter></AlertDialogContent>
     </AlertDialog>
-  </div>;
+    </ProjectSectionBody>
+  </ProjectSectionCard>;
 }
 
 function earliestDeadlineValue(): string {

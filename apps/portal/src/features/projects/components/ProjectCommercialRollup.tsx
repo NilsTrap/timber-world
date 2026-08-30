@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useId, useState, useTransition } from "react";
 import { Button, Input, Label } from "@timber/ui";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { Calculator, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { getProjectCommercialRollup, saveProjectCommercialRollup, type CommercialRollupState } from "../actions/projectCommercialActions";
 import { calculateCommercialRollup } from "../services/projectCommercialRollup";
+import { ProjectSectionBody, ProjectSectionCard, ProjectSectionHeader } from "./ProjectSectionCard";
+import { ProjectDisclosureButton } from "./ProjectDisclosureButton";
 
 export function ProjectCommercialRollup({ projectId, currency }: { projectId: string; currency: string }) {
   const [state, setState] = useState<CommercialRollupState | null>(null);
@@ -124,25 +126,17 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
     });
   const summary = [state.state === "stale" ? "Source changed; review and reconfirm" : state.state === "confirmed" ? "Confirmed" : "Draft", state.scope ? `${state.scope === "full" ? "Full" : "Partial"} offer` : null, state.salesAmountCents != null ? `Buyer total ${format(state.salesAmountCents)}` : null, state.marginAmountCents != null ? `Margin ${format(state.marginAmountCents)}${state.marginPercent != null ? ` (${state.marginPercent.toFixed(2)}%)` : ""}` : null].filter(Boolean).join(" · ");
   return (
-    <section className="rounded-lg border bg-card">
-      <div className="flex items-center justify-between gap-3 p-4">
-        <div>
-          <h3 className="text-lg font-semibold">Commercial offer</h3>
-          <p className="text-sm text-muted-foreground">{summary}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+    <ProjectSectionCard>
+      <ProjectSectionHeader title="Commercial offer" subtitle={summary} actions={<>
           {state.canBuild && !open ? (
             <Button type="button" size="sm" onClick={() => setOpen(true)}>
-              Configure offer
+              <Calculator className="h-4 w-4" /> Configure offer
             </Button>
           ) : null}
-          <Button type="button" size="icon" variant="ghost" aria-label={open ? "Collapse commercial offer" : "Expand commercial offer"} aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((current) => !current)}>
-            <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
+          <ProjectDisclosureButton open={open} controls={bodyId} expandLabel="Expand commercial offer" collapseLabel="Collapse commercial offer" onToggle={() => setOpen((current) => !current)} />
+      </>} />
       {open ? (
-        <div id={bodyId} className="space-y-3 border-t p-4">
+        <ProjectSectionBody id={bodyId} className="space-y-3">
           {state.state === "stale" ? <p className="text-sm text-amber-700">Source changed; review and reconfirm.</p> : null}
           {state.canBuild ? (
             <>
@@ -271,8 +265,8 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
               </div>
             </div>
           ) : null}
-        </div>
+        </ProjectSectionBody>
       ) : null}
-    </section>
+    </ProjectSectionCard>
   );
 }

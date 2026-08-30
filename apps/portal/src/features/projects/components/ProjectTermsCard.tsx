@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ListChecks, Loader2 } from "lucide-react";
 import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@timber/ui";
 import { toast } from "sonner";
 import type { ProjectTerms } from "../types";
@@ -9,6 +9,8 @@ import { getFieldOptions, type FieldOptionChoice } from "../../orders/actions/ge
 import { updateDealTerms } from "../../orders/actions/dealActions";
 import { parseAdvanceFromPaymentTerm } from "../../orders/services/paymentTerms";
 import { formatDate } from "@/lib/utils";
+import { ProjectSectionBody, ProjectSectionCard, ProjectSectionHeader } from "./ProjectSectionCard";
+import { ProjectDisclosureButton } from "./ProjectDisclosureButton";
 
 const NONE = "__none";
 
@@ -88,25 +90,17 @@ export function ProjectTermsCard({ projectId, terms, deliveryDeadline, canEdit }
   const summary = summaryParts.join(" · ") || "No terms set";
 
   return (
-    <section className="rounded-lg border bg-card">
-      <div className="flex items-center justify-between gap-3 p-4">
-        <div>
-          <h2 className="text-lg font-semibold">Terms</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">{summary}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+    <ProjectSectionCard>
+      <ProjectSectionHeader title="Terms" subtitle={summary} actions={<>
           {summaryParts.length === 0 && canEdit && !open ? (
             <Button type="button" size="sm" onClick={() => setOpen(true)}>
-              Set terms
+              <ListChecks className="h-4 w-4" /> Set terms
             </Button>
           ) : null}
-          <Button type="button" size="icon" variant="ghost" aria-label={open ? "Collapse terms" : "Expand terms"} aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((current) => !current)}>
-            <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
+          <ProjectDisclosureButton open={open} controls={bodyId} expandLabel="Expand terms" collapseLabel="Collapse terms" onToggle={() => setOpen((current) => !current)} />
+      </>} />
       {open ? (
-        <div id={bodyId} className="grid gap-4 border-t p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <ProjectSectionBody id={bodyId} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <TermField label="Incoterms" saving={saving === "incoterms"}>
             {canEdit ? (
               <Select
@@ -167,9 +161,9 @@ export function ProjectTermsCard({ projectId, terms, deliveryDeadline, canEdit }
             <ReadValue value={values.advancePct == null ? "" : `${values.advancePct}%`} />
             <p className="mt-1 text-xs text-muted-foreground">Derived from payment terms</p>
           </TermField>
-        </div>
+        </ProjectSectionBody>
       ) : null}
-    </section>
+    </ProjectSectionCard>
   );
 }
 
