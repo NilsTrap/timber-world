@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -189,6 +189,7 @@ function earliestDeadlineValue(): string {
 function formatCents(cents: number, currency: string): string { return `${(cents / 100).toFixed(2)} ${currency}`; }
 function TraderMarginCard({projectId,currency,pricing,onSaved}:{projectId:string;currency:string;pricing:ProjectCommercialPricing;onSaved:(pricing:ProjectCommercialPricing)=>void}){
   const [mode,setMode]=useState<ProjectMarginMode>(pricing.marginAmountCents==null?"percentage":"amount");
+  const marginModeName=useId();
   const [value,setValue]=useState(pricing.marginAmountCents==null?(pricing.marginPercent==null?"":String(pricing.marginPercent)):(pricing.marginAmountCents/100).toFixed(2));
   const [saving,startSaving]=useTransition();
   useEffect(()=>{setValue(mode==="percentage"?(pricing.marginPercent==null?"":String(pricing.marginPercent)):(pricing.marginAmountCents==null?"":(pricing.marginAmountCents/100).toFixed(2)))},[mode,pricing.marginAmountCents,pricing.marginPercent]);
@@ -198,7 +199,7 @@ function TraderMarginCard({projectId,currency,pricing,onSaved}:{projectId:string
   const save=()=>{if(!calculation)return;startSaving(async()=>{const result=await saveProjectAwardedMargin({projectId,mode,value:numericValue});if(!result.success){toast.error(result.error);return}onSaved(result.data);toast.success("Trader margin saved")})};
   return <div className="space-y-3 rounded-md border bg-muted/20 p-3">
     <div><p className="font-medium">Trader margin</p><p className="text-sm text-muted-foreground">Purchase cost: {formatCents(pricing.purchaseCostCents,currency)}</p></div>
-    <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant={mode==="percentage"?"default":"outline"} onClick={()=>setMode("percentage")}>Percentage</Button><Button type="button" size="sm" variant={mode==="amount"?"default":"outline"} onClick={()=>setMode("amount")}>Amount</Button></div>
+    <fieldset className="flex flex-wrap gap-2"><legend className="sr-only">Trader margin entry mode</legend><label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-muted"><input className="h-4 w-4 accent-primary" type="radio" name={marginModeName} value="percentage" checked={mode==="percentage"} onChange={()=>setMode("percentage")}/>Percentage</label><label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-muted"><input className="h-4 w-4 accent-primary" type="radio" name={marginModeName} value="amount" checked={mode==="amount"} onChange={()=>setMode("amount")}/>Amount</label></fieldset>
     <div className="grid gap-3 sm:grid-cols-[minmax(180px,1fr)_auto_auto_auto] sm:items-end">
       <Field label={mode==="percentage"?"Gross margin (%)":`Margin amount (${currency})`}><Input aria-label={mode==="percentage"?"Gross margin percentage":"Margin amount"} type="number" min="0" max={mode==="percentage"?"99.99":undefined} step={mode==="percentage"?"0.01":"0.01"} value={value} onChange={(event)=>setValue(event.target.value)}/></Field>
       <p className="pb-2 text-sm"><span className="text-muted-foreground">Margin</span><br/><strong>{calculation?formatCents(calculation.marginAmountCents,currency):"—"}</strong>{calculation?` (${calculation.marginPercent.toFixed(2)}%)`:""}</p>
