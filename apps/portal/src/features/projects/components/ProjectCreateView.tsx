@@ -17,7 +17,7 @@ import {
 } from "../filePaths";
 import type { ProjectsViewer } from "../types";
 import { ProjectDropSurface } from "./ProjectDropSurface";
-import { uploadProjectBrowserFile } from "./projectUploadClient";
+import { uploadProjectBrowserArchive, uploadProjectBrowserFile } from "./projectUploadClient";
 
 type UploadStatus = "staged" | "uploading" | "done" | "failed";
 interface StagedFile {
@@ -27,6 +27,7 @@ interface StagedFile {
   status: UploadStatus;
   progress: number;
   error?: string;
+  kind: "file" | "archive";
 }
 
 export function ProjectCreateView({ viewer }: { viewer: ProjectsViewer }) {
@@ -78,7 +79,24 @@ export function ProjectCreateView({ viewer }: { viewer: ProjectsViewer }) {
       if (occupied.has(key) || folderKeys.has(key)) { errors.push(`${path.path}: duplicate path`); continue; }
       if (ancestorKeys.some((ancestor) => existingFileKeys.has(ancestor))) { errors.push(`${path.path}: a file blocks this folder path`); continue; }
       occupied.add(key);
-      additions.push({ id: crypto.randomUUID(), file, relativePath: path.path, status: "staged", progress: 0 });
+      additions.push({ id: crypto.randomUUID(), file, relativePath: path.path, status: "staged", progress: 0, kind: "file" });
+    }
+    setFiles((current) => [...current, ...additions]);
+    setMessage(errors.length ? errors.join(" · ") : null);
+  };
+
+  const addArchives = (incoming: File[]) => {
+    const occupied = new Set(files.map((item) => projectPathKey(item.relativePath)));
+    const additions: StagedFile[] = [];
+    const errors: string[] = [];
+    for (const file of incoming) {
+      const path = pathFromBrowserFile(file as File & { path?: string });
+      if (!path.ok) { errors.push(`${file.name}: ${path.error}`); continue; }
+      if (file.size > MAX_PROJECT_FILE_BYTES) { errors.push(`${path.path}: over 100 MB`); continue; }
+      const key = projectPathKey(path.path);
+      if (occupied.has(key)) { errors.push(`${path.path}: duplicate path`); continue; }
+      occupied.add(key);
+      additions.push({ id: crypto.randomUUID(), file, relativePath: path.path, status: "staged", progress: 0, kind: "archive" });
     }
     setFiles((current) => [...current, ...additions]);
     setMessage(errors.length ? errors.join(" · ") : null);
@@ -128,9 +146,12 @@ export function ProjectCreateView({ viewer }: { viewer: ProjectsViewer }) {
   const uploadOne = async (project: CreatedProject, item: StagedFile) => {
     setFiles((current) => current.map((row) => row.id === item.id ? { ...row, status: "uploading", progress: 1, error: undefined } : row));
     try {
-      await uploadProjectBrowserFile(project.id, item.file, item.relativePath, (progress) => {
+      const onProgress = (progress: number) => {
         setFiles((current) => current.map((row) => row.id === item.id ? { ...row, progress } : row));
-      });
+      };
+      const parent = item.relativePath.includes("/") ? item.relativePath.slice(0, item.relativePath.lastIndexOf("/")) : "";
+      if (item.kind === "archive") await uploadProjectBrowserArchive(project.id, item.file, parent, onProgress);
+      else await uploadProjectBrowserFile(project.id, item.file, item.relativePath, onProgress);
       setFiles((current) => current.map((row) => row.id === item.id ? { ...row, status: "done", progress: 100 } : row));
       return true;
     } catch (error) {
@@ -195,7 +216,7 @@ export function ProjectCreateView({ viewer }: { viewer: ProjectsViewer }) {
         <Input id="project-name" value={name} maxLength={255} disabled={!!created} onChange={(event) => setName(event.target.value)} placeholder="e.g. Oak stair components" />
       </div>
 
-      <ProjectDropSurface disabled={creating || complete} onFiles={addFiles} onError={setMessage} />
+      <ProjectDropSurface disabled={creating || complete} onFiles={addFiles} onArchives={addArchives} onError={setMessage} />
 
       {!created ? <div className="flex justify-end"><Button type="button" variant="outline" size="sm" onClick={addFolder}><FolderPlus className="mr-1.5 h-4 w-4" /> New folder</Button></div> : null}
 
@@ -227,7 +248,7 @@ export function ProjectCreateView({ viewer }: { viewer: ProjectsViewer }) {
                 ) : null}
               </div>
               {item.status === "failed" && created ? <Button type="button" variant="outline" size="sm" onClick={() => uploadOne(created, item)}><RotateCcw className="mr-1 h-3.5 w-3.5" /> Retry</Button> : null}
-              {item.status !== "done" && item.status !== "uploading" ? <Button type="button" variant="ghost" size="icon" aria-label="Rename file" onClick={() => renameFile(item)}><Pencil className="h-4 w-4" /></Button> : null}
+              {item.kind === "file" && item.status !== "done" && item.status !== "uploading" ? <Button type="button" variant="ghost" size="icon" aria-label="Rename file" onClick={() => renameFile(item)}><Pencil className="h-4 w-4" /></Button> : null}
               {item.status !== "done" && item.status !== "uploading" ? <Button type="button" variant="ghost" size="icon" aria-label="Remove file" onClick={() => setFiles((current) => current.filter((row) => row.id !== item.id))}><Trash2 className="h-4 w-4" /></Button> : null}
             </div>
           ))}

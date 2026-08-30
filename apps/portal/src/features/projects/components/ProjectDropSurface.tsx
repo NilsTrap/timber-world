@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Archive, FolderUp, Upload } from "lucide-react";
+import { FolderUp, Upload } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@timber/ui";
 import { MAX_PROJECT_FILE_BYTES } from "../filePaths";
@@ -9,19 +9,32 @@ import { MAX_PROJECT_FILE_BYTES } from "../filePaths";
 export function ProjectDropSurface({
   disabled,
   onFiles,
-  onArchive,
+  onArchives,
   onError,
   onActivityChange,
 }: {
   disabled?: boolean;
   onFiles: (files: File[]) => void;
-  onArchive?: (file: File) => void;
+  onArchives?: (files: File[]) => void;
   onError: (message: string) => void;
   onActivityChange?: (active: boolean) => void;
 }) {
   const folderInput = useRef<HTMLInputElement | null>(null);
-  const archiveInput = useRef<HTMLInputElement | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const routeFiles = (files: File[]) => {
+    if (!onArchives) {
+      onFiles(files);
+      return;
+    }
+    const archives: File[] = [];
+    const ordinary: File[] = [];
+    for (const file of files) {
+      if (file.name.toLowerCase().endsWith(".zip")) archives.push(file);
+      else ordinary.push(file);
+    }
+    if (ordinary.length > 0) onFiles(ordinary);
+    if (archives.length > 0) onArchives(archives);
+  };
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     disabled,
     noClick: true,
@@ -29,7 +42,7 @@ export function ProjectDropSurface({
     maxSize: MAX_PROJECT_FILE_BYTES,
     onDropAccepted: (files) => {
       setPickerOpen(false);
-      onFiles(files);
+      routeFiles(files);
     },
     onDropRejected: (rejections) => {
       setPickerOpen(false);
@@ -75,18 +88,6 @@ export function ProjectDropSurface({
           event.currentTarget.value = "";
         }}
       />
-      <input
-        ref={archiveInput}
-        type="file"
-        accept=".zip,application/zip"
-        className="hidden"
-        onChange={(event) => {
-          setPickerOpen(false);
-          const file = event.currentTarget.files?.[0];
-          if (file) onArchive?.(file);
-          event.currentTarget.value = "";
-        }}
-      />
       <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
       <p className="mt-2 text-sm font-medium">
         {isDragActive ? "Drop files and folders here" : "Drop files and folders here"}
@@ -105,15 +106,6 @@ export function ProjectDropSurface({
         >
           <FolderUp className="mr-1.5 h-4 w-4" /> Choose folder
         </Button>
-        {onArchive ? <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          onClick={() => { setPickerOpen(true); archiveInput.current?.click(); }}
-        >
-          <Archive className="mr-1.5 h-4 w-4" /> Upload archive
-        </Button> : null}
       </div>
     </div>
   );

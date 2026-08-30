@@ -162,6 +162,8 @@ const capture = readFileSync("src/features/projects/components/viewers/projectPr
 const officialImageActions = readFileSync("src/features/projects/actions/projectOfficialImageActions.ts", "utf8");
 const spineActions = readFileSync("src/features/projects/actions/projectSpineActions.ts", "utf8");
 const spineTitle = readFileSync("src/features/projects/components/ProjectSpineTitle.tsx", "utf8");
+const createView = readFileSync("src/features/projects/components/ProjectCreateView.tsx", "utf8");
+const portalLayout = readFileSync("src/app/(portal)/layout.tsx", "utf8");
 const migration = readFileSync("../../supabase/migrations/20260821211500_project_file_workspace.sql", "utf8");
 const folderMigration = readFileSync("../../supabase/migrations/20260826090000_project_workspace_folders.sql", "utf8");
 const buyerAccessMigration = readFileSync("../../supabase/migrations/20260826130000_buyer_project_workspace_access.sql", "utf8");
@@ -189,7 +191,10 @@ const ordinaryUploadAction = actions.slice(actions.indexOf("export async functio
 ok("preparation persists an uploading row before signing", ordinaryUploadAction.indexOf('lifecycle_status: "uploading"') < ordinaryUploadAction.indexOf(".createSignedUploadUrl(storagePath"));
 ok("ZIP archives upload once and extract on the server", actions.includes("prepareProjectArchiveUpload") && actions.includes("extractProjectArchiveUpload") && actions.includes("JSZip.loadAsync"));
 ok("archive extraction preserves safe paths and limits expansion", actions.includes("normaliseProjectPath(unsafeName)") && actions.includes("MAX_ARCHIVE_FILES") && actions.includes("MAX_ARCHIVE_EXPANDED_BYTES"));
-ok("archive UI has a dedicated picker and extraction progress", workspace.includes("uploadProjectBrowserArchive") && workspace.includes("Uploading and extracting archive"));
+ok("ZIP files are auto-routed without a dedicated archive picker", dropSurface.includes("onArchives") && dropSurface.includes('endsWith(".zip")') && !dropSurface.includes("Upload archive"));
+ok("archive extraction works in existing and new projects", workspace.includes("uploadProjectBrowserArchive") && workspace.includes("Uploading and extracting archive") && createView.includes("uploadProjectBrowserArchive") && createView.includes('kind: "archive"'));
+ok("existing-project archive failures remain retryable without stopping the queue", workspace.includes("interface FailedArchive") && workspace.includes("failedCount += 1") && workspace.includes("Retry") && workspace.includes("for (const [archiveIndex, file] of archives.entries())"));
+ok("portal confines scrolling to its main content region", portalLayout.includes('className="fixed inset-0 flex min-h-0 bg-background"') && portalLayout.includes('className="min-h-0 flex-1 overflow-y-auto"'));
 ok("awarded margin crosses the client boundary only for RFQ managers", rfqActions.includes('if(canManage&&row.status==="awarded")') && rfqActions.includes('...(commercialPricing?{commercialPricing}:{})'));
 ok("awarded margin is editable through a dedicated trader card", rfqCard.includes("Trader margin") && rfqCard.includes("saveProjectAwardedMargin") && rfqCard.includes("Sales amount"));
 ok("persisted awarded margin reloads from exact cents", rfqCard.includes('pricing.marginAmountCents==null?"percentage":"amount"'));

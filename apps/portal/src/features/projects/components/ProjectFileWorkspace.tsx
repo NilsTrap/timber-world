@@ -83,6 +83,13 @@ interface PendingUpload {
   error?: string;
 }
 
+interface FailedArchive {
+  id: string;
+  file: File;
+  targetFolder: string;
+  error: string;
+}
+
 export function ProjectFileWorkspace({
   projectId,
   initialFiles,
@@ -104,6 +111,7 @@ export function ProjectFileWorkspace({
   const [files, setFiles] = useState(initialFiles);
   const [folders, setFolders] = useState(initialFolders);
   const [pending, setPending] = useState<PendingUpload[]>([]);
+  const [failedArchives, setFailedArchives] = useState<FailedArchive[]>([]);
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [fileSearch, setFileSearch] = useState("");
@@ -195,25 +203,43 @@ export function ProjectFileWorkspace({
     void Promise.all(Array.from({ length: Math.min(3, next.length) }, () => worker()));
   };
 
-  const uploadArchive = async (file: File) => {
+  const uploadArchives = async (archives: File[], retryTargetFolder?: string) => {
     setArchiveProgress(1);
     setMessage(null);
-    try {
-      const saved = await uploadProjectBrowserArchive(projectId, file, selectedFolder ?? "", setArchiveProgress);
-      setFiles((current) => [...current, ...saved]);
-      const extractedFolders = new Set<string>();
-      for (const item of saved) {
-        const parts = item.relativePath.split("/");
-        parts.slice(0, -1).forEach((_, index) => extractedFolders.add(parts.slice(0, index + 1).join("/")));
+    let extractedCount = 0;
+    let failedCount = 0;
+    for (const [archiveIndex, file] of archives.entries()) {
+      const archiveId = crypto.randomUUID();
+      const path = pathFromBrowserFile(file as File & { path?: string });
+      const relativeParent = path.ok && path.path.includes("/") ? path.path.slice(0, path.path.lastIndexOf("/")) : "";
+      const targetFolder = retryTargetFolder ?? [selectedFolder, relativeParent].filter(Boolean).join("/");
+      try {
+        if (!path.ok) throw new Error(path.error);
+        const saved = await uploadProjectBrowserArchive(projectId, file, targetFolder, (progress) => {
+          setArchiveProgress(Math.round(((archiveIndex + progress / 100) / archives.length) * 100));
+        });
+        extractedCount += saved.length;
+        setFiles((current) => [...current, ...saved]);
+        const extractedFolders = new Set<string>();
+        for (const item of saved) {
+          const parts = item.relativePath.split("/");
+          parts.slice(0, -1).forEach((_, index) => extractedFolders.add(parts.slice(0, index + 1).join("/")));
+        }
+        setFolders((current) => {
+          const occupied = new Set(current.map((folder) => projectPathKey(folder.relativePath)));
+          return [...current, ...[...extractedFolders].filter((path) => !occupied.has(projectPathKey(path))).map((relativePath) => ({ id: `archive:${relativePath}`, relativePath, createdAt: new Date().toISOString() }))];
+        });
+        setFailedArchives((current) => current.filter((archive) => archive.file !== file));
+      } catch (error) {
+        failedCount += 1;
+        setFailedArchives((current) => [...current.filter((archive) => archive.file !== file), { id: archiveId, file, targetFolder, error: (error as Error).message }]);
       }
-      setFolders((current) => {
-        const occupied = new Set(current.map((folder) => projectPathKey(folder.relativePath)));
-        return [...current, ...[...extractedFolders].filter((path) => !occupied.has(projectPathKey(path))).map((relativePath) => ({ id: `archive:${relativePath}`, relativePath, createdAt: new Date().toISOString() }))];
-      });
-      setMessage(`${saved.length} file(s) extracted from ${file.name}.`);
+    }
+    try {
+      setMessage(failedCount > 0
+        ? `${failedCount} archive(s) failed. Successful archives extracted ${extractedCount} file(s).`
+        : `${extractedCount} file(s) extracted from ${archives.length} archive(s).`);
       router.refresh();
-    } catch (error) {
-      setMessage((error as Error).message);
     } finally {
       setArchiveProgress(null);
     }
@@ -503,12 +529,20 @@ export function ProjectFileWorkspace({
           onKeyDown={() => setUploadActivity((activity) => activity + 1)}
           onDragEnter={() => setUploadActivity((activity) => activity + 1)}
         >
-          <ProjectDropSurface disabled={archiveProgress !== null} onFiles={addFiles} onArchive={(file) => void uploadArchive(file)} onError={setMessage} onActivityChange={setUploadInteractionActive} />
+          <ProjectDropSurface disabled={archiveProgress !== null} onFiles={addFiles} onArchives={(files) => void uploadArchives(files)} onError={setMessage} onActivityChange={setUploadInteractionActive} />
         </div>
       ) : null}
       {archiveProgress !== null ? <div className="rounded-lg border bg-card p-3">
         <div className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Uploading and extracting archive… {archiveProgress}%</div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={archiveProgress} aria-valuemin={0} aria-valuemax={100}><div className="h-full bg-primary transition-[width]" style={{ width: `${archiveProgress}%` }} /></div>
+      </div> : null}
+      {failedArchives.length > 0 ? <div className="space-y-2 rounded-lg border border-destructive/30 bg-card p-3">
+        {failedArchives.map((archive) => <div key={archive.id} className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="min-w-0 flex-1 truncate" title={archive.file.name}>{archive.file.name}: {archive.error}</span>
+          <Button type="button" size="sm" variant="outline" disabled={archiveProgress !== null} onClick={() => void uploadArchives([archive.file], archive.targetFolder)}>
+            <RotateCcw className="mr-1 h-3.5 w-3.5" /> Retry
+          </Button>
+        </div>)}
       </div> : null}
       {canWrite ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
