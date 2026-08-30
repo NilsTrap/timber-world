@@ -148,6 +148,8 @@ export interface ProjectLine {
   notes: string | null;
   processRequirements: ProjectProcessRequirement[];
   basicProperties?: Array<{key:string;label:string;value:string}>;
+  /** True when product identity and structured fields were snapshotted from the catalogue. */
+  isCatalogSnapshot: boolean;
   /** Internal cost build-up. Absent unless the viewer may see deal terms. */
   components?: ProjectLineComponent[];
 }

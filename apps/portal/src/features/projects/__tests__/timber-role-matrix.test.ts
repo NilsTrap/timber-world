@@ -261,7 +261,7 @@ function dealFixture() {
     id: "line-1", side: "sell", lineNo: 1, productName: "Oak board", woodSpecies: "Oak",
     humidity: null, processing: null, quality: "A", thickness: "20", width: "100",
     length: "2000", pieces: "20", volumeM3: 1, unit: "m3",
-    unitPriceCents: 90000, vatRate: 21, lineTotalCents: 90000,
+    unitPriceCents: 90000, vatRate: 21, lineTotalCents: 90000, catalogProductId: null,
   };
   return {
     id: PROJECT, code: "ORD-001", dealCode: "TWP-001", name: "Matrix project",

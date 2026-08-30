@@ -12,6 +12,7 @@ import {
   canEditProjectSpecification,
   projectSpecificationEditDenialCode,
 } from "../services/projectSpecification";
+import { specificationLineUpdate } from "../services/specificationLineEdit";
 
 const uuid = z.string().uuid();
 const lineUnit = z.enum(["kg", "m3", "m2", "piece", "linear_m", "package", "crate", "loose_m3"]);
@@ -188,18 +189,35 @@ export async function updateProjectSpecificationLine(raw: unknown): Promise<Acti
   const input = parsed.data;
   const ctx = await editableProject(input.projectId);
   if (!ctx.success) return ctx;
-  const {data:existing}=await ctx.data.db.from("order_line_items").select("catalog_product_id").eq("id",input.lineId).eq("order_id",input.projectId).maybeSingle();
-  if(existing?.catalog_product_id)return{success:false,error:"Catalogue snapshots are immutable; replace the line to change it",code:"VALIDATION_ERROR"};
-  const quantity = lineQuantities(input.unit, input.quantity);
-  const { data, error } = await ctx.data.db.from("order_line_items").update({
-    product_name: input.productName, unit: input.unit,
-    unit_price_cents: null, line_total_cents: null,
-    notes: input.notes || null,
-    catalog_product_id: null, catalog_variant_id: null, is_standard: false,
-    ...quantity,
-  }).eq("id", input.lineId).eq("order_id", input.projectId).select("id").maybeSingle();
+  const { data: existing, error: existingError } = await ctx.data.db
+    .from("order_line_items")
+    .select("catalog_product_id, unit")
+    .eq("id", input.lineId)
+    .eq("order_id", input.projectId)
+    .maybeSingle();
+  if (existingError) return { success: false, error: existingError.message, code: "FETCH_FAILED" };
+  if (!existing) return { success: false, error: "Line not found", code: "NOT_FOUND" };
+
+  const isCatalogSnapshot = Boolean(existing.catalog_product_id);
+  const persistedUnit = isCatalogSnapshot ? lineUnit.safeParse(existing.unit) : null;
+  if (persistedUnit && !persistedUnit.success) return { success: false, error: "Line unit is not supported", code: "VALIDATION_ERROR" };
+  const resolvedUnit = persistedUnit?.success ? persistedUnit.data : input.unit;
+  if (!validQuantityForUnit(resolvedUnit, input.quantity)) return { success: false, error: "Quantity is outside the allowed range for this unit", code: "VALIDATION_ERROR" };
+  const quantity = lineQuantities(resolvedUnit, input.quantity);
+  const update = specificationLineUpdate(isCatalogSnapshot, {
+    productName: input.productName,
+    unit: input.unit,
+    notes: input.notes,
+    quantityFields: quantity,
+  });
+  const updateQuery = ctx.data.db.from("order_line_items").update(update)
+    .eq("id", input.lineId).eq("order_id", input.projectId).eq("side", "sell");
+  const guardedUpdate = isCatalogSnapshot
+    ? updateQuery.not("catalog_product_id", "is", null).eq("unit", resolvedUnit)
+    : updateQuery.is("catalog_product_id", null);
+  const { data, error } = await guardedUpdate.select("id").maybeSingle();
   if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
-  if (!data) return { success: false, error: "Line not found", code: "NOT_FOUND" };
+  if (!data) return { success: false, error: "Line changed; refresh and try again", code: "CONFLICT" };
   refreshProject(input.projectId);
   return { success: true, data: { id: input.lineId } };
 }

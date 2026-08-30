@@ -78,7 +78,7 @@ function line(over: Partial<DealLineLike> = {}): DealLineLike {
     id: "li-1", side: "sell", lineNo: 1, productName: "Oak board", woodSpecies: "Oak",
     humidity: "8-10%", processing: "planed", quality: "A", thickness: "20", width: "120",
     length: "2000", pieces: "50", volumeM3: 2.4, unit: "m3",
-    unitPriceCents: 120000, vatRate: 21, lineTotalCents: 288000, ...over,
+    unitPriceCents: 120000, vatRate: 21, lineTotalCents: 288000, catalogProductId: null, ...over,
   };
 }
 

@@ -93,6 +93,7 @@ export interface DealLineLike {
   lineTotalCents: number | null;
   notes?: string | null;
   specificationFields?: Array<{ key: string; label: string; value: string }>;
+  catalogProductId: string | null;
 }
 
 export interface DealLineComponentLike {
@@ -298,6 +299,7 @@ export function toProjectLines(
         unit: requirement.unit,
       })) ?? [],
       basicProperties: (li.specificationFields??[]).map((field)=>({key:field.key,label:field.label,value:field.value})),
+      isCatalogSnapshot: Boolean(li.catalogProductId),
     };
     if (seeTerms) {
       line.unitPriceCents = li.unitPriceCents;
