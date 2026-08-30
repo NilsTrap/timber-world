@@ -22,13 +22,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@timber/ui";
-import { Loader2, Pencil, Power, PowerOff, Send, RefreshCw, KeyRound, Star, Search } from "lucide-react";
+import { Loader2, Pencil, Power, PowerOff, Send, RefreshCw, KeyRound, Star, Search, Trash2 } from "lucide-react";
 import { getPeopleDirectory, type DirectoryPerson } from "../actions/getPeopleDirectory";
 import {
   toggleUserActive,
   sendUserCredentials,
   resendUserCredentials,
   resetUserPassword,
+  deletePersonPermanently,
 } from "../actions";
 import { PersonEditDialog, type EditablePerson } from "./PersonEditDialog";
 
@@ -73,6 +74,8 @@ export function PeopleTable() {
   const [togglePerson, setTogglePerson] = useState<DirectoryPerson | null>(null);
   const [isToggling, setIsToggling] = useState(false);
   const [credBusyId, setCredBusyId] = useState<string | null>(null);
+  const [deletePerson, setDeletePerson] = useState<DirectoryPerson | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -144,6 +147,25 @@ export function PeopleTable() {
       load();
     } else {
       toast.error(r.error);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deletePerson) return;
+    setIsDeleting(true);
+    try {
+      const result = await deletePersonPermanently(deletePerson.id);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`${result.data.email} was permanently deleted`);
+      setDeletePerson(null);
+      await load();
+    } catch {
+      toast.error("Could not permanently delete person");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -300,6 +322,18 @@ export function PeopleTable() {
                         >
                           {p.isActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
                         </Button>
+                        {!p.isCurrentUser && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeletePerson(p)}
+                            title="Delete permanently"
+                            aria-label={`Permanently delete ${p.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -333,6 +367,25 @@ export function PeopleTable() {
             <AlertDialogCancel disabled={isToggling}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmToggle} disabled={isToggling}>
               {isToggling ? "Working..." : togglePerson?.isActive ? "Deactivate" : "Activate"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deletePerson} onOpenChange={(open) => !isDeleting && !open && setDeletePerson(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete <strong>{deletePerson?.name}</strong> ({deletePerson?.email})? Their login,
+              company memberships, access groups, and API keys will be removed. This cannot be undone, but the same
+              email can be invited again. Existing commercial records will remain.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDelete} disabled={isDeleting}>
+              {isDeleting ? "Deleting..." : "Delete permanently"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

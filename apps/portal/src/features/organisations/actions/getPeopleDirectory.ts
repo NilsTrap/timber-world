@@ -34,6 +34,7 @@ export interface DirectoryPerson {
   primaryOrgId: string | null;
   orgs: PersonOrgRef[];
   groups: PersonGroupRef[];
+  isCurrentUser: boolean;
 }
 
 /** One row per login person, with active and inactive memberships. */
@@ -48,6 +49,7 @@ export async function getPeopleDirectory(): Promise<ActionResult<DirectoryPerson
       success: true,
       data: people.map((p) => ({
         ...p,
+        isCurrentUser: p.id === guard.session.portalUserId,
         orgs: p.memberships.map((m) => ({
           id: m.orgId,
           name: m.orgName,

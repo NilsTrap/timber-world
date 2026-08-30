@@ -14,6 +14,7 @@ export { getOrganisationUsers } from "./getOrganisationUsers";
 export { createOrganisationUser } from "./createOrganisationUser";
 export { updateOrganisationUser } from "./updateOrganisationUser";
 export { toggleUserActive } from "./toggleUserActive";
+export { deletePersonPermanently } from "./deletePerson";
 
 // Add existing user to organisation
 export { searchUserByEmail, addExistingUserToOrganisation } from "./addExistingUserToOrganisation";
