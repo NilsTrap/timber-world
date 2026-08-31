@@ -11,6 +11,7 @@ export const structuredSpecificationValuesSchema = z.object({
   processValues: z.array(z.object({
     key,
     value: value.refine((input) => /^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$/.test(input), "Process quantity must be zero or greater"),
+    active: z.boolean(),
   })).max(200),
 }).superRefine((input, context) => {
   for (const group of [input.basicValues, input.processValues]) {

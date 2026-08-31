@@ -11,7 +11,7 @@ const ids = {
 const parsed = structuredSpecificationValuesSchema.parse({
   ...ids,
   basicValues: [{ key: "grade", value: "S355" }, { key: "coated", value: "false" }],
-  processValues: [{ key: "welding", value: "0" }, { key: "cutting", value: "12.5" }],
+  processValues: [{ key: "welding", value: "0", active: false }, { key: "cutting", value: "12.5", active: true }],
 });
 assert.deepEqual(structuredSpecificationPayload(parsed), {
   p_order_id: ids.projectId,
@@ -21,6 +21,8 @@ assert.deepEqual(structuredSpecificationPayload(parsed), {
   p_process_values: parsed.processValues,
 });
 assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, processValues: [{ key: "welding", value: "-1" }] }).success, false);
+assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, processValues: [{ key: "welding", value: "0", active: false }] }).success, true);
+assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, processValues: [{ key: "welding", value: "0" }] }).success, false);
 assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, basicValues: [{ key: "grade", value: "A" }, { key: "grade", value: "B" }] }).success, false);
 assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, version: null }).success, false);
 
@@ -39,6 +41,12 @@ assert.match(migration, /p_basic_values IS NULL OR p_process_values IS NULL OR p
 assert.match(migration, /BASIC_SNAPSHOT_TOO_LARGE/);
 assert.match(migration, /vv\.value_file_name/);
 assert.match(migration, /'allowedOptions'/);
+
+const applicabilityMigration = readFileSync("../../supabase/migrations/20260831120000_project_process_applicability.sql", "utf8");
+assert.match(applicabilityMigration, /is_active BOOLEAN NOT NULL DEFAULT true/);
+assert.match(applicabilityMigration, /update_project_spec_values_and_applicability/);
+assert.match(applicabilityMigration, /guard_inactive_project_rfq_process_entries/);
+assert.match(applicabilityMigration, /'active',pr\.is_active/);
 
 const tables = readFileSync("src/features/projects/components/ProjectSpecificationTables.tsx", "utf8");
 assert.match(tables, /useEffect\(\(\) =>/);

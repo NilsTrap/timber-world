@@ -247,6 +247,7 @@ function normalizeCandidateLines(lines: unknown[]): ProjectDetail["lines"] {
           unit: typeof requirement.unit === "string" ? requirement.unit : null,
           fieldType: "number" as const,
           required: requirement.required === true,
+          active: requirement.active === true,
         }];
       }),
       basicProperties: Array.isArray(line.basicProperties) ? line.basicProperties.flatMap((candidate)=>{
@@ -340,6 +341,7 @@ async function loadProcessRequirements(db: DbClient, lineIds: string[]): Promise
     unit: row.unit as string | null,
     fieldType: "number" as const,
     required: row.is_required === true,
+    active: row.is_active === true,
   }));
 }
 

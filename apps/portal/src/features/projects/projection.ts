@@ -120,6 +120,7 @@ export interface DealProcessRequirementLike {
   unit: string | null;
   fieldType?: "number";
   required?: boolean;
+  active?: boolean;
 }
 
 export interface ProjectionContext {
@@ -305,6 +306,7 @@ export function toProjectLines(
         unit: requirement.unit,
         fieldType: requirement.fieldType ?? "number",
         required: requirement.required ?? false,
+        active: requirement.active === true,
       })) ?? [],
       basicProperties: (li.specificationFields??[]).map((field)=>({
         key:field.key,label:field.label,type:field.type ?? "text",unit:field.unit ?? null,value:field.value,

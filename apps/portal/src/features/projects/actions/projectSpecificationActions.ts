@@ -242,10 +242,10 @@ export async function updateProjectSpecificationStructuredValues(raw: unknown): 
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid specification fields", code: "VALIDATION_ERROR" };
   const ctx = await editableProject(parsed.data.projectId);
   if (!ctx.success) return ctx;
-  const { error } = await ctx.data.db.rpc(
-    "update_project_specification_structured_values",
-    structuredSpecificationPayload(parsed.data),
-  );
+  const { error } = await ctx.data.db.rpc("update_project_spec_values_and_applicability", {
+    ...structuredSpecificationPayload(parsed.data),
+    p_process_states: parsed.data.processValues.map(({ key, active }) => ({ key, active })),
+  });
   if (error) return mapStructuredValueRpcError(error.message ?? "");
   refreshProject(parsed.data.projectId);
   return { success: true, data: { id: parsed.data.lineId } };

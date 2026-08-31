@@ -164,6 +164,7 @@ export interface ProjectProcessRequirement {
   unit: string | null;
   fieldType: "number";
   required: boolean;
+  active: boolean;
 }
 
 export interface ProjectSpecificationField {
