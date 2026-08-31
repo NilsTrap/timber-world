@@ -52,6 +52,27 @@ const tables = readFileSync("src/features/projects/components/ProjectSpecificati
 assert.match(tables, /useEffect\(\(\) =>/);
 assert.match(tables, /field\.type === "file"/);
 assert.match(tables, /field\.allowedOptions\.map/);
-assert.match(tables, /version: line\.structuredValuesVersion/);
+assert.match(tables, /version: versionRef\.current/);
+assert.match(tables, /queueRef\.current = queueRef\.current\.then/);
+assert.match(tables, /lastQueuedStructuredRef\.current/);
+assert.match(tables, /lastQueuedLineRef\.current/);
+assert.match(tables, /queueHadErrorRef\.current/);
+assert.match(tables, /onBlur=\{saveStructuredFields\}/);
+assert.match(tables, /onBlur=\{saveLine\}/);
+assert.match(tables, /queueMicrotask\(onCommit\)/);
+assert.match(tables, /aria-live="polite"/);
+assert.match(tables, /\}, \[line\.id\]\);/);
+assert.doesNotMatch(tables, />Save line</);
+assert.doesNotMatch(tables, />Save fields</);
+assert.doesNotMatch(tables, /router\.refresh\(\)/);
+
+const actions = readFileSync("src/features/projects/actions/projectSpecificationActions.ts", "utf8");
+assert.match(actions, /select\("id, updated_at"\)/);
+assert.match(actions, /guardedUpdate\.eq\("updated_at", input\.version\)/);
+assert.match(actions, /data: \{ id: input\.lineId, version: version\.data \}/);
+assert.match(actions, /select\("updated_at"\)/);
+assert.match(actions, /data: \{ id: parsed\.data\.lineId, version: version\.data \}/);
+const autosaveActions = actions.slice(actions.indexOf("export async function updateProjectSpecificationLine"), actions.indexOf("export async function deleteProjectSpecificationLine"));
+assert.doesNotMatch(autosaveActions, /refreshProject\(/);
 
 console.log("specification structured values tests passed");

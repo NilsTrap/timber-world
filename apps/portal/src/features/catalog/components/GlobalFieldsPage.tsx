@@ -32,6 +32,14 @@ interface Props {
   fields: FieldWithAssignments[];
 }
 
+interface DraftFieldOption {
+  value: string;
+  label: string;
+  description: string;
+}
+
+const EMPTY_DRAFT_OPTION: DraftFieldOption = { value: "", label: "", description: "" };
+
 export function GlobalFieldsPage({ fields: initialFields }: Props) {
   const router = useRouter();
   const [fields, setFields] = useState(initialFields);
@@ -46,6 +54,7 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
   const [label, setLabel] = useState("");
   const [type, setType] = useState<FieldType>("text");
   const [unit, setUnit] = useState("");
+  const [draftOptions, setDraftOptions] = useState<DraftFieldOption[]>([{ ...EMPTY_DRAFT_OPTION }]);
   const [saving, setSaving] = useState(false);
 
   const filteredFields = useMemo(() => {
@@ -62,6 +71,7 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
 
   const resetForm = () => {
     setKey(""); setLabel(""); setType("text"); setUnit("");
+    setDraftOptions([{ ...EMPTY_DRAFT_OPTION }]);
     setShowForm(false); setEditingId(null);
   };
 
@@ -72,6 +82,11 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
 
   const handleSave = async () => {
     if (!key.trim() || !label.trim()) { toast.error("Key and label required"); return; }
+    const enteredOptions = draftOptions.filter((option) => option.value.trim() || option.label.trim() || option.description.trim());
+    if (!editingId && type === "select" && enteredOptions.some((option) => !option.value.trim() || !option.label.trim())) {
+      toast.error("Every dropdown option needs both a stored value and a display label");
+      return;
+    }
     setSaving(true);
     const result = await saveField({
       id: editingId ?? undefined,
@@ -80,18 +95,52 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
       fieldType: type,
       unit: unit.trim() || null,
     });
-    setSaving(false);
     if (result.success) {
-      toast.success(editingId ? "Field updated" : "Field created");
+      let savedOptions: FieldOption[] = result.data.options || [];
+      let optionError: string | null = null;
+
+      if (!editingId && type === "select") {
+        for (const [index, option] of enteredOptions.entries()) {
+          const optionResult = await saveFieldOption({
+            fieldId: result.data.id,
+            value: option.value.trim(),
+            label: option.label.trim(),
+            description: option.description.trim() || null,
+            sortOrder: index,
+          });
+          if (optionResult.success) {
+            savedOptions = [...savedOptions, optionResult.data];
+          } else {
+            optionError = `Field created, but option "${option.label.trim() || option.value.trim()}" could not be saved: ${optionResult.error}`;
+            break;
+          }
+        }
+      }
+
+      const savedField = { ...result.data, options: savedOptions };
       if (editingId) {
-        setFields(fields.map((f) => f.id === editingId ? { ...result.data, assignments: (f as FieldWithAssignments).assignments } : f));
+        setFields(fields.map((f) => f.id === editingId ? { ...savedField, assignments: (f as FieldWithAssignments).assignments } : f));
       } else {
-        setFields([...fields, { ...result.data, assignments: [] }]);
+        setFields([...fields, { ...savedField, assignments: [] }]);
+        if (type === "select") setExpandedId(result.data.id);
       }
       resetForm();
+      if (optionError) toast.error(optionError);
+      else toast.success(editingId ? "Field updated" : enteredOptions.length > 0 ? `Field created with ${savedOptions.length} options` : "Field created");
     } else {
       toast.error(result.error);
     }
+    setSaving(false);
+  };
+
+  const updateDraftOption = (index: number, patch: Partial<DraftFieldOption>) => {
+    setDraftOptions((current) => current.map((option, optionIndex) => optionIndex === index ? { ...option, ...patch } : option));
+  };
+
+  const removeDraftOption = (index: number) => {
+    setDraftOptions((current) => current.length === 1
+      ? [{ ...EMPTY_DRAFT_OPTION }]
+      : current.filter((_, optionIndex) => optionIndex !== index));
   };
 
   const handleDelete = async (id: string) => {
@@ -180,6 +229,38 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
               <Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="mm" className="text-sm" />
             </div>
           </div>
+          {!editingId && type === "select" && (
+            <div className="rounded-md border bg-muted/20 p-4 space-y-3">
+              <div>
+                <h4 className="text-sm font-semibold">Dropdown options</h4>
+                <p className="text-xs text-muted-foreground">Add the choices users will see. The stored value is the stable code saved in data; the display label is the readable name shown in the dropdown.</p>
+              </div>
+              <div className="space-y-2">
+                {draftOptions.map((option, index) => (
+                  <div key={index} className="grid grid-cols-1 gap-2 items-end md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_2rem]">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Stored value</label>
+                      <Input value={option.value} onChange={(event) => updateDraftOption(index, { value: event.target.value })} placeholder="oak" className="h-9 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Display label</label>
+                      <Input value={option.label} onChange={(event) => updateDraftOption(index, { label: event.target.value })} placeholder="European Oak" className="h-9 text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Description (optional)</label>
+                      <Input value={option.description} onChange={(event) => updateDraftOption(index, { description: event.target.value })} placeholder="Additional context" className="h-9 text-sm" />
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" className="h-9 w-8" onClick={() => removeDraftOption(index)} aria-label={`Remove option ${index + 1}`}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={() => setDraftOptions((current) => [...current, { ...EMPTY_DRAFT_OPTION }])}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Add another option
+              </Button>
+            </div>
+          )}
           <div className="flex gap-2">
             <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : editingId ? "Update" : "Create"}</Button>
             <Button size="sm" variant="outline" onClick={resetForm}>Cancel</Button>
@@ -219,14 +300,16 @@ export function GlobalFieldsPage({ fields: initialFields }: Props) {
                     ) : (
                       <span className="text-xs text-muted-foreground italic">Not assigned to any category</span>
                     )}
-                    {field.options && field.options.length > 0 && (
-                      <span className="text-xs text-muted-foreground">{field.options.length} options</span>
+                    {field.fieldType === "select" && (
+                      <span className="text-xs text-muted-foreground">{field.options?.length ?? 0} options</span>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
                   {field.fieldType === "select" && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedId(expandedId === field.id ? null : field.id)}>
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setExpandedId(expandedId === field.id ? null : field.id)}>
+                      <List className="h-3.5 w-3.5" />
+                      {expandedId === field.id ? "Hide options" : "Manage options"}
                       {expandedId === field.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                     </Button>
                   )}

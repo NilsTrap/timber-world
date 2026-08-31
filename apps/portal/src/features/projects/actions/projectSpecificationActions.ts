@@ -32,6 +32,7 @@ const lineSchema = z.object({
   unit: lineUnit,
   notes: z.string().trim().max(2000).optional().default(""),
   catalogVariantId: uuid.optional(),
+  version: z.string().datetime({ offset: true }).optional(),
 });
 
 const componentSchema = z.object({
@@ -198,7 +199,7 @@ export async function getProjectCatalogOptions(): Promise<ActionResult<ProjectCa
   return { success: true, data: options };
 }
 
-export async function updateProjectSpecificationLine(raw: unknown): Promise<ActionResult<{ id: string }>> {
+export async function updateProjectSpecificationLine(raw: unknown): Promise<ActionResult<{ id: string; version: string }>> {
   const parsed = lineSchema.extend({ lineId: uuid }).safeParse(raw);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid line", code: "VALIDATION_ERROR" };
   const input = parsed.data;
@@ -230,14 +231,16 @@ export async function updateProjectSpecificationLine(raw: unknown): Promise<Acti
   const guardedUpdate = isCatalogSnapshot
     ? updateQuery.not("catalog_product_id", "is", null).eq("unit", resolvedUnit)
     : updateQuery.is("catalog_product_id", null);
-  const { data, error } = await guardedUpdate.select("id").maybeSingle();
+  const versionedUpdate = input.version ? guardedUpdate.eq("updated_at", input.version) : guardedUpdate;
+  const { data, error } = await versionedUpdate.select("id, updated_at").maybeSingle();
   if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
   if (!data) return { success: false, error: "Line changed; refresh and try again", code: "CONFLICT" };
-  refreshProject(input.projectId);
-  return { success: true, data: { id: input.lineId } };
+  const version = z.string().datetime({ offset: true }).safeParse(data.updated_at);
+  if (!version.success) return { success: false, error: "Line version was not returned", code: "UPDATE_FAILED" };
+  return { success: true, data: { id: input.lineId, version: version.data } };
 }
 
-export async function updateProjectSpecificationStructuredValues(raw: unknown): Promise<ActionResult<{ id: string }>> {
+export async function updateProjectSpecificationStructuredValues(raw: unknown): Promise<ActionResult<{ id: string; version: string }>> {
   const parsed = structuredSpecificationValuesSchema.safeParse(raw);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid specification fields", code: "VALIDATION_ERROR" };
   const ctx = await editableProject(parsed.data.projectId);
@@ -247,8 +250,12 @@ export async function updateProjectSpecificationStructuredValues(raw: unknown): 
     p_process_states: parsed.data.processValues.map(({ key, active }) => ({ key, active })),
   });
   if (error) return mapStructuredValueRpcError(error.message ?? "");
-  refreshProject(parsed.data.projectId);
-  return { success: true, data: { id: parsed.data.lineId } };
+  const { data, error: versionError } = await ctx.data.db.from("order_line_items")
+    .select("updated_at").eq("id", parsed.data.lineId).eq("order_id", parsed.data.projectId).eq("side", "sell").maybeSingle();
+  if (versionError) return { success: false, error: versionError.message, code: "FETCH_FAILED" };
+  const version = z.string().datetime({ offset: true }).safeParse(data?.updated_at);
+  if (!version.success) return { success: false, error: "Line version was not returned", code: "UPDATE_FAILED" };
+  return { success: true, data: { id: parsed.data.lineId, version: version.data } };
 }
 
 export async function deleteProjectSpecificationLine(raw: unknown): Promise<ActionResult<{ id: string }>> {
