@@ -19,13 +19,13 @@ type SpecificationTablesProps = {
 export function ProjectSpecificationTables({ projectId, lines, canEdit, onEdit, onDelete }: SpecificationTablesProps) {
   const groups = useMemo(() => groupLinesBySchema(lines), [lines]);
   return <div className="space-y-3 p-3">
-    {groups.map((group, groupIndex) => <section key={group.key} className="overflow-hidden rounded-lg border bg-background">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/20 px-3 py-2">
+    {groups.map((group, groupIndex) => <section key={group.key} className="overflow-hidden rounded-lg border border-[#ded8d0] bg-white dark:border-border dark:bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ded8d0] bg-white px-3 py-2 dark:border-border dark:bg-card">
         <div><h3 className="font-semibold">{groupTitle(group.lines, groupIndex)}</h3><p className="text-xs text-muted-foreground">{group.lines.length} line(s) sharing the same properties</p></div>
       </div>
       <div className="overflow-x-auto">
         <table className={`w-max min-w-full border-collapse text-sm ${DENSE_TABLE_CLASS}`}>
-          <thead><tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+          <thead><tr className="border-b border-[#ded8d0] bg-[#f3f0ec] text-left text-xs text-[#485358] dark:border-border dark:bg-muted dark:text-muted-foreground">
             <th className="w-10 px-3 py-2 font-medium">#</th>
             <th className="min-w-44 px-3 py-2 font-medium">Line item</th>
             {group.fields.map((field) => <th key={field.key} className="min-w-32 border-l px-3 py-2 font-medium">{fieldLabel(field)}</th>)}
@@ -87,7 +87,7 @@ function SpecificationProductRows({ projectId, line, fields, canEdit, onEdit, on
   }
 
   return <Fragment>
-    <tr className="border-b align-middle">
+    <tr className="border-b border-[#ebe6e0] bg-white align-middle dark:border-border dark:bg-card">
       <td className="px-3 py-2 text-muted-foreground">{line.lineNo}</td><td className="px-3 py-2 font-semibold">{line.productName ?? "—"}</td>
       {fields.map((field) => { const fieldEditable = editableSnapshot && structuredFields.some((candidate) => candidate.key === field.key); return <td key={field.key} className="border-l p-0">{fieldEditable ? <BasicFieldInput field={field} value={basicValues[field.key] ?? ""} onChange={(value) => setBasicValues((current) => ({ ...current, [field.key]: value }))} /> : <span className="block px-3 py-2">{displayValue(field, basicValues[field.key])}</span>}</td>; })}
       <td className="border-l p-0">{canEdit && line.id ? <CompactInput aria-label={`Quantity for ${line.productName ?? "line"}`} type="number" min="0" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} /> : <span className="block px-3 py-2">{quantity}</span>}</td>
@@ -96,16 +96,16 @@ function SpecificationProductRows({ projectId, line, fields, canEdit, onEdit, on
       {canEdit ? <td className="px-2 py-1"><div className="flex justify-end gap-1">{line.id ? <><Button size="sm" disabled={pending} onClick={saveLine}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Save line</Button>{editableSnapshot ? <Button type="button" variant="outline" size="sm" disabled={pending} onClick={saveStructuredFields}>Save fields</Button> : null}</> : <Button variant="ghost" size="icon" aria-label={`Edit ${line.productName ?? "line"}`} onClick={() => onEdit(line)}><Pencil className="h-4 w-4" /></Button>}<Button variant="ghost" size="icon" aria-label={`Delete ${line.productName ?? "line"}`} onClick={() => onDelete(line)}><Trash2 className="h-4 w-4" /></Button></div></td> : null}
     </tr>
     {processes.length ? <tr className="border-b last:border-b-0"><td colSpan={columnCount} className="p-0">
-      <div className="sticky left-0 m-3 w-[calc(100vw-2rem)] max-w-5xl overflow-hidden rounded-md border border-primary/15 bg-primary/[0.025] sm:w-[calc(100vw-20rem)]">
-        <div className="flex flex-wrap items-center justify-between gap-2 bg-primary/[0.07] px-3 py-2">
+      <div className="sticky left-0 m-3 w-[calc(100vw-2rem)] max-w-5xl overflow-hidden rounded-md border border-[#d9e2dd] bg-white sm:w-[calc(100vw-20rem)] dark:border-border dark:bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-[#e9f0ec] px-3 py-2 dark:bg-primary/15">
           <div className="flex items-center gap-2 font-medium"><span aria-hidden>↳</span> Applicable processes <span className="text-xs font-normal text-muted-foreground">{activeCount} selected</span></div>
           <div className="flex items-center gap-3">
             {processes.some((process) => !isActiveProcess(processValues[process.fieldKey])) ? canEdit ? <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" className="h-4 w-4 accent-primary" checked={showInactive} onChange={(event) => setShowInactive(event.target.checked)} /> Show inactive</label> : <Button type="button" variant="ghost" size="sm" onClick={() => setShowInactive((current) => !current)}>{showInactive ? "Hide inactive" : "Show inactive"}</Button> : null}
             <Button type="button" variant="outline" size="sm" aria-expanded={processesOpen} onClick={() => setProcessesOpen((open) => !open)}>{processesOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}{processesOpen ? "Hide processes" : "Show processes"}</Button>
           </div>
         </div>
-        {processesOpen ? <div className="overflow-x-auto"><table className={`w-full min-w-[560px] border-collapse text-sm ${DENSE_TABLE_CLASS}`}><thead><tr className="border-b bg-muted/20 text-left text-xs text-muted-foreground"><th className="w-16 px-3 py-2 font-medium">Use</th><th className="px-3 py-2 font-medium">Process</th><th className="w-40 px-3 py-2 font-medium">Quantity</th><th className="w-28 px-3 py-2 font-medium">Unit</th></tr></thead><tbody>
-          {visibleProcesses.map((process) => { const active = isActiveProcess(processValues[process.fieldKey]); return <tr key={process.id} className={`border-b last:border-b-0 ${active ? "" : "bg-muted/20 text-muted-foreground"}`}>
+        {processesOpen ? <div className="overflow-x-auto"><table className={`w-full min-w-[560px] border-collapse text-sm ${DENSE_TABLE_CLASS}`}><thead><tr className="border-b border-[#ded8d0] bg-[#f8faf9] text-left text-xs text-[#485358] dark:border-border dark:bg-muted/50 dark:text-muted-foreground"><th className="w-16 px-3 py-2 font-medium">Use</th><th className="px-3 py-2 font-medium">Process</th><th className="w-40 px-3 py-2 font-medium">Quantity</th><th className="w-28 px-3 py-2 font-medium">Unit</th></tr></thead><tbody>
+          {visibleProcesses.map((process) => { const active = isActiveProcess(processValues[process.fieldKey]); return <tr key={process.id} className={`border-b border-[#ebe6e0] last:border-b-0 dark:border-border ${active ? "bg-white dark:bg-card" : "bg-[#fafafa] text-[#657078] dark:bg-muted/30 dark:text-muted-foreground"}`}>
             <td className="px-3 py-2">{editableSnapshot ? <input type="checkbox" className="h-4 w-4 accent-primary" aria-label={`Use ${process.name} for ${line.productName ?? "line"}`} checked={active} onChange={(event) => { if (!event.target.checked) setInactiveProcessValues((current) => ({ ...current, [process.fieldKey]: processValues[process.fieldKey] ?? process.value })); setProcessValues((current) => ({ ...current, [process.fieldKey]: event.target.checked ? restoreProcessValue(inactiveProcessValues[process.fieldKey] ?? process.value) : "0" })); if (!event.target.checked) setShowInactive(true); }} /> : active ? <span className="text-primary">✓</span> : <span>—</span>}</td>
             <td className="px-3 py-2 font-medium">{process.name}</td><td className="p-0">{editableSnapshot ? <CompactInput aria-label={`${process.name} quantity for ${line.productName ?? "line"}`} type="number" min="0" step="any" value={processValues[process.fieldKey] ?? "0"} onChange={(event) => setProcessValues((current) => ({ ...current, [process.fieldKey]: event.target.value }))} /> : <span className="block px-3 py-2">{processValues[process.fieldKey] ?? "0"}</span>}</td><td className="px-3 py-2">{process.unit ?? "—"}</td>
           </tr>; })}
@@ -116,7 +116,7 @@ function SpecificationProductRows({ projectId, line, fields, canEdit, onEdit, on
   </Fragment>;
 }
 
-function CompactInput(props: React.ComponentProps<typeof Input>) { return <Input {...props} className={`h-10 rounded-none border-0 bg-transparent px-3 shadow-none focus-visible:ring-2 focus-visible:ring-inset ${props.className ?? ""}`} />; }
+function CompactInput(props: React.ComponentProps<typeof Input>) { return <Input {...props} className={`h-10 rounded-none border-0 bg-transparent px-3 shadow-none focus-visible:bg-[#f8fcfa] focus-visible:ring-2 focus-visible:ring-inset dark:focus-visible:bg-muted/30 ${props.className ?? ""}`} />; }
 function BasicFieldInput({ field, value, onChange }: { field: ProjectSpecificationField; value: string; onChange: (value: string) => void }) {
   if (field.type === "file") return <span className="block px-3 py-2 text-muted-foreground" title="File fields are managed through catalogue assets">{value || "No file"}</span>;
   if (field.type === "select") return <select aria-label={field.label} className="h-10 w-full min-w-32 border-0 bg-transparent px-3 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary" value={value} onChange={(event) => onChange(event.target.value)}><option value="">—</option>{field.allowedOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>;
