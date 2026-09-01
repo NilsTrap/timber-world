@@ -14,7 +14,7 @@ export default function PortalLayout({
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <ViewAsBannerWrapper />
           <main className="min-h-0 flex-1 overflow-y-auto">
-            <div className="container mx-auto px-6 py-8">{children}</div>
+            <div className="w-full px-4 py-8 sm:px-6">{children}</div>
           </main>
         </div>
       </div>
