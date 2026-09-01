@@ -101,6 +101,23 @@ async function findTermsWithAi(text: string, prompt: string): Promise<string[]> 
 }
 
 export async function approveCleanProjectFileAction(fileId: string): Promise<ActionResult<null>> { return updateCleanState(fileId, "approve"); }
+export interface ApprovedProjectFileResult { fileId: string; approvedFileId: string }
+export async function approveProjectFilesAction(fileIds: string[]): Promise<ActionResult<ApprovedProjectFileResult[]>> {
+  const ids = [...new Set(fileIds)].filter(isValidUUID).slice(0, 50);
+  if (!ids.length) return { success: false, error: "Select files to approve", code: "VALIDATION_ERROR" };
+  const actor = await resolveProjectsActor();
+  if (!actor.ok || !actor.isPlatformAdmin) return { success: false, error: "Only a super admin can approve files directly", code: "FORBIDDEN" };
+  const { data } = await actor.db.from("order_files").select("id, order_id, lifecycle_status").in("id", ids).eq("category", "project").eq("file_variant", "original");
+  const originals = (data ?? []) as Array<{ id: string; order_id: string; lifecycle_status: string }>;
+  if (originals.length !== ids.length || originals.some((file) => file.lifecycle_status !== "ready") || new Set(originals.map((file) => file.order_id)).size !== 1) return { success: false, error: "Every selected file must be ready on the same project", code: "NOT_FOUND" };
+  const { data: derivativeRows } = await actor.db.from("order_files").select("id, source_file_id").in("source_file_id", ids).eq("category", "project").eq("file_variant", "recipient_copy");
+  const derivatives = new Map(((derivativeRows ?? []) as Array<{ id: string; source_file_id: string }>).map((file) => [file.source_file_id, file.id]));
+  const approved = originals.map((file) => ({ fileId: file.id, approvedFileId: derivatives.get(file.id) ?? file.id }));
+  const { error } = await actor.db.from("order_files").update({ cleanup_status: "approved", approved_at: new Date().toISOString(), approved_by: actor.portalUserId }).in("id", approved.map((file) => file.approvedFileId));
+  if (error) return { success: false, error: "Could not approve the selected files", code: "UPDATE_FAILED" };
+  revalidatePath(`/projects/${originals[0]!.order_id}`);
+  return { success: true, data: approved };
+}
 export async function unshareProjectFileAction(fileId: string): Promise<ActionResult<null>> { return updateCleanState(fileId, "unshare"); }
 export async function shareProjectFileAction(fileId: string): Promise<ActionResult<null>> { return updateCleanState(fileId, "share"); }
 
@@ -108,7 +125,7 @@ export async function shareProjectFilesAction(fileIds: string[]): Promise<Action
   const ids = [...new Set(fileIds)].filter(isValidUUID).slice(0, 50);
   if (!ids.length) return { success: false, error: "Select approved cleaned files", code: "VALIDATION_ERROR" };
   const actor = await resolveProjectsActor(); if (!actor.ok) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
-  const { data } = await actor.db.from("order_files").select("id, order_id, cleanup_status").in("id", ids).eq("file_variant", "recipient_copy");
+  const { data } = await actor.db.from("order_files").select("id, order_id, cleanup_status").in("id", ids).eq("category", "project");
   const files = (data ?? []) as Array<{ id: string; order_id: string; cleanup_status: string }>;
   if (files.length !== ids.length || files.some((file) => file.cleanup_status !== "approved") || new Set(files.map((file) => file.order_id)).size !== 1) return { success: false, error: "Every selected file must be approved on this project", code: "NOT_APPROVED" };
   const orderId = files[0]!.order_id;
@@ -124,7 +141,7 @@ export async function shareProjectFilesAction(fileIds: string[]): Promise<Action
 export async function unshareProjectFilesAction(fileIds: string[]): Promise<ActionResult<null>> {
   const ids = [...new Set(fileIds)].filter(isValidUUID).slice(0, 50); if (!ids.length) return { success: false, error: "Select shared files", code: "VALIDATION_ERROR" };
   const actor = await resolveProjectsActor(); if (!actor.ok) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
-  const { data } = await actor.db.from("order_files").select("id, order_id").in("id", ids).eq("file_variant", "recipient_copy");
+  const { data } = await actor.db.from("order_files").select("id, order_id").in("id", ids).eq("category", "project");
   const files = (data ?? []) as Array<{ id: string; order_id: string }>; if (files.length !== ids.length || new Set(files.map((file) => file.order_id)).size !== 1) return { success: false, error: "Files unavailable", code: "NOT_FOUND" };
   const orderId = files[0]!.order_id; const { data: order } = await actor.db.from("orders").select("seller_organisation_id").eq("id", orderId).is("deleted_at",null).maybeSingle();
   if (!order || (!actor.isPlatformAdmin && (order as any).seller_organisation_id !== actor.orgId)) return { success: false, error: "Only the trader can manage sharing", code: "FORBIDDEN" };
@@ -136,8 +153,8 @@ export async function unshareProjectFilesAction(fileIds: string[]): Promise<Acti
 export async function getCleanProjectFileUrlAction(fileId: string): Promise<ActionResult<{ url: string; fileName: string; mimeType: string | null }>> {
   if (!isValidUUID(fileId)) return { success: false, error: "Cleaned file unavailable", code: "NOT_FOUND" };
   const actor = await resolveProjectsActor(); if (!actor.ok) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
-  const { data } = await actor.db.from("order_files").select("id, file_name, mime_type, storage_path, lifecycle_status").eq("id", fileId).eq("category", "project").eq("file_variant", "recipient_copy").maybeSingle();
-  const file = data as any; if (!file || file.lifecycle_status !== "ready") return { success: false, error: "Cleaned file unavailable", code: "NOT_FOUND" };
+  const { data } = await actor.db.from("order_files").select("id, file_name, mime_type, storage_path, lifecycle_status, cleanup_status").eq("id", fileId).eq("category", "project").maybeSingle();
+  const file = data as any; if (!file || file.lifecycle_status !== "ready" || file.cleanup_status !== "approved") return { success: false, error: "Approved file unavailable", code: "NOT_FOUND" };
   const { data: signed, error } = await actor.db.storage.from("orders").createSignedUrl(file.storage_path, 120);
   if (error || !signed?.signedUrl) return { success: false, error: "Cleaned file unavailable", code: "NOT_FOUND" };
   return { success: true, data: { url: signed.signedUrl, fileName: file.file_name, mimeType: file.mime_type } };
@@ -146,7 +163,7 @@ export async function getCleanProjectFileUrlAction(fileId: string): Promise<Acti
 async function updateCleanState(fileId: string, action: "approve" | "share" | "unshare"): Promise<ActionResult<null>> {
   if (!isValidUUID(fileId)) return { success: false, error: "File unavailable", code: "NOT_FOUND" };
   const actor = await resolveProjectsActor(); if (!actor.ok) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
-  const { data } = await actor.db.from("order_files").select("id, order_id, source_file_id, cleanup_status").eq("id", fileId).eq("file_variant", "recipient_copy").maybeSingle();
+  const { data } = await actor.db.from("order_files").select("id, order_id, source_file_id, cleanup_status").eq("id", fileId).eq("category", "project").maybeSingle();
   const clean = data as any; if (!clean) return { success: false, error: "Cleaned file unavailable", code: "NOT_FOUND" };
   const { data: order } = await actor.db.from("orders").select("id, spine_id, seller_organisation_id").eq("id", clean.order_id).is("deleted_at",null).maybeSingle();
   const deal = order as any; if (!deal || (!actor.isPlatformAdmin && deal.seller_organisation_id !== actor.orgId)) return { success: false, error: "Only the trader can manage sharing", code: "FORBIDDEN" };

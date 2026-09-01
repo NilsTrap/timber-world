@@ -400,6 +400,7 @@ export function toProjectDetail(
       createdAt: f.createdAt,
       cleanupStatus: f.cleanupStatus,
       cleanFileId: f.cleanFileId,
+      wasCleaned: f.wasCleaned,
       cleanupFindingsCount: f.cleanupFindingsCount,
       shared: f.shared,
       sharedInbound: f.sharedInbound,

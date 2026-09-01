@@ -217,6 +217,7 @@ export interface ProjectFileMeta {
   createdAt: string;
   cleanupStatus: "not_started" | "processing" | "needs_review" | "approved" | "failed";
   cleanFileId: string | null;
+  wasCleaned: boolean;
   cleanupFindingsCount: number;
   shared: boolean;
   sharedInbound: boolean;

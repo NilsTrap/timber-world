@@ -20,6 +20,7 @@ import { loadSpineOriginAllocation } from "../services/spineOriginSpecification"
 import { canOfferSellerCompletion, openRfqAvailability } from "../services/projectRfq";
 import { purchaseLegAllowsBuyerEdit, toEligiblePartyOption, type PartyOptionRow } from "../services/projectPartyOptions";
 import type { ProjectDetail, ProjectLegOption, ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace, ProjectsResult, ProjectsViewer } from "../types";
+import { projectLegReference } from "../services/projectLegReference";
 import type { DealLineComponentLike, DealProcessRequirementLike } from "../projection";
 import { getProjectStageConfiguration, type ProjectStageConfiguration } from "../../project-stages/stages";
 import { createAdminClient as createTypedAdminClient } from "@/lib/supabase/admin";
@@ -110,7 +111,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
       : Promise.resolve({ data: null, error: null }),
   ]);
   const officialImages:ProjectDetail["officialImages"]=[];
-  if(walled.spineId){const admin=createAdminClient();const{data:designations,error:galleryError}=await admin.from("spine_project_images").select("position,order_file_id,order_files!inner(id,file_name,mime_type,file_size_bytes,lifecycle_status,created_at,storage_path)").eq("spine_id",walled.spineId).order("position");if(galleryError)return{ok:false,deny:"not_found"};for(const designation of designations??[]){const row=designation.order_files as unknown as Record<string,unknown>;if(row.lifecycle_status!=="ready")continue;const{data:signed,error:signedError}=await admin.storage.from("orders").createSignedUrl(String(row.storage_path),60*60);if(signedError)return{ok:false,deny:"not_found"};officialImages.push({id:String(row.id),fileName:"",relativePath:"",mimeType:row.mime_type as string|null,fileSizeBytes:row.file_size_bytes as number|null,lifecycleStatus:"ready",createdAt:String(row.created_at),cleanupStatus:"not_started",cleanFileId:null,cleanupFindingsCount:0,shared:false,sharedInbound:false,officialImagePosition:Number(designation.position),previewUrl:signed.signedUrl})}}
+  if(walled.spineId){const admin=createAdminClient();const{data:designations,error:galleryError}=await admin.from("spine_project_images").select("position,order_file_id,order_files!inner(id,file_name,mime_type,file_size_bytes,lifecycle_status,created_at,storage_path)").eq("spine_id",walled.spineId).order("position");if(galleryError)return{ok:false,deny:"not_found"};for(const designation of designations??[]){const row=designation.order_files as unknown as Record<string,unknown>;if(row.lifecycle_status!=="ready")continue;const{data:signed,error:signedError}=await admin.storage.from("orders").createSignedUrl(String(row.storage_path),60*60);if(signedError)return{ok:false,deny:"not_found"};officialImages.push({id:String(row.id),fileName:"",relativePath:"",mimeType:row.mime_type as string|null,fileSizeBytes:row.file_size_bytes as number|null,lifecycleStatus:"ready",createdAt:String(row.created_at),cleanupStatus:"not_started",cleanFileId:null,wasCleaned:false,cleanupFindingsCount:0,shared:false,sharedInbound:false,officialImagePosition:Number(designation.position),previewUrl:signed.signedUrl})}}
 
   const ctx: ProjectionContext = {
     access: a.access,
@@ -375,12 +376,22 @@ async function loadPartyOptions(
 }
 
 async function loadProjectLegOptions(db: DbClient, spineId: string, currentProjectId: string): Promise<ProjectLegOption[]> {
-  const { data, error } = await db.from("orders").select("id, deal_code, code, created_at, lifecycle_stage")
+  const { data, error } = await db.from("orders").select(`
+      id, deal_code, code, created_at, lifecycle_stage,
+      buyer:organisations!orders_buyer_organisation_id_fkey(code),
+      seller:organisations!orders_seller_organisation_id_fkey(code)
+    `)
     .eq("spine_id", spineId).is("deleted_at", null).order("created_at", { ascending: true });
   if (error) throw new Error("Could not load project legs");
-  return ((data ?? []) as Array<{ id: string; deal_code: string | null; code: string; created_at: string; lifecycle_stage: string }>)
+  return ((data ?? []) as unknown as Array<{
+    id: string; deal_code: string | null; code: string; created_at: string; lifecycle_stage: string;
+    buyer: { code: string | null } | null; seller: { code: string | null } | null;
+  }>)
     .filter((leg) => leg.lifecycle_stage !== "cancelled" || leg.id === currentProjectId)
-    .map((leg) => ({ id: leg.id, reference: leg.deal_code ?? leg.code }));
+    .map((leg) => {
+      const storedReference = leg.deal_code ?? leg.code;
+      return { id: leg.id, reference: projectLegReference(storedReference, leg.buyer?.code ?? null, leg.seller?.code ?? null) };
+    });
 }
 
 async function hasActiveNextLeg(db: DbClient, spineId: string, buyerOrganisationId: string | null): Promise<boolean> {

@@ -6,6 +6,7 @@ import { sanitizeProjectHtml } from "../components/viewers/sanitizeProjectHtml";
 import { isValidOcctResult } from "../components/viewers/validateOcctResult";
 import { MAX_CAPTURE_DIMENSION, MAX_CAPTURE_PIXELS, boundedCaptureSize, hasVisiblePixelVariation, scaledVisibleCanvasRegion } from "../components/viewers/projectPreviewCapture";
 import { nextOfficialImagePosition } from "../officialImagePolicy";
+import { projectLegReference } from "../services/projectLegReference";
 import { ALL_FILE_TYPES, filterProjectFiles, NO_FILE_EXTENSION, projectFileExtension, projectFileExtensions, projectFileTypeValue } from "../services/projectFileFilters";
 
 let passed = 0;
@@ -24,6 +25,9 @@ function ok(label: string, value: boolean) {
     console.error(`✗ ${label}`);
   }
 }
+
+eq("leg reference shows buyer before seller", projectLegReference("TIM-AAI-002", "AAI", "TIM"), "AAI-TIM-002");
+eq("leg reference keeps an explicit missing buyer", projectLegReference("TIM-XXX-005", null, "TIM"), "XXX-TIM-005");
 
 const filterFiles = [
   { fileName: "Assembly.STEP", relativePath: "CAD/Assembly.STEP" },
@@ -334,6 +338,7 @@ const cleanupActions = readFileSync("src/features/projects/actions/projectFileCl
 const deletionActions = readFileSync("src/features/projects/actions/projectDeletionActions.ts", "utf8");
 const commercialActions = readFileSync("src/features/projects/actions/projectCommercialActions.ts", "utf8");
 const deletionMigration = readFileSync("../../supabase/migrations/20260901120000_project_soft_deletion.sql", "utf8");
+const sharedSpecificationMigration = readFileSync("../../supabase/migrations/20260901200000_shared_specification_and_process_total_pricing.sql", "utf8");
 const projectsList = readFileSync("src/features/projects/components/ProjectsListView.tsx", "utf8");
 const projectsLoader = readFileSync("src/features/projects/actions/getProjects.ts", "utf8");
 const orderDealService = readFileSync("src/features/orders/services/orderDeals.ts", "utf8");
@@ -419,6 +424,8 @@ ok("failed spine attachment is surfaced and cleaned up", orderDeals.includes("sp
 ok("seller correction validates active eligibility and both self-deal edges", legCorrectionMigration.includes("is_active AND (is_trader OR is_supplier OR is_producer)") && legCorrectionMigration.includes("p_seller_id = v_order.buyer_organisation_id") && legCorrectionMigration.includes("v_link.seller_organisation_id = p_seller_id"));
 ok("seller correction cannot repeat an organisation elsewhere in the active spine", legCorrectionMigration.includes("Seller already belongs to this project spine") && legCorrectionMigration.includes("buyer_organisation_id = p_seller_id OR seller_organisation_id = p_seller_id"));
 ok("workspace exposes concise cleanup and sharing controls", />\s*Move/.test(workspace) && />\s*Delete/.test(workspace) && /}\s*Clean/.test(workspace) && />\s*Share/.test(workspace) && />\s*Unshare\s*</.test(workspace) && /Approve\s+cleaned\s+file/.test(workspace) && workspace.includes("Shared status for") && !workspace.includes("Move selected") && !workspace.includes("Delete selected") && !workspace.includes("Clean selected") && !workspace.includes("Share with next party") && !workspace.includes("Unshare selected"));
+ok("super admin has bulk approval independent of cleanup", workspace.includes("canBulkApprove") && workspace.includes("approveProjectFilesAction") && cleanupActions.includes("Only a super admin can approve files directly") && cleanupActions.includes('derivatives.get(file.id) ?? file.id'));
+ok("cleaning and approval appear as independent file statuses", workspace.includes("<TableHead>Clean</TableHead>") && workspace.includes("<TableHead>Approved</TableHead>") && workspace.includes("file.wasCleaned && file.cleanFileId") && workspace.includes(">Not cleaned<") && workspace.includes('"Not approved"') && service.includes("was_cleaned: !!derivative"));
 ok("closed upload control uses the primary button style", workspace.includes('variant={uploadOpen ? "secondary" : "default"}'));
 ok("successful cleanup deselects only files actually cleaned", workspace.includes("filter((id) => !updates.has(id))") && workspace.indexOf("filter((id) => !updates.has(id))", workspace.indexOf("const cleanSelected")) < workspace.indexOf("} catch", workspace.indexOf("const cleanSelected")));
 ok("clean derivatives are linked and downstream reads require approval", cleanupMigration.includes("source_file_id") && cleanupMigration.includes("shared_to_order_id") && cleanupMigration.includes("cleanup_status='approved'"));
@@ -456,8 +463,9 @@ ok("buyer removal uses a read visibility gate and mutates only the spine designa
 ok("specification lines group by basic schema with processes nested beneath their product", specificationTables.includes("groupLinesBySchema") && specificationTables.includes("Applicable processes") && specificationTables.includes("SpecificationProductRows"));
 ok("catalogue specification lines allow quantity and notes edits without mutating their snapshot", specificationEditor.includes("isCatalogSnapshot") && specificationEditor.includes("Catalogue fields and unit stay unchanged") && specificationActions.includes("specificationLineUpdate") && specificationActions.includes('.not("catalog_product_id", "is", null)') && !specificationActions.includes("Catalogue snapshots are immutable; replace the line"));
 ok("catalogue fields are snapshotted atomically without polluting notes", specificationActions.includes("create_project_specification_line_with_snapshot") && structuredQuoteMigration.includes("immutable basic-field snapshot in one transaction") && structuredQuoteMigration.includes("specification_fields JSONB"));
+ok("origin specification lines are created and backfilled across every active spine leg", sharedSpecificationMigration.includes("copy_origin_specification_line_to_spine") && sharedSpecificationMigration.includes("share_origin_specification_line AFTER INSERT") && sharedSpecificationMigration.includes("leg.spine_id=root_order.spine_id") && sharedSpecificationMigration.includes("origin_line_item_id=root.id"));
 ok("supplier and admin quotation forms price lines and processes", quotationRows.includes('targetType: "line"') && quotationRows.includes('targetType: "process"') && rfqCard.includes("Enter quotation") && rfqActions.includes("submit_project_rfq_quote_entries"));
-ok("both quotation entry surfaces require explicit pricing modes", rfqCard.includes("Price by line/process") && rfqCard.includes("One total project price") && specificationTables.includes("Price by line/process") && specificationTables.includes("One total project price"));
+ok("both quotation entry surfaces support unit, per-process total, and all-process total modes", rfqCard.includes("Unit price for each process") && rfqCard.includes("Total for each process") && rfqCard.includes("One total for all processes") && specificationTables.includes("Unit price for each process") && specificationTables.includes("Total for each process") && specificationTables.includes("One total for all processes"));
 ok("inline quotation mode switching is reversible presentation state", specificationTables.includes('disabled={quotePending} type="radio" name={`quotation-pricing-mode-${candidateId}`}') && specificationTables.includes('onChange={()=>setQuoteMode("itemized")}') && specificationTables.includes('onChange={()=>setQuoteMode("total")}') && !specificationTables.includes("Changing pricing mode replaces the saved") && !specificationTables.includes('setQuoteMode("itemized");setQuoteTotal("")') && !specificationTables.includes('setQuoteMode("total");setQuotePrices({})'));
 ok("specification identity and actions share an accessible full-width row above properties", specificationTables.includes('scope="row"') && specificationTables.includes("headers={lineHeaderId}") && specificationTables.includes('className="ml-auto flex shrink-0 items-center gap-1"') && specificationTables.includes('aria-label={`Delete ${line.productName ?? "line"}`}') && !specificationTables.includes('<th className="w-36 px-3 py-2 font-medium">Line item</th>'));
 ok("portal content uses the full available main width", portalLayout.includes('className="w-full px-4 py-8 sm:px-6"') && !portalLayout.includes("container mx-auto"));

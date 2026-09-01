@@ -97,6 +97,7 @@ export function ProjectDetailView({
         canWrite={viewer.canWriteFiles && !supplierSeller}
         canUpload={viewer.canWriteFiles || supplierSeller}
         canManageCleanup={viewer.isPlatformAdmin || (viewerIsSeller && sellerIsTrader)}
+        canBulkApprove={viewer.isPlatformAdmin}
         canManageOfficialImages={canManageOfficialImages}
       />
 

@@ -71,6 +71,7 @@ function publicFile(row: Record<string, unknown>): ProjectFileMeta {
     createdAt: row.created_at as string,
     cleanupStatus: "not_started",
     cleanFileId: null,
+    wasCleaned: false,
     cleanupFindingsCount: 0,
     shared: false,
     sharedInbound: false,

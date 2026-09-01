@@ -6,7 +6,7 @@ import { Download, Eye, Folder, FolderInput, FolderPlus, FolderOpen, Info, Loade
 import { Button, Checkbox, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@timber/ui";
 import { formatDateTime } from "@/lib/utils";
 import { createProjectFolderAction, deleteProjectFileAction, deleteProjectFilesAction, deleteProjectFolderAction, getProjectFileUrlAction, moveProjectFileAction, moveProjectFolderAction, renameProjectFileAction, renameProjectFolderAction } from "../actions/projectFileActions";
-import { approveCleanProjectFileAction, cleanProjectFilesAction, getCleanProjectFileUrlAction, shareProjectFileAction, shareProjectFilesAction, unshareProjectFileAction, unshareProjectFilesAction } from "../actions/projectFileCleanupActions";
+import { approveCleanProjectFileAction, approveProjectFilesAction, cleanProjectFilesAction, getCleanProjectFileUrlAction, shareProjectFileAction, shareProjectFilesAction, unshareProjectFileAction, unshareProjectFilesAction } from "../actions/projectFileCleanupActions";
 import { buildProjectTree, isPreviewableProjectFile, normaliseProjectName, pathFromBrowserFile, projectPathKey, replacePathPrefix, type ProjectTreeNode } from "../filePaths";
 import type { ProjectFileMeta, ProjectFolderMeta } from "../types";
 import { ALL_FILE_TYPES, filterProjectFiles, projectFileExtensions, projectFileTypeLabel } from "../services/projectFileFilters";
@@ -36,7 +36,7 @@ interface FailedArchive {
   error: string;
 }
 
-export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, canWrite, canUpload = canWrite, canManageCleanup, canManageOfficialImages = false }: { projectId: string; initialFiles: ProjectFileMeta[]; initialFolders: ProjectFolderMeta[]; canWrite: boolean; canUpload?: boolean; canManageCleanup: boolean; canManageOfficialImages?: boolean }) {
+export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, canWrite, canUpload = canWrite, canManageCleanup, canBulkApprove = false, canManageOfficialImages = false }: { projectId: string; initialFiles: ProjectFileMeta[]; initialFolders: ProjectFolderMeta[]; canWrite: boolean; canUpload?: boolean; canManageCleanup: boolean; canBulkApprove?: boolean; canManageOfficialImages?: boolean }) {
   const router = useRouter();
   const [files, setFiles] = useState(initialFiles);
   const [folders, setFolders] = useState(initialFolders);
@@ -513,6 +513,7 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
             ? {
                 ...file,
                 cleanFileId: item.cleanFileId,
+                wasCleaned: true,
                 cleanupStatus: item.cleanupStatus,
                 cleanupFindingsCount: item.findingsCount,
                 shared: false,
@@ -529,6 +530,24 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
     }
   };
 
+  const approveSelected = async () => {
+    const selected = files.filter((file) => selectedFileIds.has(file.id) && !file.sharedInbound);
+    if (!selected.length) return setMessage("Select project files to approve.");
+    setCleanupBusy(true);
+    try {
+      const result = await approveProjectFilesAction(selected.map((file) => file.id));
+      if (!result.success) return setMessage(result.error);
+      const approved = new Map(result.data.map((file) => [file.fileId, file.approvedFileId]));
+      setFiles((current) => current.map((file) => approved.has(file.id) ? { ...file, cleanupStatus: "approved", cleanFileId: approved.get(file.id)! } : file));
+      setSelectedFileIds(new Set());
+      setMessage(`${result.data.length} file(s) approved.`);
+    } catch {
+      setMessage("File approval failed. Please try again.");
+    } finally {
+      setCleanupBusy(false);
+    }
+  };
+
   const openCleanPreview = async (file: ProjectFileMeta) => {
     if (!file.cleanFileId) return;
     const result = await getCleanProjectFileUrlAction(file.cleanFileId);
@@ -537,7 +556,7 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
     setPreview({
       fileId: file.cleanFileId,
       url: result.data.url,
-      fileName: `Clean · ${result.data.fileName}`,
+      fileName: `${file.cleanFileId === file.id ? "Approved" : "Clean"} · ${result.data.fileName}`,
       mimeType: result.data.mimeType,
     });
   };
@@ -644,6 +663,9 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
                   <Button type="button" size="sm" disabled={selectedFileIds.size === 0 || cleanupBusy} onClick={cleanSelected}>
                     {cleanupBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />} Clean
                   </Button>
+                  {canBulkApprove ? <Button type="button" size="sm" disabled={selectedFileIds.size === 0 || cleanupBusy} onClick={approveSelected}>
+                    <ShieldCheck className="mr-1.5 h-4 w-4" /> Approve
+                  </Button> : null}
                   <Button type="button" size="sm" disabled={selectedFileIds.size === 0} onClick={shareSelected}>
                     <ShieldCheck className="mr-1.5 h-4 w-4" /> Share
                   </Button>
@@ -752,6 +774,7 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
                       </TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Clean</TableHead>
+                      <TableHead>Approved</TableHead>
                       <TableHead>Shared</TableHead>
                       <TableHead>Size</TableHead>
                       <TableHead>Status</TableHead>
@@ -785,7 +808,7 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                        <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                           {emptyFilesCopy}
                         </TableCell>
                       </TableRow>
@@ -848,14 +871,17 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
                         </>
                       )}
                       <div className="flex shrink-0 flex-col items-end gap-1 text-[11px]" onClick={(event) => event.stopPropagation()}>
-                        {file.cleanFileId ? (
+                        {file.wasCleaned && file.cleanFileId ? (
                           <button type="button" className="flex items-center gap-1" onClick={() => void openCleanPreview(file)}>
                             <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                            {file.cleanupStatus === "approved" ? "Approved" : "Review"}
+                            Cleaned
                           </button>
                         ) : (
                           <span className="text-muted-foreground">Not cleaned</span>
                         )}
+                        <span className={file.cleanupStatus === "approved" ? "font-medium text-emerald-700" : "text-muted-foreground"}>
+                          {file.cleanupStatus === "approved" ? "Approved" : "Not approved"}
+                        </span>
                         <Checkbox aria-label={`Shared status for ${file.fileName}`} checked={file.sharedInbound || file.shared} disabled={file.sharedInbound || !canWrite || file.cleanupStatus !== "approved"} onCheckedChange={(checked) => void toggleShared(file, checked === true)} />
                       </div>
                       <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
@@ -1025,14 +1051,19 @@ function WorkspaceRow({ file, selected, onSelected, canWrite, onInfo, onPreview,
         )}
       </TableCell>
       <TableCell onClick={(event) => event.stopPropagation()}>
-        {file.cleanFileId ? (
+        {file.wasCleaned && file.cleanFileId ? (
           <Button type="button" size="sm" variant="ghost" onClick={() => onCleanPreview(file)}>
-            <ShieldCheck className={`mr-1 h-4 w-4 ${file.cleanupStatus === "approved" ? "text-emerald-600" : "text-amber-600"}`} />
-            {file.cleanupStatus === "approved" ? "Approved" : "Review"}
+            <ShieldCheck className="mr-1 h-4 w-4 text-emerald-600" />
+            Cleaned
           </Button>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-muted-foreground">Not cleaned</span>
         )}
+      </TableCell>
+      <TableCell>
+        <span className={file.cleanupStatus === "approved" ? "font-medium text-emerald-700" : "text-muted-foreground"}>
+          {file.cleanupStatus === "approved" ? "Approved" : "Not approved"}
+        </span>
       </TableCell>
       <TableCell onClick={(event) => event.stopPropagation()}>
         <Checkbox aria-label={`Shared status for ${file.fileName}`} checked={file.sharedInbound || file.shared} disabled={file.sharedInbound || !canWrite || file.cleanupStatus !== "approved"} onCheckedChange={(checked) => onShared(file, checked === true)} />

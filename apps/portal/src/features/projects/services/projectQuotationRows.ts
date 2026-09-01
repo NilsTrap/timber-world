@@ -2,13 +2,14 @@ import type { ProjectQuoteEntry, ProjectRfqCandidate } from "../actions/projectR
 import type { ProjectLine } from "../types";
 
 export type PricingRow = { key: string; targetType: "line" | "process"; targetId: string; label: string; quantity: number; unit: string };
-export type ProjectQuotationPricingMode = "itemized" | "total";
+export type ProjectQuotationPricingMode = "itemized" | "itemized_total" | "total";
 
 export function quotationPricingRows(lines: ProjectLine[]): PricingRow[] {
   return lines.flatMap((line) => {
     if (!line.id) return [];
     const quantity = Number(line.volumeM3 ?? line.pieces ?? 0);
-    const material = quantity > 0 ? [{ key: `line:${line.id}`, targetType: "line" as const, targetId: line.id, label: line.productName ?? `Line ${line.lineNo}`, quantity, unit: line.unit }] : [];
+    const hasMaterialProcess = (line.processRequirements ?? []).some((process) => process.fieldKey === "metal");
+    const material = !hasMaterialProcess && quantity > 0 ? [{ key: `line:${line.id}`, targetType: "line" as const, targetId: line.id, label: line.productName ?? `Line ${line.lineNo}`, quantity, unit: line.unit }] : [];
     const processes = (line.processRequirements ?? []).flatMap((process) => {
       const processQuantity = Number(process.value);
       return process.active && processQuantity > 0 ? [{ key: `process:${process.id}`, targetType: "process" as const, targetId: process.id, label: `${line.productName ?? `Line ${line.lineNo}`} · ${process.name}`, quantity: processQuantity, unit: process.unit ?? "unit" }] : [];
@@ -36,4 +37,8 @@ export function quotationTotalCents(value: string): number | null {
   const [whole, fraction = ""] = normalized.split(".");
   const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
   return Number.isSafeInteger(cents) ? cents : null;
+}
+
+export function quotationEntryAmountCents(mode: ProjectQuotationPricingMode, quantity: number, enteredCents: number): number {
+  return mode === "itemized_total" ? enteredCents : Math.round(quantity * enteredCents);
 }
