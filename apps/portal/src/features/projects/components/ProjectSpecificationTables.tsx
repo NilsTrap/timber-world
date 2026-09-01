@@ -5,7 +5,7 @@ import { ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
 import { Button, DENSE_TABLE_CLASS, Input } from "@timber/ui";
 import { toast } from "sonner";
 import type { ProjectLine, ProjectSpecificationField } from "../types";
-import { updateProjectSpecificationLine, updateProjectSpecificationStructuredValues } from "../actions/projectSpecificationActions";
+import { updateProjectSpecificationLine, updateProjectSpecificationStructuredValues, verifyProjectSpecificationLine, verifyProjectSpecificationStructuredValues } from "../actions/projectSpecificationActions";
 import { correctProjectQuotation, getProjectRfqState, initializeDirectProjectQuotation, type ProjectQuoteEntry, type ProjectRfqCandidate } from "../actions/projectRfqActions";
 import { pricesFromQuotation, quotationTotalCents, type ProjectQuotationPricingMode } from "../services/projectQuotationRows";
 
@@ -229,21 +229,44 @@ function SpecificationProductRows({ projectId, line, fields, canEdit, currency, 
     lastQueuedStructuredRef.current = signature;
     enqueue(async () => {
       let structured;
+      const payload = {
+        projectId, lineId: line.id!, version: versionRef.current,
+        basicValues: structuredFields.map((field) => ({ key: field.key, value: snapshot.basic[field.key] ?? "", active: snapshot.basicActive[field.key] !== false })),
+        processValues: processes.map((process) => ({ key: process.fieldKey, value: snapshot.process[process.fieldKey] ?? "0", active: snapshot.active[process.fieldKey] !== false })),
+      };
       try {
         structured = await updateProjectSpecificationStructuredValues({
-          projectId, lineId: line.id!, version: versionRef.current,
-          basicValues: structuredFields.map((field) => ({ key: field.key, value: snapshot.basic[field.key] ?? "", active: snapshot.basicActive[field.key] !== false })),
-          processValues: processes.map((process) => ({ key: process.fieldKey, value: snapshot.process[process.fieldKey] ?? "0", active: snapshot.active[process.fieldKey] !== false })),
+          ...payload,
         });
       } catch (error) {
+        try {
+          const verification = await verifyProjectSpecificationStructuredValues(payload);
+          if (verification.success && verification.data.matches) {
+            versionRef.current = verification.data.version;
+            committedRef.current = { ...committedRef.current, basic: snapshot.basic, basicActive: snapshot.basicActive, process: snapshot.process, active: snapshot.active };
+            runPostSave(onSaved);
+            return true;
+          }
+        } catch {
+          // Preserve the original mutation error when verification is unavailable.
+        }
         onFailed?.();
         if (lastQueuedStructuredRef.current === signature) lastQueuedStructuredRef.current = structuredSignature(committedRef.current);
         throw error;
       }
-      if (!structured.success) { onFailed?.(); if (lastQueuedStructuredRef.current === signature) lastQueuedStructuredRef.current = structuredSignature(committedRef.current); toast.error(structured.error); return false; }
+      if (!structured.success) {
+        const verification = await verifyProjectSpecificationStructuredValues(payload);
+        if (verification.success && verification.data.matches) {
+          versionRef.current = verification.data.version;
+          committedRef.current = { ...committedRef.current, basic: snapshot.basic, basicActive: snapshot.basicActive, process: snapshot.process, active: snapshot.active };
+          runPostSave(onSaved);
+          return true;
+        }
+        onFailed?.(); if (lastQueuedStructuredRef.current === signature) lastQueuedStructuredRef.current = structuredSignature(committedRef.current); toast.error(structured.error); return false;
+      }
       versionRef.current = structured.data.version;
       committedRef.current = { ...committedRef.current, basic: snapshot.basic, basicActive: snapshot.basicActive, process: snapshot.process, active: snapshot.active };
-      onSaved?.();
+      runPostSave(onSaved);
       return true;
     });
   }
@@ -255,13 +278,46 @@ function SpecificationProductRows({ projectId, line, fields, canEdit, currency, 
     if (signature === lastQueuedLineRef.current) return;
     lastQueuedLineRef.current = signature;
     enqueue(async () => {
-      const product = await updateProjectSpecificationLine({ projectId, lineId: line.id!, productName: line.productName ?? "Specification line", quantity: snapshot.quantity, unit: line.unit, notes: snapshot.notes, version: versionRef.current });
-      if (!product.success) { if (lastQueuedLineRef.current === signature) lastQueuedLineRef.current = lineSignature(committedRef.current); toast.error(product.error); return false; }
+      const payload = { projectId, lineId: line.id!, productName: line.productName ?? "Specification line", quantity: snapshot.quantity, unit: line.unit, notes: snapshot.notes, version: versionRef.current };
+      let product;
+      try {
+        product = await updateProjectSpecificationLine(payload);
+      } catch (error) {
+        try {
+          const verification = await verifyProjectSpecificationLine(payload);
+          if (verification.success && verification.data.matches) {
+            versionRef.current = verification.data.version;
+            committedRef.current = { ...committedRef.current, ...snapshot };
+            runPostSave(onSaved);
+            return true;
+          }
+        } catch {
+          // Preserve the original mutation error when verification is unavailable.
+        }
+        if (lastQueuedLineRef.current === signature) lastQueuedLineRef.current = lineSignature(committedRef.current);
+        throw error;
+      }
+      if (!product.success) {
+        const verification = await verifyProjectSpecificationLine(payload);
+        if (verification.success && verification.data.matches) {
+          versionRef.current = verification.data.version;
+          committedRef.current = { ...committedRef.current, ...snapshot };
+          runPostSave(onSaved);
+          return true;
+        }
+        if (lastQueuedLineRef.current === signature) lastQueuedLineRef.current = lineSignature(committedRef.current); toast.error(product.error); return false;
+      }
       versionRef.current = product.data.version;
       committedRef.current = { ...committedRef.current, ...snapshot };
-      onSaved?.();
+      runPostSave(onSaved);
       return true;
     });
+  }
+
+  function runPostSave(callback?: () => void) {
+    if (!callback) return;
+    try { callback(); }
+    catch { toast.error("Specification saved, but the related quotation update could not be started"); }
   }
 
   return <Fragment>

@@ -2,7 +2,7 @@
 title: 'Specification cell autosave and durable consecutive edits'
 type: 'bugfix'
 created: '2026-08-31'
-status: 'in-review'
+status: 'done'
 baseline_commit: '7932b32d94963583d0c358b03570ecdb9b652a78'
 context:
   - '{project-root}/_bmad-output/project-context.md'
@@ -73,3 +73,24 @@ Autosave is commit-on-blur rather than per-keystroke. A row owns one promise cha
 **Manual checks:**
 - Repeat the reported two-save sequence in the local browser, verify Saving/Saved feedback, reload, and compare persisted values.
 - Change a process checkbox and quantity, then reload and confirm applicability and quantity persist.
+
+## Suggested Review Order
+
+**Ambiguous save reconciliation**
+
+- Verifies committed structured snapshots before presenting a transport failure.
+  [`ProjectSpecificationTables.tsx:224`](../../apps/portal/src/features/projects/components/ProjectSpecificationTables.tsx#L224)
+
+- Reads authoritative values and a stable concurrency version for reconciliation.
+  [`projectSpecificationActions.ts:278`](../../apps/portal/src/features/projects/actions/projectSpecificationActions.ts#L278)
+
+- Applies the same recovery contract to quantity and notes.
+  [`projectSpecificationActions.ts:244`](../../apps/portal/src/features/projects/actions/projectSpecificationActions.ts#L244)
+
+**Status isolation**
+
+- Keeps quotation follow-ups outside the specification-save failure boundary.
+  [`ProjectSpecificationTables.tsx:317`](../../apps/portal/src/features/projects/components/ProjectSpecificationTables.tsx#L317)
+
+- Locks regression contracts for verification, queues, and callback isolation.
+  [`specificationStructuredValues.test.ts:96`](../../apps/portal/src/features/projects/services/__tests__/specificationStructuredValues.test.ts#L96)

@@ -99,6 +99,12 @@ assert.match(actions, /guardedUpdate\.eq\("updated_at", input\.version\)/);
 assert.match(actions, /data: \{ id: input\.lineId, version \}/);
 assert.match(actions, /p_basic_states/);
 assert.match(actions, /data: \{ id: parsed\.data\.lineId, version \}/);
+assert.match(actions, /verifyProjectSpecificationStructuredValues/);
+assert.match(actions, /verifyProjectSpecificationLine/);
+assert.match(actions, /matches, version/);
+assert.match(tables, /verification\.success && verification\.data\.matches/);
+assert.match(tables, /if \(!success\) queueHadErrorRef\.current = true/);
+assert.match(tables, /runPostSave\(onSaved\)/);
 const autosaveActions = actions.slice(actions.indexOf("export async function updateProjectSpecificationLine"), actions.indexOf("export async function deleteProjectSpecificationLine"));
 assert.doesNotMatch(autosaveActions, /refreshProject\(/);
 

@@ -241,6 +241,24 @@ export async function updateProjectSpecificationLine(raw: unknown): Promise<Acti
   return { success: true, data: { id: input.lineId, version } };
 }
 
+export async function verifyProjectSpecificationLine(raw: unknown): Promise<ActionResult<{ matches: boolean; version: string }>> {
+  const parsed = lineSchema.extend({ lineId: uuid }).safeParse(raw);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid line", code: "VALIDATION_ERROR" };
+  const input = parsed.data;
+  const ctx = await editableProject(input.projectId);
+  if (!ctx.success) return ctx;
+  const { data, error } = await ctx.data.db.from("order_line_items")
+    .select("updated_at, pieces, volume_m3, notes, unit")
+    .eq("id", input.lineId).eq("order_id", input.projectId).eq("side", "sell").maybeSingle();
+  if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };
+  if (!data) return { success: false, error: "Line not found", code: "NOT_FOUND" };
+  const version = normalizeSpecificationVersion(data.updated_at);
+  if (!version) return { success: false, error: "Line version was not returned", code: "UPDATE_FAILED" };
+  const storedQuantity = data.unit === "m3" || data.unit === "loose_m3" ? data.volume_m3 : data.pieces;
+  const matches = Number(storedQuantity) === input.quantity && String(data.notes ?? "") === input.notes;
+  return { success: true, data: { matches, version } };
+}
+
 export async function updateProjectSpecificationStructuredValues(raw: unknown): Promise<ActionResult<{ id: string; version: string }>> {
   const parsed = structuredSpecificationValuesSchema.safeParse(raw);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid specification fields", code: "VALIDATION_ERROR" };
@@ -255,6 +273,44 @@ export async function updateProjectSpecificationStructuredValues(raw: unknown): 
   const version = normalizeSpecificationVersion(data);
   if (!version) return { success: false, error: "Line version was not returned", code: "UPDATE_FAILED" };
   return { success: true, data: { id: parsed.data.lineId, version } };
+}
+
+export async function verifyProjectSpecificationStructuredValues(raw: unknown): Promise<ActionResult<{ matches: boolean; version: string }>> {
+  const parsed = structuredSpecificationValuesSchema.safeParse(raw);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid specification fields", code: "VALIDATION_ERROR" };
+  const ctx = await editableProject(parsed.data.projectId);
+  if (!ctx.success) return ctx;
+  const { data: line, error: lineError } = await ctx.data.db.from("order_line_items").select("updated_at, specification_fields")
+    .eq("id", parsed.data.lineId).eq("order_id", parsed.data.projectId).eq("side", "sell").maybeSingle();
+  const { data: processes, error: processError } = await ctx.data.db.from("order_line_item_process_requirements").select("field_key, value, is_active")
+    .eq("order_line_item_id", parsed.data.lineId);
+  if (lineError || processError) return { success: false, error: lineError?.message ?? processError?.message ?? "Could not verify specification", code: "FETCH_FAILED" };
+  if (!line) return { success: false, error: "Line not found", code: "NOT_FOUND" };
+  const version = normalizeSpecificationVersion(line.updated_at);
+  if (!version) return { success: false, error: "Line version was not returned", code: "UPDATE_FAILED" };
+  const { data: versionCheck, error: versionError } = await ctx.data.db.from("order_line_items").select("updated_at")
+    .eq("id", parsed.data.lineId).eq("order_id", parsed.data.projectId).eq("side", "sell").maybeSingle();
+  const confirmedVersion = normalizeSpecificationVersion(versionCheck?.updated_at);
+  if (versionError || confirmedVersion !== version) return { success: true, data: { matches: false, version } };
+  const fields: unknown[] = Array.isArray(line.specification_fields) ? line.specification_fields : [];
+  const basicByKey = new Map<string, { value: string; active: boolean }>(fields.flatMap((candidate: unknown) => {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return [];
+    const field = candidate as Record<string, unknown>;
+    return typeof field.key === "string" ? [[field.key, { value: typeof field.value === "string" ? field.value : "", active: field.active !== false }] as const] : [];
+  }));
+  const processRows = (processes ?? []) as Array<{ field_key: string; value: unknown; is_active: boolean | null }>;
+  const processByKey = new Map<string, { value: string; active: boolean }>(processRows.map((process) => [process.field_key, { value: String(process.value ?? "0"), active: process.is_active !== false }]));
+  const matches = basicByKey.size === parsed.data.basicValues.length
+    && processByKey.size === parsed.data.processValues.length
+    && parsed.data.basicValues.every((item) => {
+      const stored = basicByKey.get(item.key);
+      return stored?.value === item.value && stored.active === item.active;
+    })
+    && parsed.data.processValues.every((item) => {
+      const stored = processByKey.get(item.key);
+      return stored?.value === item.value && stored.active === item.active;
+    });
+  return { success: true, data: { matches, version } };
 }
 
 export async function deleteProjectSpecificationLine(raw: unknown): Promise<ActionResult<{ id: string }>> {
