@@ -376,7 +376,7 @@ async function loadPartyOptions(
 
 async function loadProjectLegOptions(db: DbClient, spineId: string, currentProjectId: string): Promise<ProjectLegOption[]> {
   const { data, error } = await db.from("orders").select("id, deal_code, code, created_at, lifecycle_stage")
-    .eq("spine_id", spineId).order("created_at", { ascending: true });
+    .eq("spine_id", spineId).is("deleted_at", null).order("created_at", { ascending: true });
   if (error) throw new Error("Could not load project legs");
   return ((data ?? []) as Array<{ id: string; deal_code: string | null; code: string; created_at: string; lifecycle_stage: string }>)
     .filter((leg) => leg.lifecycle_stage !== "cancelled" || leg.id === currentProjectId)
@@ -387,7 +387,7 @@ async function hasActiveNextLeg(db: DbClient, spineId: string, buyerOrganisation
   if (!buyerOrganisationId) return true;
   const { data, error } = await db.from("orders").select("id")
     .eq("spine_id", spineId).eq("buyer_organisation_id", buyerOrganisationId)
-    .neq("lifecycle_stage", "cancelled").limit(1);
+    .is("deleted_at", null).neq("lifecycle_stage", "cancelled").limit(1);
   if (error) throw new Error("Could not verify the next project leg");
   return (data ?? []).length > 0;
 }

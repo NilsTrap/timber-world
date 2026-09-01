@@ -331,6 +331,12 @@ const quotationRows = readFileSync("src/features/projects/services/projectQuotat
 const specificationSampleSeed = readFileSync("../../supabase/seeds/mills_sample_p04668_s04739.sql", "utf8");
 const cleanupMigration = readFileSync("../../supabase/migrations/20260826150000_project_file_cleanup.sql", "utf8");
 const cleanupActions = readFileSync("src/features/projects/actions/projectFileCleanupActions.ts", "utf8");
+const deletionActions = readFileSync("src/features/projects/actions/projectDeletionActions.ts", "utf8");
+const commercialActions = readFileSync("src/features/projects/actions/projectCommercialActions.ts", "utf8");
+const deletionMigration = readFileSync("../../supabase/migrations/20260901120000_project_soft_deletion.sql", "utf8");
+const projectsList = readFileSync("src/features/projects/components/ProjectsListView.tsx", "utf8");
+const projectsLoader = readFileSync("src/features/projects/actions/getProjects.ts", "utf8");
+const orderDealService = readFileSync("src/features/orders/services/orderDeals.ts", "utf8");
 ok("metadata loader select excludes storage_path", /const SAFE_FILE_SELECT\s*=\s*[\s\S]*?;/.test(service) && !service.match(/const SAFE_FILE_SELECT\s*=\s*([\s\S]*?);/)?.[1]?.includes("storage_path"));
 ok("workspace reads only category=project", service.includes('.eq("category", PROJECT_CATEGORY)'));
 ok("workspace reads originals only", service.includes('.eq("file_variant", ORIGINAL_VARIANT)'));
@@ -459,6 +465,17 @@ ok("inline admin quotation failures restore persisted pricing state", specificat
 ok("structured quotation totals use canonical quantities and are audited on the database boundary", structuredQuoteMigration.includes("round(canonical_quantity * unit_price)") && structuredQuoteMigration.includes("DUPLICATE_ENTRY") && structuredQuoteMigration.includes("quote_entered_as_admin=is_admin") && structuredQuoteMigration.includes("STALE_REQUIREMENT"));
 ok("screenshot success refreshes both project surfaces", workspace.includes("officialImagePosition: completed.data.position") && workspace.includes("router.refresh()") && officialImageActions.includes('revalidatePath("/projects")'));
 ok("project detail preserves official image metadata", projection.includes("officialImagePosition: f.officialImagePosition") && projection.includes("previewUrl: f.previewUrl"));
+ok("project deletion actions re-resolve and enforce platform-admin authority", deletionActions.includes("resolveProjectsActor()") && deletionActions.includes("!actor.isPlatformAdmin") && deletionActions.includes('code:"FORBIDDEN"'));
+ok("soft deletion is atomic and batch-bound without physical deletes", deletionMigration.includes("soft_delete_project") && deletionMigration.includes("deletion_batch_id=v_batch") && deletionMigration.includes("restore_soft_deleted_project") && !deletionMigration.includes("DELETE FROM"));
+ok("origin legs cannot be independently removed", deletionMigration.includes("ORIGIN_LEG_REQUIRES_PROJECT_DELETE") && deletionActions.includes("Delete the whole project instead"));
+ok("deleted orders and spines reject physical deletes and ordinary mutations", deletionMigration.includes("guard_project_tombstone") && deletionMigration.includes("PHYSICAL_PROJECT_DELETE_FORBIDDEN") && deletionMigration.includes("trg_guard_soft_deleted_spine_mutation") && deletionMigration.includes("NEW.deleted_at IS NULL AND public.is_current_user_platform_admin()") && deletionMigration.includes("to_jsonb(NEW)-ARRAY['deleted_at','deleted_by','deletion_batch_id','updated_at']"));
+ok("normal deal and project loaders exclude tombstones", orderDealService.includes('.is("deleted_at", null)') && projectsLoader.includes('spineQuery.is("deleted_at", null)'));
+ok("admin list exposes confirmed delete and recovery controls", projectsList.includes("Delete project") && projectsList.includes("Delete leg") && projectsList.includes("Restore project") && projectsList.includes("AlertDialogDescription"));
+ok("individually deleted legs have a dedicated recovery path", deletionMigration.includes("restore_soft_deleted_project_leg") && deletionActions.includes("restoreProjectLeg") && projectsList.includes("Restore leg"));
+ok("origin legs serialize guidance instead of a destructive mutation", projectsLoader.includes("isOriginLeg") && projectsList.includes("Delete project instead") && projectsList.includes("if (!deletedOnly && mutationTarget.isOriginLeg)"));
+ok("recovery is paged and refreshes authoritative server state", projectsLoader.includes("recoveryPageSize") && orderDealService.includes("filters.offset") && projectsList.includes("router.refresh()") && projectsList.includes("recoveryHasMore"));
+ok("RFQ writes require an active parent order", deletionMigration.includes("guard_project_rfq_active_order") && deletionMigration.includes("trg_project_rfq_candidates_active_order") && deletionMigration.includes("o.deleted_at IS NULL"));
+ok("commercial project reads reject tombstoned orders", commercialActions.includes('.is("deleted_at",null)'));
 
 console.log(`\nprojects-workspace.test.ts: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

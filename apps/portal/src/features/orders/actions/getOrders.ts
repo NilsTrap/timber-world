@@ -132,6 +132,7 @@ export async function getOrders(options?: {
       )
     `
     )
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   // 4. Filter by status if needed

@@ -97,7 +97,7 @@ export async function setProjectSeller(input: { projectId: string; sellerOrganis
   let traderCount = 1;
   if (origin.data.spineId) {
     const { data, error } = await client.from("orders").select("id, deal_code, buyer_organisation_id, seller_organisation_id, lifecycle_stage, created_at")
-      .eq("spine_id", origin.data.spineId).neq("id", input.projectId).neq("lifecycle_stage", "cancelled").order("created_at", { ascending: true });
+      .eq("spine_id", origin.data.spineId).is("deleted_at",null).neq("id", input.projectId).neq("lifecycle_stage", "cancelled").order("created_at", { ascending: true });
     if (error) return { success: false, error: "Could not read the project chain", code: "QUERY_FAILED" };
     const remaining = [...((data ?? []) as Array<{ id: string; deal_code: string | null; buyer_organisation_id: string; seller_organisation_id: string; lifecycle_stage: string }>)];
     while (true) {

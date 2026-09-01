@@ -23,12 +23,15 @@ function first(value: string | string[] | undefined): string {
 }
 
 export default async function ProjectsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const res = await listProjects();
+  const params = await searchParams;
+  const deletedOnly = first(params.deleted) === "1";
+  const parsedRecoveryPage = Number.parseInt(first(params.page),10);
+  const recoveryPage = Number.isFinite(parsedRecoveryPage) && parsedRecoveryPage > 0 ? parsedRecoveryPage - 1 : 0;
+  const res = await listProjects({ deletedOnly, recoveryPage });
   if (!res.ok) {
     if (res.deny === "login") redirect("/login");
     notFound();
   }
-  const params = await searchParams;
   const filters: ProjectListFilters = {
     ...EMPTY_PROJECT_FILTERS,
     search: first(params.q),
@@ -37,5 +40,5 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
     supplier: first(params.supplier),
     stage: first(params.stage),
   };
-  return <ProjectsListView items={filterProjectGroups(res.items, filters)} allItems={res.items} viewer={res.viewer} filters={filters} filterOptions={projectFilterOptions(res.items)} />;
+  return <ProjectsListView items={filterProjectGroups(res.items, filters)} allItems={res.items} viewer={res.viewer} filters={filters} filterOptions={projectFilterOptions(res.items)} deletedOnly={deletedOnly} recoveryPage={res.recoveryPage} recoveryHasMore={res.recoveryHasMore} />;
 }

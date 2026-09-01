@@ -173,7 +173,7 @@ export async function getOrderDeal(db: DbClient, _actor: ActorContext, orderId: 
   if (!isValidUUID(orderId)) return { success: false, error: "Invalid order id", code: "VALIDATION_ERROR" };
   const c = db as DbClient;
 
-  const { data: row, error } = await c.from("orders").select(ORDER_SELECT).eq("id", orderId).single();
+  const { data: row, error } = await c.from("orders").select(ORDER_SELECT).eq("id", orderId).is("deleted_at", null).single();
   if (error || !row) return { success: false, error: error?.message ?? "Order not found", code: "NOT_FOUND" };
 
   const [{ data: items }, { data: refs }, { data: docs }] = await Promise.all([
@@ -209,6 +209,9 @@ export interface ListOrderDealsFilters {
   status?: string;
   productGroup?: string;
   limit?: number;
+  /** Recovery tooling only. Normal callers always receive active deals. */
+  deletedOnly?: boolean;
+  offset?: number;
   /**
    * Scope the result to bilateral deals where one organisation is the seller or
    * buyer. RLS is still the wall; this narrows WHICH of the caller's visible
@@ -233,13 +236,16 @@ export async function listDeals(db: DbClient, _actor: ActorContext, filters: Lis
   }
   const c = db as DbClient;
   let query = c.from("orders").select(ORDER_SELECT).order("created_at", { ascending: false });
+  query = filters.deletedOnly ? query.not("deleted_at", "is", null) : query.is("deleted_at", null);
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.productGroup) query = query.eq("product_group", filters.productGroup);
   if (filters.partyOrganisationId) {
     const org = filters.partyOrganisationId;
     query = query.or(`seller_organisation_id.eq.${org},buyer_organisation_id.eq.${org}`);
   }
-  query = query.limit(Math.min(filters.limit ?? 100, 200));
+  const limit = Math.min(filters.limit ?? 100, filters.deletedOnly ? 101 : 200);
+  const offset = Math.max(0, filters.offset ?? 0);
+  query = query.range(offset, offset + limit - 1);
   const { data, error } = await query;
   if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };
   return { success: true, data: (data ?? []).map(mapOrderDealHeader) };
@@ -267,7 +273,7 @@ export async function listDealsMissingDocs(db: DbClient, _actor: ActorContext, o
   // Scan the newest 500 deals as candidates, then ask which of THOSE already have
   // the doc type (scoped by id so the lookup can't hit the PostgREST max-rows cap
   // and falsely report a deal as missing).
-  const { data: candidates, error } = await c.from("orders").select(ORDER_SELECT).order("created_at", { ascending: false }).limit(500);
+  const { data: candidates, error } = await c.from("orders").select(ORDER_SELECT).is("deleted_at", null).order("created_at", { ascending: false }).limit(500);
   if (error) return { success: false, error: error.message, code: "FETCH_FAILED" };
   const rows = candidates ?? [];
   if (rows.length === 0) return { success: true, data: [] };

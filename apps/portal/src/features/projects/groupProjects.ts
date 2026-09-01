@@ -41,6 +41,7 @@ export function groupProjectRows(candidates: readonly ProjectGroupingCandidate[]
     if (parent.spineId) {
       output.push({
         ...parent.item,
+        spineId: parent.spineId,
         rowKind: "spine",
         spineCode,
         groupKey,

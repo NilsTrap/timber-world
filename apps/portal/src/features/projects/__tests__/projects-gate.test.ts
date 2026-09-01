@@ -19,6 +19,7 @@ import {
   filterNavItemsByModules,
 } from "@/components/layout/navItems";
 import type { NavItem } from "@/components/layout/Sidebar";
+import { readFileSync } from "node:fs";
 
 let passed = 0;
 let failed = 0;
@@ -166,6 +167,11 @@ ok("the injected item requires no module of its own (the caller gates it)",
 // The static admin nav must stay exactly as navItems.test.ts asserts it.
 ok("ADMIN_NAV_ITEMS still contains no /projects entry",
    !ADMIN_NAV_ITEMS.some((i) => i.href === "/projects" || (i.children ?? []).some((c) => c.href === "/projects")));
+
+const deletionActions = readFileSync("src/features/projects/actions/projectDeletionActions.ts", "utf8");
+const projectsListView = readFileSync("src/features/projects/components/ProjectsListView.tsx", "utf8");
+ok("forged deletion calls are denied server-side", deletionActions.includes("resolveProjectsActor()") && deletionActions.includes("!actor.isPlatformAdmin") && deletionActions.includes('code:"FORBIDDEN"'));
+ok("deletion controls are serialized only inside the platform-admin branch", projectsListView.includes('viewer.isPlatformAdmin && (item.rowKind === "spine"'));
 
 // ── 7. Confirmed Nilitto MVP navigation presets ──────────────────────────
 function navFor(modules: string[]) {

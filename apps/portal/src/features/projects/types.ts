@@ -85,6 +85,12 @@ export interface ProjectListItem {
   id: string;
   /** Presentation-only row identity: a spine header or a bilateral deal. */
   rowKind: "spine" | "leg";
+  /** Admin mutation target; emitted only for a spine row. */
+  spineId?: string;
+  /** Present only in the Super Admin recovery view. */
+  deletedAt?: string;
+  /** Admin-only hint used to replace destructive leg deletion with guidance. */
+  isOriginLeg?: boolean;
   /** Deal code (preferred) or the legacy ORD-### code. */
   reference: string;
   name: string | null;

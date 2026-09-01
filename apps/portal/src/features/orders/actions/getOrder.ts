@@ -40,6 +40,7 @@ export async function getOrder(orderId: string): Promise<ActionResult<Order>> {
       portal_users!orders_created_by_fkey (name)
     `)
     .eq("id", orderId)
+    .is("deleted_at", null)
     .single();
 
   if (error || !data) {

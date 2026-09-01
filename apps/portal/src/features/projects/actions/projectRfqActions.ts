@@ -88,7 +88,7 @@ export async function getProjectRfqState(projectId: string): Promise<ActionResul
   let commercialPricing:ProjectCommercialPricing|undefined;
   if(canManage&&row.status==="awarded"){
     const winner=mapped.find((candidate)=>candidate.status==="awarded");
-    const {data:order,error:pricingError}=await candidateDb.from("orders").select("margin_amount_cents,margin_percent,resale_value_cents").eq("id",projectId).maybeSingle();
+    const {data:order,error:pricingError}=await candidateDb.from("orders").select("margin_amount_cents,margin_percent,resale_value_cents").eq("id",projectId).is("deleted_at",null).maybeSingle();
     if(pricingError)return{success:false,error:"Could not load trader margin",code:"FETCH_FAILED"};
     if(winner?.quoteTotalCents!=null&&order)commercialPricing={purchaseCostCents:winner.quoteTotalCents,marginAmountCents:order.margin_amount_cents==null?null:Number(order.margin_amount_cents),marginPercent:order.margin_percent==null?null:Number(order.margin_percent),salesAmountCents:order.resale_value_cents==null?null:Number(order.resale_value_cents)};
   }

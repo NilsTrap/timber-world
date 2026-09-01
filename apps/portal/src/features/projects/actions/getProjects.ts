@@ -32,11 +32,14 @@ const LIST_LIMIT = 200;
 export type ListProjectsResult = ProjectsResult<{
   items: ProjectListItem[];
   viewer: ProjectsViewer;
+  recoveryPage: number;
+  recoveryHasMore: boolean;
 }>;
 
-export async function listProjects(): Promise<ListProjectsResult> {
+export async function listProjects(options: { deletedOnly?: boolean; recoveryPage?: number } = {}): Promise<ListProjectsResult> {
   const a = await resolveProjectsActor();
   if (!a.ok) return a;
+  if (options.deletedOnly && !a.isPlatformAdmin) return { ok: false, deny: "not_found" };
 
   // Scope non-admins to the CURRENT organisation, exactly like the Orders list
   // (getOrders.ts). RLS alone would also hand back deals from the viewer's OTHER
@@ -47,10 +50,13 @@ export async function listProjects(): Promise<ListProjectsResult> {
     !a.isPlatformAdmin && a.orgId && isValidUUID(a.orgId) ? a.orgId : undefined;
   if (!a.isPlatformAdmin && !partyOrganisationId) return { ok: false, deny: "not_found" };
 
-  const res = await listDeals(a.db, a.actor, { limit: LIST_LIMIT, partyOrganisationId });
+  const recoveryPage = options.deletedOnly ? Math.max(0, Math.floor(options.recoveryPage ?? 0)) : 0;
+  const recoveryPageSize = 100;
+  const res = await listDeals(a.db, a.actor, { limit: options.deletedOnly ? recoveryPageSize + 1 : LIST_LIMIT, offset: options.deletedOnly ? recoveryPage * recoveryPageSize : 0, partyOrganisationId, deletedOnly: options.deletedOnly });
   if (!res.success) return { ok: false, deny: "not_found" };
 
-  const committedRaws: OrderDealSummary[] = res.data;
+  const recoveryHasMore = options.deletedOnly === true && res.data.length > recoveryPageSize;
+  const committedRaws: OrderDealSummary[] = options.deletedOnly ? res.data.slice(0,recoveryPageSize) : res.data;
   let invitedRows: Array<{ id: string; reference: string; name: string | null; stage: string; deliveryDeadline: string | null }> = [];
   if (!a.isPlatformAdmin && a.orgId) {
     const { data, error } = await a.db.rpc("list_project_rfq_invitations");
@@ -71,13 +77,17 @@ export async function listProjects(): Promise<ListProjectsResult> {
   const spineCodeById = new Map<string, string>();
   const spineTitleById = new Map<string, string>();
   const originOrderBySpineId = new Map<string, string>();
+  const spineDeletedAtById = new Map<string, string>();
   if (visibleSpineIds.length > 0) {
-    const { data, error } = await a.db.from("spines").select("id, code, title, origin_order_id").in("id", visibleSpineIds);
+    let spineQuery = a.db.from("spines").select("id, code, title, origin_order_id, deleted_at").in("id", visibleSpineIds);
+    if (!options.deletedOnly) spineQuery = spineQuery.is("deleted_at", null);
+    const { data, error } = await spineQuery;
     if (error) return { ok: false, deny: "not_found" };
-    for (const row of (data ?? []) as Array<{ id: string; code: string; title: string | null; origin_order_id: string | null }>) {
+    for (const row of (data ?? []) as Array<{ id: string; code: string; title: string | null; origin_order_id: string | null; deleted_at: string | null }>) {
       spineCodeById.set(row.id, row.code);
       if (row.title?.trim()) spineTitleById.set(row.id, row.title.trim());
       if (row.origin_order_id) originOrderBySpineId.set(row.id, row.origin_order_id);
+      if (row.deleted_at) spineDeletedAtById.set(row.id, row.deleted_at);
     }
   }
 
@@ -122,6 +132,7 @@ export async function listProjects(): Promise<ListProjectsResult> {
     const walled = walledRows[index]!;
     const item = toProjectListItem(raw as DealHeaderLike, walled as DealHeaderLike, ctx, fileCounts.get(raw.id)?.total ?? 0);
     if (walled.spineId && spineTitleById.has(walled.spineId)) item.name = spineTitleById.get(walled.spineId)!;
+    if (a.isPlatformAdmin && walled.spineId) item.isOriginLeg = originOrderBySpineId.get(walled.spineId) === raw.id;
     item.thumbnailUrl = primaryThumbnailByOrder.get(raw.id) ?? null;
     return {
       item,
@@ -135,7 +146,11 @@ export async function listProjects(): Promise<ListProjectsResult> {
         ? primaryThumbnailBySpine.get(walled.spineId)??primaryThumbnailByOrder.get(originOrderBySpineId.get(walled.spineId) ?? "") ?? null
         : null,
     };
-  }));
+  }).filter((candidate) => !candidate.spineId || spineCodeById.has(candidate.spineId)))
+    .filter((item) => !options.deletedOnly || item.rowKind === "leg" || (item.spineId ? spineDeletedAtById.has(item.spineId) : false))
+    .map((item) => item.rowKind === "spine" && item.spineId && spineDeletedAtById.has(item.spineId)
+      ? { ...item, deletedAt: spineDeletedAtById.get(item.spineId) }
+      : item);
   const invitedItems: ProjectListItem[] = invitedRows.map((row) => ({
     id: row.id,
     reference: row.reference,
@@ -160,5 +175,5 @@ export async function listProjects(): Promise<ListProjectsResult> {
     const configured = stageByKey.get(item.stage);
     return configured ? { ...item, stageLabel: configured.label, stageColor: configured.color } : item;
   });
-  return { ok: true, items, viewer };
+  return { ok: true, items, viewer, recoveryPage, recoveryHasMore };
 }
