@@ -67,6 +67,9 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
         : [];
     }),
   );
+  const invalidWholePackageSelection = (state.sources ?? []).some((source) => source.wholePackage && (
+    source.lines.length === 0 || source.lines.some((line) => Number(selected[`${source.sourceOrderId}:${line.originLineItemId}`]) !== line.availableQuantity)
+  ) && source.lines.some((line) => selected[`${source.sourceOrderId}:${line.originLineItemId}`] != null));
   const selectedByLine = contributions.reduce<Record<string, number>>(
     (totals, item) => ({
       ...totals,
@@ -143,14 +146,13 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
               <div className="space-y-2">
                 {state.sources?.map((source) => (
                   <div key={source.sourceOrderId} className="rounded border p-2">
-                    <p className="font-medium">
-                      {source.reference} · {source.sellerName}
-                    </p>
+                    <div className="flex items-center justify-between gap-3"><p className="font-medium">{source.reference} · {source.sellerName}{source.wholePackage?" · whole project price":""}</p>{source.wholePackage?<label className="text-sm"><input className="mr-2" type="checkbox" disabled={source.lines.length===0} checked={source.lines.length>0&&source.lines.every((line)=>Number(selected[`${source.sourceOrderId}:${line.originLineItemId}`])===line.availableQuantity)} onChange={(event)=>setSelected((current)=>{const next={...current};for(const line of source.lines){const key=`${source.sourceOrderId}:${line.originLineItemId}`;if(event.target.checked)next[key]=String(line.availableQuantity);else delete next[key]}return next})}/>Use complete source package</label>:null}</div>
                     {source.lines.map((line) => {
                       const key = `${source.sourceOrderId}:${line.originLineItemId}`;
                       return (
                         <div key={key} className="grid grid-cols-[1fr_8rem_auto] items-center gap-3 py-1 text-sm">
                           <label>
+                            {!source.wholePackage?
                             <input
                               className="mr-2"
                               type="checkbox"
@@ -163,7 +165,7 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
                                   return next;
                                 })
                               }
-                            />
+                            />:null}
                             {line.originLineItemId.slice(0, 8)}
                           </label>
                           <Input
@@ -172,7 +174,7 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
                             min="0"
                             max={line.availableQuantity}
                             step="any"
-                            disabled={selected[key] == null}
+                            disabled={source.wholePackage||selected[key] == null}
                             value={selected[key] ?? ""}
                             onChange={(event) =>
                               setSelected((current) => ({
@@ -225,7 +227,7 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
                   <Label>{marginMode === "amount" ? `Margin amount (${currency})` : "Gross margin (%)"}</Label>
                   <Input type="number" min="0" max={marginMode === "percentage" ? "99.99" : undefined} step="0.01" value={margin} onChange={(event) => setMargin(event.target.value)} />
                 </label>
-                <Button className="self-end" disabled={pending || !preview || (scope === "full" && missing.length > 0)} onClick={save}>
+                <Button className="self-end" disabled={pending || !preview || invalidWholePackageSelection || (scope === "full" && missing.length > 0)} onClick={save}>
                   {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Confirm selling price
                 </Button>

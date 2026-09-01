@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { quotationEntries } from "../projectQuotationRows";
+import { quotationEntries, quotationTotalCents } from "../projectQuotationRows";
 import { calculateProjectMargin, canManageProjectRfq, canOfferSellerCompletion, candidateCanSee, mapAwardRfqError, mapCreateRfqError, openRfqAvailability, quoteTotalToCents } from "../projectRfq";
 import { parseSpineOriginAllocation } from "../spineOriginSpecification";
 import { purchaseLegAllowsBuyerEdit, toEligiblePartyOption } from "../projectPartyOptions";
@@ -8,6 +8,9 @@ import { buildDefaultLegQuantities, buildLegWorkPackages, reconcileLegQuantities
 import { parseCreateProjectLegInput } from "../projectLegValidation";
 
 assert.equal(quoteTotalToCents(12.345), 1235);
+assert.equal(quotationTotalCents("0"),0);
+assert.equal(quotationTotalCents("12.34"),1234);
+assert.equal(quotationTotalCents("12.345"),null);
 assert.throws(() => quoteTotalToCents(-1));
 assert.deepEqual(calculateProjectMargin(800000, "percentage", 20), {
   marginAmountCents: 200000,
@@ -359,4 +362,26 @@ assert.match(commercialCard, /Purchase:[\s\S]*Additional:[\s\S]*Margin:[\s\S]*To
 assert.match(commercialCard, /catch\(\(\)\s*=>\s*setLoadError\("Could not load commercial offer"\)\)/);
 assert.doesNotMatch(rfqCard, /find\(\(candidate\)=>candidate\.id===viewCandidateId\)!/);
 assert.match(rfqCard, /View quotation/);
+const pricingModeMigration = readFileSync("../../supabase/migrations/20260901170000_project_quotation_pricing_mode.sql", "utf8");
+assert.match(pricingModeMigration, /pricing_mode IN \('itemized','total'\)/);
+assert.match(pricingModeMigration, /MIXED_OR_INVALID_TOTAL/);
+assert.match(pricingModeMigration, /project_quote_origin_allocations/);
+assert.match(pricingModeMigration, /remainder DESC,origin_id/);
+assert.match(pricingModeMigration, /INCONSISTENT_QUOTATION/);
+assert.match(pricingModeMigration, /DROP FUNCTION IF EXISTS public\.submit_project_rfq_quote_entries\(UUID,JSONB,TEXT\)/);
+assert.match(pricingModeMigration, /DROP FUNCTION IF EXISTS public\.correct_project_rfq_quote_entries\(UUID,JSONB,TEXT\)/);
+assert.match(pricingModeMigration, /coalesce\(quote_entries,'null'::jsonb\)='\[\]'::jsonb/);
+assert.match(pricingModeMigration, /p_total_cents>9007199254740991/);
+assert.match(pricingModeMigration, /total>9007199254740991/);
+assert.match(pricingModeMigration, /JOIN public\.project_rfqs r ON r\.id=c\.rfq_id WHERE c\.id=p_candidate_id AND r\.order_id=p_order_id/);
+assert.match(pricingModeMigration, /INVALID_ALLOCATION_QUANTITY/);
+assert.match(pricingModeMigration, /CREATE CONSTRAINT TRIGGER enforce_total_project_source_whole_package/);
+assert.match(pricingModeMigration, /DEFERRABLE INITIALLY DEFERRED/);
+assert.doesNotMatch(pricingModeMigration, /pg_get_functiondef|changed:=replace/);
+assert.match(actions, /pricingMode:z\.enum\(\["itemized","total"\]\)/);
+assert.match(actions, /p_total_cents:parsed\.data\.totalCents/);
+assert.match(rfqCard, /Price by line\/process/);
+assert.match(rfqCard, /One total project price/);
+assert.match(rfqCard, /Changing pricing mode replaces/);
+assert.match(rfqCard, /Legacy quotation — pricing mode not recorded/);
 console.log("projectRfq.test.ts: passed");

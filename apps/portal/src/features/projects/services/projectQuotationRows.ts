@@ -2,6 +2,7 @@ import type { ProjectQuoteEntry, ProjectRfqCandidate } from "../actions/projectR
 import type { ProjectLine } from "../types";
 
 export type PricingRow = { key: string; targetType: "line" | "process"; targetId: string; label: string; quantity: number; unit: string };
+export type ProjectQuotationPricingMode = "itemized" | "total";
 
 export function quotationPricingRows(lines: ProjectLine[]): PricingRow[] {
   return lines.flatMap((line) => {
@@ -27,4 +28,12 @@ export function quotationEntries(lines: ProjectLine[], prices: Record<string, st
     const unitPrice = Number(rawPrice);
     return Number.isFinite(unitPrice) && unitPrice >= 0 ? [{ targetType: row.targetType, targetId: row.targetId, label: row.label, quantity: row.quantity, unit: row.unit, unitPriceCents: Math.round(unitPrice * 100) }] : [];
   });
+}
+
+export function quotationTotalCents(value: string): number | null {
+  const normalized = value.trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+  const [whole, fraction = ""] = normalized.split(".");
+  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  return Number.isSafeInteger(cents) ? cents : null;
 }

@@ -327,6 +327,7 @@ const structuredQuoteMigration = readFileSync("../../supabase/migrations/2026082
 const spineTitleMigration = readFileSync("../../supabase/migrations/20260830090000_project_spine_title_edit.sql", "utf8");
 const rfqActions = readFileSync("src/features/projects/actions/projectRfqActions.ts", "utf8");
 const rfqCard = readFileSync("src/features/projects/components/ProjectRfqCard.tsx", "utf8");
+const quotationRows = readFileSync("src/features/projects/services/projectQuotationRows.ts", "utf8");
 const specificationSampleSeed = readFileSync("../../supabase/seeds/mills_sample_p04668_s04739.sql", "utf8");
 const cleanupMigration = readFileSync("../../supabase/migrations/20260826150000_project_file_cleanup.sql", "utf8");
 const cleanupActions = readFileSync("src/features/projects/actions/projectFileCleanupActions.ts", "utf8");
@@ -449,7 +450,9 @@ ok("buyer removal uses a read visibility gate and mutates only the spine designa
 ok("specification lines group by basic schema with processes nested beneath their product", specificationTables.includes("groupLinesBySchema") && specificationTables.includes("Applicable processes") && specificationTables.includes("SpecificationProductRows"));
 ok("catalogue specification lines allow quantity and notes edits without mutating their snapshot", specificationEditor.includes("isCatalogSnapshot") && specificationEditor.includes("Catalogue fields and unit stay unchanged") && specificationActions.includes("specificationLineUpdate") && specificationActions.includes('.not("catalog_product_id", "is", null)') && !specificationActions.includes("Catalogue snapshots are immutable; replace the line"));
 ok("catalogue fields are snapshotted atomically without polluting notes", specificationActions.includes("create_project_specification_line_with_snapshot") && structuredQuoteMigration.includes("immutable basic-field snapshot in one transaction") && structuredQuoteMigration.includes("specification_fields JSONB"));
-ok("supplier and admin quotation forms price lines and processes", rfqCard.includes('targetType:"line"') && rfqCard.includes('targetType:"process"') && rfqCard.includes("Enter quotation") && rfqActions.includes("submit_project_rfq_quote_entries"));
+ok("supplier and admin quotation forms price lines and processes", quotationRows.includes('targetType: "line"') && quotationRows.includes('targetType: "process"') && rfqCard.includes("Enter quotation") && rfqActions.includes("submit_project_rfq_quote_entries"));
+ok("both quotation entry surfaces require explicit pricing modes", rfqCard.includes("Price by line/process") && rfqCard.includes("One total project price") && specificationTables.includes("Price by line/process") && specificationTables.includes("One total project price"));
+ok("inline admin quotation failures restore persisted pricing state", specificationTables.includes("restorePersistedQuotation(candidate)") && specificationTables.includes("finally{setQuotePending(false)}"));
 ok("structured quotation totals use canonical quantities and are audited on the database boundary", structuredQuoteMigration.includes("round(canonical_quantity * unit_price)") && structuredQuoteMigration.includes("DUPLICATE_ENTRY") && structuredQuoteMigration.includes("quote_entered_as_admin=is_admin") && structuredQuoteMigration.includes("STALE_REQUIREMENT"));
 ok("screenshot success refreshes both project surfaces", workspace.includes("officialImagePosition: completed.data.position") && workspace.includes("router.refresh()") && officialImageActions.includes('revalidatePath("/projects")'));
 ok("project detail preserves official image metadata", projection.includes("officialImagePosition: f.officialImagePosition") && projection.includes("previewUrl: f.previewUrl"));

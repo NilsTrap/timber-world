@@ -23,3 +23,13 @@ assert.throws(() => calculateCommercialRollup({ ...base, contributions: [{ ...ba
 assert.throws(() => calculateCommercialRollup({ ...base, contributions: [base.contributions[0]!, { ...base.contributions[0]! }], scope: "partial", adjustmentCents: 0, marginMode: "amount", marginValue: 0 }), /twice/);
 const zeroLine=calculateCommercialRollup({scope:"full",requirements:[{originLineItemId:"paid",requiredQuantity:1},{originLineItemId:"free",requiredQuantity:100}],contributions:[{...base.contributions[0]!,originLineItemId:"paid",selectedQuantity:1,availableQuantity:1,availableAmountCents:100},{...base.contributions[1]!,originLineItemId:"free",selectedQuantity:100,availableQuantity:100,availableAmountCents:0}],adjustmentCents:9,marginMode:"amount",marginValue:11});
 assert.equal(zeroLine.lines.find((line)=>line.originLineItemId==="free")?.offeredValueCents,0);
+
+// The database allocation uses the same stable largest-remainder rule: an odd
+// total is preserved exactly and ties resolve by origin id.
+const totalOnlyCents=1001;
+const weights=[{id:"a",quantity:1},{id:"b",quantity:1},{id:"c",quantity:1}];
+const baseAllocations=weights.map((line)=>({id:line.id,cents:Math.floor(totalOnlyCents*line.quantity/3),remainder:(totalOnlyCents*line.quantity/3)%1}));
+let remainder=totalOnlyCents-baseAllocations.reduce((sum,line)=>sum+line.cents,0);
+for(const line of baseAllocations.sort((a,b)=>b.remainder-a.remainder||a.id.localeCompare(b.id))){if(remainder--<=0)break;line.cents+=1;}
+assert.equal(baseAllocations.reduce((sum,line)=>sum+line.cents,0),totalOnlyCents);
+assert.equal(baseAllocations.find((line)=>line.id==="a")?.cents,334);

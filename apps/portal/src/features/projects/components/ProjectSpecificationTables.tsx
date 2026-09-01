@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import type { ProjectLine, ProjectSpecificationField } from "../types";
 import { updateProjectSpecificationLine, updateProjectSpecificationStructuredValues } from "../actions/projectSpecificationActions";
 import { correctProjectQuotation, getProjectRfqState, initializeDirectProjectQuotation, type ProjectQuoteEntry, type ProjectRfqCandidate } from "../actions/projectRfqActions";
-import { pricesFromQuotation } from "../services/projectQuotationRows";
+import { pricesFromQuotation, quotationTotalCents, type ProjectQuotationPricingMode } from "../services/projectQuotationRows";
 
 type SpecificationTablesProps = {
   projectId: string;
@@ -28,6 +28,8 @@ export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnter
   const [candidates, setCandidates] = useState<ProjectRfqCandidate[]>([]);
   const [candidateId, setCandidateId] = useState("");
   const [quotePrices, setQuotePrices] = useState<Record<string, string>>({});
+  const [quoteMode,setQuoteMode]=useState<ProjectQuotationPricingMode|null>(null);
+  const [quoteTotal,setQuoteTotal]=useState("");
   const [quoteStatus, setQuoteStatus] = useState<"idle" | "saved" | "error">("idle");
   const quotePricesRef = useRef<Record<string, string>>({});
   const candidatesRef = useRef<ProjectRfqCandidate[]>([]);
@@ -53,8 +55,15 @@ export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnter
 
   function selectCandidate(nextId: string) {
     setCandidateId(nextId); candidateIdRef.current = nextId; quoteErrorKeysRef.current.clear(); setQuoteStatus("idle");
-    const next = pricesFromQuotation(candidates.find((candidate) => candidate.id === nextId)?.quoteEntries ?? []);
+    const candidate=candidates.find((item)=>item.id===nextId);const next = pricesFromQuotation(candidate?.quoteEntries ?? []);
+    setQuoteMode(candidate?.pricingMode??null);setQuoteTotal(candidate?.pricingMode==="total"&&candidate.quoteTotalCents!=null?(candidate.quoteTotalCents/100).toFixed(2):"");
     quotePricesRef.current = next; setQuotePrices(next);
+  }
+
+  function restorePersistedQuotation(candidate: ProjectRfqCandidate) {
+    const prices = pricesFromQuotation(candidate.quoteEntries);
+    setQuoteMode(candidate.pricingMode); setQuoteTotal(candidate.pricingMode === "total" && candidate.quoteTotalCents != null ? (candidate.quoteTotalCents / 100).toFixed(2) : "");
+    quotePricesRef.current = prices; setQuotePrices(prices);
   }
 
   async function createDirectQuotation() {
@@ -66,7 +75,7 @@ export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnter
       if (!refreshed.success || !refreshed.data) { const message = refreshed.success ? "Could not load supplier quotation" : refreshed.error; setQuoteLoadError(message); toast.error(message); return; }
       setCandidates(refreshed.data.candidates); candidatesRef.current = refreshed.data.candidates;
       const candidate = refreshed.data.candidates.find((item) => item.id === result.data.candidateId);
-      if (candidate) { setCandidateId(candidate.id); candidateIdRef.current = candidate.id; const prices = pricesFromQuotation(candidate.quoteEntries); setQuotePrices(prices); quotePricesRef.current = prices; }
+      if (candidate) { setCandidateId(candidate.id); candidateIdRef.current = candidate.id; const prices = pricesFromQuotation(candidate.quoteEntries); setQuotePrices(prices); quotePricesRef.current = prices;setQuoteMode(candidate.pricingMode);setQuoteTotal(candidate.pricingMode==="total"&&candidate.quoteTotalCents!=null?(candidate.quoteTotalCents/100).toFixed(2):""); }
     } catch {
       const message = "Could not create supplier quotation";
       setQuoteLoadError(message); toast.error(message);
@@ -107,15 +116,27 @@ export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnter
       if (!candidate) { setQuoteStatus("error"); toast.error("Select an RFQ candidate"); return; }
       const entries = buildEntries(candidate);
       let result;
-      try { result = await correctProjectQuotation({ candidateId: candidate.id, entries, notes: candidate.quoteNotes ?? "" }); }
-      catch { quoteErrorKeysRef.current.add(entryKey); setQuoteStatus("error"); toast.error("Could not save quotation"); return; }
-      if (!result.success) { quoteErrorKeysRef.current.add(entryKey); setQuoteStatus("error"); toast.error(result.error); return; }
+      try { result = await correctProjectQuotation({ candidateId: candidate.id, pricingMode:"itemized", entries, totalCents:null, notes: candidate.quoteNotes ?? "" }); }
+      catch { restorePersistedQuotation(candidate); quoteErrorKeysRef.current.add(entryKey); setQuoteStatus("error"); toast.error("Could not save quotation"); return; }
+      if (!result.success) { restorePersistedQuotation(candidate); quoteErrorKeysRef.current.add(entryKey); setQuoteStatus("error"); toast.error(result.error); return; }
       quoteErrorKeysRef.current.delete(entryKey);
       const quoteTotalCents = entries.reduce((sum, item) => sum + Math.round(item.quantity * item.unitPriceCents), 0);
-      const nextCandidates = candidatesRef.current.map((item) => item.id === candidate.id ? { ...item, quoteEntries: entries, quoteTotalCents } : item);
+      const nextCandidates = candidatesRef.current.map((item) => item.id === candidate.id ? { ...item, pricingMode:"itemized" as const, quoteEntries: entries, quoteTotalCents } : item);
       candidatesRef.current = nextCandidates; setCandidates(nextCandidates); setQuoteStatus(quoteErrorKeysRef.current.size ? "error" : "saved");
       window.dispatchEvent(new CustomEvent("project-quotation-updated", { detail: { projectId } }));
     }).finally(() => { quoteQueuedRef.current -= 1; if (quoteQueuedRef.current === 0) setQuotePending(false); });
+  }
+
+  async function saveTotalQuotation(){
+    const candidate=candidatesRef.current.find((item)=>item.id===candidateIdRef.current);const totalCents=quotationTotalCents(quoteTotal);
+    if(!candidate||totalCents===null){toast.error("Enter a valid total project price");return}
+    setQuotePending(true);setQuoteStatus("idle");
+    try{
+      const result=await correctProjectQuotation({candidateId:candidate.id,pricingMode:"total",entries:[],totalCents,notes:candidate.quoteNotes??""});
+      if(!result.success){restorePersistedQuotation(candidate);setQuoteStatus("error");toast.error(result.error);return}
+      const next=candidatesRef.current.map((item)=>item.id===candidate.id?{...item,pricingMode:"total" as const,quoteEntries:[],quoteTotalCents:totalCents}:item);candidatesRef.current=next;setCandidates(next);setQuoteStatus("saved");window.dispatchEvent(new CustomEvent("project-quotation-updated",{detail:{projectId}}));
+    }catch{restorePersistedQuotation(candidate);setQuoteStatus("error");toast.error("Could not save quotation");}
+    finally{setQuotePending(false)}
   }
 
   return <div className="space-y-3 p-3">
@@ -124,18 +145,19 @@ export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnter
       <p className={`pb-2 text-xs ${quoteLoadError ? "text-destructive" : "text-muted-foreground"}`}>{quoteLoadError || (candidates.length ? selectedCandidate ? `Editing the authoritative ${selectedCandidate.organisationName} quotation.` : "Select whose quotation was received." : sellerOrganisationId ? `No quotation exists yet for ${sellerOrganisationName ?? "the assigned seller"}.` : "Assign a seller before entering a quotation.")}</p>
       {!assignedSellerCandidate && sellerOrganisationId ? <Button size="sm" disabled={quotePending} onClick={() => void createDirectQuotation()}>Create supplier quotation</Button> : null}
       {candidateId ? <span className={`ml-auto pb-2 text-xs ${quoteStatus === "error" ? "text-destructive" : "text-muted-foreground"}`}>{quotePending ? "Saving quotation…" : quoteStatus === "saved" ? "Quotation saved" : quoteStatus === "error" ? "Save failed" : "Saves when focus leaves a price"}</span> : null}
+      {candidateId?<fieldset className="flex w-full flex-wrap items-center gap-4 border-t pt-3"><legend className="sr-only">Quotation pricing mode</legend><label className="flex items-center gap-2 text-sm"><input type="radio" checked={quoteMode==="itemized"} onChange={()=>{if(quoteMode==="total"&&!window.confirm("Changing pricing mode replaces the saved total price. Continue?"))return;setQuoteMode("itemized");setQuoteTotal("")}}/>Price by line/process</label><label className="flex items-center gap-2 text-sm"><input type="radio" checked={quoteMode==="total"} onChange={()=>{if(quoteMode==="itemized"&&!window.confirm("Changing pricing mode replaces the saved line prices. Continue?"))return;setQuoteMode("total");setQuotePrices({});quotePricesRef.current={}}}/>One total project price</label>{quoteMode==="total"?<><Input className="w-44" aria-label="Total project price" type="number" min="0" step="0.01" value={quoteTotal} onChange={(event)=>setQuoteTotal(event.target.value)}/><Button size="sm" disabled={quotePending||quotationTotalCents(quoteTotal)===null} onClick={()=>void saveTotalQuotation()}>Save total</Button></>:null}</fieldset>:null}
     </div> : null}
     {groups.map((group, groupIndex) => <section key={group.key} className="overflow-hidden rounded-lg border border-[#ded8d0] bg-white dark:border-border dark:bg-card">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ded8d0] bg-white px-3 py-2 dark:border-border dark:bg-card">
         <div><h3 className="font-semibold">{groupTitle(group.lines, groupIndex)}</h3><p className="text-xs text-muted-foreground">{group.lines.length} line(s) sharing the same properties</p></div>
       </div>
       <div>
-        <table className={`w-full table-fixed border-collapse text-sm ${DENSE_TABLE_CLASS}`}>
+        <table className={`w-full table-fixed border-collapse text-sm ${DENSE_TABLE_CLASS} ${selectedCandidate&&quoteMode!=="itemized"?"[&_input[aria-label^='Quotation_price']]:hidden":""}`}>
           <thead><tr className="border-b border-[#ded8d0] bg-[#f3f0ec] text-left text-xs text-[#485358] dark:border-border dark:bg-muted dark:text-muted-foreground">
             <th className="w-10 px-3 py-2 font-medium">#</th>
             <th className="w-36 px-3 py-2 font-medium">Line item</th><th className="px-3 py-2 font-medium">Specification</th>{canEdit ? <th className="w-24 px-3 py-2"><span className="sr-only">Actions</span></th> : null}
           </tr></thead>
-          <tbody>{group.lines.map((line) => <SpecificationProductRows key={line.id ?? line.lineNo} projectId={projectId} line={line} fields={group.fields} canEdit={canEdit} currency={currency} quotation={selectedCandidate ? { candidateId: selectedCandidate.id, candidateName: selectedCandidate.organisationName, prices: quotePrices, setPrice: setQuotePrice, save: saveQuotationEntry, remove: removeQuotationEntry, pending: quotePending } : null} onEdit={onEdit} onDelete={onDelete} />)}</tbody>
+          <tbody>{group.lines.map((line) => <SpecificationProductRows key={line.id ?? line.lineNo} projectId={projectId} line={line} fields={group.fields} canEdit={canEdit} currency={currency} quotation={selectedCandidate&&quoteMode==="itemized" ? { candidateId: selectedCandidate.id, candidateName: selectedCandidate.organisationName, prices: quotePrices, setPrice: setQuotePrice, save: saveQuotationEntry, remove: removeQuotationEntry, pending: quotePending } : null} onEdit={onEdit} onDelete={onDelete} />)}</tbody>
         </table>
       </div>
     </section>)}
