@@ -245,15 +245,13 @@ export async function updateProjectSpecificationStructuredValues(raw: unknown): 
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid specification fields", code: "VALIDATION_ERROR" };
   const ctx = await editableProject(parsed.data.projectId);
   if (!ctx.success) return ctx;
-  const { error } = await ctx.data.db.rpc("update_project_spec_values_and_applicability", {
+  const { data, error } = await ctx.data.db.rpc("update_project_spec_values_and_applicability", {
     ...structuredSpecificationPayload(parsed.data),
+    p_basic_states: parsed.data.basicValues.map(({ key, active }) => ({ key, active })),
     p_process_states: parsed.data.processValues.map(({ key, active }) => ({ key, active })),
   });
   if (error) return mapStructuredValueRpcError(error.message ?? "");
-  const { data, error: versionError } = await ctx.data.db.from("order_line_items")
-    .select("updated_at").eq("id", parsed.data.lineId).eq("order_id", parsed.data.projectId).eq("side", "sell").maybeSingle();
-  if (versionError) return { success: false, error: versionError.message, code: "FETCH_FAILED" };
-  const version = z.string().datetime({ offset: true }).safeParse(data?.updated_at);
+  const version = z.string().datetime({ offset: true }).safeParse(data);
   if (!version.success) return { success: false, error: "Line version was not returned", code: "UPDATE_FAILED" };
   return { success: true, data: { id: parsed.data.lineId, version: version.data } };
 }

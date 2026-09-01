@@ -83,6 +83,8 @@ export function ProjectDetailView({
         currency={currency}
         canEdit={canEditSpecification}
         canEnterQuotation={viewer.isPlatformAdmin}
+        sellerOrganisationId={project.seller?.id ?? null}
+        sellerOrganisationName={project.seller?.name ?? null}
       />
 
       <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={canManageRfq} canEnterCandidateQuotation={viewer.isPlatformAdmin} initialOptions={initialRfqCandidates} lines={project.lines} />

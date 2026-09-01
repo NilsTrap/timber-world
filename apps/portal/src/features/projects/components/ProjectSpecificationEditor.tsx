@@ -23,8 +23,8 @@ const LINE_UNITS = ["kg", "piece", "m3", "m2", "linear_m", "package", "crate", "
 type Draft = { id?: string; productName: string; quantity: string; unit: string; notes: string; catalogVariantId?: string; isCatalogSnapshot?: boolean };
 const blank = (): Draft => ({ productName: "", quantity: "1", unit: "piece", notes: "" });
 
-export function ProjectSpecificationEditor({ projectId, lines, currency = "EUR", canEdit, canEnterQuotation = false }: {
-  projectId: string; lines: ProjectLine[]; currency?: string; canEdit: boolean; canEnterQuotation?: boolean;
+export function ProjectSpecificationEditor({ projectId, lines, currency = "EUR", canEdit, canEnterQuotation = false, sellerOrganisationId = null, sellerOrganisationName = null }: {
+  projectId: string; lines: ProjectLine[]; currency?: string; canEdit: boolean; canEnterQuotation?: boolean; sellerOrganisationId?: string | null; sellerOrganisationName?: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -87,6 +87,8 @@ export function ProjectSpecificationEditor({ projectId, lines, currency = "EUR",
       lines={lines}
       canEdit={canEdit}
       canEnterQuotation={canEnterQuotation}
+      sellerOrganisationId={sellerOrganisationId}
+      sellerOrganisationName={sellerOrganisationName}
       currency={currency}
       onEdit={(line) => { setCatalog([]); setDraft(lineToDraft(line)); }}
       onDelete={setDeleteTarget}
@@ -117,7 +119,7 @@ export function ProjectSpecificationEditor({ projectId, lines, currency = "EUR",
           </div></Field>
           : <Field label="Deliverable"><Input disabled={Boolean(draft.isCatalogSnapshot)} value={draft.productName} onChange={(event) => setDraft({ ...draft, productName: event.target.value })} autoFocus /></Field>}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Quantity"><Input type="number" min={isDiscreteUnit(draft.unit) ? "1" : "0.0001"} step={isDiscreteUnit(draft.unit) ? "1" : "any"} value={draft.quantity} onChange={(event) => setDraft({ ...draft, quantity: event.target.value })} /></Field>
+            <Field label="Quantity"><Input type="text" inputMode="decimal" value={draft.quantity} onChange={(event) => setDraft({ ...draft, quantity: event.target.value })} /></Field>
             <Field label="Unit"><select disabled={Boolean(draft.catalogVariantId || draft.isCatalogSnapshot)} className="h-9 rounded-md border bg-background px-3" value={draft.unit} onChange={(event) => setDraft({ ...draft, unit: event.target.value })}>{LINE_UNITS.map((unit) => <option key={unit}>{unit}</option>)}</select></Field>
           </div>
           <Field label="Technical notes"><Input value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></Field>

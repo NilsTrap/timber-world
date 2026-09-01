@@ -10,7 +10,7 @@ const ids = {
 
 const parsed = structuredSpecificationValuesSchema.parse({
   ...ids,
-  basicValues: [{ key: "grade", value: "S355" }, { key: "coated", value: "false" }],
+  basicValues: [{ key: "grade", value: "S355", active: true }, { key: "coated", value: "false", active: false }],
   processValues: [{ key: "welding", value: "0", active: false }, { key: "cutting", value: "12.5", active: true }],
 });
 assert.deepEqual(structuredSpecificationPayload(parsed), {
@@ -23,7 +23,8 @@ assert.deepEqual(structuredSpecificationPayload(parsed), {
 assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, processValues: [{ key: "welding", value: "-1" }] }).success, false);
 assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, processValues: [{ key: "welding", value: "0", active: false }] }).success, true);
 assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, processValues: [{ key: "welding", value: "0" }] }).success, false);
-assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, basicValues: [{ key: "grade", value: "A" }, { key: "grade", value: "B" }] }).success, false);
+assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, basicValues: [{ key: "grade", value: "A", active: true }, { key: "grade", value: "B", active: true }] }).success, false);
+assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, basicValues: [{ key: "grade", value: "A" }] }).success, false);
 assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, version: null }).success, false);
 
 const migration = readFileSync("../../supabase/migrations/20260830110000_catalogue_assigned_field_snapshots.sql", "utf8");
@@ -47,6 +48,11 @@ assert.match(applicabilityMigration, /is_active BOOLEAN NOT NULL DEFAULT true/);
 assert.match(applicabilityMigration, /update_project_spec_values_and_applicability/);
 assert.match(applicabilityMigration, /guard_inactive_project_rfq_process_entries/);
 assert.match(applicabilityMigration, /'active',pr\.is_active/);
+const directMigration = readFileSync("../../supabase/migrations/20260901130000_project_property_applicability_direct_quotation.sql", "utf8");
+assert.match(directMigration, /p_basic_states JSONB/);
+assert.match(directMigration, /RETURNS TIMESTAMPTZ/);
+assert.match(directMigration, /initialize_direct_project_quotation/);
+assert.match(directMigration, /seller_organisation_id<>c\.organization_id/);
 
 const tables = readFileSync("src/features/projects/components/ProjectSpecificationTables.tsx", "utf8");
 assert.match(tables, /useEffect\(\(\) =>/);
@@ -63,7 +69,9 @@ assert.match(tables, /queueMicrotask\(onCommit\)/);
 assert.match(tables, /sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4/);
 assert.match(tables, /field\.type === "select"/);
 assert.match(tables, /field\.type === "boolean"/);
-assert.match(tables, /\[&::-webkit-inner-spin-button\]:appearance-none/);
+assert.match(tables, /type=\{numeric \? "text" : type\}/);
+assert.match(tables, /Show inactive properties/);
+assert.match(tables, /Create supplier quotation/);
 assert.match(tables, /Select existing RFQ candidate/);
 assert.match(tables, /correctProjectQuotation/);
 assert.match(tables, /Quotation unit price/);
@@ -78,7 +86,7 @@ const actions = readFileSync("src/features/projects/actions/projectSpecification
 assert.match(actions, /select\("id, updated_at"\)/);
 assert.match(actions, /guardedUpdate\.eq\("updated_at", input\.version\)/);
 assert.match(actions, /data: \{ id: input\.lineId, version: version\.data \}/);
-assert.match(actions, /select\("updated_at"\)/);
+assert.match(actions, /p_basic_states/);
 assert.match(actions, /data: \{ id: parsed\.data\.lineId, version: version\.data \}/);
 const autosaveActions = actions.slice(actions.indexOf("export async function updateProjectSpecificationLine"), actions.indexOf("export async function deleteProjectSpecificationLine"));
 assert.doesNotMatch(autosaveActions, /refreshProject\(/);

@@ -176,6 +176,8 @@ export interface ProjectSpecificationField {
   sortOrder: number;
   required: boolean;
   allowedOptions: string[];
+  /** Line-snapshot applicability. Missing legacy values project as active. */
+  active: boolean;
 }
 
 export interface ProjectLineComponent {

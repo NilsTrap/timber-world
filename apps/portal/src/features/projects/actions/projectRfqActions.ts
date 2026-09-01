@@ -14,6 +14,7 @@ const quoteEntrySchema=z.object({targetType:z.enum(["line","process"]),targetId:
 const quoteSchema = z.object({ candidateId: uuid, entries:z.array(quoteEntrySchema).min(1).max(500), notes: z.string().trim().max(4000).optional().default("") });
 const adminQuoteSchema = quoteSchema.extend({ entries: z.array(quoteEntrySchema).max(500) });
 const awardSchema = z.object({ projectId: uuid, rfqId: uuid, candidateId: uuid });
+const directQuoteSchema = z.object({ projectId: uuid });
 const marginSchema = z.object({
   projectId: uuid,
   mode: z.enum(["amount", "percentage"]),
@@ -46,6 +47,19 @@ async function requireOwner(projectId: string) {
   if (!a.isPlatformAdmin) {
     if (a.orgId !== project.data.buyer.id) return null;
     const { data: ownOrg } = await a.db.from("organisations").select("is_trader,is_active").eq("id",a.orgId).maybeSingle();
+    if (!ownOrg?.is_active || !ownOrg.is_trader) return null;
+  }
+  return { a, project: project.data };
+}
+
+async function requireAwardManager(projectId: string) {
+  const a = await resolveProjectsActor();
+  if (!a.ok) return null;
+  const project = await getOrderDeal(a.db, a.actor, projectId);
+  if (!project.success || !project.data.buyer.id) return null;
+  if (!a.isPlatformAdmin) {
+    if (a.orgId !== project.data.buyer.id) return null;
+    const { data: ownOrg } = await a.db.from("organisations").select("is_trader,is_active").eq("id", a.orgId).maybeSingle();
     if (!ownOrg?.is_active || !ownOrg.is_trader) return null;
   }
   return { a, project: project.data };
@@ -86,6 +100,20 @@ export async function requestProjectQuotations(raw: unknown): Promise<ActionResu
   const {data,error}=await owner.a.db.rpc("create_project_rfq",{p_order_id:parsed.data.projectId,p_candidate_ids:parsed.data.candidateIds,p_deadline:parsed.data.deadline.toISOString()});
   if(error)return{success:false,...mapCreateRfqError(error.message)}; revalidatePath(`/projects/${parsed.data.projectId}`); return{success:true,data:{id:data as string}};
 }
+export async function initializeDirectProjectQuotation(raw: unknown): Promise<ActionResult<{rfqId:string;candidateId:string}>> {
+  const parsed=directQuoteSchema.safeParse(raw);if(!parsed.success)return{success:false,error:"Invalid project",code:"VALIDATION_ERROR"};
+  const a=await resolveProjectsActor();if(!a.ok||!a.isPlatformAdmin)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+  const {data,error}=await a.db.rpc("initialize_direct_project_quotation",{p_order_id:parsed.data.projectId});
+  if(error){
+    if(/seller.*required|seller.*eligible|self deal/i.test(error.message))return{success:false,error:"Assign an active eligible seller before creating its quotation",code:"VALIDATION_ERROR"};
+    if(/forbidden/i.test(error.message))return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+    return{success:false,error:"Could not create supplier quotation",code:"UPDATE_FAILED"};
+  }
+  const result=data as Record<string,unknown>;
+  if(typeof result?.rfqId!=="string"||typeof result?.candidateId!=="string")return{success:false,error:"Quotation identifiers were not returned",code:"UPDATE_FAILED"};
+  revalidatePath(`/projects/${parsed.data.projectId}`);
+  return{success:true,data:{rfqId:result.rfqId,candidateId:result.candidateId}};
+}
 export async function submitProjectQuotation(raw: unknown): Promise<ActionResult<true>> {
   const parsed=quoteSchema.safeParse(raw); if(!parsed.success)return{success:false,error:parsed.error.issues[0]?.message??"Invalid quotation",code:"VALIDATION_ERROR"};
   const a=await resolveProjectsActor(); if(!a.ok||(!a.orgId&&!a.isPlatformAdmin))return{success:false,error:"Not allowed",code:"FORBIDDEN"};
@@ -101,7 +129,7 @@ export async function correctProjectQuotation(raw:unknown):Promise<ActionResult<
 }
 export async function awardProjectQuotation(raw: unknown): Promise<ActionResult<{projectId:string}>> {
   const parsed=awardSchema.safeParse(raw); if(!parsed.success)return{success:false,error:"Invalid award",code:"VALIDATION_ERROR"};
-  const owner=await requireOwner(parsed.data.projectId); if(!owner)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+  const owner=await requireAwardManager(parsed.data.projectId); if(!owner)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
   const { data: rfq, error: lookupError } = await owner.a.db.from("project_rfqs").select("id").eq("id",parsed.data.rfqId).eq("order_id",parsed.data.projectId).maybeSingle();
   if (lookupError || !rfq) return { success:false,error:"Quotation request not found",code:"NOT_FOUND" };
   const {data,error}=await owner.a.db.rpc("award_project_rfq",{p_rfq_id:parsed.data.rfqId,p_candidate_id:parsed.data.candidateId});

@@ -6,7 +6,7 @@ import { Button, DENSE_TABLE_CLASS, Input } from "@timber/ui";
 import { toast } from "sonner";
 import type { ProjectLine, ProjectSpecificationField } from "../types";
 import { updateProjectSpecificationLine, updateProjectSpecificationStructuredValues } from "../actions/projectSpecificationActions";
-import { correctProjectQuotation, getProjectRfqState, type ProjectQuoteEntry, type ProjectRfqCandidate } from "../actions/projectRfqActions";
+import { correctProjectQuotation, getProjectRfqState, initializeDirectProjectQuotation, type ProjectQuoteEntry, type ProjectRfqCandidate } from "../actions/projectRfqActions";
 import { pricesFromQuotation } from "../services/projectQuotationRows";
 
 type SpecificationTablesProps = {
@@ -14,12 +14,14 @@ type SpecificationTablesProps = {
   lines: ProjectLine[];
   canEdit: boolean;
   canEnterQuotation: boolean;
+  sellerOrganisationId: string | null;
+  sellerOrganisationName: string | null;
   currency: string;
   onEdit: (line: ProjectLine) => void;
   onDelete: (line: ProjectLine) => void;
 };
 
-export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnterQuotation, currency, onEdit, onDelete }: SpecificationTablesProps) {
+export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnterQuotation, sellerOrganisationId, sellerOrganisationName, currency, onEdit, onDelete }: SpecificationTablesProps) {
   const groups = useMemo(() => groupLinesBySchema(lines), [lines]);
   const [quotePending, setQuotePending] = useState(false);
   const [quoteLoadError, setQuoteLoadError] = useState("");
@@ -34,6 +36,7 @@ export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnter
   const quoteQueuedRef = useRef(0);
   const quoteErrorKeysRef = useRef(new Set<string>());
   const selectedCandidate = candidates.find((candidate) => candidate.id === candidateId) ?? null;
+  const assignedSellerCandidate = candidates.find((candidate) => candidate.organisationId === sellerOrganisationId) ?? null;
 
   useEffect(() => {
     if (!canEnterQuotation) return;
@@ -52,6 +55,24 @@ export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnter
     setCandidateId(nextId); candidateIdRef.current = nextId; quoteErrorKeysRef.current.clear(); setQuoteStatus("idle");
     const next = pricesFromQuotation(candidates.find((candidate) => candidate.id === nextId)?.quoteEntries ?? []);
     quotePricesRef.current = next; setQuotePrices(next);
+  }
+
+  async function createDirectQuotation() {
+    setQuotePending(true); setQuoteLoadError("");
+    try {
+      const result = await initializeDirectProjectQuotation({ projectId });
+      if (!result.success) { setQuoteLoadError(result.error); toast.error(result.error); return; }
+      const refreshed = await getProjectRfqState(projectId);
+      if (!refreshed.success || !refreshed.data) { const message = refreshed.success ? "Could not load supplier quotation" : refreshed.error; setQuoteLoadError(message); toast.error(message); return; }
+      setCandidates(refreshed.data.candidates); candidatesRef.current = refreshed.data.candidates;
+      const candidate = refreshed.data.candidates.find((item) => item.id === result.data.candidateId);
+      if (candidate) { setCandidateId(candidate.id); candidateIdRef.current = candidate.id; const prices = pricesFromQuotation(candidate.quoteEntries); setQuotePrices(prices); quotePricesRef.current = prices; }
+    } catch {
+      const message = "Could not create supplier quotation";
+      setQuoteLoadError(message); toast.error(message);
+    } finally {
+      setQuotePending(false);
+    }
   }
 
   function setQuotePrice(key: string, value: string) {
@@ -100,7 +121,8 @@ export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnter
   return <div className="space-y-3 p-3">
     {canEnterQuotation ? <div className="flex flex-wrap items-end gap-3 rounded-lg border border-[#ded8d0] bg-[#f8faf9] p-3 dark:border-border dark:bg-muted/30">
       <label className="grid min-w-64 gap-1 text-sm"><span className="font-medium">Supplier quotation</span><select disabled={quotePending} className="h-9 rounded-md border bg-background px-3" value={candidateId} onChange={(event) => selectCandidate(event.target.value)}><option value="">Select existing RFQ candidate</option>{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.organisationName}{candidate.status === "awarded" ? " · awarded" : ""}</option>)}</select></label>
-      <p className={`pb-2 text-xs ${quoteLoadError ? "text-destructive" : "text-muted-foreground"}`}>{quoteLoadError || (candidates.length ? selectedCandidate ? `Editing the authoritative ${selectedCandidate.organisationName} quotation.` : "Select whose quotation was received." : "Create a quotation request and candidate before entering prices here.")}</p>
+      <p className={`pb-2 text-xs ${quoteLoadError ? "text-destructive" : "text-muted-foreground"}`}>{quoteLoadError || (candidates.length ? selectedCandidate ? `Editing the authoritative ${selectedCandidate.organisationName} quotation.` : "Select whose quotation was received." : sellerOrganisationId ? `No quotation exists yet for ${sellerOrganisationName ?? "the assigned seller"}.` : "Assign a seller before entering a quotation.")}</p>
+      {!assignedSellerCandidate && sellerOrganisationId ? <Button size="sm" disabled={quotePending} onClick={() => void createDirectQuotation()}>Create supplier quotation</Button> : null}
       {candidateId ? <span className={`ml-auto pb-2 text-xs ${quoteStatus === "error" ? "text-destructive" : "text-muted-foreground"}`}>{quotePending ? "Saving quotation…" : quoteStatus === "saved" ? "Quotation saved" : quoteStatus === "error" ? "Save failed" : "Saves when focus leaves a price"}</span> : null}
     </div> : null}
     {groups.map((group, groupIndex) => <section key={group.key} className="overflow-hidden rounded-lg border border-[#ded8d0] bg-white dark:border-border dark:bg-card">
@@ -128,22 +150,25 @@ function SpecificationProductRows({ projectId, line, fields, canEdit, currency, 
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [processesOpen, setProcessesOpen] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
+  const [showInactiveProperties, setShowInactiveProperties] = useState(false);
   const [quantity, setQuantity] = useState(lineQuantity(line));
   const [notes, setNotes] = useState(line.notes ?? "");
   const [basicValues, setBasicValues] = useState<Record<string, string>>(() => valuesForBasics(line));
+  const [activeProperties, setActiveProperties] = useState<Record<string, boolean>>(() => applicabilityForBasics(line));
   const [processValues, setProcessValues] = useState<Record<string, string>>(() => valuesForProcesses(line));
   const [activeProcesses, setActiveProcesses] = useState<Record<string, boolean>>(() => applicabilityForProcesses(line));
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   const queuedCountRef = useRef(0);
   const queueHadErrorRef = useRef(false);
   const versionRef = useRef(line.structuredValuesVersion);
-  const valuesRef = useRef({ quantity: lineQuantity(line), notes: line.notes ?? "", basic: valuesForBasics(line), process: valuesForProcesses(line), active: applicabilityForProcesses(line) });
+  const valuesRef = useRef({ quantity: lineQuantity(line), notes: line.notes ?? "", basic: valuesForBasics(line), basicActive: applicabilityForBasics(line), process: valuesForProcesses(line), active: applicabilityForProcesses(line) });
   const committedRef = useRef(structuredClone(valuesRef.current));
   const lastQueuedLineRef = useRef(lineSignature(valuesRef.current));
   const lastQueuedStructuredRef = useRef(structuredSignature(valuesRef.current));
   const processes = line.processRequirements ?? [];
   const editableSnapshot = canEdit && line.isCatalogSnapshot && Boolean(line.id);
   const structuredFields = line.basicProperties ?? [];
+  const visibleFields = showInactiveProperties ? fields : fields.filter((field) => activeProperties[field.key] !== false);
   const visibleProcesses = showInactive ? processes : processes.filter((process) => activeProcesses[process.fieldKey] !== false);
   const activeCount = processes.filter((process) => activeProcesses[process.fieldKey] !== false).length;
   const columnCount = canEdit ? 4 : 3;
@@ -152,8 +177,8 @@ function SpecificationProductRows({ projectId, line, fields, canEdit, currency, 
   const lineUnitPrice = quotation && linePriceKey ? quotation.prices[linePriceKey] ?? "" : "";
 
   useEffect(() => {
-    const next = { quantity: lineQuantity(line), notes: line.notes ?? "", basic: valuesForBasics(line), process: valuesForProcesses(line), active: applicabilityForProcesses(line) };
-    setQuantity(next.quantity); setNotes(next.notes); setBasicValues(next.basic); setProcessValues(next.process); setActiveProcesses(next.active); setShowInactive(false);
+    const next = { quantity: lineQuantity(line), notes: line.notes ?? "", basic: valuesForBasics(line), basicActive: applicabilityForBasics(line), process: valuesForProcesses(line), active: applicabilityForProcesses(line) };
+    setQuantity(next.quantity); setNotes(next.notes); setBasicValues(next.basic); setActiveProperties(next.basicActive); setProcessValues(next.process); setActiveProcesses(next.active); setShowInactive(false); setShowInactiveProperties(false);
     valuesRef.current = next; committedRef.current = structuredClone(next); versionRef.current = line.structuredValuesVersion;
     lastQueuedLineRef.current = lineSignature(next); lastQueuedStructuredRef.current = structuredSignature(next); setSaveStatus("idle");
   // Server actions may re-render this client component with a new `line` object.
@@ -177,21 +202,28 @@ function SpecificationProductRows({ projectId, line, fields, canEdit, currency, 
     });
   }
 
-  function saveStructuredFields(onSaved?: () => void) {
+  function saveStructuredFields(onSaved?: () => void, onFailed?: () => void) {
     if (!line.id || !editableSnapshot) return;
     const snapshot = structuredClone(valuesRef.current);
     const signature = structuredSignature(snapshot);
     if (signature === lastQueuedStructuredRef.current) return;
     lastQueuedStructuredRef.current = signature;
     enqueue(async () => {
-      const structured = await updateProjectSpecificationStructuredValues({
-        projectId, lineId: line.id!, version: versionRef.current,
-        basicValues: structuredFields.map((field) => ({ key: field.key, value: snapshot.basic[field.key] ?? "" })),
-        processValues: processes.map((process) => ({ key: process.fieldKey, value: snapshot.process[process.fieldKey] ?? "0", active: snapshot.active[process.fieldKey] !== false })),
-      });
-      if (!structured.success) { if (lastQueuedStructuredRef.current === signature) lastQueuedStructuredRef.current = structuredSignature(committedRef.current); toast.error(structured.error); return false; }
+      let structured;
+      try {
+        structured = await updateProjectSpecificationStructuredValues({
+          projectId, lineId: line.id!, version: versionRef.current,
+          basicValues: structuredFields.map((field) => ({ key: field.key, value: snapshot.basic[field.key] ?? "", active: snapshot.basicActive[field.key] !== false })),
+          processValues: processes.map((process) => ({ key: process.fieldKey, value: snapshot.process[process.fieldKey] ?? "0", active: snapshot.active[process.fieldKey] !== false })),
+        });
+      } catch (error) {
+        onFailed?.();
+        if (lastQueuedStructuredRef.current === signature) lastQueuedStructuredRef.current = structuredSignature(committedRef.current);
+        throw error;
+      }
+      if (!structured.success) { onFailed?.(); if (lastQueuedStructuredRef.current === signature) lastQueuedStructuredRef.current = structuredSignature(committedRef.current); toast.error(structured.error); return false; }
       versionRef.current = structured.data.version;
-      committedRef.current = { ...committedRef.current, basic: snapshot.basic, process: snapshot.process, active: snapshot.active };
+      committedRef.current = { ...committedRef.current, basic: snapshot.basic, basicActive: snapshot.basicActive, process: snapshot.process, active: snapshot.active };
       onSaved?.();
       return true;
     });
@@ -216,8 +248,8 @@ function SpecificationProductRows({ projectId, line, fields, canEdit, currency, 
   return <Fragment>
     <tr className="border-b border-[#ebe6e0] bg-white align-top dark:border-border dark:bg-card">
       <td className="px-3 py-4 text-muted-foreground">{line.lineNo}</td><td className="px-3 py-4 font-semibold">{line.productName ?? "—"}<span className="mt-1 block text-xs font-normal text-muted-foreground">{line.unit}</span></td>
-      <td className="border-l p-3"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {fields.map((field) => { const fieldEditable = editableSnapshot && structuredFields.some((candidate) => candidate.key === field.key); return <label key={field.key} className="min-w-0 overflow-hidden rounded-md border border-[#e5e0da] bg-[#fcfbfa] dark:border-border dark:bg-muted/20"><span className="block border-b bg-[#f3f0ec] px-2 py-1 text-xs font-medium text-muted-foreground dark:bg-muted/40">{fieldLabel(field)}</span>{fieldEditable ? <BasicFieldInput field={field} value={basicValues[field.key] ?? ""} onChange={(value) => { setBasicValues((current) => ({ ...current, [field.key]: value })); valuesRef.current.basic = { ...valuesRef.current.basic, [field.key]: value }; }} onCommit={saveStructuredFields} /> : <span className="block min-h-10 px-3 py-2">{displayValue(field, basicValues[field.key])}</span>}</label>; })}
+      <td className="border-l p-3">{fields.some((field) => activeProperties[field.key] === false) ? <label className="mb-2 flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" className="h-3.5 w-3.5 accent-primary" checked={showInactiveProperties} onChange={(event) => setShowInactiveProperties(event.target.checked)} /> Show inactive properties</label> : null}<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {visibleFields.map((field) => { const fieldEditable = editableSnapshot && structuredFields.some((candidate) => candidate.key === field.key); const active = activeProperties[field.key] !== false; return <label key={field.key} className={`min-w-0 overflow-hidden rounded-md border border-[#e5e0da] dark:border-border ${active ? "bg-[#fcfbfa] dark:bg-muted/20" : "bg-[#fafafa] opacity-70 dark:bg-muted/10"}`}><span className="flex items-center gap-1.5 border-b bg-[#f3f0ec] px-2 py-0.5 text-xs font-medium text-muted-foreground dark:bg-muted/40">{fieldEditable ? <input type="checkbox" className="h-3.5 w-3.5 shrink-0 accent-primary" aria-label={`Use ${field.label} for ${line.productName ?? "line"}`} checked={active} onChange={(event) => { const next = event.target.checked; setActiveProperties((current) => ({ ...current, [field.key]: next })); valuesRef.current.basicActive = { ...valuesRef.current.basicActive, [field.key]: next }; saveStructuredFields(undefined, () => { setActiveProperties((current) => ({ ...current, [field.key]: active })); valuesRef.current.basicActive = { ...valuesRef.current.basicActive, [field.key]: active }; }); }} /> : null}<span className="truncate">{fieldLabel(field)}</span></span>{fieldEditable ? <BasicFieldInput field={field} value={basicValues[field.key] ?? ""} disabled={!active} onChange={(value) => { setBasicValues((current) => ({ ...current, [field.key]: value })); valuesRef.current.basic = { ...valuesRef.current.basic, [field.key]: value }; }} onCommit={saveStructuredFields} /> : <span className="block min-h-8 px-2 py-1.5">{displayValue(field, basicValues[field.key])}</span>}</label>; })}
         <label className="overflow-hidden rounded-md border border-[#e5e0da] bg-[#fcfbfa] dark:border-border dark:bg-muted/20"><span className="block border-b bg-[#f3f0ec] px-2 py-1 text-xs font-medium text-muted-foreground dark:bg-muted/40">Quantity</span>{canEdit && line.id ? <CompactInput aria-label={`Quantity for ${line.productName ?? "line"}`} type="number" min="0" step="any" value={quantity} onChange={(event) => { setQuantity(event.target.value); valuesRef.current.quantity = event.target.value; }} onBlur={() => saveLine(() => { if (quotation && lineUnitPrice) quotation.save({ targetType: "line", targetId: line.id!, label: line.productName ?? `Line ${line.lineNo}`, quantity: Number(valuesRef.current.quantity), unit: line.unit }, lineUnitPrice, quotation.candidateId); })} /> : <span className="block min-h-10 px-3 py-2">{quantity}</span>}</label>
         <label className="overflow-hidden rounded-md border border-[#e5e0da] bg-[#fcfbfa] dark:border-border dark:bg-muted/20 sm:col-span-2"><span className="block border-b bg-[#f3f0ec] px-2 py-1 text-xs font-medium text-muted-foreground dark:bg-muted/40">Technical notes</span>{canEdit && line.id ? <CompactInput aria-label={`Technical notes for ${line.productName ?? "line"}`} value={notes} onChange={(event) => { setNotes(event.target.value); valuesRef.current.notes = event.target.value; }} onBlur={() => saveLine()} /> : <span className="block min-h-10 px-3 py-2">{notes || "—"}</span>}</label>
       </div>{quotation && linePriceKey && line.id ? <div className="mt-3 grid items-end gap-2 rounded-md border border-[#d9e2dd] bg-[#f4f8f5] p-2 sm:grid-cols-[1fr_9rem_8rem] dark:border-border dark:bg-primary/10"><div><p className="text-xs font-medium text-muted-foreground">{quotation.candidateName} quotation · {line.productName}</p><p className="text-sm">{quantity} {line.unit}</p></div><label className="text-xs font-medium">Unit price ({currency})<CompactInput aria-label={`Quotation unit price for ${line.productName ?? "line"}`} type="number" min="0" step="0.01" disabled={quotation.pending || saveStatus === "saving" || saveStatus === "error"} value={lineUnitPrice} onChange={(event) => quotation.setPrice(linePriceKey, event.target.value)} onBlur={() => quotation.save({ targetType: "line", targetId: line.id!, label: line.productName ?? `Line ${line.lineNo}`, quantity: lineQuantityValue, unit: line.unit }, lineUnitPrice)} /></label><p className="pb-2 text-right text-sm font-semibold">{moneySubtotal(lineUnitPrice, lineQuantityValue, currency)}</p></div> : null}</td>
@@ -234,8 +266,8 @@ function SpecificationProductRows({ projectId, line, fields, canEdit, currency, 
         </div>
         {processesOpen ? <div className="overflow-x-auto"><table className={`w-full min-w-[36rem] table-fixed border-collapse text-sm ${DENSE_TABLE_CLASS}`}><thead><tr className="border-b border-[#ded8d0] bg-[#f8faf9] text-left text-xs text-[#485358] dark:border-border dark:bg-muted/50 dark:text-muted-foreground"><th className="w-12 px-2 py-2 font-medium">Use</th><th className="px-2 py-2 font-medium">Process{quotation ? ` · ${quotation.candidateName}` : ""}</th><th className="w-24 px-2 py-2 font-medium">Quantity</th><th className="w-14 px-2 py-2 font-medium">Unit</th>{quotation ? <><th className="w-28 px-2 py-2 font-medium">Unit price</th><th className="w-28 px-2 py-2 text-right font-medium">Subtotal</th></> : null}</tr></thead><tbody>
           {visibleProcesses.map((process) => { const active = activeProcesses[process.fieldKey] !== false; return <tr key={process.id} className={`border-b border-[#ebe6e0] last:border-b-0 dark:border-border ${active ? "bg-white dark:bg-card" : "bg-[#fafafa] text-[#657078] dark:bg-muted/30 dark:text-muted-foreground"}`}>
-            <td className="px-2 py-2">{editableSnapshot ? <input type="checkbox" className="h-4 w-4 accent-primary" aria-label={`Use ${process.name} for ${line.productName ?? "line"}`} checked={active} onChange={(event) => { const next = event.target.checked; const quoteCandidateId = quotation?.candidateId; setActiveProcesses((current) => ({ ...current, [process.fieldKey]: next })); valuesRef.current.active = { ...valuesRef.current.active, [process.fieldKey]: next }; saveStructuredFields(() => { if (!next && quoteCandidateId) quotation?.remove(`process:${process.id}`, quoteCandidateId); }); }} /> : active ? <span className="text-primary">✓</span> : <span>—</span>}</td>
-            <td className="px-2 py-2 font-medium">{process.name}</td><td className="p-0">{editableSnapshot ? <CompactInput aria-label={`${process.name} quantity for ${line.productName ?? "line"}`} type="number" min="0" step="any" disabled={!active} value={processValues[process.fieldKey] ?? "0"} onChange={(event) => { setProcessValues((current) => ({ ...current, [process.fieldKey]: event.target.value })); valuesRef.current.process = { ...valuesRef.current.process, [process.fieldKey]: event.target.value }; }} onBlur={() => saveStructuredFields(() => { const price = quotation?.prices[`process:${process.id}`] ?? ""; if (quotation && price && Number(valuesRef.current.process[process.fieldKey] ?? 0) > 0) quotation.save({ targetType: "process", targetId: process.id, label: `${line.productName ?? `Line ${line.lineNo}`} · ${process.name}`, quantity: Number(valuesRef.current.process[process.fieldKey]), unit: process.unit ?? "unit" }, price, quotation.candidateId); })} /> : <span className="block px-2 py-2">{processValues[process.fieldKey] ?? "0"}</span>}</td><td className="px-2 py-2">{process.unit ?? "—"}</td>{quotation ? <><td className="p-0"><CompactInput aria-label={`Quotation unit price for ${process.name}`} type="number" min="0" step="0.01" disabled={!active || quotation.pending || saveStatus === "saving" || saveStatus === "error" || Number(processValues[process.fieldKey] ?? 0) <= 0} value={quotation.prices[`process:${process.id}`] ?? ""} onChange={(event) => quotation.setPrice(`process:${process.id}`, event.target.value)} onBlur={() => quotation.save({ targetType: "process", targetId: process.id, label: `${line.productName ?? `Line ${line.lineNo}`} · ${process.name}`, quantity: Number(processValues[process.fieldKey] ?? 0), unit: process.unit ?? "unit" }, quotation.prices[`process:${process.id}`] ?? "")} /></td><td className="px-2 py-2 text-right font-medium">{moneySubtotal(quotation.prices[`process:${process.id}`] ?? "", Number(processValues[process.fieldKey] ?? 0), currency)}</td></> : null}
+            <td className="px-2 py-1.5">{editableSnapshot ? <input type="checkbox" className="h-3.5 w-3.5 accent-primary" aria-label={`Use ${process.name} for ${line.productName ?? "line"}`} checked={active} onChange={(event) => { const next = event.target.checked; const quoteCandidateId = quotation?.candidateId; setActiveProcesses((current) => ({ ...current, [process.fieldKey]: next })); valuesRef.current.active = { ...valuesRef.current.active, [process.fieldKey]: next }; saveStructuredFields(() => { if (!next && quoteCandidateId) quotation?.remove(`process:${process.id}`, quoteCandidateId); }, () => { setActiveProcesses((current) => ({ ...current, [process.fieldKey]: active })); valuesRef.current.active = { ...valuesRef.current.active, [process.fieldKey]: active }; }); }} /> : active ? <span className="text-primary">✓</span> : <span>—</span>}</td>
+            <td className="px-2 py-1.5 font-medium">{process.name}</td><td className="p-0">{editableSnapshot ? <CompactInput aria-label={`${process.name} quantity for ${line.productName ?? "line"}`} type="number" min="0" step="any" disabled={!active} value={processValues[process.fieldKey] ?? "0"} onChange={(event) => { setProcessValues((current) => ({ ...current, [process.fieldKey]: event.target.value })); valuesRef.current.process = { ...valuesRef.current.process, [process.fieldKey]: event.target.value }; }} onBlur={() => saveStructuredFields(() => { const price = quotation?.prices[`process:${process.id}`] ?? ""; if (quotation && price && Number(valuesRef.current.process[process.fieldKey] ?? 0) > 0) quotation.save({ targetType: "process", targetId: process.id, label: `${line.productName ?? `Line ${line.lineNo}`} · ${process.name}`, quantity: Number(valuesRef.current.process[process.fieldKey]), unit: process.unit ?? "unit" }, price, quotation.candidateId); })} /> : <span className="block px-2 py-1.5">{processValues[process.fieldKey] ?? "0"}</span>}</td><td className="px-2 py-1.5">{process.unit ?? "—"}</td>{quotation ? <><td className="p-0"><CompactInput aria-label={`Quotation unit price for ${process.name}`} type="number" min="0" step="0.01" disabled={!active || quotation.pending || saveStatus === "saving" || saveStatus === "error" || Number(processValues[process.fieldKey] ?? 0) <= 0} value={quotation.prices[`process:${process.id}`] ?? ""} onChange={(event) => quotation.setPrice(`process:${process.id}`, event.target.value)} onBlur={() => quotation.save({ targetType: "process", targetId: process.id, label: `${line.productName ?? `Line ${line.lineNo}`} · ${process.name}`, quantity: Number(processValues[process.fieldKey] ?? 0), unit: process.unit ?? "unit" }, quotation.prices[`process:${process.id}`] ?? "")} /></td><td className="px-2 py-1.5 text-right font-medium">{moneySubtotal(quotation.prices[`process:${process.id}`] ?? "", Number(processValues[process.fieldKey] ?? 0), currency)}</td></> : null}
           </tr>; })}
           {visibleProcesses.length === 0 ? <tr><td colSpan={quotation ? 6 : 4} className="px-3 py-6 text-center text-sm text-muted-foreground">No applicable processes. Show inactive processes to add one.</td></tr> : null}
         </tbody></table></div> : null}
@@ -244,14 +276,14 @@ function SpecificationProductRows({ projectId, line, fields, canEdit, currency, 
   </Fragment>;
 }
 
-function CompactInput(props: React.ComponentProps<typeof Input>) { return <Input {...props} className={`h-10 min-w-0 rounded-none border-0 bg-transparent px-3 shadow-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus-visible:bg-[#f8fcfa] focus-visible:ring-2 focus-visible:ring-inset dark:focus-visible:bg-muted/30 ${props.className ?? ""}`} />; }
+function CompactInput({ type, ...props }: React.ComponentProps<typeof Input>) { const numeric = type === "number"; return <Input {...props} type={numeric ? "text" : type} inputMode={numeric ? "decimal" : props.inputMode} className={`h-[34px] min-w-0 rounded-none border-0 bg-transparent px-2 shadow-none focus-visible:bg-[#f8fcfa] focus-visible:ring-2 focus-visible:ring-inset dark:focus-visible:bg-muted/30 ${props.className ?? ""}`} />; }
 function lineSignature(value: { quantity: string; notes: string }) { return JSON.stringify([value.quantity, value.notes]); }
-function structuredSignature(value: { basic: Record<string, string>; process: Record<string, string>; active: Record<string, boolean> }) { return JSON.stringify([value.basic, value.process, value.active]); }
-function BasicFieldInput({ field, value, onChange, onCommit }: { field: ProjectSpecificationField; value: string; onChange: (value: string) => void; onCommit: () => void }) {
+function structuredSignature(value: { basic: Record<string, string>; basicActive: Record<string, boolean>; process: Record<string, string>; active: Record<string, boolean> }) { return JSON.stringify([value.basic, value.basicActive, value.process, value.active]); }
+function BasicFieldInput({ field, value, disabled, onChange, onCommit }: { field: ProjectSpecificationField; value: string; disabled?: boolean; onChange: (value: string) => void; onCommit: () => void }) {
   if (field.type === "file") return <span className="block px-3 py-2 text-muted-foreground" title="File fields are managed through catalogue assets">{value || "No file"}</span>;
-  if (field.type === "select") return <select aria-label={field.label} className="h-10 w-full min-w-0 border-0 bg-transparent px-3 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary" value={value} onChange={(event) => { onChange(event.target.value); queueMicrotask(onCommit); }}><option value="">—</option>{field.allowedOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>;
-  if (field.type === "boolean") return <select aria-label={field.label} className="h-10 w-full min-w-0 border-0 bg-transparent px-3 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary" value={value} onChange={(event) => { onChange(event.target.value); queueMicrotask(onCommit); }}><option value="">—</option><option value="true">Yes</option><option value="false">No</option></select>;
-  return <CompactInput aria-label={field.label} type={field.type === "number" ? "number" : "text"} value={value} onChange={(event) => onChange(event.target.value)} onBlur={onCommit} />;
+  if (field.type === "select") return <select disabled={disabled} aria-label={field.label} className="h-[34px] w-full min-w-0 border-0 bg-transparent px-2 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary" value={value} onChange={(event) => { onChange(event.target.value); queueMicrotask(onCommit); }}><option value="">—</option>{field.allowedOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select>;
+  if (field.type === "boolean") return <select disabled={disabled} aria-label={field.label} className="h-[34px] w-full min-w-0 border-0 bg-transparent px-2 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary" value={value} onChange={(event) => { onChange(event.target.value); queueMicrotask(onCommit); }}><option value="">—</option><option value="true">Yes</option><option value="false">No</option></select>;
+  return <CompactInput disabled={disabled} aria-label={field.label} type={field.type === "number" ? "number" : "text"} value={value} onChange={(event) => onChange(event.target.value)} onBlur={onCommit} />;
 }
 function groupLinesBySchema(lines: ProjectLine[]) {
   const groups = new Map<string, { key: string; fields: ProjectSpecificationField[]; lines: ProjectLine[] }>();
@@ -267,7 +299,7 @@ function basicFieldsForLine(line: ProjectLine): ProjectSpecificationField[] {
   if (snapshotFields.length) return snapshotFields;
   return legacyBasicValues(line).map(([key, label, value], index) => ({
     key: `legacy.${key}`, label, type: "text", unit: null, value, sortOrder: index,
-    required: false, allowedOptions: [],
+    required: false, allowedOptions: [], active: true,
   }));
 }
 function legacyBasicValues(line: ProjectLine): Array<[string, string, string]> {
@@ -282,6 +314,7 @@ function fieldLabel(field: ProjectSpecificationField) { return `${field.label}${
 function displayValue(field: ProjectSpecificationField, value?: string) { if (!value) return "—"; if (field.type === "boolean") return value === "true" ? "Yes" : "No"; return value; }
 function moneySubtotal(unitPrice: string, quantity: number, currency: string) { const amount = Number(unitPrice) * quantity; return Number.isFinite(amount) && unitPrice !== "" ? `${amount.toFixed(2)} ${currency}` : "—"; }
 function valuesForBasics(line: ProjectLine) { return Object.fromEntries([...legacyBasicValues(line).map(([key, , value]) => [`legacy.${key}`, value]), ...(line.basicProperties ?? []).map((field) => [field.key, field.value])]); }
+function applicabilityForBasics(line: ProjectLine) { return Object.fromEntries((line.basicProperties ?? []).map((field) => [field.key, field.active !== false])); }
 function valuesForProcesses(line: ProjectLine) { return Object.fromEntries((line.processRequirements ?? []).map((process) => [process.fieldKey, process.value])); }
 function applicabilityForProcesses(line: ProjectLine) { return Object.fromEntries((line.processRequirements ?? []).map((process) => [process.fieldKey, process.active !== false])); }
 function lineQuantity(line: ProjectLine) { return String(line.volumeM3 ?? line.pieces ?? 1); }

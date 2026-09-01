@@ -96,6 +96,7 @@ export interface DealLineLike {
   specificationFields?: Array<{
     key: string; label: string; type?: "select" | "number" | "text" | "boolean" | "file";
     unit?: string | null; value: string; sortOrder?: number; required?: boolean; allowedOptions?: string[];
+    active?: boolean;
   }>;
   catalogProductId: string | null;
 }
@@ -310,7 +311,7 @@ export function toProjectLines(
       })) ?? [],
       basicProperties: (li.specificationFields??[]).map((field)=>({
         key:field.key,label:field.label,type:field.type ?? "text",unit:field.unit ?? null,value:field.value,
-        sortOrder:field.sortOrder ?? 0,required:field.required ?? false,allowedOptions:field.allowedOptions ?? [],
+        sortOrder:field.sortOrder ?? 0,required:field.required ?? false,allowedOptions:field.allowedOptions ?? [],active:field.active !== false,
       })),
       structuredValuesVersion: li.updatedAt ?? "",
       isCatalogSnapshot: Boolean(li.catalogProductId),

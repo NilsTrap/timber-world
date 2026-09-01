@@ -7,7 +7,7 @@ export const structuredSpecificationValuesSchema = z.object({
   projectId: z.string().uuid(),
   lineId: z.string().uuid(),
   version: z.string().datetime({ offset: true }),
-  basicValues: z.array(z.object({ key, value })).max(200),
+  basicValues: z.array(z.object({ key, value, active: z.boolean() })).max(200),
   processValues: z.array(z.object({
     key,
     value: value.refine((input) => /^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$/.test(input), "Process quantity must be zero or greater"),
