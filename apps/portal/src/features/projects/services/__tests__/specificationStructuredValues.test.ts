@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { structuredSpecificationPayload, structuredSpecificationValuesSchema } from "../specificationStructuredValues";
+import { normalizeSpecificationVersion, structuredSpecificationPayload, structuredSpecificationValuesSchema } from "../specificationStructuredValues";
 
 const ids = {
   projectId: "11111111-1111-4111-8111-111111111111",
@@ -26,6 +26,16 @@ assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, processV
 assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, basicValues: [{ key: "grade", value: "A", active: true }, { key: "grade", value: "B", active: true }] }).success, false);
 assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, basicValues: [{ key: "grade", value: "A" }] }).success, false);
 assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, version: null }).success, false);
+assert.equal(normalizeSpecificationVersion("2026-09-01 05:42:15.122842+00"), "2026-09-01T05:42:15.122842+00:00");
+assert.equal(normalizeSpecificationVersion("2026-09-01T05:42:15.122842+00:00"), "2026-09-01T05:42:15.122842+00:00");
+assert.equal(normalizeSpecificationVersion("2026-09-01 07:42:15.122842+02"), "2026-09-01T07:42:15.122842+02:00");
+assert.equal(normalizeSpecificationVersion("2026-09-01 02:42:15.122842-03"), "2026-09-01T02:42:15.122842-03:00");
+assert.equal(normalizeSpecificationVersion("2026-09-01T05:42:15.122842Z"), "2026-09-01T05:42:15.122842Z");
+assert.equal(normalizeSpecificationVersion("not-a-timestamp"), null);
+assert.equal(normalizeSpecificationVersion(null), null);
+assert.equal(normalizeSpecificationVersion(123), null);
+const normalizedVersion = normalizeSpecificationVersion("2026-09-01 05:42:15.122842+00");
+assert.equal(structuredSpecificationValuesSchema.safeParse({ ...parsed, version: normalizedVersion }).success, true);
 
 const migration = readFileSync("../../supabase/migrations/20260830110000_catalogue_assigned_field_snapshots.sql", "utf8");
 assert.match(migration, /catalogue_basic_field_snapshot/);
@@ -75,6 +85,7 @@ assert.match(tables, /Create supplier quotation/);
 assert.match(tables, /Select existing RFQ candidate/);
 assert.match(tables, /correctProjectQuotation/);
 assert.match(tables, /Quotation unit price/);
+assert.equal(tables.match(/!border-\[#b8c8bf\]/g)?.length, 2);
 assert.doesNotMatch(tables, /w-max min-w-full table-auto/);
 assert.match(tables, /aria-live="polite"/);
 assert.match(tables, /\}, \[line\.id\]\);/);
@@ -85,9 +96,9 @@ assert.doesNotMatch(tables, /router\.refresh\(\)/);
 const actions = readFileSync("src/features/projects/actions/projectSpecificationActions.ts", "utf8");
 assert.match(actions, /select\("id, updated_at"\)/);
 assert.match(actions, /guardedUpdate\.eq\("updated_at", input\.version\)/);
-assert.match(actions, /data: \{ id: input\.lineId, version: version\.data \}/);
+assert.match(actions, /data: \{ id: input\.lineId, version \}/);
 assert.match(actions, /p_basic_states/);
-assert.match(actions, /data: \{ id: parsed\.data\.lineId, version: version\.data \}/);
+assert.match(actions, /data: \{ id: parsed\.data\.lineId, version \}/);
 const autosaveActions = actions.slice(actions.indexOf("export async function updateProjectSpecificationLine"), actions.indexOf("export async function deleteProjectSpecificationLine"));
 assert.doesNotMatch(autosaveActions, /refreshProject\(/);
 

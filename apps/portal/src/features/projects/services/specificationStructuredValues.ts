@@ -25,6 +25,14 @@ export const structuredSpecificationValuesSchema = z.object({
 
 export type StructuredSpecificationValues = z.infer<typeof structuredSpecificationValuesSchema>;
 
+export function normalizeSpecificationVersion(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value
+    .replace(" ", "T")
+    .replace(/([+-]\d{2})$/, "$1:00");
+  return z.string().datetime({ offset: true }).safeParse(normalized).success ? normalized : null;
+}
+
 export function structuredSpecificationPayload(input: StructuredSpecificationValues) {
   return {
     p_order_id: input.projectId,

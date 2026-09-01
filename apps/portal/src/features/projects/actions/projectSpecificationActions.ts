@@ -14,6 +14,7 @@ import {
 } from "../services/projectSpecification";
 import { specificationLineUpdate } from "../services/specificationLineEdit";
 import {
+  normalizeSpecificationVersion,
   structuredSpecificationPayload,
   structuredSpecificationValuesSchema,
 } from "../services/specificationStructuredValues";
@@ -235,9 +236,9 @@ export async function updateProjectSpecificationLine(raw: unknown): Promise<Acti
   const { data, error } = await versionedUpdate.select("id, updated_at").maybeSingle();
   if (error) return { success: false, error: error.message, code: "UPDATE_FAILED" };
   if (!data) return { success: false, error: "Line changed; refresh and try again", code: "CONFLICT" };
-  const version = z.string().datetime({ offset: true }).safeParse(data.updated_at);
-  if (!version.success) return { success: false, error: "Line version was not returned", code: "UPDATE_FAILED" };
-  return { success: true, data: { id: input.lineId, version: version.data } };
+  const version = normalizeSpecificationVersion(data.updated_at);
+  if (!version) return { success: false, error: "Line version was not returned", code: "UPDATE_FAILED" };
+  return { success: true, data: { id: input.lineId, version } };
 }
 
 export async function updateProjectSpecificationStructuredValues(raw: unknown): Promise<ActionResult<{ id: string; version: string }>> {
@@ -251,9 +252,9 @@ export async function updateProjectSpecificationStructuredValues(raw: unknown): 
     p_process_states: parsed.data.processValues.map(({ key, active }) => ({ key, active })),
   });
   if (error) return mapStructuredValueRpcError(error.message ?? "");
-  const version = z.string().datetime({ offset: true }).safeParse(data);
-  if (!version.success) return { success: false, error: "Line version was not returned", code: "UPDATE_FAILED" };
-  return { success: true, data: { id: parsed.data.lineId, version: version.data } };
+  const version = normalizeSpecificationVersion(data);
+  if (!version) return { success: false, error: "Line version was not returned", code: "UPDATE_FAILED" };
+  return { success: true, data: { id: parsed.data.lineId, version } };
 }
 
 export async function deleteProjectSpecificationLine(raw: unknown): Promise<ActionResult<{ id: string }>> {
