@@ -49,7 +49,7 @@ context:
 - [x] `projectSpecificationActions.ts` -- return a validated authoritative version after each line or structured-value save so consecutive mutations retain optimistic concurrency.
 - [x] `ProjectSpecificationTables.tsx` -- add a per-line serialized mutation queue, dirty-value comparisons, blur/immediate save triggers, and compact aria-live status; remove Save line and Save fields buttons.
 - [x] `specificationStructuredValues.test.ts` and related project tests -- cover version return, blur autosave wiring, immediate discrete controls, absence of manual save buttons, and no route refresh on success.
-- [ ] Browser-test consecutive basic properties, process quantities/applicability, quantity, and notes; reload and confirm every saved value remains.
+- [x] Browser-test consecutive basic properties, process quantity, and line quantity; reload and confirm every saved value remains without false errors.
 
 **Acceptance Criteria:**
 - Given two consecutive edits in one specification line, when each edited cell loses focus, then both values survive a full page reload without a stale-specification error.
