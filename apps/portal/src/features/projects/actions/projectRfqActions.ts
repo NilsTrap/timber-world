@@ -12,6 +12,7 @@ const uuid = z.string().uuid();
 const requestSchema = z.object({ projectId: uuid, candidateIds: z.array(uuid).min(2).max(20), deadline: z.coerce.date().refine((value) => value.getTime() > Date.now(), "Deadline must be in the future") });
 const quoteEntrySchema=z.object({targetType:z.enum(["line","process"]),targetId:uuid,label:z.string().trim().min(1).max(200),quantity:z.coerce.number().finite().positive(),unit:z.string().trim().max(50),unitPriceCents:z.coerce.number().int().nonnegative().max(2147483647)});
 const quoteSchema = z.object({ candidateId: uuid, entries:z.array(quoteEntrySchema).min(1).max(500), notes: z.string().trim().max(4000).optional().default("") });
+const adminQuoteSchema = quoteSchema.extend({ entries: z.array(quoteEntrySchema).max(500) });
 const awardSchema = z.object({ projectId: uuid, rfqId: uuid, candidateId: uuid });
 const marginSchema = z.object({
   projectId: uuid,
@@ -93,7 +94,7 @@ export async function submitProjectQuotation(raw: unknown): Promise<ActionResult
   return{success:false,error:"Could not submit quotation",code:"SUBMIT_FAILED"};
 }
 export async function correctProjectQuotation(raw:unknown):Promise<ActionResult<true>>{
-  const parsed=quoteSchema.safeParse(raw);if(!parsed.success)return{success:false,error:parsed.error.issues[0]?.message??"Invalid quotation",code:"VALIDATION_ERROR"};
+  const parsed=adminQuoteSchema.safeParse(raw);if(!parsed.success)return{success:false,error:parsed.error.issues[0]?.message??"Invalid quotation",code:"VALIDATION_ERROR"};
   const a=await resolveProjectsActor();if(!a.ok||!a.isPlatformAdmin)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
   const{error}=await a.db.rpc("correct_project_rfq_quote_entries",{p_candidate_id:parsed.data.candidateId,p_entries:parsed.data.entries,p_notes:parsed.data.notes});
   if(error)return{success:false,error:"Could not correct quotation",code:"UPDATE_FAILED"};return{success:true,data:true};
