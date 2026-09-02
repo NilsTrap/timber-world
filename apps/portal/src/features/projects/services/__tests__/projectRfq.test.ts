@@ -386,6 +386,7 @@ assert.match(commercialCard, /catch\(\(\)\s*=>\s*setLoadError\("Could not load c
 assert.doesNotMatch(rfqCard, /find\(\(candidate\)=>candidate\.id===viewCandidateId\)!/);
 assert.match(rfqCard, /View quotation/);
 const pricingModeMigration = readFileSync("../../supabase/migrations/20260901170000_project_quotation_pricing_mode.sql", "utf8");
+const processQuotationColumnFix = readFileSync("../../supabase/migrations/20260902140000_fix_process_quotation_active_column.sql", "utf8");
 const processTotalPricingMigration = readFileSync("../../supabase/migrations/20260901200000_shared_specification_and_process_total_pricing.sql", "utf8");
 const supplierDirectQuotationMigration = readFileSync("../../supabase/migrations/20260902120000_supplier_direct_quotation.sql", "utf8");
 const zeroQuantityProcessMigration = readFileSync("../../supabase/migrations/20260902130000_zero_quantity_process_quotation.sql", "utf8");
@@ -396,6 +397,8 @@ assert.match(pricingModeMigration, /remainder DESC,origin_id/);
 assert.match(pricingModeMigration, /INCONSISTENT_QUOTATION/);
 assert.match(pricingModeMigration, /DROP FUNCTION IF EXISTS public\.submit_project_rfq_quote_entries\(UUID,JSONB,TEXT\)/);
 assert.match(pricingModeMigration, /DROP FUNCTION IF EXISTS public\.correct_project_rfq_quote_entries\(UUID,JSONB,TEXT\)/);
+assert.match(processQuotationColumnFix, /pr\.is_active=true/, "quotation normalization uses the canonical process applicability column");
+assert.doesNotMatch(processQuotationColumnFix, /pr\.active\b/, "quotation normalization never references the nonexistent process active column");
 assert.match(pricingModeMigration, /coalesce\(quote_entries,'null'::jsonb\)='\[\]'::jsonb/);
 assert.match(pricingModeMigration, /p_total_cents>9007199254740991/);
 assert.match(pricingModeMigration, /total>9007199254740991/);
