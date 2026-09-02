@@ -6,6 +6,7 @@ import { sanitizeProjectHtml } from "../components/viewers/sanitizeProjectHtml";
 import { isValidOcctResult } from "../components/viewers/validateOcctResult";
 import { MAX_CAPTURE_DIMENSION, MAX_CAPTURE_PIXELS, boundedCaptureSize, hasVisiblePixelVariation, scaledVisibleCanvasRegion } from "../components/viewers/projectPreviewCapture";
 import { nextOfficialImagePosition } from "../officialImagePolicy";
+import { resolveProjectThumbnailUrl, sortOfficialImageDesignations } from "../services/projectOfficialImages";
 import { projectLegReference } from "../services/projectLegReference";
 import { ALL_FILE_TYPES, filterProjectFiles, NO_FILE_EXTENSION, projectFileExtension, projectFileExtensions, projectFileTypeValue } from "../services/projectFileFilters";
 
@@ -285,6 +286,15 @@ ok("visible capture variation is accepted", hasVisiblePixelVariation(new Uint8Cl
 ok("uniform colored preview content is accepted", hasVisiblePixelVariation(new Uint8ClampedArray([20, 40, 60, 255, 20, 40, 60, 255])));
 eq("official images fill the next available slot", nextOfficialImagePosition([1, 3]), 2);
 eq("a fourth official image has no slot", nextOfficialImagePosition([1, 2, 3]), null);
+eq("three shared gallery designations render in canonical position order",
+  sortOfficialImageDesignations([{ position: 3 }, { position: 1 }, { position: 2 }]).map((row) => row.position),
+  [1, 2, 3]);
+const sharedThumbnails = new Map([["spine-1", "shared-primary"]]);
+eq("visible legs on the same raw spine resolve the same primary thumbnail", ["leg-1", "leg-2", "leg-3"].map((orderId) =>
+  resolveProjectThumbnailUrl("spine-1", orderId, sharedThumbnails, new Map([[orderId, `legacy-${orderId}`]]))),
+["shared-primary", "shared-primary", "shared-primary"]);
+eq("a linked spine without a ready designation retains the empty thumbnail state",
+  resolveProjectThumbnailUrl("spine-missing", "leg-1", sharedThumbnails, new Map([["leg-1", "legacy-leg-1"]])), null);
 
 // Source guards protect the easy-to-regress serialization/direct-ID boundaries.
 const service = readFileSync("src/features/projects/services/projectFiles.ts", "utf8");
@@ -311,6 +321,8 @@ const dxfViewer = readFileSync("src/features/projects/components/viewers/DxfFile
 const stepViewer = readFileSync("src/features/projects/components/viewers/StepFileViewer.tsx", "utf8");
 const capture = readFileSync("src/features/projects/components/viewers/projectPreviewCapture.ts", "utf8");
 const officialImageActions = readFileSync("src/features/projects/actions/projectOfficialImageActions.ts", "utf8");
+const officialImageService = readFileSync("src/features/projects/services/projectOfficialImages.ts", "utf8");
+const candidateSnapshotService = readFileSync("src/features/projects/services/projectRfqCandidateSnapshot.ts", "utf8");
 const spineActions = readFileSync("src/features/projects/actions/projectSpineActions.ts", "utf8");
 const spineTitle = readFileSync("src/features/projects/components/ProjectSpineTitle.tsx", "utf8");
 const createView = readFileSync("src/features/projects/components/ProjectCreateView.tsx", "utf8");
@@ -456,6 +468,14 @@ ok("official image callers clean up only their own failed upload", officialImage
 ok("official image cards hide storage filenames and expose a default-image action", officialImages.includes("Make default") && officialImages.includes("Default project image") && !officialImages.includes("{file.fileName}</span>"));
 ok("default image changes use the spine-image manager gate and resequence designations", officialImageActions.includes("setProjectOfficialImagePrimary") && officialImageActions.includes("mayManage(ctx.access,ctx.project)") && officialImageActions.includes("spine_project_images"));
 ok("gallery projection separates view, manage, and remove capabilities", projectLoader.includes("canViewOfficialImages") && projectLoader.includes("canManageOfficialImages") && projectLoader.includes("canRemoveOfficialImages") && detail.includes("canRemove={canRemoveOfficialImages}"));
+ok("authorized raw spine identity drives regular galleries without replacing the field wall", projectLoader.includes("loadSpineProjectImages(createAdminClient(), raw.spineId)") && projectLoader.includes('walled.spineId\n      ? a.db.from("spines")'));
+ok("RFQ candidates are rebound to the current organisation and active order in one spine snapshot", candidateSnapshotService.indexOf('db.rpc("get_project_rfq_candidate_snapshot"') < candidateSnapshotService.indexOf('.from("project_rfq_candidates")') && candidateSnapshotService.includes('.eq("organization_id", actorOrganisationId)') && candidateSnapshotService.includes('.is("project_rfqs.orders.deleted_at", null)') && !candidateSnapshotService.includes('.from("orders")\n    .select("spine_id")'));
+ok("RFQ candidate images expose viewing without mutation controls", projectLoader.includes("loadSpineProjectImages(candidateAdmin, candidate.spineId)") && projectLoader.includes("isRfqCandidate: true"));
+ok("shared gallery loading preserves designation order and revalidates each file", officialImageService.includes('.order("position", { ascending: true })') && officialImageService.includes("validDesignatedFile") && officialImageService.includes('file.lifecycle_status !== "ready"') && officialImageService.includes('file.category !== "project"') && officialImageService.includes('file.file_variant !== "original"') && !officialImageService.includes("file_name"));
+ok("gallery and thumbnail joins use the unambiguous owning-order relationship", (officialImageService.match(/order:orders!order_files_order_id_fkey\(spine_id\)/g) ?? []).length === 2 && !officialImageService.includes("order:orders!inner(spine_id)"));
+ok("optional gallery failures degrade without replacing project authorization", !projectLoader.includes("officialImages === null") && officialImageService.includes("if (error) return []") && officialImageService.includes("if (!previewUrl) return null"));
+ok("project list thumbnails use authorized raw spine identity", projectsLoader.includes("authorizedSpineIds") && projectsLoader.includes("raw.spineId,") && projectsLoader.includes("resolveProjectThumbnailUrl"));
+ok("loader and mutation controls share the active-trader and deal-create management gate", projectLoader.includes("projectOfficialImageCapabilities(a.db") && projectLoader.includes('hasDealCreate: a.profile.actions.has("deal:create")') && officialImageActions.includes("mayManageProjectOfficialImages(access.actor.db") && officialImageService.includes('select("is_active,is_trader")') && officialImageService.includes("input.hasDealCreate"));
 ok("gallery images are contained and open an accessible preview", officialImages.includes('className="object-contain"') && /<Dialog\s+open=\{preview !== null\}/.test(officialImages) && officialImages.includes("Preview project image"));
 ok("gallery controls reveal on hover or keyboard focus and removal is confirmed", officialImages.includes("group-hover:opacity-100") && officialImages.includes("group-focus-within:opacity-100") && /<AlertDialog\s+open=\{removeTarget !== null\}/.test(officialImages) && officialImages.includes("Remove project image {removeTarget?.officialImagePosition}?"));
 ok("populated gallery remains inside the shared collapsible card", officialImages.includes("images.length > 0 || canManage") && officialImages.includes("ProjectSectionCard") && officialImages.includes('id="project-images-content"'));

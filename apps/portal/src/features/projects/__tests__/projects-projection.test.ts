@@ -238,6 +238,8 @@ ok("purchasing on a BUY leg: no client name appears anywhere in the payload",
 
 // ── Counterparty (client) login: empty profile, viewer IS the buyer ──────────
 const client = render(CLIENT, BUYER);
+const clientWalledDeal = projectDealView(deal(), resolveFieldAccess(CLIENT), BUYER);
+eq("client: raw spine identity remains redacted by the field wall", clientWalledDeal.spineId, null);
 eq("client: direction is buy", client.item.direction, "buy");
 eq("client: still sees their OWN deal partner (the seller)", client.item.counterparty?.name, "Timber World");
 ok("client: no currency key at all", !("currency" in client.item), Object.keys(client.item));
@@ -299,7 +301,7 @@ ok("vatRate is never serialized, not even for an admin",
    !JSON.stringify(admin.detail).includes("vatRate"));
 ok("file metadata exposes only safe workspace and cleanup presentation columns",
    Object.keys(admin.detail.files[0] ?? {}).every((k) =>
-     ["id", "fileName", "relativePath", "mimeType", "fileSizeBytes", "lifecycleStatus", "createdAt", "cleanupStatus", "cleanFileId", "cleanupFindingsCount", "shared", "sharedInbound", "officialImagePosition", "previewUrl"].includes(k)));
+     ["id", "fileName", "relativePath", "mimeType", "fileSizeBytes", "lifecycleStatus", "createdAt", "cleanupStatus", "cleanFileId", "wasCleaned", "cleanupFindingsCount", "shared", "sharedInbound", "officialImagePosition", "previewUrl"].includes(k)));
 
 // ── File counts: a hidden leg's files are never attributed ───────────────────
 const rows = [

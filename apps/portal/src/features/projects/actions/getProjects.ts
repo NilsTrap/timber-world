@@ -23,6 +23,7 @@ import type { ProjectListItem, ProjectsResult, ProjectsViewer } from "../types";
 import { getProjectStages } from "../../project-stages/stages";
 import { createAdminClient as createTypedAdminClient } from "@/lib/supabase/admin";
 import type { DbClient } from "../../orders/services/dealModel";
+import { loadPrimarySpineThumbnailUrls, resolveProjectThumbnailUrl } from "../services/projectOfficialImages";
 
 const createAdminClient=()=>createTypedAdminClient() as unknown as DbClient;
 
@@ -73,6 +74,9 @@ export async function listProjects(options: { deletedOnly?: boolean; recoveryPag
   const walledRows = raws.map((raw) =>
     projectDealView({ ...raw, lineItems: [] }, a.access, a.orgId) as OrderDealSummary & { lineItems: [] },
   );
+  // listDeals plus the current-organisation filter above is the visibility wall.
+  // Raw spine ids stay inside this loader and are used only for shared images.
+  const authorizedSpineIds = [...new Set(raws.map((row) => row.spineId).filter((id): id is string => Boolean(id)))];
   const visibleSpineIds = [...new Set(walledRows.map((row) => row.spineId).filter((id): id is string => Boolean(id)))];
   const spineCodeById = new Map<string, string>();
   const spineTitleById = new Map<string, string>();
@@ -91,13 +95,12 @@ export async function listProjects(options: { deletedOnly?: boolean; recoveryPag
     }
   }
 
+  const primaryThumbnailBySpine = await loadPrimarySpineThumbnailUrls(
+    createAdminClient(),
+    authorizedSpineIds,
+  );
   const primaryThumbnailByOrder = new Map<string, string>();
-  const primaryThumbnailBySpine = new Map<string,string>();
-  if(visibleSpineIds.length){const admin=createAdminClient();const{data}=await admin.from("spine_project_images").select("spine_id,order_files!inner(storage_path,lifecycle_status)").in("spine_id",visibleSpineIds).eq("position",1);for(const row of data??[]){const file=row.order_files as unknown as{storage_path:string;lifecycle_status:string};if(file.lifecycle_status!=="ready")continue;const{data:signed}=await admin.storage.from("orders").createSignedUrl(file.storage_path,60*60);if(signed?.signedUrl)primaryThumbnailBySpine.set(row.spine_id,signed.signedUrl)}}
-  const thumbnailOrderIds = [...new Set([
-    ...visibleIds.filter((id, index) => !walledRows[index]?.spineId),
-    ...originOrderBySpineId.values(),
-  ])];
+  const thumbnailOrderIds = visibleIds.filter((_, index) => !raws[index]?.spineId);
   if (thumbnailOrderIds.length > 0) {
     const { data: imageRows } = await a.db.from("order_files")
       .select("order_id, storage_path, thumbnail_sort_order")
@@ -133,7 +136,12 @@ export async function listProjects(options: { deletedOnly?: boolean; recoveryPag
     const item = toProjectListItem(raw as DealHeaderLike, walled as DealHeaderLike, ctx, fileCounts.get(raw.id)?.total ?? 0);
     if (walled.spineId && spineTitleById.has(walled.spineId)) item.name = spineTitleById.get(walled.spineId)!;
     if (a.isPlatformAdmin && walled.spineId) item.isOriginLeg = originOrderBySpineId.get(walled.spineId) === raw.id;
-    item.thumbnailUrl = primaryThumbnailByOrder.get(raw.id) ?? null;
+    item.thumbnailUrl = resolveProjectThumbnailUrl(
+      raw.spineId,
+      raw.id,
+      primaryThumbnailBySpine,
+      primaryThumbnailByOrder,
+    );
     return {
       item,
       spineId: walled.spineId,
@@ -142,9 +150,7 @@ export async function listProjects(options: { deletedOnly?: boolean; recoveryPag
       dealKind: walled.dealKind,
       createdAt: raw.createdAt,
       sortOrder: raw.projectSortOrder,
-      spineThumbnailUrl: walled.spineId
-        ? primaryThumbnailBySpine.get(walled.spineId)??primaryThumbnailByOrder.get(originOrderBySpineId.get(walled.spineId) ?? "") ?? null
-        : null,
+      spineThumbnailUrl: walled.spineId ? item.thumbnailUrl : null,
     };
   }).filter((candidate) => !candidate.spineId || spineCodeById.has(candidate.spineId)))
     .filter((item) => !options.deletedOnly || item.rowKind === "leg" || (item.spineId ? spineDeletedAtById.has(item.spineId) : false))

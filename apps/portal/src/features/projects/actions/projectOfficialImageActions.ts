@@ -6,11 +6,12 @@ import type { DbClient } from "../../orders/services/dealModel";
 import type { ActionResult } from "../../orders/types";
 import { requireVisibleProject } from "./_projectAccess";
 import { nextOfficialImagePosition } from "../officialImagePolicy";
+import { mayManageProjectOfficialImages } from "../services/projectOfficialImages";
 const uuid=z.string().uuid();const admin=()=>createTypedAdminClient() as unknown as DbClient;
 type Access=Extract<Awaited<ReturnType<typeof requireVisibleProject>>,{ok:true}>;
 type ProjectRow={id:string;spine_id:string|null;buyer_organisation_id:string|null;seller_organisation_id:string|null};
 async function context(projectId:string,write:boolean){const access=await requireVisibleProject(projectId,write);if(!access.ok)return null;const{data}=await access.actor.db.from("orders").select("id,spine_id,buyer_organisation_id,seller_organisation_id").eq("id",projectId).is("deleted_at",null).maybeSingle();return data?.spine_id?{access,project:data as ProjectRow}:null}
-async function mayManage(access:Access,project:ProjectRow){if(access.actor.isPlatformAdmin)return true;if(!access.actor.orgId||project.seller_organisation_id!==access.actor.orgId)return false;const{data}=await access.actor.db.from("organisations").select("is_active,is_trader").eq("id",access.actor.orgId).maybeSingle();return data?.is_active===true&&data.is_trader===true}
+async function mayManage(access:Access,project:ProjectRow){return mayManageProjectOfficialImages(access.actor.db,{isPlatformAdmin:access.actor.isPlatformAdmin,actorOrganisationId:access.actor.orgId,sellerOrganisationId:project.seller_organisation_id})}
 async function mayRemove(access:Access,project:ProjectRow){return access.actor.isPlatformAdmin||Boolean(access.actor.orgId&&(project.buyer_organisation_id===access.actor.orgId||await mayManage(access,project)))}
 async function refresh(spineId:string){const{data}=await admin().from("orders").select("id").eq("spine_id",spineId).is("deleted_at",null);for(const row of data??[])revalidatePath(`/projects/${row.id}`);revalidatePath("/projects")}
 async function mutate(ctx:{access:Access;project:ProjectRow},fileId:string,action:"add"|"remove"|"default"):Promise<ActionResult<number|null>>{const{data,error}=await admin().rpc("mutate_spine_project_image",{p_spine_id:ctx.project.spine_id,p_file_id:fileId,p_action:action,p_created_by:ctx.access.actor.portalUserId});if(error)return{success:false,error:error.message.includes("IMAGE_LIMIT")?"A project can have up to three official images":"Could not update project image",code:"UPDATE_FAILED"};await refresh(ctx.project.spine_id!);return{success:true,data:data==null?null:Number(data)}}

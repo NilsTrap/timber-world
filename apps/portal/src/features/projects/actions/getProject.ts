@@ -21,6 +21,8 @@ import { canOfferSellerCompletion, openRfqAvailability } from "../services/proje
 import { purchaseLegAllowsBuyerEdit, toEligiblePartyOption, type PartyOptionRow } from "../services/projectPartyOptions";
 import type { ProjectDetail, ProjectLegOption, ProjectPartyOption, ProjectPartyRef, ProjectPartyWorkspace, ProjectsResult, ProjectsViewer } from "../types";
 import { projectLegReference } from "../services/projectLegReference";
+import { loadSpineProjectImages, projectOfficialImageCapabilities } from "../services/projectOfficialImages";
+import { loadAuthorizedRfqCandidateSnapshot } from "../services/projectRfqCandidateSnapshot";
 import type { DealLineComponentLike, DealProcessRequirementLike } from "../projection";
 import { getProjectStageConfiguration, type ProjectStageConfiguration } from "../../project-stages/stages";
 import { createAdminClient as createTypedAdminClient } from "@/lib/supabase/admin";
@@ -46,20 +48,33 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   if (!isValidUUID(projectId)) return { ok: false, deny: "not_found" };
 
   if (!a.isPlatformAdmin) {
-    const candidateProject = await loadRfqCandidateProject(a.db, projectId);
-    if (candidateProject) {
-      const [files, viewer] = await Promise.all([
+    const candidateAdmin = createAdminClient();
+    const candidate = await loadRfqCandidateProject(a.db, candidateAdmin, projectId, a.orgId);
+    if (candidate) {
+      const [files, viewer, officialImages] = await Promise.all([
         listProjectFiles(a.db, projectId, false),
         resolveProjectsViewer(a),
+        candidate.spineId
+          ? loadSpineProjectImages(candidateAdmin, candidate.spineId)
+          : Promise.resolve([]),
       ]);
-      const stageConfiguration = await getProjectStageConfiguration(a.db, candidateProject.stage, viewer);
-      candidateProject.stageLabel = stageConfiguration.current?.label ?? candidateProject.stageLabel;
+      const imageCapabilities = await projectOfficialImageCapabilities(a.db, {
+        spineId: candidate.spineId,
+        isPlatformAdmin: false,
+        viewerOrganisationId: a.orgId,
+        buyerOrganisationId: null,
+        sellerOrganisationId: null,
+        hasDealCreate: false,
+        isRfqCandidate: true,
+      });
+      const stageConfiguration = await getProjectStageConfiguration(a.db, candidate.project.stage, viewer);
+      candidate.project.stageLabel = stageConfiguration.current?.label ?? candidate.project.stageLabel;
       return {
         ok: true,
         project: {
-          ...candidateProject,
+          ...candidate.project,
           files,
-          officialImages: [],
+          officialImages,
           folders: [],
           fileCount: files.length,
           fileCounts: { total: files.length },
@@ -73,9 +88,9 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
         },
         partyWorkspace: emptyPartyWorkspace(),
         canEditSpecification: false,
-        canViewOfficialImages: false,
-        canManageOfficialImages: false,
-        canRemoveOfficialImages: false,
+        canViewOfficialImages: imageCapabilities.canView,
+        canManageOfficialImages: imageCapabilities.canManage,
+        canRemoveOfficialImages: imageCapabilities.canRemove,
         isRfqCandidate: true,
         stageConfiguration: { current: stageConfiguration.current, selectable: [] },
         stageUpdatedAt: null,
@@ -96,7 +111,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
 
   const walled = projectDealView(res.data, a.access, a.orgId);
 
-  const [personasByOrgId, files, folders, fileCounts, viewer, lineComponents, processRequirements, spineLookup] = await Promise.all([
+  const [personasByOrgId, files, folders, fileCounts, viewer, lineComponents, processRequirements, spineLookup, officialImages] = await Promise.all([
     loadOrgPersonas(a.db, [a.orgId, raw.seller.id, raw.buyer.id, raw.customer.id, raw.producer.id]),
     listProjectFiles(a.db, projectId, a.isPlatformAdmin || raw.seller.id === a.orgId),
     listProjectFolders(a.db, projectId),
@@ -109,10 +124,10 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     walled.spineId
       ? a.db.from("spines").select("code,title,created_by,origin_order_id").eq("id", walled.spineId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    raw.spineId
+      ? loadSpineProjectImages(createAdminClient(), raw.spineId)
+      : Promise.resolve([]),
   ]);
-  const officialImages:ProjectDetail["officialImages"]=[];
-  if(walled.spineId){const admin=createAdminClient();const{data:designations,error:galleryError}=await admin.from("spine_project_images").select("position,order_file_id,order_files!inner(id,file_name,mime_type,file_size_bytes,lifecycle_status,created_at,storage_path)").eq("spine_id",walled.spineId).order("position");if(galleryError)return{ok:false,deny:"not_found"};for(const designation of designations??[]){const row=designation.order_files as unknown as Record<string,unknown>;if(row.lifecycle_status!=="ready")continue;const{data:signed,error:signedError}=await admin.storage.from("orders").createSignedUrl(String(row.storage_path),60*60);if(signedError)return{ok:false,deny:"not_found"};officialImages.push({id:String(row.id),fileName:"",relativePath:"",mimeType:row.mime_type as string|null,fileSizeBytes:row.file_size_bytes as number|null,lifecycleStatus:"ready",createdAt:String(row.created_at),cleanupStatus:"not_started",cleanFileId:null,wasCleaned:false,cleanupFindingsCount:0,shared:false,sharedInbound:false,officialImagePosition:Number(designation.position),previewUrl:signed.signedUrl})}}
-
   const ctx: ProjectionContext = {
     access: a.access,
     viewerOrgId: a.orgId,
@@ -160,9 +175,17 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     lifecycleStage: raw.lifecycleStage,
     dealKind: raw.dealKind,
   });
-  const canViewOfficialImages = Boolean(walled.spineId);
-  const canManageOfficialImages = canViewOfficialImages && (a.isPlatformAdmin || (raw.seller.id === a.orgId && viewer.personas.includes("trader")));
-  const canRemoveOfficialImages = canViewOfficialImages && (a.isPlatformAdmin || raw.buyer.id === a.orgId || (raw.seller.id === a.orgId && viewer.personas.includes("trader")));
+  const imageCapabilities = await projectOfficialImageCapabilities(a.db, {
+    spineId: raw.spineId,
+    isPlatformAdmin: a.isPlatformAdmin,
+    viewerOrganisationId: a.orgId,
+    buyerOrganisationId: raw.buyer.id,
+    sellerOrganisationId: raw.seller.id,
+    hasDealCreate: a.profile.actions.has("deal:create"),
+  });
+  const canViewOfficialImages = imageCapabilities.canView;
+  const canManageOfficialImages = imageCapabilities.canManage;
+  const canRemoveOfficialImages = imageCapabilities.canRemove;
   const canEditBuyer = isDraft && purchaseLegAllowsBuyerEdit({ isPlatformAdmin: a.isPlatformAdmin, dealKind: raw.dealKind, buyerMissing: !buyer })
     && (a.isPlatformAdmin || (raw.seller.id === a.orgId && viewer.canCreateProject && viewer.createRoles.includes("trader")))
     && (a.isPlatformAdmin || a.access.domainVisible("customer_identity"));
@@ -219,16 +242,6 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   return { ok: true, project, viewer, partyWorkspace, canEditSpecification, canViewOfficialImages, canManageOfficialImages, canRemoveOfficialImages, isRfqCandidate: false, stageConfiguration, stageUpdatedAt: raw.updatedAt };
 }
 
-type CandidateSnapshot = {
-  id: string;
-  reference: string;
-  name: string | null;
-  stage: string;
-  deliveryDeadline: string | null;
-  currency: string;
-  lines: unknown[];
-};
-
 function normalizeCandidateLines(lines: unknown[]): ProjectDetail["lines"] {
   return lines.flatMap((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return [];
@@ -265,12 +278,19 @@ function normalizeCandidateLines(lines: unknown[]): ProjectDetail["lines"] {
   });
 }
 
-async function loadRfqCandidateProject(db: DbClient, projectId: string): Promise<Omit<ProjectDetail, "files" | "folders" | "fileCount" | "fileCounts"> | null> {
-  const { data, error } = await db.rpc("get_project_rfq_candidate_snapshot", { p_order_id: projectId });
-  if (error || !data || typeof data !== "object" || Array.isArray(data)) return null;
-  const row = data as unknown as CandidateSnapshot;
-  if (row.id !== projectId || !Array.isArray(row.lines)) return null;
-  return {
+async function loadRfqCandidateProject(
+  db: DbClient,
+  admin: DbClient,
+  projectId: string,
+  actorOrganisationId: string | null,
+): Promise<{
+  project: Omit<ProjectDetail, "files" | "folders" | "fileCount" | "fileCounts">;
+  spineId: string | null;
+} | null> {
+  const authorized = await loadAuthorizedRfqCandidateSnapshot(db, admin, projectId, actorOrganisationId);
+  if (!authorized) return null;
+  const row = authorized.snapshot;
+  const project: Omit<ProjectDetail, "files" | "folders" | "fileCount" | "fileCounts"> = {
     id: row.id,
     reference: row.reference,
     name: row.name,
@@ -292,6 +312,7 @@ async function loadRfqCandidateProject(db: DbClient, projectId: string): Promise
     officialImages: [],
     notes: null,
   };
+  return { project, spineId: authorized.spineId };
 }
 
 function emptyPartyWorkspace(): ProjectPartyWorkspace {
