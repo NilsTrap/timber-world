@@ -15,6 +15,7 @@ import type { ProjectStageConfiguration } from "../../project-stages/stages";
 import { ProjectCommercialRollup } from "./ProjectCommercialRollup";
 import { ProjectSpineTitle } from "./ProjectSpineTitle";
 import { ProjectSectionBody, ProjectSectionCard, ProjectSectionHeader } from "./ProjectSectionCard";
+import { ProjectQuotationEditingProvider } from "./ProjectQuotationEditingContext";
 
 /**
  * Project detail (server component).
@@ -77,17 +78,17 @@ export function ProjectDetailView({
         <ProjectTermsCard projectId={project.id} terms={project.terms} deliveryDeadline={project.deliveryDeadline} canEdit={viewer.canEditTerms} />
       ) : null}
 
-      <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={canManageRfq} canEnterCandidateQuotation={viewer.isPlatformAdmin} canInitializeOwnQuotation={viewerIsSeller} initialOptions={initialRfqCandidates} lines={project.lines} />
+      <ProjectQuotationEditingProvider projectId={project.id}>
+      <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={canManageRfq} canEnterCandidateQuotation={viewer.isPlatformAdmin} canInitializeOwnQuotation={viewerIsSeller} sellerOrganisationId={project.seller?.id ?? null} sellerOrganisationName={project.seller?.name ?? null} initialOptions={initialRfqCandidates} lines={project.lines} />
 
       <ProjectSpecificationEditor
         projectId={project.id}
         lines={project.lines}
         currency={currency}
         canEdit={canEditSpecification}
-        canEnterQuotation={viewer.isPlatformAdmin}
-        sellerOrganisationId={project.seller?.id ?? null}
-        sellerOrganisationName={project.seller?.name ?? null}
+        canEnterQuotation={viewer.isPlatformAdmin || viewerIsSeller}
       />
+      </ProjectQuotationEditingProvider>
 
       {!isRfqCandidate ? <ProjectCommercialRollup projectId={project.id} currency={currency || "EUR"} /> : null}
 

@@ -6,154 +6,107 @@ import { Button, DENSE_TABLE_CLASS, Input } from "@timber/ui";
 import { toast } from "sonner";
 import type { ProjectLine, ProjectSpecificationField } from "../types";
 import { updateProjectSpecificationLine, updateProjectSpecificationStructuredValues, verifyProjectSpecificationLine, verifyProjectSpecificationStructuredValues } from "../actions/projectSpecificationActions";
-import { correctProjectQuotation, getProjectRfqState, initializeDirectProjectQuotation, type ProjectQuoteEntry, type ProjectRfqCandidate } from "../actions/projectRfqActions";
-import { pricesFromQuotation, quotationEntryAmountCents, quotationTotalCents, type ProjectQuotationPricingMode } from "../services/projectQuotationRows";
+import { correctProjectQuotation, type ProjectQuoteEntry, type ProjectRfqCandidate } from "../actions/projectRfqActions";
+import { pricesFromQuotation, quotationEntryAmountCents } from "../services/projectQuotationRows";
+import { useProjectQuotationEditing } from "./ProjectQuotationEditingContext";
 
 type SpecificationTablesProps = {
   projectId: string;
   lines: ProjectLine[];
   canEdit: boolean;
   canEnterQuotation: boolean;
-  sellerOrganisationId: string | null;
-  sellerOrganisationName: string | null;
   currency: string;
   onEdit: (line: ProjectLine) => void;
   onDelete: (line: ProjectLine) => void;
 };
 
-export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnterQuotation, sellerOrganisationId, sellerOrganisationName, currency, onEdit, onDelete }: SpecificationTablesProps) {
+export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnterQuotation, currency, onEdit, onDelete }: SpecificationTablesProps) {
+  const sharedQuotation = useProjectQuotationEditing();
   const groups = useMemo(() => groupLinesBySchema(lines), [lines]);
   const [quotePending, setQuotePending] = useState(false);
-  const [quoteLoadError, setQuoteLoadError] = useState("");
-  const [candidates, setCandidates] = useState<ProjectRfqCandidate[]>([]);
-  const [candidateId, setCandidateId] = useState("");
   const [quotePrices, setQuotePrices] = useState<Record<string, string>>({});
-  const [quoteMode,setQuoteMode]=useState<ProjectQuotationPricingMode|null>(null);
-  const [quoteTotal,setQuoteTotal]=useState("");
   const [quoteStatus, setQuoteStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [quoteCanManage, setQuoteCanManage] = useState(false);
   const quotePricesRef = useRef<Record<string, string>>({});
-  const candidatesRef = useRef<ProjectRfqCandidate[]>([]);
-  const candidateIdRef = useRef("");
+  const activeCandidateRef = useRef<ProjectRfqCandidate | null>(null);
   const quoteQueueRef = useRef<Promise<void>>(Promise.resolve());
   const quoteQueuedRef = useRef(0);
   const quoteErrorKeysRef = useRef(new Set<string>());
-  const selectedCandidate = candidates.find((candidate) => candidate.id === candidateId) ?? null;
-  const assignedSellerCandidate = candidates.find((candidate) => candidate.organisationId === sellerOrganisationId) ?? null;
+  const selectedCandidate = sharedQuotation.activeCandidate;
+  const quoteMode = sharedQuotation.mode;
 
   useEffect(() => {
-    if (!canEnterQuotation) return;
-    let cancelled = false;
-    setCandidates([]); candidatesRef.current = []; setCandidateId(""); candidateIdRef.current = ""; setQuotePrices({}); quotePricesRef.current = {}; setQuoteLoadError("");
-    void getProjectRfqState(projectId).then((result) => {
-      if (cancelled) return;
-      if (!result.success) { setQuoteLoadError(result.error); toast.error(result.error); return; }
-      if (!result.data) return;
-      setCandidates(result.data.candidates); candidatesRef.current = result.data.candidates;
-    });
-    return () => { cancelled = true; };
-  }, [canEnterQuotation, projectId]);
-
-  function selectCandidate(nextId: string) {
-    setCandidateId(nextId); candidateIdRef.current = nextId; quoteErrorKeysRef.current.clear(); setQuoteStatus("idle");
-    const candidate=candidates.find((item)=>item.id===nextId);const next = pricesFromQuotation(candidate?.quoteEntries ?? []);
-    setQuoteMode(candidate?.pricingMode??null);setQuoteTotal(candidate?.pricingMode==="total"&&candidate.quoteTotalCents!=null?(candidate.quoteTotalCents/100).toFixed(2):"");
-    quotePricesRef.current = next; setQuotePrices(next);
-  }
+    if (!canEnterQuotation || sharedQuotation.projectId !== projectId || !sharedQuotation.activeCandidate) {
+      activeCandidateRef.current = null; quotePricesRef.current = {}; setQuotePrices({}); setQuoteCanManage(false); setQuotePending(false); setQuoteStatus("idle"); sharedQuotation.setInlineState(false, "idle"); return;
+    }
+    setQuoteCanManage(sharedQuotation.canManage);
+    if (!sharedQuotation.canManage) setQuotePending(sharedQuotation.pending);
+    activeCandidateRef.current = sharedQuotation.activeCandidate;
+    quotePricesRef.current = sharedQuotation.prices; setQuotePrices(sharedQuotation.prices);
+  }, [canEnterQuotation, projectId, sharedQuotation.activeCandidate, sharedQuotation.canManage, sharedQuotation.pending, sharedQuotation.prices, sharedQuotation.projectId]);
 
   function restorePersistedQuotation(candidate: ProjectRfqCandidate) {
     const prices = pricesFromQuotation(candidate.quoteEntries);
-    setQuoteMode(candidate.pricingMode); setQuoteTotal(candidate.pricingMode === "total" && candidate.quoteTotalCents != null ? (candidate.quoteTotalCents / 100).toFixed(2) : "");
     quotePricesRef.current = prices; setQuotePrices(prices);
-  }
-
-  async function createDirectQuotation() {
-    setQuotePending(true); setQuoteLoadError("");
-    try {
-      const result = await initializeDirectProjectQuotation({ projectId });
-      if (!result.success) { setQuoteLoadError(result.error); toast.error(result.error); return; }
-      const refreshed = await getProjectRfqState(projectId);
-      if (!refreshed.success || !refreshed.data) { const message = refreshed.success ? "Could not load supplier quotation" : refreshed.error; setQuoteLoadError(message); toast.error(message); return; }
-      setCandidates(refreshed.data.candidates); candidatesRef.current = refreshed.data.candidates;
-      const candidate = refreshed.data.candidates.find((item) => item.id === result.data.candidateId);
-      if (candidate) { setCandidateId(candidate.id); candidateIdRef.current = candidate.id; const prices = pricesFromQuotation(candidate.quoteEntries); setQuotePrices(prices); quotePricesRef.current = prices;setQuoteMode(candidate.pricingMode);setQuoteTotal(candidate.pricingMode==="total"&&candidate.quoteTotalCents!=null?(candidate.quoteTotalCents/100).toFixed(2):""); }
-    } catch {
-      const message = "Could not create supplier quotation";
-      setQuoteLoadError(message); toast.error(message);
-    } finally {
-      setQuotePending(false);
-    }
+    sharedQuotation.setPrices(prices);
   }
 
   function setQuotePrice(key: string, value: string) {
     const next = { ...quotePricesRef.current, [key]: value };
     quotePricesRef.current = next; setQuotePrices(next); setQuoteStatus("idle");
+    sharedQuotation.setPrices(next);
   }
 
   function saveQuotationEntry(entry: Omit<ProjectQuoteEntry, "unitPriceCents">, value: string, candidateOverride?: string) {
+    if (!quoteCanManage) return;
     const numericPrice = Number(value);
     const entryKey = `${entry.targetType}:${entry.targetId}`;
     if (!value.trim() || !Number.isFinite(numericPrice) || numericPrice < 0) {
-      const existing = candidatesRef.current.find((item) => item.id === candidateIdRef.current)?.quoteEntries.find((item) => `${item.targetType}:${item.targetId}` === entryKey);
+      const existing = activeCandidateRef.current?.quoteEntries.find((item) => `${item.targetType}:${item.targetId}` === entryKey);
       const restored = existing ? (existing.unitPriceCents / 100).toFixed(2) : "";
       quotePricesRef.current = { ...quotePricesRef.current, [entryKey]: restored }; setQuotePrices(quotePricesRef.current);
+      sharedQuotation.setPrices(quotePricesRef.current);
       setQuoteStatus("error"); toast.error("Enter a valid quotation price"); return;
     }
+    const savingMode: "itemized" | "itemized_total" = quoteMode === "itemized_total" ? "itemized_total" : "itemized";
     queueQuotationChange(entryKey, (candidate) => {
       const nextEntry: ProjectQuoteEntry = { ...entry, unitPriceCents: Math.round(numericPrice * 100) };
       return [...candidate.quoteEntries.filter((item) => `${item.targetType}:${item.targetId}` !== entryKey), nextEntry];
-    }, candidateOverride);
+    }, savingMode, candidateOverride);
   }
 
   function removeQuotationEntry(entryKey: string, candidateOverride?: string) {
-    queueQuotationChange(entryKey, (candidate) => candidate.quoteEntries.filter((item) => `${item.targetType}:${item.targetId}` !== entryKey), candidateOverride);
+    if (!quoteCanManage) return;
+    const savingMode: "itemized" | "itemized_total" = quoteMode === "itemized_total" ? "itemized_total" : "itemized";
+    queueQuotationChange(entryKey, (candidate) => candidate.quoteEntries.filter((item) => `${item.targetType}:${item.targetId}` !== entryKey), savingMode, candidateOverride);
   }
 
-  function queueQuotationChange(entryKey: string, buildEntries: (candidate: ProjectRfqCandidate) => ProjectQuoteEntry[], candidateOverride?: string) {
-    const savingCandidateId = candidateOverride ?? candidateIdRef.current;
-    quoteQueuedRef.current += 1; setQuotePending(true); setQuoteStatus("idle");
+  function queueQuotationChange(entryKey: string, buildEntries: (candidate: ProjectRfqCandidate) => ProjectQuoteEntry[], savingMode: "itemized" | "itemized_total", candidateOverride?: string) {
+    const savingCandidateId = candidateOverride ?? activeCandidateRef.current?.id ?? "";
+    quoteQueuedRef.current += 1; setQuotePending(true); setQuoteStatus("idle"); sharedQuotation.setInlineState(true, "idle");
     quoteQueueRef.current = quoteQueueRef.current.catch(() => undefined).then(async () => {
-      const candidate = candidatesRef.current.find((item) => item.id === savingCandidateId);
+      const candidate = activeCandidateRef.current?.id === savingCandidateId ? activeCandidateRef.current : null;
       if (!candidate) { setQuoteStatus("error"); toast.error("Select an RFQ candidate"); return; }
       const entries = buildEntries(candidate);
       let result;
-      const savingMode: "itemized" | "itemized_total"=quoteMode==="itemized_total"?"itemized_total":"itemized";
       try { result = await correctProjectQuotation({ candidateId: candidate.id, pricingMode:savingMode, entries, totalCents:null, notes: candidate.quoteNotes ?? "" }); }
       catch { restorePersistedQuotation(candidate); quoteErrorKeysRef.current.add(entryKey); setQuoteStatus("error"); toast.error("Could not save quotation"); return; }
       if (!result.success) { restorePersistedQuotation(candidate); quoteErrorKeysRef.current.add(entryKey); setQuoteStatus("error"); toast.error(result.error); return; }
       quoteErrorKeysRef.current.delete(entryKey);
       const quoteTotalCents = entries.reduce((sum, item) => sum + quotationEntryAmountCents(savingMode,item.quantity,item.unitPriceCents), 0);
-      const nextCandidates = candidatesRef.current.map((item) => item.id === candidate.id ? { ...item, pricingMode:savingMode, quoteEntries: entries, quoteTotalCents } : item);
-      candidatesRef.current = nextCandidates; setCandidates(nextCandidates); setQuoteStatus(quoteErrorKeysRef.current.size ? "error" : "saved");
+      const nextCandidate = { ...candidate, pricingMode:savingMode, quoteEntries: entries, quoteTotalCents };
+      activeCandidateRef.current = nextCandidate; sharedQuotation.setActiveCandidate(nextCandidate); setQuoteStatus(quoteErrorKeysRef.current.size ? "error" : "saved");
       window.dispatchEvent(new CustomEvent("project-quotation-updated", { detail: { projectId } }));
-    }).finally(() => { quoteQueuedRef.current -= 1; if (quoteQueuedRef.current === 0) setQuotePending(false); });
-  }
-
-  async function saveTotalQuotation(){
-    const candidate=candidatesRef.current.find((item)=>item.id===candidateIdRef.current);const totalCents=quotationTotalCents(quoteTotal);
-    if(!candidate||totalCents===null){toast.error("Enter a valid total project price");return}
-    setQuotePending(true);setQuoteStatus("idle");
-    try{
-      const result=await correctProjectQuotation({candidateId:candidate.id,pricingMode:"total",entries:[],totalCents,notes:candidate.quoteNotes??""});
-      if(!result.success){restorePersistedQuotation(candidate);setQuoteStatus("error");toast.error(result.error);return}
-      const next=candidatesRef.current.map((item)=>item.id===candidate.id?{...item,pricingMode:"total" as const,quoteEntries:[],quoteTotalCents:totalCents}:item);candidatesRef.current=next;setCandidates(next);setQuoteStatus("saved");window.dispatchEvent(new CustomEvent("project-quotation-updated",{detail:{projectId}}));
-    }catch{restorePersistedQuotation(candidate);setQuoteStatus("error");toast.error("Could not save quotation");}
-    finally{setQuotePending(false)}
+    }).finally(() => { quoteQueuedRef.current -= 1; if (quoteQueuedRef.current === 0) { setQuotePending(false); sharedQuotation.setInlineState(false, quoteErrorKeysRef.current.size ? "error" : "saved"); } });
   }
 
   return <div className="space-y-3 p-3">
-    {canEnterQuotation ? <div className="flex flex-wrap items-end gap-3 rounded-lg border border-[#ded8d0] bg-[#f8faf9] p-3 dark:border-border dark:bg-muted/30">
-      <label className="grid min-w-64 gap-1 text-sm"><span className="font-medium">Supplier quotation</span><select disabled={quotePending} className="h-9 rounded-md border bg-background px-3" value={candidateId} onChange={(event) => selectCandidate(event.target.value)}><option value="">Select existing RFQ candidate</option>{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.organisationName}{candidate.status === "awarded" ? " · awarded" : ""}</option>)}</select></label>
-      <p className={`pb-2 text-xs ${quoteLoadError ? "text-destructive" : "text-muted-foreground"}`}>{quoteLoadError || (candidates.length ? selectedCandidate ? `Editing the authoritative ${selectedCandidate.organisationName} quotation.` : "Select whose quotation was received." : sellerOrganisationId ? `No quotation exists yet for ${sellerOrganisationName ?? "the assigned seller"}.` : "Assign a seller before entering a quotation.")}</p>
-      {!assignedSellerCandidate && sellerOrganisationId ? <Button size="sm" disabled={quotePending} onClick={() => void createDirectQuotation()}>Create supplier quotation</Button> : null}
-      {candidateId ? <span className={`ml-auto pb-2 text-xs ${quoteStatus === "error" ? "text-destructive" : "text-muted-foreground"}`}>{quotePending ? "Saving quotation…" : quoteStatus === "saved" ? "Quotation saved" : quoteStatus === "error" ? "Save failed" : "Saves when focus leaves a price"}</span> : null}
-      {candidateId?<fieldset className="flex w-full flex-wrap items-center gap-4 border-t pt-3"><legend className="sr-only">Quotation pricing mode</legend><label className="flex items-center gap-2 text-sm"><input disabled={quotePending} type="radio" name={`quotation-pricing-mode-${candidateId}`} checked={quoteMode==="itemized"} onChange={()=>setQuoteMode("itemized")}/>Unit price for each process</label><label className="flex items-center gap-2 text-sm"><input disabled={quotePending} type="radio" name={`quotation-pricing-mode-${candidateId}`} checked={quoteMode==="itemized_total"} onChange={()=>setQuoteMode("itemized_total")}/>Total for each process</label><label className="flex items-center gap-2 text-sm"><input disabled={quotePending} type="radio" name={`quotation-pricing-mode-${candidateId}`} checked={quoteMode==="total"} onChange={()=>setQuoteMode("total")}/>One total for all processes</label>{quoteMode==="total"?<><Input className="w-44" aria-label="Total for all processes" type="number" min="0" step="0.01" value={quoteTotal} onChange={(event)=>setQuoteTotal(event.target.value)}/><Button size="sm" disabled={quotePending||quotationTotalCents(quoteTotal)===null} onClick={()=>void saveTotalQuotation()}>Save total</Button></>:null}</fieldset>:null}
-    </div> : null}
     {groups.map((group, groupIndex) => <section key={group.key} className="overflow-hidden rounded-lg border border-[#ded8d0] bg-white dark:border-border dark:bg-card">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ded8d0] bg-white px-3 py-2 dark:border-border dark:bg-card">
         <div><h3 className="font-semibold">{groupTitle(group.lines, groupIndex)}</h3><p className="text-xs text-muted-foreground">{group.lines.length} line(s) sharing the same properties</p></div>
       </div>
       <div>
-        <table className={`w-full border-collapse text-sm ${DENSE_TABLE_CLASS} ${selectedCandidate&&quoteMode==="total"?"[&_input[aria-label^='Quotation_price']]:hidden":""}`}>
+        <table className={`w-full border-collapse text-sm ${DENSE_TABLE_CLASS}`}>
           <thead className="sr-only"><tr><th scope="col">Specification line</th></tr></thead>
           <tbody>{group.lines.map((line) => <SpecificationProductRows key={line.id ?? line.lineNo} projectId={projectId} line={line} fields={group.fields} canEdit={canEdit} currency={currency} quotation={selectedCandidate&&quoteMode!=="total"&&quoteMode ? { candidateId: selectedCandidate.id, candidateName: selectedCandidate.organisationName, mode:quoteMode, prices: quotePrices, setPrice: setQuotePrice, save: saveQuotationEntry, remove: removeQuotationEntry, pending: quotePending } : null} onEdit={onEdit} onDelete={onDelete} />)}</tbody>
         </table>

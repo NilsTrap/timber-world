@@ -23,8 +23,8 @@ const LINE_UNITS = ["kg", "piece", "m3", "m2", "linear_m", "package", "crate", "
 type Draft = { id?: string; productName: string; quantity: string; unit: string; notes: string; catalogVariantId?: string; isCatalogSnapshot?: boolean };
 const blank = (): Draft => ({ productName: "", quantity: "1", unit: "piece", notes: "" });
 
-export function ProjectSpecificationEditor({ projectId, lines, currency = "EUR", canEdit, canEnterQuotation = false, sellerOrganisationId = null, sellerOrganisationName = null }: {
-  projectId: string; lines: ProjectLine[]; currency?: string; canEdit: boolean; canEnterQuotation?: boolean; sellerOrganisationId?: string | null; sellerOrganisationName?: string | null;
+export function ProjectSpecificationEditor({ projectId, lines, currency = "EUR", canEdit, canEnterQuotation = false }: {
+  projectId: string; lines: ProjectLine[]; currency?: string; canEdit: boolean; canEnterQuotation?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -87,8 +87,6 @@ export function ProjectSpecificationEditor({ projectId, lines, currency = "EUR",
       lines={lines}
       canEdit={canEdit}
       canEnterQuotation={canEnterQuotation}
-      sellerOrganisationId={sellerOrganisationId}
-      sellerOrganisationName={sellerOrganisationName}
       currency={currency}
       onEdit={(line) => { setCatalog([]); setDraft(lineToDraft(line)); }}
       onDelete={setDeleteTarget}

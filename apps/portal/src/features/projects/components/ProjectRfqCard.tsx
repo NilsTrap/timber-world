@@ -15,14 +15,16 @@ import {
   type ProjectCommercialPricing, type ProjectRfqCandidate, type ProjectRfqState,
 } from "../actions/projectRfqActions";
 import { calculateProjectMargin, type ProjectMarginMode } from "../services/projectRfq";
-import { pricesFromQuotation, quotationEntries, quotationEntryAmountCents, quotationPricingRows, quotationTotalCents, type PricingRow, type ProjectQuotationPricingMode } from "../services/projectQuotationRows";
+import { pricesFromQuotation, quotationEntries, quotationEntryAmountCents, quotationPricingRows, quotationTotalCents, type ProjectQuotationPricingMode } from "../services/projectQuotationRows";
 import type { ProjectLine } from "../types";
 import { ProjectSectionBody, ProjectSectionCard, ProjectSectionHeader } from "./ProjectSectionCard";
+import { useProjectQuotationEditing } from "./ProjectQuotationEditingContext";
 
-export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandidateQuotation, canInitializeOwnQuotation, initialOptions, lines }: {
-  projectId: string; currency: string; canManage: boolean; canEnterCandidateQuotation:boolean; canInitializeOwnQuotation:boolean; initialOptions: Array<{ id: string; name: string }>; lines:ProjectLine[];
+export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandidateQuotation, canInitializeOwnQuotation, sellerOrganisationId, sellerOrganisationName, initialOptions, lines }: {
+  projectId: string; currency: string; canManage: boolean; canEnterCandidateQuotation:boolean; canInitializeOwnQuotation:boolean; sellerOrganisationId:string|null; sellerOrganisationName:string|null; initialOptions: Array<{ id: string; name: string }>; lines:ProjectLine[];
 }) {
   const router = useRouter();
+  const sharedQuotation = useProjectQuotationEditing();
   const [pending, startTransition] = useTransition();
   const [rfq, setRfq] = useState<ProjectRfqState | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -30,14 +32,17 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
   const [options, setOptions] = useState<Array<{ id: string; name: string }>>(initialOptions);
   const [selected, setSelected] = useState<string[]>([]);
   const [deadline, setDeadline] = useState(earliestDeadlineValue());
-  const [prices,setPrices]=useState<Record<string,string>>({});
-  const [pricingMode,setPricingMode]=useState<ProjectQuotationPricingMode|null>(null);
   const [projectTotal,setProjectTotal]=useState("");
   const [notes, setNotes] = useState("");
   const [awardTarget, setAwardTarget] = useState<ProjectRfqCandidate | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [adminCandidateId,setAdminCandidateId]=useState<string|null>(null);
   const [viewCandidateId,setViewCandidateId]=useState<string|null>(null);
+  const prices = sharedQuotation.prices;
+  const pricingMode = sharedQuotation.mode;
+  const setPrices = sharedQuotation.setPrices;
+  const setPricingMode = sharedQuotation.setMode;
+  const busy = pending || sharedQuotation.inlinePending;
 
   const loadOptions = useCallback(async () => {
     const choices = await getEligibleProjectRfqCandidates(projectId);
@@ -62,6 +67,11 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { const refresh = (event: Event) => { if ((event as CustomEvent<{projectId?:string}>).detail?.projectId === projectId) void load(); }; window.addEventListener("project-quotation-updated", refresh); return () => window.removeEventListener("project-quotation-updated", refresh); }, [load, projectId]);
+  useEffect(() => {
+    const candidateId = rfq?.canManage ? adminCandidateId : rfq?.ownCandidateId ?? null;
+    const activeCandidate = candidateId ? rfq?.candidates.find((candidate) => candidate.id === candidateId) ?? null : null;
+    sharedQuotation.setControlState({ candidateId, activeCandidate, pending, canManage: rfq?.canManage === true });
+  }, [adminCandidateId, pending, rfq?.canManage, rfq?.candidates, rfq?.ownCandidateId, sharedQuotation.setControlState]);
 
   function requestQuotations() {
     startTransition(async () => {
@@ -173,13 +183,15 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
           {candidate.quoteNotes ? <p className="text-sm">{candidate.quoteNotes}</p> : null}
           {candidate.submitterName ? <p className="text-xs text-muted-foreground">Submitted by {candidate.submitterName}</p> : null}
         </div>
-        <div className="flex gap-2">{candidate.pricingMode||candidate.quoteTotalCents!=null||candidate.quoteEntries.length?<Button variant="outline" size="sm" onClick={()=>setViewCandidateId(candidate.id)}>View quotation</Button>:null}{canEnterCandidateQuotation?<Button variant="outline" size="sm" onClick={()=>{setAdminCandidateId(candidate.id);setViewCandidateId(null);setPrices(pricesFromQuotation(candidate.quoteEntries));setPricingMode(candidate.pricingMode);setProjectTotal(candidate.pricingMode==="total"&&candidate.quoteTotalCents!=null?(candidate.quoteTotalCents/100).toFixed(2):"");setNotes(candidate.quoteNotes??"")}}>{candidate.pricingMode||candidate.quoteTotalCents!=null||candidate.quoteEntries.length?"Edit quotation":"Enter quotation"}</Button>:null}{rfq.status === "open" && candidate.status === "submitted" ? <Button size="sm" onClick={() => setAwardTarget(candidate)}>Award</Button> : null}</div>
+        <div className="flex gap-2">{candidate.pricingMode||candidate.quoteTotalCents!=null||candidate.quoteEntries.length?<Button disabled={busy} variant="outline" size="sm" onClick={()=>setViewCandidateId(candidate.id)}>View quotation</Button>:null}{canEnterCandidateQuotation?<Button disabled={busy} variant="outline" size="sm" onClick={()=>{setAdminCandidateId(candidate.id);setViewCandidateId(null);setPrices(pricesFromQuotation(candidate.quoteEntries));setPricingMode(candidate.pricingMode);setProjectTotal(candidate.pricingMode==="total"&&candidate.quoteTotalCents!=null?(candidate.quoteTotalCents/100).toFixed(2):"");setNotes(candidate.quoteNotes??"")}}>{candidate.pricingMode||candidate.quoteTotalCents!=null||candidate.quoteEntries.length?"Edit quotation":"Enter quotation"}</Button>:null}{rfq.status === "open" && candidate.status === "submitted" ? <Button disabled={busy} size="sm" onClick={() => setAwardTarget(candidate)}>Award</Button> : null}</div>
       </div>)}
       <div className="flex justify-end gap-2">
         {rfq.status === "open" ? <Button variant="outline" size="sm" onClick={() => setConfirmCancel(true)}>Close request</Button> : null}
         {rfq.status !== "open" ? <Button variant="outline" size="sm" onClick={startNewRound}>Start new round</Button> : null}
       </div>
     </div> : null}
+
+    {canManage && sellerOrganisationId && !rfq?.candidates.some((candidate) => candidate.organisationId === sellerOrganisationId) ? <div className="flex flex-wrap items-center justify-between gap-3 rounded border p-3"><p className="text-sm text-muted-foreground">No quotation exists yet for {sellerOrganisationName ?? "the assigned seller"}.</p><Button size="sm" disabled={busy} onClick={createOwnQuotation}>Create supplier quotation</Button></div> : null}
 
     {rfq?.canManage && rfq.status === "awarded" && rfq.commercialPricing ? <TraderMarginCard
       projectId={projectId}
@@ -192,7 +204,7 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
     {!rfq?.canManage&&rfq?.ownCandidateId&&rfq.status!=="open"&&ownReadOnlyCandidate?<QuotationDetail candidate={ownReadOnlyCandidate} currency={currency}/>:null}
     {(rfq?.ownCandidateId&&!rfq.canManage&&rfq.status==="open"||rfq?.canManage&&adminCandidateId) ? !rfq.canManage&&deadlinePassed
       ? <p className="text-sm text-muted-foreground">The quotation deadline has passed.</p>
-      : <QuotationEntryForm lines={lines} currency={currency} mode={pricingMode} onModeChange={(next)=>{if(pricingMode&&pricingMode!==next&&(Object.keys(prices).length>0||projectTotal)){if(!window.confirm("Changing pricing mode replaces the current quotation prices. Continue?"))return;setPrices({});setProjectTotal("");}setPricingMode(next)}} projectTotal={projectTotal} setProjectTotal={setProjectTotal} prices={prices} setPrices={setPrices} notes={notes} setNotes={setNotes} pending={pending} onSubmit={submitQuotation} onCancel={rfq.canManage?()=>setAdminCandidateId(null):undefined}/>
+      : <QuotationEntryForm lines={lines} currency={currency} mode={pricingMode} onModeChange={setPricingMode} projectTotal={projectTotal} setProjectTotal={setProjectTotal} prices={prices} notes={notes} setNotes={setNotes} pending={busy} inlineStatus={sharedQuotation.inlinePending?"saving":sharedQuotation.inlineStatus} onSubmit={submitQuotation} onCancel={rfq.canManage?()=>setAdminCandidateId(null):undefined}/>
       : null}
 
     <AlertDialog open={awardTarget !== null} onOpenChange={(open) => !open && !pending && setAwardTarget(null)}>
@@ -246,8 +258,8 @@ function QuotationDetail({candidate,currency,onClose}:{candidate:ProjectRfqCandi
   return <div className="space-y-3 rounded-md border p-3"><div className="flex items-start justify-between"><div><p className="font-medium">{candidate.organisationName} quotation</p><p className="text-xs text-muted-foreground">{modeLabel}{candidate.submittedAt?` · Submitted ${new Date(candidate.submittedAt).toLocaleString()}`:" · Not submitted"}{candidate.updatedAt?` · updated ${new Date(candidate.updatedAt).toLocaleString()}`:""}{candidate.quoteEnteredAsAdmin?" · corrected by admin":""}</p></div>{onClose?<Button size="sm" variant="ghost" onClick={onClose}>Close</Button>:null}</div>{showEntries?<div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">Requirement</th><th className="p-2 text-right">Quantity</th><th className="p-2">Unit</th><th className="p-2 text-right">{totalsMode?"Process total":"Unit price"}</th><th className="p-2 text-right">Total</th></tr></thead><tbody>{candidate.quoteEntries.map((entry)=><tr key={`${entry.targetType}:${entry.targetId}`} className="border-b last:border-0"><td className="p-2">{entry.label}</td><td className="p-2 text-right">{entry.quantity}</td><td className="p-2">{entry.unit}</td><td className="p-2 text-right">{formatCents(entry.unitPriceCents,currency)}</td><td className="p-2 text-right">{formatCents(quotationEntryAmountCents(candidate.pricingMode??"itemized",entry.quantity,entry.unitPriceCents),currency)}</td></tr>)}</tbody></table></div>:candidate.pricingMode==="total"?<p className="rounded-md bg-muted p-3 text-sm">Total price for the complete process list</p>:null}<p className="text-right font-semibold">Total: {formatCents(candidate.quoteTotalCents??0,currency)}</p>{candidate.quoteNotes?<p className="text-sm">{candidate.quoteNotes}</p>:null}{candidate.status==="awarded"?<p className="text-xs text-muted-foreground">Awarded quotation is locked for the supplier.</p>:null}</div>;
 }
 
-function QuotationEntryForm({lines,currency,mode,onModeChange,projectTotal,setProjectTotal,prices,setPrices,notes,setNotes,pending,onSubmit,onCancel}:{lines:ProjectLine[];currency:string;mode:ProjectQuotationPricingMode|null;onModeChange:(mode:ProjectQuotationPricingMode)=>void;projectTotal:string;setProjectTotal:(value:string)=>void;prices:Record<string,string>;setPrices:React.Dispatch<React.SetStateAction<Record<string,string>>>;notes:string;setNotes:(value:string)=>void;pending:boolean;onSubmit:()=>void;onCancel?:()=>void}) {
-  const rows=quotationPricingRows(lines);const rowCents=(row:PricingRow)=>quotationEntryAmountCents(mode??"itemized",row.quantity,Math.round(Number(prices[row.key]||0)*100));const totalCents=rows.reduce((sum,row)=>sum+rowCents(row),0);const totalValue=quotationTotalCents(projectTotal);const itemized=mode!==null&&mode!=="total";const totalsMode=mode==="itemized_total";
-  return <div className="space-y-3 rounded-md border p-3"><fieldset className="flex flex-wrap gap-4"><legend className="mb-2 font-medium">How is this quotation priced?</legend><label className="flex items-center gap-2"><input type="radio" checked={mode==="itemized"} onChange={()=>onModeChange("itemized")}/>Unit price for each process</label><label className="flex items-center gap-2"><input type="radio" checked={totalsMode} onChange={()=>onModeChange("itemized_total")}/>Total for each process</label><label className="flex items-center gap-2"><input type="radio" checked={mode==="total"} onChange={()=>onModeChange("total")}/>One total for all processes</label></fieldset>{itemized?<div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">Requirement</th><th className="p-2 text-right">Quantity</th><th className="p-2">Unit</th><th className="p-2 text-right">{totalsMode?`Process total (${currency})`:`Unit price (${currency})`}</th><th className="p-2 text-right">Total</th></tr></thead><tbody>{rows.map((row)=><tr key={row.key} className="border-b last:border-0"><td className="p-2">{row.label}</td><td className="p-2 text-right">{row.quantity}</td><td className="p-2">{row.unit}</td><td className="p-2"><Input aria-label={`${totalsMode?"Total price":"Unit price"} for ${row.label}`} className="ml-auto w-32 text-right" type="number" min="0" step="0.01" value={prices[row.key]??""} onChange={(event)=>setPrices((current)=>({...current,[row.key]:event.target.value}))}/></td><td className="p-2 text-right">{(rowCents(row)/100).toFixed(2)}</td></tr>)}</tbody></table></div>:mode==="total"?<Field label={`Total for all processes (${currency})`}><Input aria-label="Total for all processes" type="number" min="0" step="0.01" value={projectTotal} onChange={(event)=>setProjectTotal(event.target.value)}/></Field>:<p className="text-sm text-muted-foreground">Choose a pricing mode to enter the quotation.</p>}<div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end"><Field label="Notes and exceptions"><Input value={notes} onChange={(event)=>setNotes(event.target.value)}/></Field><p className="pb-2 font-semibold">Total: {itemized?(totalCents/100).toFixed(2):totalValue==null?"—":(totalValue/100).toFixed(2)} {currency}</p><div className="flex gap-2">{onCancel?<Button variant="outline" onClick={onCancel}>Cancel</Button>:null}<Button disabled={pending||!mode||(itemized&&(rows.length===0||Object.keys(prices).length===0))||(mode==="total"&&totalValue===null)} onClick={onSubmit}>{pending?<Loader2 className="mr-2 h-4 w-4 animate-spin"/>:null}Submit quotation</Button></div></div></div>;
+function QuotationEntryForm({lines,currency,mode,onModeChange,projectTotal,setProjectTotal,prices,notes,setNotes,pending,inlineStatus,onSubmit,onCancel}:{lines:ProjectLine[];currency:string;mode:ProjectQuotationPricingMode|null;onModeChange:(mode:ProjectQuotationPricingMode)=>void;projectTotal:string;setProjectTotal:(value:string)=>void;prices:Record<string,string>;notes:string;setNotes:(value:string)=>void;pending:boolean;inlineStatus:"idle"|"saving"|"saved"|"error";onSubmit:()=>void;onCancel?:()=>void}) {
+  const rows=quotationPricingRows(lines);const entries=quotationEntries(lines,prices);const totalCents=entries.reduce((sum,entry)=>sum+quotationEntryAmountCents(mode??"itemized",entry.quantity,entry.unitPriceCents),0);const totalValue=quotationTotalCents(projectTotal);const itemized=mode!==null&&mode!=="total";const totalsMode=mode==="itemized_total";
+  return <div className="space-y-3 rounded-md border p-3"><fieldset disabled={pending} className="flex flex-wrap gap-4"><legend className="mb-2 font-medium">How is this quotation priced?</legend><label className="flex items-center gap-2"><input type="radio" checked={mode==="itemized"} onChange={()=>onModeChange("itemized")}/>Unit price for each process</label><label className="flex items-center gap-2"><input type="radio" checked={totalsMode} onChange={()=>onModeChange("itemized_total")}/>Total for each process</label><label className="flex items-center gap-2"><input type="radio" checked={mode==="total"} onChange={()=>onModeChange("total")}/>One total for all processes</label></fieldset>{itemized?<p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">Enter {totalsMode?"process totals":"unit prices"} in the Applicable processes tables in the technical specification below.</p>:mode==="total"?<Field label={`Total for all processes (${currency})`}><Input aria-label="Total for all processes" type="number" min="0" step="0.01" value={projectTotal} onChange={(event)=>setProjectTotal(event.target.value)}/></Field>:<p className="text-sm text-muted-foreground">Choose a pricing mode to enter the quotation.</p>}<p aria-live="polite" className={`text-xs ${inlineStatus==="error"?"text-destructive":"text-muted-foreground"}`}>{inlineStatus==="saving"?"Saving inline quotation…":inlineStatus==="saved"?"Inline quotation saved":inlineStatus==="error"?"Inline quotation save failed":""}</p><div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end"><Field label="Notes and exceptions"><Input disabled={pending} value={notes} onChange={(event)=>setNotes(event.target.value)}/></Field><p className="pb-2 font-semibold">Total: {itemized?(totalCents/100).toFixed(2):totalValue==null?"—":(totalValue/100).toFixed(2)} {currency}</p><div className="flex gap-2">{onCancel?<Button disabled={pending} variant="outline" onClick={onCancel}>Cancel</Button>:null}<Button disabled={pending||!mode||(itemized&&(rows.length===0||entries.length===0))||(mode==="total"&&totalValue===null)} onClick={onSubmit}>{pending?<Loader2 className="mr-2 h-4 w-4 animate-spin"/>:null}Submit quotation</Button></div></div></div>;
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="grid gap-1.5"><Label>{label}</Label>{children}</div>; }
