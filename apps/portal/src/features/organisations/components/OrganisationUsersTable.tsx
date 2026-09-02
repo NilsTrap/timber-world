@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import {
   ArrowUp,
@@ -16,6 +16,9 @@ import {
   KeyRound,
   UserMinus,
   Star,
+  Copy,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import {
   Button,
@@ -34,6 +37,14 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Label,
 } from "@timber/ui";
 import {
   getOrganisationUsers,
@@ -47,6 +58,7 @@ import {
 } from "../actions";
 import dynamic from "next/dynamic";
 import type { OrganisationUser } from "../types";
+import { generateTemporaryPassword } from "@/lib/utils/generatePassword";
 
 // AddUserDialog only mounts when the admin clicks the corresponding action.
 const AddUserDialog = dynamic(
@@ -147,7 +159,13 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
   // Send/Resend credentials state
   const [sendingCredentialsFor, setSendingCredentialsFor] = useState<string | null>(null);
   const [resendingCredentialsFor, setResendingCredentialsFor] = useState<string | null>(null);
-  const [resettingPasswordFor, setResettingPasswordFor] = useState<string | null>(null);
+  const [resetUser, setResetUser] = useState<OrganisationUser | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetConfirmation, setResetConfirmation] = useState("");
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const resetSubmittingRef = useRef(false);
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -270,19 +288,56 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
   };
 
   // Handle reset password (active users)
-  const handleResetPassword = async (user: OrganisationUser) => {
-    setResettingPasswordFor(user.id);
+  const clearResetDialog = () => {
+    setResetUser(null);
+    setResetPassword("");
+    setResetConfirmation("");
+    setResetError(null);
+    setShowResetPassword(false);
+  };
 
-    const result = await resetUserPassword(user.id, organisationId);
-
-    if (result.success) {
-      toast.success(`Password reset link sent to ${result.data.email}`);
-      loadUsers();
-    } else {
-      toast.error(result.error);
+  const handleResetPassword = async () => {
+    if (!resetUser || resetSubmittingRef.current) return;
+    if (resetPassword.length < 8) {
+      setResetError("Password must be at least 8 characters");
+      return;
+    }
+    if (resetPassword !== resetConfirmation) {
+      setResetError("Passwords do not match");
+      return;
     }
 
-    setResettingPasswordFor(null);
+    resetSubmittingRef.current = true;
+    setIsResettingPassword(true);
+    try {
+      setResetError(null);
+      const result = await resetUserPassword(resetUser.id, organisationId, {
+        password: resetPassword,
+        confirmation: resetConfirmation,
+      });
+      if (result.success) {
+        toast.success("Password updated");
+        clearResetDialog();
+        loadUsers();
+      } else {
+        setResetError(result.error);
+      }
+    } catch {
+      setResetError("Password could not be updated; try again");
+    } finally {
+      resetSubmittingRef.current = false;
+      setIsResettingPassword(false);
+    }
+  };
+
+  const copyResetPassword = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(resetPassword);
+      toast.success("Password copied");
+    } catch {
+      toast.error("Password could not be copied");
+    }
   };
 
   // Confirm remove-from-organisation (deactivates the membership; refuses the
@@ -461,20 +516,15 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                           </Button>
                         )}
                         {/* Reset Password button - for active users */}
-                        {user.status === "active" && user.authUserId && user.isActive && (
+                        {user.status === "active" && user.authUserId && user.isActive && user.membershipActive !== false && (
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() => handleResetPassword(user)}
-                            disabled={resettingPasswordFor === user.id}
+                            onClick={() => setResetUser(user)}
                             aria-label={`Reset password for ${user.name}`}
                             title="Reset password"
                           >
-                            {resettingPasswordFor === user.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <KeyRound className="h-4 w-4" />
-                            )}
+                            <KeyRound className="h-4 w-4" />
                           </Button>
                         )}
                         <Button
@@ -538,6 +588,89 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
         onOpenChange={(open) => !open && setEditingUser(null)}
         onSuccess={handleSuccess}
       />
+
+      <Dialog
+        open={!!resetUser}
+        onOpenChange={(open) => {
+          if (!open && !isResettingPassword) clearResetDialog();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set password</DialogTitle>
+            <DialogDescription>
+              Set a new password for {resetUser?.name}. It will not be sent by email.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void handleResetPassword(); }}>
+            <div className="space-y-2">
+              <Label htmlFor="reset-password">New password</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="reset-password"
+                  type={showResetPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={resetPassword}
+                  aria-describedby={resetError ? "reset-password-error" : undefined}
+                  aria-invalid={!!resetError}
+                  onChange={(event) => { setResetPassword(event.target.value); setResetError(null); }}
+                  disabled={isResettingPassword}
+                />
+                <Button type="button" variant="outline" size="icon" disabled={isResettingPassword} onClick={() => setShowResetPassword((shown) => !shown)} aria-label={showResetPassword ? "Hide password" : "Show password"}>
+                  {showResetPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={!resetPassword || isResettingPassword}
+                  aria-label="Copy password"
+                  onClick={() => void copyResetPassword()}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reset-password-confirmation">Confirm password</Label>
+              <Input
+                id="reset-password-confirmation"
+                type={showResetPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={resetConfirmation}
+                aria-describedby={resetError ? "reset-password-error" : undefined}
+                aria-invalid={!!resetError}
+                onChange={(event) => { setResetConfirmation(event.target.value); setResetError(null); }}
+                disabled={isResettingPassword}
+              />
+            </div>
+            {resetError && <p id="reset-password-error" role="alert" className="text-sm text-destructive">{resetError}</p>}
+            <DialogFooter className="sm:justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const generated = generateTemporaryPassword(12);
+                  setResetPassword(generated);
+                  setResetConfirmation(generated);
+                  setResetError(null);
+                  setShowResetPassword(true);
+                }}
+                disabled={isResettingPassword}
+              >
+                Generate
+              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={clearResetDialog} disabled={isResettingPassword}>Cancel</Button>
+                <Button type="submit" disabled={isResettingPassword}>
+                  {isResettingPassword && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Set password
+                </Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Toggle Active Confirmation Dialog */}
       <AlertDialog

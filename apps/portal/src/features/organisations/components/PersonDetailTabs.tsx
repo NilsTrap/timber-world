@@ -41,7 +41,6 @@ import {
   toggleUserActive,
   sendUserCredentials,
   resendUserCredentials,
-  resetUserPassword,
   removeUserFromOrganisation,
   setMembershipActive,
   type PersonDetail,
@@ -124,7 +123,7 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
     if (!person.isActive) return null;
     if (person.status === "created" && !person.authUserId) return "send" as const;
     if (person.status === "invited" && person.authUserId) return "resend" as const;
-    if (person.status === "active" && person.authUserId) return "reset" as const;
+    // Password setting requires the organisation-scoped secure dialog.
     return null;
   }, [person.isActive, person.status, person.authUserId]);
 
@@ -132,18 +131,13 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
     if (!credentialAction) return;
     const orgId = primaryOrgId ?? "";
     setCredBusy(true);
-    const r =
-      credentialAction === "send"
-        ? await sendUserCredentials(person.id, orgId)
-        : credentialAction === "resend"
-          ? await resendUserCredentials(person.id, orgId)
-          : await resetUserPassword(person.id, orgId);
+    const r = credentialAction === "send"
+      ? await sendUserCredentials(person.id, orgId)
+      : await resendUserCredentials(person.id, orgId);
     setCredBusy(false);
     if (r.success) {
       toast.success(
-        credentialAction === "reset"
-          ? `Password reset link sent to ${r.data.email}`
-          : `Invite sent to ${r.data.email}`,
+        `Invite sent to ${r.data.email}`,
       );
       refreshPerson();
     } else {
@@ -210,9 +204,8 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
     </div>
   );
 
-  const credentialLabel =
-    credentialAction === "send" ? "Send credentials" : credentialAction === "resend" ? "Resend invite" : "Reset password";
-  const CredentialIcon = credentialAction === "reset" ? RefreshCw : credentialAction === "resend" ? RefreshCw : Send;
+  const credentialLabel = credentialAction === "send" ? "Send credentials" : "Resend invite";
+  const CredentialIcon = credentialAction === "resend" ? RefreshCw : Send;
 
   return (
     <>

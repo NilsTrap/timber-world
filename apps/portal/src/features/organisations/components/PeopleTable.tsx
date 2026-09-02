@@ -22,13 +22,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@timber/ui";
-import { Loader2, Pencil, Power, PowerOff, Send, RefreshCw, KeyRound, Star, Search, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Power, PowerOff, Send, RefreshCw, Star, Search, Trash2 } from "lucide-react";
 import { getPeopleDirectory, type DirectoryPerson } from "../actions/getPeopleDirectory";
 import {
   toggleUserActive,
   sendUserCredentials,
   resendUserCredentials,
-  resetUserPassword,
   deletePersonPermanently,
 } from "../actions";
 import { PersonEditDialog, type EditablePerson } from "./PersonEditDialog";
@@ -108,11 +107,11 @@ export function PeopleTable() {
     });
   }, [people, search, orgFilter, statusFilter]);
 
-  const credentialAction = (p: DirectoryPerson): "send" | "resend" | "reset" | null => {
+  const credentialAction = (p: DirectoryPerson): "send" | "resend" | null => {
     if (!p.isActive) return null;
     if (p.status === "created" && !p.authUserId) return "send";
     if (p.status === "invited" && p.authUserId) return "resend";
-    if (p.status === "active" && p.authUserId) return "reset";
+    // Password setting requires the organisation-scoped secure dialog.
     return null;
   };
 
@@ -121,15 +120,12 @@ export function PeopleTable() {
     if (!action) return;
     const orgId = p.primaryOrgId ?? "";
     setCredBusyId(p.id);
-    const r =
-      action === "send"
-        ? await sendUserCredentials(p.id, orgId)
-        : action === "resend"
-          ? await resendUserCredentials(p.id, orgId)
-          : await resetUserPassword(p.id, orgId);
+    const r = action === "send"
+      ? await sendUserCredentials(p.id, orgId)
+      : await resendUserCredentials(p.id, orgId);
     setCredBusyId(null);
     if (r.success) {
-      toast.success(action === "reset" ? `Reset link sent to ${r.data.email}` : `Invite sent to ${r.data.email}`);
+      toast.success(`Invite sent to ${r.data.email}`);
       load();
     } else {
       toast.error(r.error);
@@ -299,13 +295,11 @@ export function PeopleTable() {
                             size="icon-sm"
                             onClick={() => runCredential(p)}
                             disabled={credBusyId === p.id}
-                            title={action === "send" ? "Send credentials" : action === "resend" ? "Resend invite" : "Reset password"}
+                            title={action === "send" ? "Send credentials" : "Resend invite"}
                             aria-label={`Credentials for ${p.name}`}
                           >
                             {credBusyId === p.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : action === "reset" ? (
-                              <KeyRound className="h-4 w-4" />
                             ) : action === "resend" ? (
                               <RefreshCw className="h-4 w-4" />
                             ) : (
