@@ -11,7 +11,10 @@ import type { ActionResult, StageOption } from "../types";
 export async function updateProjectStage(raw: unknown): Promise<ActionResult<{ stage: StageOption; updatedAt: string }>> {
   const parsed = updateProjectStageSchema.safeParse(raw);
   if (!parsed.success) return { success: false, error: "Invalid stage change", code: "VALIDATION_ERROR" };
-  const access = await requireVisibleProject(parsed.data.projectId, true);
+  // Stage changes have their own active-stage and persona authorization below,
+  // backed by the database trigger. Requiring general project-write capability
+  // here incorrectly excludes supplier parties that may confirm a project.
+  const access = await requireVisibleProject(parsed.data.projectId, false);
   if (!access.ok) return { success: false, error: "Project unavailable", code: access.code };
   const viewer = await resolveProjectsViewer(access.actor);
   const { data: stageRow, error: stageError } = await access.actor.db.from("project_stages")

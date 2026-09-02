@@ -45,12 +45,15 @@ const detail = readFileSync("src/features/projects/components/ProjectDetailView.
 const selector = readFileSync("src/features/projects/components/ProjectStatusSelect.tsx", "utf8");
 const updateAction = readFileSync("src/features/project-stages/actions/updateProjectStage.ts", "utf8");
 const nav = readFileSync("src/components/layout/navItems.ts", "utf8");
-assert.match(detail, /actions={<><ProjectStatusSelect[\s\S]*<ProjectNextLegControl/);
+assert.match(detail, /<div className="flex items-center gap-3"><ProjectStatusSelect[\s\S]*<ProjectNextLegControl[\s\S]*<\/div><\/div>/);
 assert.doesNotMatch(detail, /badge={<ProjectStageBadge/);
 assert.match(selector, /className="h-8 min-w-36"/);
 assert.match(selector, /expectedUpdatedAt/);
 assert.match(updateAction, /viewer\.isPlatformAdmin \? createAdminClient\(\) : access\.actor\.db/);
-assert.match(updateAction, /requireVisibleProject\(parsed\.data\.projectId, true\)/);
+assert.match(updateAction, /requireVisibleProject\(parsed\.data\.projectId, false\)/);
+assert.doesNotMatch(updateAction, /requireVisibleProject\(parsed\.data\.projectId, true\)/);
+assert.match(updateAction, /canViewerSelectStage\(stage, viewer\)/);
+assert.match(updateAction, /eq\("updated_at", parsed\.data\.expectedUpdatedAt\)/);
 assert.match(nav, /\/admin\/settings\/project-stages/);
 
 console.log("project stages: pure and migration contracts passed");
