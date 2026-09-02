@@ -77,6 +77,8 @@ export function ProjectDetailView({
         <ProjectTermsCard projectId={project.id} terms={project.terms} deliveryDeadline={project.deliveryDeadline} canEdit={viewer.canEditTerms} />
       ) : null}
 
+      <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={canManageRfq} canEnterCandidateQuotation={viewer.isPlatformAdmin} canInitializeOwnQuotation={viewerIsSeller} initialOptions={initialRfqCandidates} lines={project.lines} />
+
       <ProjectSpecificationEditor
         projectId={project.id}
         lines={project.lines}
@@ -87,7 +89,6 @@ export function ProjectDetailView({
         sellerOrganisationName={project.seller?.name ?? null}
       />
 
-      <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={canManageRfq} canEnterCandidateQuotation={viewer.isPlatformAdmin} initialOptions={initialRfqCandidates} lines={project.lines} />
       {!isRfqCandidate ? <ProjectCommercialRollup projectId={project.id} currency={currency || "EUR"} /> : null}
 
       <ProjectFileWorkspace

@@ -11,7 +11,7 @@ import {
 } from "@timber/ui";
 import {
   awardProjectQuotation, cancelProjectQuotationRequest, getEligibleProjectRfqCandidates, getProjectRfqState,
-  correctProjectQuotation, requestProjectQuotations, saveProjectAwardedMargin, submitProjectQuotation,
+  correctProjectQuotation, initializeDirectProjectQuotation, requestProjectQuotations, saveProjectAwardedMargin, submitProjectQuotation,
   type ProjectCommercialPricing, type ProjectRfqCandidate, type ProjectRfqState,
 } from "../actions/projectRfqActions";
 import { calculateProjectMargin, type ProjectMarginMode } from "../services/projectRfq";
@@ -19,13 +19,14 @@ import { pricesFromQuotation, quotationEntries, quotationEntryAmountCents, quota
 import type { ProjectLine } from "../types";
 import { ProjectSectionBody, ProjectSectionCard, ProjectSectionHeader } from "./ProjectSectionCard";
 
-export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandidateQuotation, initialOptions, lines }: {
-  projectId: string; currency: string; canManage: boolean; canEnterCandidateQuotation:boolean; initialOptions: Array<{ id: string; name: string }>; lines:ProjectLine[];
+export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandidateQuotation, canInitializeOwnQuotation, initialOptions, lines }: {
+  projectId: string; currency: string; canManage: boolean; canEnterCandidateQuotation:boolean; canInitializeOwnQuotation:boolean; initialOptions: Array<{ id: string; name: string }>; lines:ProjectLine[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [rfq, setRfq] = useState<ProjectRfqState | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [options, setOptions] = useState<Array<{ id: string; name: string }>>(initialOptions);
   const [selected, setSelected] = useState<string[]>([]);
   const [deadline, setDeadline] = useState(earliestDeadlineValue());
@@ -46,7 +47,8 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
 
   const load = useCallback(async () => {
     const result = await getProjectRfqState(projectId);
-    if (!result.success) { toast.error(result.error); setLoaded(true); return; }
+    if (!result.success) { toast.error(result.error); setLoadFailed(true); setLoaded(true); return; }
+    setLoadFailed(false);
     setRfq(result.data);
     setAdminCandidateId((current)=>current&&result.data?.candidates.some((candidate)=>candidate.id===current)?current:null);
     setViewCandidateId((current)=>current&&result.data?.candidates.some((candidate)=>candidate.id===current)?current:null);
@@ -66,6 +68,16 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
       const result = await requestProjectQuotations({ projectId, candidateIds: selected, deadline: new Date(deadline).toISOString() });
       if (!result.success) { toast.error(result.error); return; }
       toast.success("Quotation requests created");
+      router.refresh();
+      await load();
+    });
+  }
+
+  function createOwnQuotation() {
+    startTransition(async () => {
+      const result = await initializeDirectProjectQuotation({ projectId });
+      if (!result.success) { toast.error(result.error); return; }
+      toast.success("Quotation created");
       router.refresh();
       await load();
     });
@@ -121,7 +133,8 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
   }
 
   if (!loaded) return <ProjectSectionCard><ProjectSectionHeader title="Supplier quotations" subtitle="Loading quotation requests…" /></ProjectSectionCard>;
-  if (!rfq && !canManage) return null;
+  if (loadFailed) return <ProjectSectionCard><ProjectSectionHeader title="Supplier quotations" subtitle="Quotation details could not be loaded" /></ProjectSectionCard>;
+  if (!rfq && !canManage && !canInitializeOwnQuotation) return null;
   const deadlinePassed = Boolean(rfq && new Date(rfq.deadline).getTime() <= Date.now());
 
   const viewedCandidate=viewCandidateId?rfq?.candidates.find((candidate)=>candidate.id===viewCandidateId)??null:null;
@@ -129,7 +142,9 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
   return <ProjectSectionCard>
     <ProjectSectionHeader title="Supplier quotations" subtitle={rfq
       ? `${rfq.status === "open" && deadlinePassed ? "closed" : rfq.status} · deadline ${new Date(rfq.deadline).toLocaleString()}`
-      : "Invite several candidates without committing them to the seller chain"} />
+      : canInitializeOwnQuotation && !canManage
+        ? "Create and submit your quotation for this project"
+        : "Invite several candidates without committing them to the seller chain"} />
     <ProjectSectionBody className="space-y-3">
 
     {!rfq && canManage ? <div className="space-y-3">
@@ -144,6 +159,11 @@ export function ProjectRfqCard({ projectId, currency, canManage, canEnterCandida
           {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Request quotations ({selected.length})
         </Button>
       </div>
+    </div> : null}
+
+    {!rfq && !canManage && canInitializeOwnQuotation ? <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="text-sm text-muted-foreground">Create your supplier quotation and choose how its processes are priced.</p>
+      <Button disabled={pending} onClick={createOwnQuotation}>{pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Create quotation</Button>
     </div> : null}
 
     {rfq?.canManage ? <div className="space-y-2">{rfq.candidates.map((candidate) =>

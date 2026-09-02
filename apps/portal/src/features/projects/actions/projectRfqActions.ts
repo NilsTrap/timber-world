@@ -11,7 +11,9 @@ import type { ProjectQuotationPricingMode } from "../services/projectQuotationRo
 
 const uuid = z.string().uuid();
 const requestSchema = z.object({ projectId: uuid, candidateIds: z.array(uuid).min(2).max(20), deadline: z.coerce.date().refine((value) => value.getTime() > Date.now(), "Deadline must be in the future") });
-const quoteEntrySchema=z.object({targetType:z.enum(["line","process"]),targetId:uuid,label:z.string().trim().min(1).max(200),quantity:z.coerce.number().finite().positive(),unit:z.string().trim().max(50),unitPriceCents:z.coerce.number().int().nonnegative().max(2147483647)});
+const quoteEntrySchema=z.object({targetType:z.enum(["line","process"]),targetId:uuid,label:z.string().trim().min(1).max(200),quantity:z.coerce.number().finite().nonnegative(),unit:z.string().trim().max(50),unitPriceCents:z.coerce.number().int().nonnegative().max(2147483647)}).superRefine((entry,context)=>{
+  if(entry.targetType==="line"&&entry.quantity<=0)context.addIssue({code:"custom",path:["quantity"],message:"Line quantities must be positive"});
+});
 const quoteSchema = z.object({ candidateId: uuid, pricingMode:z.enum(["itemized","itemized_total","total"]), entries:z.array(quoteEntrySchema).max(500), totalCents:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable(), notes: z.string().trim().max(4000).optional().default("") }).superRefine((input,context)=>{
   if(input.pricingMode!=="total"&&(input.entries.length<1||input.totalCents!==null))context.addIssue({code:"custom",message:"Itemized quotations require prices and cannot include a project total"});
   if(input.pricingMode==="total"&&(input.entries.length!==0||input.totalCents===null))context.addIssue({code:"custom",message:"Total quotations require one project total and cannot include line prices"});
@@ -106,7 +108,9 @@ export async function requestProjectQuotations(raw: unknown): Promise<ActionResu
 }
 export async function initializeDirectProjectQuotation(raw: unknown): Promise<ActionResult<{rfqId:string;candidateId:string}>> {
   const parsed=directQuoteSchema.safeParse(raw);if(!parsed.success)return{success:false,error:"Invalid project",code:"VALIDATION_ERROR"};
-  const a=await resolveProjectsActor();if(!a.ok||!a.isPlatformAdmin)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+  const a=await resolveProjectsActor();if(!a.ok)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+  const project=await getOrderDeal(a.db,a.actor,parsed.data.projectId);
+  if(!project.success||(!a.isPlatformAdmin&&project.data.seller.id!==a.orgId))return{success:false,error:"Not allowed",code:"FORBIDDEN"};
   const {data,error}=await a.db.rpc("initialize_direct_project_quotation",{p_order_id:parsed.data.projectId});
   if(error){
     if(/seller.*required|seller.*eligible|self deal/i.test(error.message))return{success:false,error:"Assign an active eligible seller before creating its quotation",code:"VALIDATION_ERROR"};

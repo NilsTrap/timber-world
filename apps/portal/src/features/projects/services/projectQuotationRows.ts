@@ -11,8 +11,8 @@ export function quotationPricingRows(lines: ProjectLine[]): PricingRow[] {
     const hasMaterialProcess = (line.processRequirements ?? []).some((process) => process.fieldKey === "metal");
     const material = !hasMaterialProcess && quantity > 0 ? [{ key: `line:${line.id}`, targetType: "line" as const, targetId: line.id, label: line.productName ?? `Line ${line.lineNo}`, quantity, unit: line.unit }] : [];
     const processes = (line.processRequirements ?? []).flatMap((process) => {
-      const processQuantity = Number(process.value);
-      return process.active && processQuantity > 0 ? [{ key: `process:${process.id}`, targetType: "process" as const, targetId: process.id, label: `${line.productName ?? `Line ${line.lineNo}`} · ${process.name}`, quantity: processQuantity, unit: process.unit ?? "unit" }] : [];
+      const canonicalQuantity = /^\s*[0-9]+(?:\.[0-9]+)?\s*$/.test(process.value) ? Number(process.value.trim()) : null;
+      return process.active && canonicalQuantity !== null ? [{ key: `process:${process.id}`, targetType: "process" as const, targetId: process.id, label: `${line.productName ?? `Line ${line.lineNo}`} · ${process.name}`, quantity: canonicalQuantity, unit: process.unit ?? "unit" }] : [];
     });
     return [...material, ...processes];
   });
