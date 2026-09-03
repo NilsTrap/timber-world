@@ -129,6 +129,7 @@ export async function createProjectRfqFromSpecification(raw: unknown): Promise<A
   });
   if(error){
     const normalized=error.message.replaceAll("_"," ");
+    if(/could not find the function|schema cache|pgrst202/i.test(normalized))return{success:false,error:"RFQ setup is not available in the database yet",code:"SETUP_REQUIRED"};
     if(/sourcing leg exists/i.test(normalized))return{success:false,error:"An RFQ workspace already exists. Refresh the project to manage it",code:"CONFLICT"};
     if(/over allocated|allocation origins duplicate/i.test(normalized))return{success:false,error:"One or more specification lines are no longer available. Refresh and try again",code:"CONFLICT"};
     if(/deadline/i.test(normalized))return{success:false,error:"Choose a future quotation deadline",code:"VALIDATION_ERROR"};

@@ -40,6 +40,8 @@ assert.match(migration,/ORDER BY l\.id FOR UPDATE/);
 assert.match(migration,/WORK_PACKAGE_OVER_ALLOCATED/);
 assert.equal((migration.match(/IF v_required-v_allocated<=0/g)??[]).length,2);
 assert.match(action,/code:"CONFLICT"/);
+assert.ok(action.indexOf("could not find the function")<action.indexOf("if(/deadline/i"),"missing RPC errors must not be mislabeled as deadline errors");
+assert.match(action,/RFQ setup is not available in the database yet/);
 
 // Authorization and eligible suppliers remain server/database enforced.
 assert.match(migration,/current_user_can_create_deal_in_org/);
