@@ -54,7 +54,7 @@ export async function loadAuthorizedRfqCandidateSnapshot(
   // service-role order lookup that could observe a changed spine.
   const { data: authorizationData, error: authorizationError } = await admin
     .from("project_rfq_candidates")
-    .select("organization_id,project_rfqs!inner(order_id,status,deadline,orders!inner(id,spine_id,deleted_at))")
+    .select("organization_id,project_rfqs!project_rfq_candidates_rfq_id_fkey!inner(order_id,status,deadline,orders!inner(id,spine_id,deleted_at))")
     .eq("organization_id", actorOrganisationId)
     .eq("project_rfqs.order_id", projectId)
     .eq("project_rfqs.status", "open")

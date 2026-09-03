@@ -29,9 +29,9 @@ function fakeRpcClient(projectId: string): DbClient {
   } as unknown as DbClient;
 }
 
-function fakeAuthorizationClient(row: unknown, tables: string[]): DbClient {
+function fakeAuthorizationClient(row: unknown, tables: string[], selections: string[] = []): DbClient {
   const query: Record<string, unknown> = {
-    select: () => query,
+    select: (selection: string) => { selections.push(selection); return query; },
     eq: () => query,
     gt: () => query,
     is: () => query,
@@ -74,9 +74,10 @@ async function main() {
   const projectId = "project-1";
   const now = new Date("2026-09-02T12:00:00Z");
   const tables: string[] = [];
+  const selections: string[] = [];
   const authorized = await loadAuthorizedRfqCandidateSnapshot(
     fakeRpcClient(projectId),
-    fakeAuthorizationClient(authorization({ projectId, relationshipArrays: true }), tables),
+    fakeAuthorizationClient(authorization({ projectId, relationshipArrays: true }), tables, selections),
     projectId,
     "current-org",
     now,
@@ -84,6 +85,8 @@ async function main() {
   eq("candidate authorization returns the spine from the current-org invitation snapshot",
     authorized?.spineId, "spine-authorized");
   eq("candidate authorization performs no second raw-order lookup", tables, ["project_rfq_candidates"]);
+  eq("candidate authorization pins the invitation RFQ relationship",
+    selections[0]?.includes("project_rfqs!project_rfq_candidates_rfq_id_fkey!inner"), true);
 
   const wrongCurrentOrg = await loadAuthorizedRfqCandidateSnapshot(
     fakeRpcClient(projectId),
