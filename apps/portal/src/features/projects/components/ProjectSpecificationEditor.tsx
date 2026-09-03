@@ -11,6 +11,7 @@ import {
   EmptyState, Input, Label,
 } from "@timber/ui";
 import type { ProjectLine } from "../types";
+import type { ProjectPartyWorkspace } from "../types";
 import {
   createProjectSpecificationLine, deleteProjectSpecificationLine,
   getProjectCatalogOptions, updateProjectSpecificationLine,
@@ -18,13 +19,14 @@ import {
 } from "../actions/projectSpecificationActions";
 import { ProjectSectionBody, ProjectSectionCard, ProjectSectionHeader } from "./ProjectSectionCard";
 import { ProjectSpecificationTables } from "./ProjectSpecificationTables";
+import { CreateProjectRfqDialog } from "./CreateProjectRfqDialog";
 
 const LINE_UNITS = ["kg", "piece", "m3", "m2", "linear_m", "package", "crate", "loose_m3"] as const;
 type Draft = { id?: string; productName: string; quantity: string; unit: string; notes: string; catalogVariantId?: string; isCatalogSnapshot?: boolean };
 const blank = (): Draft => ({ productName: "", quantity: "1", unit: "piece", notes: "" });
 
-export function ProjectSpecificationEditor({ projectId, lines, currency = "EUR", canEdit, canEnterQuotation = false }: {
-  projectId: string; lines: ProjectLine[]; currency?: string; canEdit: boolean; canEnterQuotation?: boolean;
+export function ProjectSpecificationEditor({ projectId, lines, currency = "EUR", canEdit, canEnterQuotation = false, specificationRfq }: {
+  projectId: string; lines: ProjectLine[]; currency?: string; canEdit: boolean; canEnterQuotation?: boolean; specificationRfq?: ProjectPartyWorkspace["specificationRfq"];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -76,9 +78,12 @@ export function ProjectSpecificationEditor({ projectId, lines, currency = "EUR",
 
   return <div className="space-y-3">
     <ProjectSectionCard>
-      <ProjectSectionHeader title="Technical specification" subtitle={`${lines.length} line(s) · prices are added only after award`} reserveDisclosureSpace actions={canEdit ? <>
+      <ProjectSectionHeader title="Technical specification" subtitle={`${lines.length} line(s) · prices are added only after award`} reserveDisclosureSpace actions={(canEdit||specificationRfq) ? <>
+        {specificationRfq ? <CreateProjectRfqDialog sourceProjectId={projectId} composer={specificationRfq} /> : null}
+        {canEdit ? <>
         <Button size="sm" onClick={openCatalog} disabled={pending}><Library className="h-4 w-4" /> Add from catalogue</Button>
         <Button size="sm" onClick={() => { setCatalog([]); setDraft(blank()); }}><Plus className="h-4 w-4" /> Custom line</Button>
+        </> : null}
       </> : undefined} />
       <ProjectSectionBody className="p-0">
 

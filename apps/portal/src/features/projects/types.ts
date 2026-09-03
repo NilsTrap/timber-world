@@ -78,6 +78,12 @@ export interface ProjectPartyWorkspace {
   originAllocation?: import("./services/spineOriginSpecification").SpineOriginAllocation[];
   /** An open sourcing request on a buyer-only placeholder. */
   openRfqState?: import("./services/projectRfq").OpenRfqAvailability;
+  /** Primary specification-level sourcing flow, present only for an authorized trader/admin. */
+  specificationRfq?: {
+    existingProjectId: string | null;
+    availableLines: Array<{ id: string; lineNo: number; productName: string; quantity: number; unit: string }>;
+    candidates: Array<{ id: string; name: string }>;
+  };
 }
 
 /** One visible bilateral deal = one clickable row, optionally grouped by spine. */

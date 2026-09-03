@@ -87,6 +87,7 @@ export function ProjectDetailView({
         currency={currency}
         canEdit={canEditSpecification}
         canEnterQuotation={viewer.isPlatformAdmin || viewerIsSeller}
+        specificationRfq={partyWorkspace.specificationRfq}
       />
       </ProjectQuotationEditingProvider>
 

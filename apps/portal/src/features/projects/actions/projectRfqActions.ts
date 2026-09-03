@@ -11,6 +11,7 @@ import type { ProjectQuotationPricingMode } from "../services/projectQuotationRo
 
 const uuid = z.string().uuid();
 const requestSchema = z.object({ projectId: uuid, candidateIds: z.array(uuid).min(2).max(20), deadline: z.coerce.date().refine((value) => value.getTime() > Date.now(), "Deadline must be in the future") });
+const specificationRequestSchema = requestSchema.extend({ lineItemIds: z.array(uuid).min(1).max(500) });
 const quoteEntrySchema=z.object({targetType:z.enum(["line","process"]),targetId:uuid,label:z.string().trim().min(1).max(200),quantity:z.coerce.number().finite().nonnegative(),unit:z.string().trim().max(50),unitPriceCents:z.coerce.number().int().nonnegative().max(2147483647)}).superRefine((entry,context)=>{
   if(entry.targetType==="line"&&entry.quantity<=0)context.addIssue({code:"custom",path:["quantity"],message:"Line quantities must be positive"});
 });
@@ -105,6 +106,44 @@ export async function requestProjectQuotations(raw: unknown): Promise<ActionResu
   const owner=await requireOwner(parsed.data.projectId); if(!owner)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
   const {data,error}=await owner.a.db.rpc("create_project_rfq",{p_order_id:parsed.data.projectId,p_candidate_ids:parsed.data.candidateIds,p_deadline:parsed.data.deadline.toISOString()});
   if(error)return{success:false,...mapCreateRfqError(error.message)}; revalidatePath(`/projects/${parsed.data.projectId}`); return{success:true,data:{id:data as string}};
+}
+
+export async function createProjectRfqFromSpecification(raw: unknown): Promise<ActionResult<{projectId:string;rfqId:string}>> {
+  const parsed=specificationRequestSchema.safeParse(raw);
+  if(!parsed.success)return{success:false,error:parsed.error.issues[0]?.message??"Invalid RFQ",code:"VALIDATION_ERROR"};
+  if(new Set(parsed.data.lineItemIds).size!==parsed.data.lineItemIds.length)return{success:false,error:"Specification lines must be unique",code:"VALIDATION_ERROR"};
+  if(new Set(parsed.data.candidateIds).size!==parsed.data.candidateIds.length)return{success:false,error:"Candidates must be unique",code:"VALIDATION_ERROR"};
+  const actor=await resolveProjectsActor();
+  if(!actor.ok)return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+  const source=await getOrderDeal(actor.db,actor.actor,parsed.data.projectId);
+  if(!source.success||!source.data.buyer.id||!source.data.seller.id||source.data.upstreamDealId||source.data.lifecycleStage!=="draft")return{success:false,error:"This project cannot start an RFQ",code:"NOT_ELIGIBLE"};
+  if(!actor.isPlatformAdmin&&(actor.orgId!==source.data.seller.id||!actor.profile.actions.has("deal:create")))return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+  const admin=createAdminClient();
+  const{data:parties,error:partiesError}=await admin.from("organisations").select("id,is_active,is_customer,is_trader").in("id",[source.data.buyer.id,source.data.seller.id]);
+  if(partiesError)return{success:false,error:"Could not verify project parties",code:"FETCH_FAILED"};
+  const rows=(parties??[]) as Array<{id:string;is_active:boolean;is_customer:boolean;is_trader:boolean}>;
+  if(!rows.some((row)=>row.id===source.data.buyer.id&&row.is_active&&(row.is_customer||row.is_trader))||!rows.some((row)=>row.id===source.data.seller.id&&row.is_active&&row.is_trader))return{success:false,error:"The project parties are no longer eligible",code:"NOT_ELIGIBLE"};
+  const{data,error}=await actor.db.rpc("create_project_rfq_from_specification",{
+    p_source_order_id:parsed.data.projectId,p_line_item_ids:parsed.data.lineItemIds,
+    p_candidate_ids:parsed.data.candidateIds,p_deadline:parsed.data.deadline.toISOString(),
+  });
+  if(error){
+    const normalized=error.message.replaceAll("_"," ");
+    if(/sourcing leg exists/i.test(normalized))return{success:false,error:"An RFQ workspace already exists. Refresh the project to manage it",code:"CONFLICT"};
+    if(/over allocated|allocation origins duplicate/i.test(normalized))return{success:false,error:"One or more specification lines are no longer available. Refresh and try again",code:"CONFLICT"};
+    if(/deadline/i.test(normalized))return{success:false,error:"Choose a future quotation deadline",code:"VALIDATION_ERROR"};
+    if(/lines/i.test(normalized))return{success:false,error:"Select between 1 and 500 available specification lines",code:"VALIDATION_ERROR"};
+    if(/candidate/i.test(normalized))return{success:false,error:"Select between 2 and 20 unique suppliers",code:"VALIDATION_ERROR"};
+    if(/eligible|self deal/i.test(normalized))return{success:false,error:"One or more selected suppliers are no longer eligible",code:"VALIDATION_ERROR"};
+    if(/source not eligible|source not found/i.test(normalized))return{success:false,error:"This project can no longer start an RFQ",code:"NOT_ELIGIBLE"};
+    if(/forbidden/i.test(normalized))return{success:false,error:"Not allowed",code:"FORBIDDEN"};
+    return{success:false,error:"Could not create the RFQ",code:"CREATE_FAILED"};
+  }
+  const result=data as Record<string,unknown>;
+  if(typeof result?.projectId!=="string"||typeof result?.rfqId!=="string")return{success:false,error:"RFQ identifiers were not returned",code:"CREATE_FAILED"};
+  revalidatePath(`/projects/${parsed.data.projectId}`);
+  revalidatePath("/projects");
+  return{success:true,data:{projectId:result.projectId,rfqId:result.rfqId}};
 }
 export async function initializeDirectProjectQuotation(raw: unknown): Promise<ActionResult<{rfqId:string;candidateId:string}>> {
   const parsed=directQuoteSchema.safeParse(raw);if(!parsed.success)return{success:false,error:"Invalid project",code:"VALIDATION_ERROR"};

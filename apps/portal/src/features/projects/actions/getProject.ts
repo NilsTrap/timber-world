@@ -52,7 +52,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     const candidate = await loadRfqCandidateProject(a.db, candidateAdmin, projectId, a.orgId);
     if (candidate) {
       const [files, viewer, officialImages] = await Promise.all([
-        listProjectFiles(a.db, projectId, false),
+        listProjectFiles(a.db, projectId, false, true),
         resolveProjectsViewer(a),
         candidate.spineId
           ? loadSpineProjectImages(candidateAdmin, candidate.spineId)
@@ -208,10 +208,19 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   const legOptions = raw.spineId
     ? await loadProjectLegOptions(a.db, raw.spineId, projectId)
     : [];
-  const traderCanCreateSourcingLeg = Boolean(!a.isPlatformAdmin && isDraft && raw.spineId
-    && raw.seller.id === a.orgId && viewer.personas.includes("trader"));
-  const canCreateSpineLeg = a.isPlatformAdmin || traderCanCreateSourcingLeg;
-  const [createBuyerOptions, createSellerOptions, allocationResult] = canCreateSpineLeg && isDraft && raw.spineId
+  const hasDealCreate = a.isPlatformAdmin || a.profile.actions.has("deal:create");
+  const sourceAdmin = createAdminClient();
+  const { data: sourceParties, error: sourcePartiesError } = raw.buyer.id && raw.seller.id
+    ? await sourceAdmin.from("organisations").select("id,is_active,is_customer,is_trader").in("id", [raw.buyer.id, raw.seller.id])
+    : { data: [], error: null };
+  if (sourcePartiesError) throw new Error("Could not verify RFQ source parties");
+  const partyRows=(sourceParties??[]) as Array<{id:string;is_active:boolean;is_customer:boolean;is_trader:boolean}>;
+  const eligibleBuyer=partyRows.some((row)=>row.id===raw.buyer.id&&row.is_active&&(row.is_customer||row.is_trader));
+  const eligibleTraderSeller=partyRows.some((row)=>row.id===raw.seller.id&&row.is_active&&row.is_trader);
+  const traderOwnsSource = Boolean(!a.isPlatformAdmin && isDraft && raw.spineId && !raw.upstreamDealId
+    && raw.seller.id === a.orgId && viewer.personas.includes("trader") && hasDealCreate && eligibleBuyer && eligibleTraderSeller);
+  const canCreateSpineLeg = a.isPlatformAdmin;
+  const [createBuyerOptions, createSellerOptions, allocationResult] = (canCreateSpineLeg || traderOwnsSource) && isDraft && raw.spineId
     ? await Promise.all([
       a.isPlatformAdmin ? loadPartyOptions(a.db, true, null, "buyer") : Promise.resolve(seller ? [{ id: seller.id, code: seller.code ?? "TRD", name: seller.name ?? "Trader", group: "buyers" as const }] : []),
       a.isPlatformAdmin ? loadPartyOptions(a.db, true, null, "seller") : Promise.resolve([]),
@@ -219,6 +228,33 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     ])
     : [[], [], { ok: false as const, error: "unavailable" as const }];
   const originAllocation = allocationResult.ok ? allocationResult.data : undefined;
+  const canStartSpecificationRfq = Boolean(isDraft && raw.spineId && !raw.upstreamDealId && raw.buyer.id && raw.seller.id
+    && hasDealCreate && eligibleBuyer && eligibleTraderSeller && (a.isPlatformAdmin || traderOwnsSource));
+  let specificationRfq: ProjectPartyWorkspace["specificationRfq"];
+  if (canStartSpecificationRfq) {
+    const [{ data: children, error: childrenError }, candidateOptions, { data: sourceLines, error: sourceLinesError }] = await Promise.all([
+      a.db.from("orders").select("id").eq("upstream_deal_id", projectId).is("deleted_at", null).neq("lifecycle_stage", "cancelled").order("created_at").limit(2),
+      loadPartyOptions(a.db, a.isPlatformAdmin, raw.seller.id, "seller"),
+      a.db.from("order_line_items").select("id,origin_line_item_id,line_no,product_name,unit").eq("order_id",projectId).eq("side","sell").order("line_no"),
+    ]);
+    if(childrenError||sourceLinesError)throw new Error("Could not load RFQ creation state");
+    const childIds=((children??[]) as Array<{id:string}>).map((row)=>row.id);
+    let existingProjectId:string|null=null;
+    if(childIds.length){
+      const{data:rfqs,error:rfqsError}=await a.db.from("project_rfqs").select("order_id").in("order_id",childIds).limit(1);
+      if(rfqsError)throw new Error("Could not verify the sourcing RFQ");
+      existingProjectId=((rfqs??[]) as Array<{order_id:string}>)[0]?.order_id??null;
+    }
+    const allocationByOrigin=new Map((originAllocation??[]).map((line)=>[line.originLineItemId,line]));
+    specificationRfq = {
+      existingProjectId,
+      availableLines: ((sourceLines??[]) as Array<{id:string;origin_line_item_id:string|null;line_no:number;product_name:string|null;unit:string}>).flatMap((line)=>{
+        const allocation=allocationByOrigin.get(line.origin_line_item_id??line.id);
+        return allocation&&allocation.remainingQuantity>0?[{id:line.id,lineNo:line.line_no,productName:line.product_name??allocation.productName,quantity:allocation.remainingQuantity,unit:line.unit}]:[];
+      }),
+      candidates: candidateOptions.map((option)=>({id:option.id,name:option.name})),
+    };
+  }
   const partyWorkspace: ProjectPartyWorkspace = {
     buyerProjectId: canEditBuyer ? projectId : null,
     buyer,
@@ -235,6 +271,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     createSellerOptions,
     originAllocation,
     openRfqState,
+    ...(specificationRfq ? { specificationRfq } : {}),
   };
   const stageConfiguration = await getProjectStageConfiguration(a.db, raw.lifecycleStage, viewer);
   project.stageLabel = stageConfiguration.current?.label ?? project.stageLabel;
@@ -381,7 +418,8 @@ async function loadPartyOptions(
   if (!centerOrgId && side === "center") return [];
   let ids: string[] | null = null;
   if (!admin) {
-    const { data } = await db.from("organisation_trading_partners").select("partner_organisation_id").eq("organisation_id", centerOrgId as string);
+    const { data, error } = await db.from("organisation_trading_partners").select("partner_organisation_id").eq("organisation_id", centerOrgId as string);
+    if(error)throw new Error("Could not load eligible project parties");
     ids = ((data ?? []) as { partner_organisation_id: string }[]).map((row) => row.partner_organisation_id);
     if (ids.length === 0) return [];
   }
