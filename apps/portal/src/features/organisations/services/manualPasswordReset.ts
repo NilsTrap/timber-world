@@ -45,7 +45,7 @@ export async function setManualPassword(
       admin.from("organization_memberships").select("id").eq("user_id", userId)
         .eq("organization_id", organisationId).eq("is_active", true).maybeSingle(),
       admin.from("portal_users").select("id, auth_user_id, is_platform_admin, status").eq("id", userId)
-        .eq("is_active", true).eq("status", "active").maybeSingle(),
+        .eq("is_active", true).maybeSingle(),
       admin.from("organization_memberships").select("id").eq("user_id", userId)
         .eq("is_active", true).neq("organization_id", organisationId).limit(1).maybeSingle(),
     ]);
@@ -53,6 +53,9 @@ export async function setManualPassword(
       return { ok: false, code: "RESET_FAILED" };
     }
     if (!membershipResult.data || !userResult.data) return { ok: false, code: "DENIED" };
+    if (userResult.data.status !== "active" && userResult.data.status !== "invited") {
+      return { ok: false, code: "DENIED" };
+    }
     if (userResult.data.is_platform_admin === true && !allowPlatformAdminTarget) {
       return { ok: false, code: "DENIED" };
     }

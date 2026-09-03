@@ -34,6 +34,7 @@ import {
   Building2,
   Star,
   Loader2,
+  KeyRound,
 } from "lucide-react";
 import {
   getPersonById,
@@ -48,6 +49,8 @@ import {
 } from "../actions";
 import { PersonEditDialog, type EditablePerson } from "./PersonEditDialog";
 import { PersonApiKeysSection } from "./PersonApiKeysSection";
+import { ManualPasswordDialog } from "./ManualPasswordDialog";
+import { canManageManualPassword } from "./manualPasswordEligibility";
 
 interface PersonDetailTabsProps {
   person: PersonDetail;
@@ -85,6 +88,7 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
   const [toggleOpen, setToggleOpen] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [credBusy, setCredBusy] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   const refreshPerson = useCallback(async () => {
     const r = await getPersonById(person.id);
@@ -206,6 +210,9 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
 
   const credentialLabel = credentialAction === "send" ? "Send credentials" : "Resend invite";
   const CredentialIcon = credentialAction === "resend" ? RefreshCw : Send;
+  const passwordOrgId = memberships.find((membership) => membership.isActive && membership.isPrimary)?.orgId
+    ?? memberships.find((membership) => membership.isActive)?.orgId ?? null;
+  const canSetPassword = canManageManualPassword(person, !!passwordOrgId);
 
   return (
     <>
@@ -233,6 +240,11 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
                   <Button variant="outline" size="sm" onClick={runCredential} disabled={credBusy}>
                     {credBusy ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CredentialIcon className="h-4 w-4 mr-1" />}
                     {credentialLabel}
+                  </Button>
+                )}
+                {canSetPassword && (
+                  <Button variant="outline" size="sm" onClick={() => setPasswordOpen(true)}>
+                    <KeyRound className="h-4 w-4 mr-1" /> Set password
                   </Button>
                 )}
                 <Button variant="outline" size="sm" onClick={() => setToggleOpen(true)}>
@@ -352,6 +364,14 @@ export function PersonDetailTabs({ person: initialPerson }: PersonDetailTabsProp
         open={editOpen}
         onOpenChange={setEditOpen}
         onSuccess={refreshPerson}
+      />
+
+      <ManualPasswordDialog
+        user={passwordOpen ? person : null}
+        organisationId={passwordOrgId}
+        open={passwordOpen}
+        onOpenChange={setPasswordOpen}
+        onSuccess={async () => { await refreshPerson(); await loadMemberships(); }}
       />
 
       {/* Toggle active confirm */}

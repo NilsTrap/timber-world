@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@timber/ui";
-import { Loader2, Pencil, Power, PowerOff, Send, RefreshCw, Star, Search, Trash2 } from "lucide-react";
+import { KeyRound, Loader2, Pencil, Power, PowerOff, Send, RefreshCw, Star, Search, Trash2 } from "lucide-react";
 import { getPeopleDirectory, type DirectoryPerson } from "../actions/getPeopleDirectory";
 import {
   toggleUserActive,
@@ -31,6 +31,8 @@ import {
   deletePersonPermanently,
 } from "../actions";
 import { PersonEditDialog, type EditablePerson } from "./PersonEditDialog";
+import { ManualPasswordDialog } from "./ManualPasswordDialog";
+import { canManageManualPassword } from "./manualPasswordEligibility";
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
@@ -75,6 +77,7 @@ export function PeopleTable() {
   const [credBusyId, setCredBusyId] = useState<string | null>(null);
   const [deletePerson, setDeletePerson] = useState<DirectoryPerson | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [passwordPerson, setPasswordPerson] = useState<DirectoryPerson | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -233,6 +236,9 @@ export function PeopleTable() {
               {filtered.map((p) => {
                 const s = statusInfo(p);
                 const action = credentialAction(p);
+                const passwordOrgId = p.orgs.find((org) => org.isActive && org.isPrimary)?.id
+                  ?? p.orgs.find((org) => org.isActive)?.id ?? null;
+                const canSetPassword = canManageManualPassword(p, !!passwordOrgId);
                 return (
                   <TableRow key={p.id} className={!p.isActive ? "opacity-60" : ""}>
                     <TableCell className="font-medium">
@@ -307,6 +313,11 @@ export function PeopleTable() {
                             )}
                           </Button>
                         )}
+                        {canSetPassword && (
+                          <Button variant="ghost" size="icon-sm" onClick={() => setPasswordPerson(p)} title="Set password" aria-label={`Set password for ${p.name}`}>
+                            <KeyRound className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -342,6 +353,14 @@ export function PeopleTable() {
         person={editPerson}
         open={!!editPerson}
         onOpenChange={(o) => !o && setEditPerson(null)}
+        onSuccess={load}
+      />
+
+      <ManualPasswordDialog
+        user={passwordPerson}
+        organisationId={passwordPerson?.orgs.find((org) => org.isActive && org.isPrimary)?.id ?? passwordPerson?.orgs.find((org) => org.isActive)?.id ?? null}
+        open={!!passwordPerson}
+        onOpenChange={(open) => { if (!open) setPasswordPerson(null); }}
         onSuccess={load}
       />
 

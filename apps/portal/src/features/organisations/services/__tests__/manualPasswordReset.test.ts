@@ -111,6 +111,16 @@ await test("updates the exact auth identity for an active exact membership", asy
   assert.equal(JSON.stringify(result).includes("auth-a"), false);
 });
 
+await test("updates an invited user's auth password without changing portal lifecycle status", async () => {
+  const state = fixture({ status: "invited" });
+  const result = await setManualPassword(state.admin, "user-a", "org-a", "Secret123", true);
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(state.passwordCalls, [{ id: "auth-a", password: "Secret123" }]);
+  assert.equal(state.portalUsers[0]?.status, "invited");
+  assert.equal(JSON.stringify(result).includes("Secret123"), false);
+  assert.equal(JSON.stringify(result).includes("auth-a"), false);
+});
+
 await test("denies missing, inactive, and wrong-company memberships before auth mutation", async () => {
   for (const [state, organisationId] of [
     [fixture({ membership: false }), "org-a"],
@@ -138,8 +148,8 @@ await test("reports provider failure generically and does not update the portal 
   assert.equal(JSON.stringify(result).includes("provider detail"), false);
 });
 
-await test("requires active status and blocks platform-admin targets from traders", async () => {
-  for (const state of [fixture({ status: "invited" }), fixture({ platformAdmin: true })]) {
+await test("requires an eligible status and blocks platform-admin targets from traders", async () => {
+  for (const state of [fixture({ status: "created" }), fixture({ platformAdmin: true })]) {
     const result = await setManualPassword(state.admin, "user-a", "org-a", "Secret123", false);
     assert.deepEqual(result, { ok: false, code: "DENIED" });
     assert.equal(state.passwordCalls.length, 0);
