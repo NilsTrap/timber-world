@@ -61,17 +61,17 @@ function mapFile(row: Record<string, unknown>): ProjectFileMeta {
     cleanFileId: (row.clean_file_id as string) ?? null,
     wasCleaned: !!row.was_cleaned,
     cleanupFindingsCount: Number(row.cleanup_findings_count ?? 0),
-    shared: !!row.shared_to_order_id,
+    shared: !!row.shared_to_order_id || row.shared_with_rfq_candidates === true,
     sharedInbound: !!row.shared_inbound,
     officialImagePosition: row.is_thumbnail ? Number(row.thumbnail_sort_order ?? 0) || null : null,
   };
 }
 
 const SAFE_FILE_SELECT =
-  "id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at, cleanup_status, shared_to_order_id, is_thumbnail, thumbnail_sort_order";
+  "id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at, cleanup_status, shared_to_order_id, shared_with_rfq_candidates, is_thumbnail, thumbnail_sort_order";
 
 /** Original workspace metadata for one visible deal. No storage/source columns. */
-export async function listProjectFiles(db: DbClient, dealId: string, revealCleanup = false): Promise<ProjectFileMeta[]> {
+export async function listProjectFiles(db: DbClient, dealId: string, revealCleanup = false, rfqSourceOrderId: string | null = null): Promise<ProjectFileMeta[]> {
   let { data, error } = await db
     .from("order_files")
     .select(SAFE_FILE_SELECT)
@@ -91,19 +91,23 @@ export async function listProjectFiles(db: DbClient, dealId: string, revealClean
   const originals = data as Array<Record<string, unknown>>;
   const originalIds = originals.map((row) => row.id as string);
   const sourceDerivatives = revealCleanup && originalIds.length ? await db.from("order_files")
-    .select("id, source_file_id, cleanup_status, cleanup_findings, shared_to_order_id")
+    .select("id, source_file_id, cleanup_status, cleanup_findings, shared_to_order_id, shared_with_rfq_candidates")
     .in("source_file_id", originalIds).eq("category", PROJECT_CATEGORY).eq("file_variant", "recipient_copy") : { data: [] };
   const inbound = await db.from("order_files")
-    .select("id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at, cleanup_status, cleanup_findings, shared_to_order_id, file_variant")
+    .select("id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at, cleanup_status, cleanup_findings, shared_to_order_id, shared_with_rfq_candidates, file_variant")
     .eq("shared_to_order_id", dealId).eq("category", PROJECT_CATEGORY).eq("cleanup_status", "approved");
+  const rfqShared = rfqSourceOrderId ? await db.from("order_files")
+    .select("id, file_name, relative_path, mime_type, file_size_bytes, lifecycle_status, created_at, cleanup_status, cleanup_findings, shared_to_order_id, shared_with_rfq_candidates, file_variant")
+    .eq("order_id", rfqSourceOrderId).eq("category", PROJECT_CATEGORY).eq("cleanup_status", "approved").eq("shared_with_rfq_candidates", true) : { data: [] };
   const derivatives = new Map(((sourceDerivatives.data ?? []) as Array<Record<string, unknown>>).map((row) => [row.source_file_id as string, row]));
   const own = originals.map((row) => {
     const derivative = derivatives.get(row.id as string);
     const directlyApproved = !derivative && row.cleanup_status === "approved";
-    return mapFile({ ...row, cleanup_status: derivative?.cleanup_status ?? row.cleanup_status, clean_file_id: derivative?.id ?? (directlyApproved ? row.id : null), was_cleaned: !!derivative, cleanup_findings_count: Array.isArray(derivative?.cleanup_findings) ? derivative.cleanup_findings.length : 0, shared_to_order_id: derivative?.shared_to_order_id ?? (directlyApproved ? row.shared_to_order_id : null) });
+    return mapFile({ ...row, cleanup_status: derivative?.cleanup_status ?? row.cleanup_status, clean_file_id: derivative?.id ?? (directlyApproved ? row.id : null), was_cleaned: !!derivative, cleanup_findings_count: Array.isArray(derivative?.cleanup_findings) ? derivative.cleanup_findings.length : 0, shared_to_order_id: derivative?.shared_to_order_id ?? (directlyApproved ? row.shared_to_order_id : null), shared_with_rfq_candidates: derivative?.shared_with_rfq_candidates ?? (directlyApproved ? row.shared_with_rfq_candidates : false) });
   });
   const received = ((inbound.data ?? []) as Array<Record<string, unknown>>).map((row) => mapFile({ ...row, clean_file_id: row.id, was_cleaned: row.file_variant === "recipient_copy", cleanup_findings_count: 0, shared_inbound: true }));
-  return [...own, ...received].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  const candidateFiles = ((rfqShared.data ?? []) as Array<Record<string, unknown>>).map((row) => mapFile({ ...row, clean_file_id: row.id, was_cleaned: row.file_variant === "recipient_copy", cleanup_findings_count: 0, shared_inbound: true }));
+  return [...new Map([...own, ...received, ...candidateFiles].map((file) => [file.id, file])).values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
 function mapFolder(row: Record<string, unknown>): ProjectFolderMeta {

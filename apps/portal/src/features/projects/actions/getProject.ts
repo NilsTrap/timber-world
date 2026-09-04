@@ -52,7 +52,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     const candidate = await loadRfqCandidateProject(a.db, candidateAdmin, projectId, a.orgId);
     if (candidate) {
       const [files, viewer, officialImages] = await Promise.all([
-        listProjectFiles(a.db, projectId, false, true),
+        listProjectFiles(a.db, projectId, false, candidate.sourceOrderId),
         resolveProjectsViewer(a),
         candidate.spineId
           ? loadSpineProjectImages(candidateAdmin, candidate.spineId)
@@ -323,6 +323,7 @@ async function loadRfqCandidateProject(
 ): Promise<{
   project: Omit<ProjectDetail, "files" | "folders" | "fileCount" | "fileCounts">;
   spineId: string | null;
+  sourceOrderId: string;
 } | null> {
   const authorized = await loadAuthorizedRfqCandidateSnapshot(db, admin, projectId, actorOrganisationId);
   if (!authorized) return null;
@@ -349,7 +350,7 @@ async function loadRfqCandidateProject(
     officialImages: [],
     notes: null,
   };
-  return { project, spineId: authorized.spineId };
+  return { project, spineId: authorized.spineId, sourceOrderId: authorized.sourceOrderId };
 }
 
 function emptyPartyWorkspace(): ProjectPartyWorkspace {

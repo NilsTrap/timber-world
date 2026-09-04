@@ -50,7 +50,8 @@ export async function proxy(request: NextRequest) {
 
   // Define route groups
   const isAuthRoute =
-    pathname.startsWith("/login") || pathname.startsWith("/register");
+    pathname.startsWith("/login") || pathname.startsWith("/register") ||
+    pathname.startsWith("/forgot-password") || pathname.startsWith("/reset-password");
 
   const isAcceptInviteRoute = pathname.startsWith("/accept-invite");
 
@@ -108,7 +109,7 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  if (isAuthRoute && user) {
+  if (isAuthRoute && user && !pathname.startsWith("/reset-password") && request.nextUrl.searchParams.get("reauth") !== "1") {
     // Redirect authenticated users away from login/register pages
     const projectsUrl = new URL("/projects", request.url);
     return NextResponse.redirect(projectsUrl);

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { logLoginEvent } from "@/features/audit/actions/logLoginEvent";
 import { loginSchema, type LoginInput } from "../schemas/login";
 
@@ -59,11 +60,20 @@ export async function loginUser(
 
   // 3. Check portal_users record and verify user is active
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: portalUser } = await (supabase as any)
+  const { data: portalUser, error: portalUserError } = await (supabase as any)
     .from("portal_users")
     .select("id, status, is_active")
     .eq("auth_user_id", data.user.id)
     .single();
+
+  if (portalUserError || !portalUser) {
+    await supabase.auth.signOut();
+    return {
+      success: false,
+      error: "Your account is not configured for the portal. Please contact your administrator.",
+      code: "ACCOUNT_NOT_CONFIGURED",
+    };
+  }
 
   // 4. Block deactivated users
   if (portalUser && portalUser.is_active === false) {
@@ -76,29 +86,41 @@ export async function loginUser(
     };
   }
 
-  // 5. Handle first login - update status from 'invited' to 'active'
-  // This happens when a user logs in for the first time after receiving credentials
-  if (portalUser && portalUser.status === "invited") {
-    // Update status to 'active' and record last login timestamp
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
-      .from("portal_users")
-      .update({
-        status: "active",
-        last_login_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", portalUser.id);
-  } else if (portalUser) {
-    // Just update last_login_at for returning users
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
-      .from("portal_users")
-      .update({
-        last_login_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", portalUser.id);
+  // 5. Complete the exact authenticated user's lifecycle through the
+  // server-only admin boundary. Ordinary users cannot update portal_users
+  // under RLS, which previously left invited buyers/traders/suppliers in a
+  // redirect loop after an administrator assigned a password.
+  if (portalUser.status === "invited") {
+    const now = new Date().toISOString();
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      const { data: activated, error: lifecycleError } = await admin
+        .from("portal_users")
+        .update({ status: "active", last_login_at: now, updated_at: now })
+        .eq("id", portalUser.id)
+        .eq("auth_user_id", data.user.id)
+        .eq("status", "invited")
+        .select("id")
+        .maybeSingle();
+      if (lifecycleError || !activated) throw new Error("Account activation failed");
+    } catch {
+      await supabase.auth.signOut();
+      return {
+        success: false,
+        error: "Your account could not be activated. Please contact your administrator.",
+        code: "ACCOUNT_ACTIVATION_FAILED",
+      };
+    }
+  } else {
+    // Login telemetry must never make an otherwise valid active account unavailable.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      await admin.from("portal_users").update({ last_login_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", portalUser.id).eq("auth_user_id", data.user.id);
+    } catch {
+      // Audit logging below is also best-effort.
+    }
   }
 
   // 5b. Record a login-history event (fire-and-forget; never blocks login).

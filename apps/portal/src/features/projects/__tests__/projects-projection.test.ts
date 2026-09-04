@@ -173,7 +173,7 @@ const CLIENT = emptyAccessProfile();                                      // cou
 
 // ── Platform admin ──────────────────────────────────────────────────────────
 const admin = render(ADMIN, null, true);
-eq("admin: reference prefers the deal code", admin.item.reference, "TWP-CLI-0007");
+eq("admin: reference presents buyer before seller", admin.item.reference, "CLI-TWP-0007");
 eq("admin: stage label comes from the shared §12 source", admin.item.stageLabel, "Confirmed");
 eq("admin: currency is serialized", admin.item.currency, "EUR");
 eq("admin: counterparty resolves to the buyer on a sell-shaped deal", admin.item.counterparty?.name, "Client Org");
@@ -241,6 +241,7 @@ const client = render(CLIENT, BUYER);
 const clientWalledDeal = projectDealView(deal(), resolveFieldAccess(CLIENT), BUYER);
 eq("client: raw spine identity remains redacted by the field wall", clientWalledDeal.spineId, null);
 eq("client: direction is buy", client.item.direction, "buy");
+eq("client: reference presents buyer before seller", client.item.reference, "CLI-TWP-0007");
 eq("client: still sees their OWN deal partner (the seller)", client.item.counterparty?.name, "Timber World");
 ok("client: no currency key at all", !("currency" in client.item), Object.keys(client.item));
 ok("client: no terms key at all", !("terms" in client.detail), Object.keys(client.detail));

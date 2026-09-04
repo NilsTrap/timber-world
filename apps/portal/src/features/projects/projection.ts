@@ -27,6 +27,7 @@ import { dealDirectionFor, resolveViewerDirection } from "../orders/services/ord
 import { stageLabel } from "../orders/services/stageColors";
 import type { FieldAccess } from "../orders/services/dealFields";
 import type { ProjectPersona } from "./personas";
+import { projectLegReference } from "./services/projectLegReference";
 import type {
   ProjectDetail,
   ProjectFileCounts,
@@ -235,11 +236,13 @@ export function toProjectListItem(
   fileCount: number,
 ): ProjectListItem {
   const { direction, counterparty } = resolveProjectParties(raw, ctx);
+  const storedReference = walled.dealCode ?? walled.code;
+  const reference = projectLegReference(storedReference, raw.buyer.code, raw.seller.code);
   const item: ProjectListItem = {
     id: walled.id,
-    reference: walled.dealCode ?? walled.code,
+    reference,
     name: walled.name,
-    spineCode: walled.dealCode ?? walled.code,
+    spineCode: reference,
     groupKey: walled.id,
     rowKind: "leg",
     depth: 0,

@@ -64,7 +64,14 @@ export async function setManualPassword(
     if (typeof authUserId !== "string" || !authUserId) return { ok: false, code: "NO_AUTH_USER" };
 
     const { error } = await admin.auth.admin.updateUserById(authUserId, { password });
-    return error ? { ok: false, code: "RESET_FAILED" } : { ok: true };
+    if (error) return { ok: false, code: "RESET_FAILED" };
+
+    const activation = await admin.from("portal_users")
+      .update({ status: "active", updated_at: new Date().toISOString() })
+      .eq("id", userId)
+      .select("id")
+      .maybeSingle();
+    return activation.error || !activation.data ? { ok: false, code: "RESET_FAILED" } : { ok: true };
   } catch {
     return { ok: false, code: "RESET_FAILED" };
   }

@@ -11,6 +11,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button, Input, Label } from "@timber/ui";
 import { loginSchema, type LoginInput } from "../schemas/login";
@@ -94,7 +95,12 @@ export function LoginForm() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="password">Password</Label>
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="password">Password</Label>
+          <Link className="text-sm font-medium text-primary hover:underline" href="/forgot-password">
+            Forgot password?
+          </Link>
+        </div>
         <Input
           {...register("password")}
           id="password"

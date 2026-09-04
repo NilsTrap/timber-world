@@ -32,6 +32,24 @@ pnpm exec tsx src/lib/seed.ts
 
 Creates 3 test orgs (IJLA, IJLB, IJLC) and 4 test users (`test-admin@ijl.test`, `test-org-a-full@ijl.test`, `test-org-a-limited@ijl.test`, `test-org-b-full@ijl.test`). Refuses to run against the production Supabase URL.
 
+## Agent UI-flow fixture
+
+This separate fixture is local-only and does not start or reset Supabase. Copy the
+`NILITTO_UI_FLOW_*` placeholders from `.env.example`, point them at a loopback
+Supabase instance with the current schema, and then run:
+
+```bash
+pnpm --filter @timber/tests-rls-and-perf ui-flow:fixture -- apply
+pnpm --filter @timber/tests-rls-and-perf ui-flow:fixture -- verify
+pnpm --filter @timber/tests-rls-and-perf ui-flow:fixture -- reset
+```
+
+`apply` and `reset` both converge only the deterministic `.test` fixture records
+to the same clean five-person, split-staircase baseline. Two additional passive
+supplier organisations provide the second candidate required for the metal and
+wood RFPs; they have no auth users or mailboxes. Playwright setup remains manual
+so an ordinary browser test cannot mutate a database implicitly.
+
 ## Safety rails
 
 - `seed.ts` refuses to run against the known production project ref.

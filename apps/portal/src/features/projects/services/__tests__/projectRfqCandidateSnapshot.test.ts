@@ -56,6 +56,7 @@ function authorization(input: {
   const order = {
     id: input.projectId,
     spine_id: "spine-authorized",
+    upstream_deal_id: "source-order",
     deleted_at: input.deletedAt ?? null,
   };
   const rfq = {
@@ -84,6 +85,8 @@ async function main() {
   );
   eq("candidate authorization returns the spine from the current-org invitation snapshot",
     authorized?.spineId, "spine-authorized");
+  eq("candidate authorization returns the upstream file source without exposing it in the project payload",
+    authorized?.sourceOrderId, "source-order");
   eq("candidate authorization performs no second raw-order lookup", tables, ["project_rfq_candidates"]);
   eq("candidate authorization pins the invitation RFQ relationship",
     selections[0]?.includes("project_rfqs!project_rfq_candidates_rfq_id_fkey!inner"), true);

@@ -37,6 +37,7 @@ interface FailedArchive {
 }
 
 export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, canWrite, canUpload = canWrite, canManageCleanup, canBulkApprove = false, canManageOfficialImages = false }: { projectId: string; initialFiles: ProjectFileMeta[]; initialFolders: ProjectFolderMeta[]; canWrite: boolean; canUpload?: boolean; canManageCleanup: boolean; canBulkApprove?: boolean; canManageOfficialImages?: boolean }) {
+  const showWorkflowColumns = canManageCleanup || canBulkApprove;
   const router = useRouter();
   const [files, setFiles] = useState(initialFiles);
   const [folders, setFolders] = useState(initialFolders);
@@ -47,6 +48,7 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
   const [fileSearch, setFileSearch] = useState("");
   const [fileType, setFileType] = useState(ALL_FILE_TYPES);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageTone, setMessageTone] = useState<"status" | "warning">("status");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(true);
   const [uploadActivity, setUploadActivity] = useState(0);
@@ -501,11 +503,15 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
   };
 
   const cleanSelected = async () => {
+    setMessage(null);
     setCleanupBusy(true);
     try {
       const result = await cleanProjectFilesAction([...selectedFileIds]);
-      if (!result.success) return setMessage(result.error);
-      const updates = new Map(result.data.map((item) => [item.fileId, item]));
+      if (!result.success) {
+        setMessageTone("warning");
+        return setMessage(result.error);
+      }
+      const updates = new Map(result.data.cleaned.map((item) => [item.fileId, item]));
       setFiles((current) =>
         current.map((file) => {
           const item = updates.get(file.id);
@@ -522,8 +528,16 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
         }),
       );
       setSelectedFileIds((current) => new Set([...current].filter((id) => !updates.has(id))));
-      setMessage(`${result.data.length} cleaned file(s) ready for review.`);
+      const failedDetails = result.data.failed.map((failure) => `${files.find((file) => file.id === failure.fileId)?.fileName ?? "Unknown file"}: ${failure.error}`);
+      if (result.data.failed.length) {
+        setMessageTone("warning");
+        setMessage(`${result.data.cleaned.length} file(s) cleaned. ${result.data.failed.length} skipped or failed — ${failedDetails.join("; ")}.`);
+      } else {
+        setMessageTone("status");
+        setMessage(`${result.data.cleaned.length} cleaned file(s) ready for review.`);
+      }
     } catch {
+      setMessageTone("warning");
       setMessage("Cleanup failed. Please try again.");
     } finally {
       setCleanupBusy(false);
@@ -579,11 +593,23 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
 
   const shareSelected = async () => {
     const selected = files.filter((file) => selectedFileIds.has(file.id));
-    if (selected.some((file) => file.cleanupStatus !== "approved" || !file.cleanFileId)) return setMessage("Preview and approve every selected cleaned file first.");
+    if (!selected.length) {
+      setMessageTone("warning");
+      return setMessage("Select at least one file to share.");
+    }
+    const unapproved = selected.filter((file) => file.cleanupStatus !== "approved" || !file.cleanFileId);
+    if (unapproved.length) {
+      setMessageTone("warning");
+      return setMessage(`Sharing is unavailable for ${unapproved.length} selected file(s). Approve each file before sharing it with RFQ recipients.`);
+    }
     const result = await shareProjectFilesAction(selected.map((file) => file.cleanFileId!));
-    if (!result.success) return setMessage(result.error);
+    if (!result.success) {
+      setMessageTone("warning");
+      return setMessage(result.error);
+    }
     setFiles((current) => current.map((file) => (selectedFileIds.has(file.id) ? { ...file, shared: true } : file)));
-    setMessage(`${selected.length} file(s) shared with the next party.`);
+    setMessageTone("status");
+    setMessage(`${selected.length} file(s) shared with RFQ recipients.`);
   };
   const unshareSelected = async () => {
     const selected = files.filter((file) => selectedFileIds.has(file.id) && file.cleanFileId && file.shared);
@@ -750,7 +776,7 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
             </div>
           ) : null}
           {message ? (
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role={messageTone === "warning" ? "alert" : "status"} className={messageTone === "warning" ? "rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900" : "text-sm text-muted-foreground"}>
               {message}
             </p>
           ) : null}
@@ -773,11 +799,11 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
                         <span className="sr-only">Select</span>
                       </TableHead>
                       <TableHead>Name</TableHead>
-                      <TableHead>Clean</TableHead>
-                      <TableHead>Approved</TableHead>
-                      <TableHead>Shared</TableHead>
+                      {showWorkflowColumns ? <TableHead>Clean</TableHead> : null}
+                      {showWorkflowColumns ? <TableHead>Approved</TableHead> : null}
+                      {showWorkflowColumns ? <TableHead>Shared</TableHead> : null}
                       <TableHead>Size</TableHead>
-                      <TableHead>Status</TableHead>
+                      {showWorkflowColumns ? <TableHead>Status</TableHead> : null}
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -797,6 +823,7 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
                             })
                           }
                           canWrite={canWrite}
+                          showWorkflowColumns={showWorkflowColumns}
                           onInfo={setFileInfo}
                           onPreview={openPreview}
                           onCleanPreview={openCleanPreview}
@@ -808,7 +835,7 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                        <TableCell colSpan={showWorkflowColumns ? 8 : 4} className="py-8 text-center text-muted-foreground">
                           {emptyFilesCopy}
                         </TableCell>
                       </TableRow>
@@ -870,7 +897,7 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
                           </div>
                         </>
                       )}
-                      <div className="flex shrink-0 flex-col items-end gap-1 text-[11px]" onClick={(event) => event.stopPropagation()}>
+                      {showWorkflowColumns ? <div className="flex shrink-0 flex-col items-end gap-1 text-[11px]" onClick={(event) => event.stopPropagation()}>
                         {file.wasCleaned && file.cleanFileId ? (
                           <button type="button" className="flex items-center gap-1" onClick={() => void openCleanPreview(file)}>
                             <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
@@ -883,7 +910,7 @@ export function ProjectFileWorkspace({ projectId, initialFiles, initialFolders, 
                           {file.cleanupStatus === "approved" ? "Approved" : "Not approved"}
                         </span>
                         <Checkbox aria-label={`Shared status for ${file.fileName}`} checked={file.sharedInbound || file.shared} disabled={file.sharedInbound || !canWrite || file.cleanupStatus !== "approved"} onCheckedChange={(checked) => void toggleShared(file, checked === true)} />
-                      </div>
+                      </div> : null}
                       <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
                         <FileActions file={file} canWrite={canWrite && !file.sharedInbound} onInfo={setFileInfo} onPreview={openPreview} onDownload={download} onRename={renameFile} onDelete={deleteFile} />
                       </div>
@@ -1017,7 +1044,7 @@ function TreeNodes({ nodes, selected, onSelect, canWrite, onRename, onMove, onDe
   );
 }
 
-function WorkspaceRow({ file, selected, onSelected, canWrite, onInfo, onPreview, onCleanPreview, onShared, onDownload, onRename, onDelete }: { file: ProjectFileMeta; selected: boolean; onSelected: (checked: boolean) => void; canWrite: boolean; onInfo: (file: ProjectFileMeta) => void; onPreview: (file: ProjectFileMeta) => void; onCleanPreview: (file: ProjectFileMeta) => void; onShared: (file: ProjectFileMeta, checked: boolean) => void; onDownload: (file: ProjectFileMeta) => void; onRename: (file: ProjectFileMeta) => void; onDelete: (file: ProjectFileMeta) => void }) {
+function WorkspaceRow({ file, selected, onSelected, canWrite, showWorkflowColumns, onInfo, onPreview, onCleanPreview, onShared, onDownload, onRename, onDelete }: { file: ProjectFileMeta; selected: boolean; onSelected: (checked: boolean) => void; canWrite: boolean; showWorkflowColumns: boolean; onInfo: (file: ProjectFileMeta) => void; onPreview: (file: ProjectFileMeta) => void; onCleanPreview: (file: ProjectFileMeta) => void; onShared: (file: ProjectFileMeta, checked: boolean) => void; onDownload: (file: ProjectFileMeta) => void; onRename: (file: ProjectFileMeta) => void; onDelete: (file: ProjectFileMeta) => void }) {
   const previewable = isPreviewableProjectFile(file.fileName, file.mimeType);
   return (
     <TableRow className={previewable ? "cursor-pointer" : undefined} onClick={previewable ? () => onPreview(file) : undefined}>
@@ -1050,7 +1077,7 @@ function WorkspaceRow({ file, selected, onSelected, canWrite, onInfo, onPreview,
           </span>
         )}
       </TableCell>
-      <TableCell onClick={(event) => event.stopPropagation()}>
+      {showWorkflowColumns ? <TableCell onClick={(event) => event.stopPropagation()}>
         {file.wasCleaned && file.cleanFileId ? (
           <Button type="button" size="sm" variant="ghost" onClick={() => onCleanPreview(file)}>
             <ShieldCheck className="mr-1 h-4 w-4 text-emerald-600" />
@@ -1059,17 +1086,17 @@ function WorkspaceRow({ file, selected, onSelected, canWrite, onInfo, onPreview,
         ) : (
           <span className="text-muted-foreground">Not cleaned</span>
         )}
-      </TableCell>
-      <TableCell>
+      </TableCell> : null}
+      {showWorkflowColumns ? <TableCell>
         <span className={file.cleanupStatus === "approved" ? "font-medium text-emerald-700" : "text-muted-foreground"}>
           {file.cleanupStatus === "approved" ? "Approved" : "Not approved"}
         </span>
-      </TableCell>
-      <TableCell onClick={(event) => event.stopPropagation()}>
+      </TableCell> : null}
+      {showWorkflowColumns ? <TableCell onClick={(event) => event.stopPropagation()}>
         <Checkbox aria-label={`Shared status for ${file.fileName}`} checked={file.sharedInbound || file.shared} disabled={file.sharedInbound || !canWrite || file.cleanupStatus !== "approved"} onCheckedChange={(checked) => onShared(file, checked === true)} />
-      </TableCell>
+      </TableCell> : null}
       <TableCell>{formatBytes(file.fileSizeBytes)}</TableCell>
-      <TableCell className="capitalize">{file.lifecycleStatus}</TableCell>
+      {showWorkflowColumns ? <TableCell className="capitalize">{file.lifecycleStatus}</TableCell> : null}
       <TableCell>
         <div className="flex justify-end" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
           <FileActions file={file} canWrite={canWrite && !file.sharedInbound} onInfo={onInfo} onPreview={onPreview} onDownload={onDownload} onRename={onRename} onDelete={onDelete} />

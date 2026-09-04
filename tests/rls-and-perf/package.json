@@ -9,7 +9,9 @@
     "baseline": "tsx src/run.ts --mode=baseline",
     "negative": "tsx src/run.ts --mode=negative",
     "onboarding": "tsx src/run.ts --mode=onboarding",
-    "test:target-safety": "tsx src/lib/targetSafety.test.ts"
+    "test:target-safety": "tsx src/lib/targetSafety.test.ts",
+    "ui-flow:fixture": "tsx src/ui-flow/fixture.ts",
+    "test:ui-flow-fixture": "tsx src/ui-flow/fixtureConfig.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"

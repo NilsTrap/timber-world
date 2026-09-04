@@ -5,6 +5,27 @@ export type PasswordlessInviteResult =
   | { ok: true; email: string; mode: "sent" | "resent" }
   | { ok: false; code: "ONBOARDING_DENIED" | "ALREADY_ACTIVE" | "MAIL_FAILED" };
 
+const STAGING_PORTAL_URL = "https://staging.nilitto.com";
+
+export function resolveInviteAppUrl(
+  configuredUrl = process.env.NEXT_PUBLIC_APP_URL,
+  nodeEnv = process.env.NODE_ENV,
+): string {
+  const fallback = nodeEnv === "production" ? STAGING_PORTAL_URL : "http://localhost:3000";
+
+  try {
+    const url = new URL(configuredUrl || fallback);
+    const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
+
+    // A stale Vercel environment variable must never put an unreachable local
+    // address in an email sent from a deployed portal.
+    if (nodeEnv === "production" && (url.protocol !== "https:" || isLocal)) return STAGING_PORTAL_URL;
+    return url.origin;
+  } catch {
+    return fallback;
+  }
+}
+
 /**
  * Generate a one-time Supabase activation link and deliver the application-
  * controlled Nilitto email through Resend. The link/token is never returned,
@@ -27,7 +48,7 @@ export async function sendPasswordlessInvite(
   if (user.status === "active") return { ok: false, code: "ALREADY_ACTIVE" };
 
   const isResend = Boolean(user.auth_user_id);
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://nilitto.com").replace(/\/$/, "");
+  const appUrl = resolveInviteAppUrl();
   const redirectTo = `${appUrl}/accept-invite`;
   const linkType = user.auth_user_id ? "recovery" : "invite";
   const { data, error } = await authAdmin.auth.admin.generateLink({

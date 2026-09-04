@@ -106,17 +106,18 @@ await test("updates the exact auth identity for an active exact membership", asy
   const result = await setManualPassword(state.admin, "user-a", "org-a", "Secret123", true);
   assert.deepEqual(result, { ok: true });
   assert.deepEqual(state.passwordCalls, [{ id: "auth-a", password: "Secret123" }]);
-  assert.equal(state.portalUsers[0]?.updated_at, undefined);
+  assert.equal(typeof state.portalUsers[0]?.updated_at, "string");
   assert.equal(JSON.stringify(result).includes("Secret123"), false);
   assert.equal(JSON.stringify(result).includes("auth-a"), false);
 });
 
-await test("updates an invited user's auth password without changing portal lifecycle status", async () => {
+await test("activates an invited user when an administrator assigns a password", async () => {
   const state = fixture({ status: "invited" });
   const result = await setManualPassword(state.admin, "user-a", "org-a", "Secret123", true);
   assert.deepEqual(result, { ok: true });
   assert.deepEqual(state.passwordCalls, [{ id: "auth-a", password: "Secret123" }]);
-  assert.equal(state.portalUsers[0]?.status, "invited");
+  assert.equal(state.portalUsers[0]?.status, "active");
+  assert.equal(typeof state.portalUsers[0]?.updated_at, "string");
   assert.equal(JSON.stringify(result).includes("Secret123"), false);
   assert.equal(JSON.stringify(result).includes("auth-a"), false);
 });

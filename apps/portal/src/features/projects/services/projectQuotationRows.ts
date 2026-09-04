@@ -18,8 +18,11 @@ export function quotationPricingRows(lines: ProjectLine[]): PricingRow[] {
   });
 }
 
-export function pricesFromQuotation(entries: ProjectRfqCandidate["quoteEntries"]): Record<string, string> {
-  return Object.fromEntries(entries.map((entry) => [`${entry.targetType}:${entry.targetId}`, (entry.unitPriceCents / 100).toFixed(2)]));
+export function pricesFromQuotation(entries: ProjectRfqCandidate["quoteEntries"], mode: ProjectQuotationPricingMode | null = "itemized_total"): Record<string, string> {
+  return Object.fromEntries(entries.map((entry) => {
+    const totalCents = mode === "itemized" ? Math.round(entry.quantity * entry.unitPriceCents) : entry.unitPriceCents;
+    return [`${entry.targetType}:${entry.targetId}`, (totalCents / 100).toFixed(2)];
+  }));
 }
 
 export function quotationEntries(lines: ProjectLine[], prices: Record<string, string>): ProjectQuoteEntry[] {
@@ -41,4 +44,16 @@ export function quotationTotalCents(value: string): number | null {
 
 export function quotationEntryAmountCents(mode: ProjectQuotationPricingMode, quantity: number, enteredCents: number): number {
   return mode === "itemized_total" ? enteredCents : Math.round(quantity * enteredCents);
+}
+
+export function detailedTotalFromUnitPrice(unitPrice: string, quantity: number): string {
+  const value = Number(unitPrice);
+  if (!unitPrice.trim() || !Number.isFinite(value) || value < 0 || !Number.isFinite(quantity) || quantity < 0) return "";
+  return ((Math.round(value * 100) * quantity) / 100).toFixed(2);
+}
+
+export function unitPriceFromDetailedTotal(total: string, quantity: number): string {
+  const value = Number(total);
+  if (!total.trim() || !Number.isFinite(value) || value < 0 || !Number.isFinite(quantity) || quantity <= 0) return "";
+  return (value / quantity).toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
 }

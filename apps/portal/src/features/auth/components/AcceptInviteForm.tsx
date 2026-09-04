@@ -57,7 +57,8 @@ export function AcceptInviteForm() {
   // Process the invite token on mount
   useEffect(() => {
     async function processInviteToken() {
-      const supabase = createClient();
+      try {
+        const supabase = createClient();
 
       // 1. Check for PKCE code in query params (modern Supabase flow)
       const urlParams = new URLSearchParams(window.location.search);
@@ -134,22 +135,16 @@ export function AcceptInviteForm() {
         return;
       }
 
-      // 3. Fallback: check if there's already a session (user refreshed the page)
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        const userMeta = session.user.user_metadata;
+        // An invitation must carry its own one-time code or token. Do not try
+        // to recover unrelated/stale login sessions here: invalid refresh
+        // tokens can otherwise leave this screen waiting indefinitely.
+        setInviteState({ status: "no_token" });
+      } catch {
         setInviteState({
-          status: "ready",
-          email: session.user.email || "",
-          name: (userMeta?.name as string) || null,
+          status: "error",
+          message: "Your login session is no longer valid. Return to Login and sign in again.",
         });
-        return;
       }
-
-      setInviteState({ status: "no_token" });
     }
 
     processInviteToken();
@@ -194,9 +189,7 @@ export function AcceptInviteForm() {
         <p className="text-muted-foreground">
           No invitation found. Please use the link from your invitation email.
         </p>
-        <Button variant="outline" onClick={() => router.push("/login")}>
-          Go to Login
-        </Button>
+        <Button variant="outline" asChild><a href="/login?reauth=1">Go to Login</a></Button>
       </div>
     );
   }
@@ -206,9 +199,7 @@ export function AcceptInviteForm() {
     return (
       <div className="text-center py-8 space-y-4">
         <p className="text-destructive">{inviteState.message}</p>
-        <Button variant="outline" onClick={() => router.push("/login")}>
-          Go to Login
-        </Button>
+        <Button variant="outline" asChild><a href="/login?reauth=1">Go to Login</a></Button>
       </div>
     );
   }

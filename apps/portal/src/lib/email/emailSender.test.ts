@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { sendCredentialsEmail } from "./sendCredentialsEmail";
 import { sendPasswordResetEmail } from "./sendPasswordResetEmail";
 import { sendNilittoInviteEmail } from "./sendNilittoInviteEmail";
+import { sendNilittoRecoveryEmail } from "./sendNilittoRecoveryEmail";
 
 const FALLBACK_SENDER = "Nilitto Trading Platform <noreply@mail.nilitto.com>";
 const CONFIGURED_SENDER = "Custom Sender <custom@mail.nilitto.com>";
@@ -10,6 +11,7 @@ const CONFIGURED_SENDER = "Custom Sender <custom@mail.nilitto.com>";
 const originalFetch = globalThis.fetch;
 const originalApiKey = process.env.RESEND_API_KEY;
 const originalFrom = process.env.RESEND_FROM_EMAIL;
+const originalMailpitUrl = process.env.NILITTO_TEST_MAILPIT_URL;
 
 const sentBodies: Array<Record<string, unknown>> = [];
 
@@ -57,13 +59,39 @@ async function run() {
     assert.match(String(invite?.subject), /Nilitto/);
     assert.doesNotMatch(String(invite?.html), /Timber World|Timber International/);
 
-    console.log("5 portal email sender assertions passed.");
+    process.env.NILITTO_TEST_MAILPIT_URL = "http://127.0.0.1:8025";
+    delete process.env.RESEND_API_KEY;
+    await sendNilittoInviteEmail({
+      to: "supplier@example.test",
+      name: "Supplier",
+      organisationName: "Test supplier",
+      inviteUrl: "http://localhost:3001/accept-invite?code=test-only",
+    });
+    const mailpitInvite = sentBodies.at(-1);
+    assert.deepEqual(mailpitInvite?.From, { Name: "Nilitto Trading Platform", Email: "noreply@mail.nilitto.com" });
+    assert.deepEqual(mailpitInvite?.To, [{ Email: "supplier@example.test" }]);
+    assert.match(String(mailpitInvite?.Subject), /Nilitto/);
+    assert.match(String(mailpitInvite?.Text), /activate your account/i);
+
+    await sendNilittoRecoveryEmail(
+      "buyer@example.test",
+      "http://localhost:3001/reset-password?code=test-only",
+    );
+    const recovery = sentBodies.at(-1);
+    assert.deepEqual(recovery?.To, [{ Email: "buyer@example.test" }]);
+    assert.match(String(recovery?.Subject), /reset your nilitto password/i);
+    assert.match(String(recovery?.Text), /choose a new password/i);
+    assert.doesNotMatch(String(recovery?.Text), /temporary password/i);
+
+    console.log("13 portal email sender assertions passed.");
   } finally {
     globalThis.fetch = originalFetch;
     if (originalApiKey === undefined) delete process.env.RESEND_API_KEY;
     else process.env.RESEND_API_KEY = originalApiKey;
     if (originalFrom === undefined) delete process.env.RESEND_FROM_EMAIL;
     else process.env.RESEND_FROM_EMAIL = originalFrom;
+    if (originalMailpitUrl === undefined) delete process.env.NILITTO_TEST_MAILPIT_URL;
+    else process.env.NILITTO_TEST_MAILPIT_URL = originalMailpitUrl;
   }
 }
 

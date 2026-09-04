@@ -10,21 +10,24 @@ import type { CleanupFinding } from "../services/fileCleanup";
 
 type CleanupStatus = "not_started" | "processing" | "needs_review" | "approved" | "failed";
 export interface CleanedFileResult { fileId: string; cleanFileId: string; cleanupStatus: CleanupStatus; findingsCount: number }
+export interface FailedFileCleanupResult { fileId: string; error: string; code: string }
+export interface BulkFileCleanupResult { cleaned: CleanedFileResult[]; failed: FailedFileCleanupResult[] }
 
 const FILE_SELECT = "id, order_id, file_name, relative_path, mime_type, storage_path, lifecycle_status, file_variant, source_file_id, cleanup_status";
 
-export async function cleanProjectFilesAction(fileIds: string[]): Promise<ActionResult<CleanedFileResult[]>> {
+export async function cleanProjectFilesAction(fileIds: string[]): Promise<ActionResult<BulkFileCleanupResult>> {
   const ids = [...new Set(fileIds)].filter(isValidUUID).slice(0, 50);
   if (!ids.length) return { success: false, error: "Select files to clean", code: "VALIDATION_ERROR" };
   const actor = await resolveProjectsActor();
   if (!actor.ok) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
-  const results: CleanedFileResult[] = [];
+  const cleaned: CleanedFileResult[] = [];
+  const failed: FailedFileCleanupResult[] = [];
   for (const fileId of ids) {
     const result = await cleanOne(actor, fileId);
-    if (!result.success) return result;
-    results.push(result.data);
+    if (result.success) cleaned.push(result.data);
+    else failed.push({ fileId, error: result.error, code: result.code ?? "CLEANUP_FAILED" });
   }
-  return { success: true, data: results };
+  return { success: true, data: { cleaned, failed } };
 }
 
 async function cleanOne(actor: Extract<Awaited<ReturnType<typeof resolveProjectsActor>>, { ok: true }>, fileId: string): Promise<ActionResult<CleanedFileResult>> {
@@ -70,7 +73,7 @@ async function cleanOne(actor: Extract<Awaited<ReturnType<typeof resolveProjects
     const storagePath = `${file.order_id}/project/${crypto.randomUUID()}_${sanitizeStorageFileName(cleanFileName)}`;
     const { error: uploadError } = await actor.db.storage.from("orders").upload(storagePath, output, { contentType: cleanMimeType, upsert: false });
     if (uploadError) return failCleanup(actor, fileId, "Could not save the cleaned copy");
-    const payload = { order_id: file.order_id, category: "project", file_name: cleanFileName, relative_path: cleanFileName, mime_type: cleanMimeType, file_size_bytes: output.byteLength, storage_path: storagePath, uploaded_by: actor.portalUserId, file_variant: "recipient_copy", source_file_id: file.id, lifecycle_status: "ready", cleanup_status: "needs_review", cleanup_findings: findings, cleaned_at: new Date().toISOString(), approved_at: null, approved_by: null, shared_to_order_id: null, shared_at: null, shared_by: null };
+    const payload = { order_id: file.order_id, category: "project", file_name: cleanFileName, relative_path: cleanFileName, mime_type: cleanMimeType, file_size_bytes: output.byteLength, storage_path: storagePath, uploaded_by: actor.portalUserId, file_variant: "recipient_copy", source_file_id: file.id, lifecycle_status: "ready", cleanup_status: "needs_review", cleanup_findings: findings, cleaned_at: new Date().toISOString(), approved_at: null, approved_by: null, shared_to_order_id: null, shared_with_rfq_candidates: false, shared_at: null, shared_by: null };
     const { data: existing } = await actor.db.from("order_files").select("id, storage_path").eq("source_file_id", file.id).eq("file_variant", "recipient_copy").maybeSingle();
     let cleanFileId: string;
     if (existing) {
@@ -129,11 +132,9 @@ export async function shareProjectFilesAction(fileIds: string[]): Promise<Action
   const files = (data ?? []) as Array<{ id: string; order_id: string; cleanup_status: string }>;
   if (files.length !== ids.length || files.some((file) => file.cleanup_status !== "approved") || new Set(files.map((file) => file.order_id)).size !== 1) return { success: false, error: "Every selected file must be approved on this project", code: "NOT_APPROVED" };
   const orderId = files[0]!.order_id;
-  const { data: order } = await actor.db.from("orders").select("id, spine_id, seller_organisation_id").eq("id", orderId).is("deleted_at",null).maybeSingle();
+  const { data: order } = await actor.db.from("orders").select("id, seller_organisation_id").eq("id", orderId).is("deleted_at",null).maybeSingle();
   const deal = order as any; if (!deal || (!actor.isPlatformAdmin && deal.seller_organisation_id !== actor.orgId)) return { success: false, error: "Only the trader can manage sharing", code: "FORBIDDEN" };
-  const { data: next } = await actor.db.from("orders").select("id").eq("spine_id", deal.spine_id).eq("buyer_organisation_id", deal.seller_organisation_id).is("deleted_at",null).neq("id", deal.id).neq("lifecycle_stage", "cancelled").limit(1).maybeSingle();
-  if (!next) return { success: false, error: "Add the next party before sharing files", code: "NO_NEXT_LEG" };
-  const { error } = await actor.db.from("order_files").update({ shared_to_order_id: (next as any).id, shared_at: new Date().toISOString(), shared_by: actor.portalUserId }).in("id", ids);
+  const { error } = await actor.db.from("order_files").update({ shared_with_rfq_candidates: true, shared_at: new Date().toISOString(), shared_by: actor.portalUserId }).in("id", ids);
   if (error) return { success: false, error: "Could not share the selected files", code: "UPDATE_FAILED" };
   revalidatePath(`/projects/${orderId}`); return { success: true, data: null };
 }
@@ -145,7 +146,7 @@ export async function unshareProjectFilesAction(fileIds: string[]): Promise<Acti
   const files = (data ?? []) as Array<{ id: string; order_id: string }>; if (files.length !== ids.length || new Set(files.map((file) => file.order_id)).size !== 1) return { success: false, error: "Files unavailable", code: "NOT_FOUND" };
   const orderId = files[0]!.order_id; const { data: order } = await actor.db.from("orders").select("seller_organisation_id").eq("id", orderId).is("deleted_at",null).maybeSingle();
   if (!order || (!actor.isPlatformAdmin && (order as any).seller_organisation_id !== actor.orgId)) return { success: false, error: "Only the trader can manage sharing", code: "FORBIDDEN" };
-  const { error } = await actor.db.from("order_files").update({ shared_to_order_id: null, shared_at: null, shared_by: null }).in("id", ids);
+  const { error } = await actor.db.from("order_files").update({ shared_to_order_id: null, shared_with_rfq_candidates: false, shared_at: null, shared_by: null }).in("id", ids);
   if (error) return { success: false, error: "Could not unshare the selected files", code: "UPDATE_FAILED" };
   revalidatePath(`/projects/${orderId}`); return { success: true, data: null };
 }
@@ -165,16 +166,14 @@ async function updateCleanState(fileId: string, action: "approve" | "share" | "u
   const actor = await resolveProjectsActor(); if (!actor.ok) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
   const { data } = await actor.db.from("order_files").select("id, order_id, source_file_id, cleanup_status").eq("id", fileId).eq("category", "project").maybeSingle();
   const clean = data as any; if (!clean) return { success: false, error: "Cleaned file unavailable", code: "NOT_FOUND" };
-  const { data: order } = await actor.db.from("orders").select("id, spine_id, seller_organisation_id").eq("id", clean.order_id).is("deleted_at",null).maybeSingle();
+  const { data: order } = await actor.db.from("orders").select("id, seller_organisation_id").eq("id", clean.order_id).is("deleted_at",null).maybeSingle();
   const deal = order as any; if (!deal || (!actor.isPlatformAdmin && deal.seller_organisation_id !== actor.orgId)) return { success: false, error: "Only the trader can manage sharing", code: "FORBIDDEN" };
   let update: Record<string, unknown>;
   if (action === "approve") update = { cleanup_status: "approved", approved_at: new Date().toISOString(), approved_by: actor.portalUserId };
-  else if (action === "unshare") update = { shared_to_order_id: null, shared_at: null, shared_by: null };
+  else if (action === "unshare") update = { shared_to_order_id: null, shared_with_rfq_candidates: false, shared_at: null, shared_by: null };
   else {
     if (clean.cleanup_status !== "approved") return { success: false, error: "Preview and approve the cleaned file first", code: "NOT_APPROVED" };
-    const { data: next } = await actor.db.from("orders").select("id").eq("spine_id", deal.spine_id).eq("buyer_organisation_id", deal.seller_organisation_id).is("deleted_at",null).neq("id", deal.id).neq("lifecycle_stage", "cancelled").limit(1).maybeSingle();
-    if (!next) return { success: false, error: "Add the next party before sharing files", code: "NO_NEXT_LEG" };
-    update = { shared_to_order_id: (next as any).id, shared_at: new Date().toISOString(), shared_by: actor.portalUserId };
+    update = { shared_with_rfq_candidates: true, shared_at: new Date().toISOString(), shared_by: actor.portalUserId };
   }
   const { error } = await actor.db.from("order_files").update(update).eq("id", clean.id);
   if (error) return { success: false, error: "Could not update file sharing", code: "UPDATE_FAILED" };

@@ -49,7 +49,9 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
         </Button>
       </section>
     );
-  if (!state) return <section className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">Loading commercial offer…</section>;
+  if (!state) return null;
+  const hasSupplierProposal = (state.sources?.length ?? 0) > 0 || state.lines.length > 0;
+  if (!hasSupplierProposal) return null;
   const format = (cents: number | null | undefined) => (cents == null ? "—" : `${(cents / 100).toFixed(2)} ${currency}`);
   const contributions = (state.sources ?? []).flatMap((source) =>
     source.lines.flatMap((line) => {

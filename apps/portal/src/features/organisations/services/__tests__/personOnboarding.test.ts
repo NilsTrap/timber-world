@@ -191,7 +191,7 @@ async function test(name: string, fn: () => void | Promise<void>) {
 
 async function main() {
   const onboarding = await import("../personOnboarding");
-  const { sendPasswordlessInvite } = await import("../passwordlessInvite");
+  const { resolveInviteAppUrl, sendPasswordlessInvite } = await import("../passwordlessInvite");
   const { isPlatformAdmin } = await import("@/lib/auth/getSession");
   const { isValidUUID } = await import("../../types");
 
@@ -205,6 +205,13 @@ async function main() {
     assert.equal(isValidUUID("not-a-user-id"), false);
     assert.equal(isValidUUID("' OR true --"), false);
     assert.equal(isValidUUID("00000000-0000-4000-8000-000000000001"), true);
+  });
+
+  await test("production invite links cannot point to localhost", () => {
+    assert.equal(resolveInviteAppUrl("http://localhost:3000", "production"), "https://staging.nilitto.com");
+    assert.equal(resolveInviteAppUrl("http://127.0.0.1:3000", "production"), "https://staging.nilitto.com");
+    assert.equal(resolveInviteAppUrl("https://staging.nilitto.com/", "production"), "https://staging.nilitto.com");
+    assert.equal(resolveInviteAppUrl("http://localhost:3001", "development"), "http://localhost:3001");
   });
 
   await test("derives every persona and safely reads legacy multi-role organisations", () => {
@@ -282,10 +289,12 @@ async function main() {
     process.env.RESEND_API_KEY = "test-only-key";
     globalThis.fetch = async () => new Response(JSON.stringify({ id: "mail-1" }), { status: 200 });
     let generateCalls = 0;
+    let generatedRedirect = "";
     const authAdmin = {
       auth: {
-        admin: { generateLink: async () => {
+        admin: { generateLink: async (input: { options?: { redirectTo?: string } }) => {
           generateCalls++;
+          generatedRedirect = input.options?.redirectTo || "";
           return { data: { user: { id: "auth-1" }, properties: { action_link: `https://example.test/invite-${generateCalls}` } }, error: null };
         } },
       },
@@ -296,6 +305,7 @@ async function main() {
       assert.deepEqual(sent, { ok: true, email: "person@example.test", mode: "sent" });
       assert.deepEqual(resent, { ok: true, email: "person@example.test", mode: "resent" });
       assert.equal(generateCalls, 2);
+      assert.equal(generatedRedirect, `${resolveInviteAppUrl()}/accept-invite`);
       assert.doesNotMatch(JSON.stringify([sent, resent]), /token|password|action[_-]?link|auth-1/i);
     } finally {
       globalThis.fetch = originalFetch;

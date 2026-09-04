@@ -1,4 +1,5 @@
 const NILITTO_INVITE_SENDER = "Nilitto Trading Platform <noreply@mail.nilitto.com>";
+const NILITTO_INVITE_SENDER_EMAIL = "noreply@mail.nilitto.com";
 
 export interface NilittoInviteEmailData {
   to: string;
@@ -11,6 +12,18 @@ export interface NilittoInviteEmailResult {
   success: boolean;
   messageId?: string;
   error?: string;
+}
+
+function mailpitSendUrl(configuredUrl = process.env.NILITTO_TEST_MAILPIT_URL): string | null {
+  if (!configuredUrl) return null;
+
+  try {
+    const url = new URL(configuredUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return `${url.origin}${url.pathname.replace(/\/$/, "")}/api/v1/send`;
+  } catch {
+    return null;
+  }
 }
 
 function escapeHtml(value: string): string {
@@ -26,9 +39,6 @@ function escapeHtml(value: string): string {
 export async function sendNilittoInviteEmail(
   data: NilittoInviteEmailData,
 ): Promise<NilittoInviteEmailResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return { success: false, error: "EMAIL_NOT_CONFIGURED" };
-
   const name = escapeHtml(data.name);
   const organisationName = escapeHtml(data.organisationName);
   const inviteUrl = escapeHtml(data.inviteUrl);
@@ -45,20 +55,33 @@ export async function sendNilittoInviteEmail(
     <p style="font-size:13px;color:#667085">This link is personal to you. If you were not expecting this invitation, you can ignore this email.</p>
   </div>
 </div></body></html>`;
+  const mailpitUrl = mailpitSendUrl();
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!mailpitUrl && !apiKey) return { success: false, error: "EMAIL_NOT_CONFIGURED" };
 
   try {
-    const response = await fetch("https://api.resend.com/emails", {
+    const response = await fetch(mailpitUrl ?? "https://api.resend.com/emails", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        from: NILITTO_INVITE_SENDER,
-        to: [data.to],
-        subject,
-        html,
-        text,
-      }),
+      headers: mailpitUrl
+        ? { "Content-Type": "application/json" }
+        : { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(mailpitUrl
+        ? {
+            From: { Name: "Nilitto Trading Platform", Email: NILITTO_INVITE_SENDER_EMAIL },
+            To: [{ Email: data.to }],
+            Subject: subject,
+            HTML: html,
+            Text: text,
+          }
+        : {
+            from: NILITTO_INVITE_SENDER,
+            to: [data.to],
+            subject,
+            html,
+            text,
+          }),
     });
-    if (!response.ok) return { success: false, error: `RESEND_${response.status}` };
+    if (!response.ok) return { success: false, error: `${mailpitUrl ? "MAILPIT" : "RESEND"}_${response.status}` };
     const result = await response.json() as { id?: string };
     return { success: true, messageId: result.id };
   } catch {
@@ -66,4 +89,4 @@ export async function sendNilittoInviteEmail(
   }
 }
 
-export { NILITTO_INVITE_SENDER };
+export { NILITTO_INVITE_SENDER, mailpitSendUrl };

@@ -13,6 +13,7 @@ export type RfqCandidateProjectSnapshot = {
 type CandidateOrderAuthorizationRow = {
   id: string;
   spine_id: string | null;
+  upstream_deal_id: string | null;
   deleted_at: string | null;
 };
 
@@ -39,7 +40,7 @@ export async function loadAuthorizedRfqCandidateSnapshot(
   projectId: string,
   actorOrganisationId: string | null,
   now = new Date(),
-): Promise<{ snapshot: RfqCandidateProjectSnapshot; spineId: string | null } | null> {
+): Promise<{ snapshot: RfqCandidateProjectSnapshot; spineId: string | null; sourceOrderId: string } | null> {
   if (!actorOrganisationId) return null;
 
   // Keep the authenticated SECURITY DEFINER function as the first visibility
@@ -54,7 +55,7 @@ export async function loadAuthorizedRfqCandidateSnapshot(
   // service-role order lookup that could observe a changed spine.
   const { data: authorizationData, error: authorizationError } = await admin
     .from("project_rfq_candidates")
-    .select("organization_id,project_rfqs!project_rfq_candidates_rfq_id_fkey!inner(order_id,status,deadline,orders!inner(id,spine_id,deleted_at))")
+    .select("organization_id,project_rfqs!project_rfq_candidates_rfq_id_fkey!inner(order_id,status,deadline,orders!inner(id,spine_id,upstream_deal_id,deleted_at))")
     .eq("organization_id", actorOrganisationId)
     .eq("project_rfqs.order_id", projectId)
     .eq("project_rfqs.status", "open")
@@ -79,5 +80,5 @@ export async function loadAuthorizedRfqCandidateSnapshot(
     || order.deleted_at !== null
   ) return null;
 
-  return { snapshot, spineId: order.spine_id };
+  return { snapshot, spineId: order.spine_id, sourceOrderId: order.upstream_deal_id ?? order.id };
 }

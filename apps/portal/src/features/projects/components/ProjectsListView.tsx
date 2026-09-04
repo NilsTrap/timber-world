@@ -132,7 +132,7 @@ export function ProjectsListView({
               <TableRow>
                 <TableHead className="w-24">Image</TableHead>
                 <TableHead>Spine ID</TableHead>
-                <TableHead>Project</TableHead>
+                <TableHead className="w-32 max-w-32">Project</TableHead>
                 <TableHead>Buyer</TableHead>
                 <TableHead>Seller</TableHead>
                 <TableHead>Stage</TableHead>
@@ -159,7 +159,7 @@ export function ProjectsListView({
                       {item.rowKind === "spine" ? item.spineCode : item.depth > 0 ? `↳ ${item.reference}` : item.reference}
                     </Link>}
                   </TableCell>
-                  <TableCell colSpan={item.rowKind === "spine" ? 3 : 1} className={item.rowKind === "spine" ? "font-medium" : "max-w-[18rem] truncate"}>{item.rowKind === "spine" || item.depth === 0 ? item.name ?? "—" : ""}</TableCell>
+                  <TableCell colSpan={item.rowKind === "spine" ? 3 : 1} className={item.rowKind === "spine" ? "font-medium" : "w-32 max-w-32 truncate"}>{item.rowKind === "spine" || item.depth === 0 ? item.name ?? "—" : ""}</TableCell>
                   {item.rowKind !== "spine" ? <>
                     <TableCell className="whitespace-nowrap">{item.buyer?.name ?? "—"}</TableCell>
                     <TableCell className="whitespace-nowrap">{item.seller?.name ?? "—"}</TableCell>

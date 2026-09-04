@@ -71,12 +71,27 @@ export async function listProjects(options: { deletedOnly?: boolean; recoveryPag
   const raws: OrderDealSummary[] = committedRaws;
   const visibleIds = raws.map((d) => d.id);
 
+  const invitedSpineByOrder = new Map<string, string>();
+  if (invitedRows.length > 0) {
+    const { data: invitedOrders } = await createAdminClient()
+      .from("orders")
+      .select("id,spine_id")
+      .in("id", invitedRows.map((row) => row.id))
+      .is("deleted_at", null);
+    for (const row of (invitedOrders ?? []) as Array<{ id: string; spine_id: string | null }>) {
+      if (row.spine_id) invitedSpineByOrder.set(row.id, row.spine_id);
+    }
+  }
+
   const walledRows = raws.map((raw) =>
     projectDealView({ ...raw, lineItems: [] }, a.access, a.orgId) as OrderDealSummary & { lineItems: [] },
   );
   // listDeals plus the current-organisation filter above is the visibility wall.
   // Raw spine ids stay inside this loader and are used only for shared images.
-  const authorizedSpineIds = [...new Set(raws.map((row) => row.spineId).filter((id): id is string => Boolean(id)))];
+  const authorizedSpineIds = [...new Set([
+    ...raws.map((row) => row.spineId),
+    ...invitedSpineByOrder.values(),
+  ].filter((id): id is string => Boolean(id)))];
   const visibleSpineIds = [...new Set(walledRows.map((row) => row.spineId).filter((id): id is string => Boolean(id)))];
   const spineCodeById = new Map<string, string>();
   const spineTitleById = new Map<string, string>();
@@ -173,6 +188,9 @@ export async function listProjects(options: { deletedOnly?: boolean; recoveryPag
     seller: null,
     deliveryDeadline: row.deliveryDeadline,
     fileCount: 0,
+    thumbnailUrl: invitedSpineByOrder.has(row.id)
+      ? primaryThumbnailBySpine.get(invitedSpineByOrder.get(row.id)!) ?? null
+      : null,
     rfqInvitation: true,
   }));
 
