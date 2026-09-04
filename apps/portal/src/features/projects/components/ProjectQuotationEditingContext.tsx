@@ -11,6 +11,8 @@ type ProjectQuotationEditingContextValue = ProjectQuotationEditingState & {
   setMode: (mode: ProjectQuotationPricingMode | null) => void;
   setPrices: (prices: Record<string, string>) => void;
   setActiveCandidate: (candidate: ProjectRfqCandidate) => void;
+  projectTotal: string;
+  setProjectTotal: (value: string) => void;
   inlinePending: boolean;
   inlineStatus: "idle" | "saved" | "error";
   setInlineState: (pending: boolean, status: "idle" | "saved" | "error") => void;
@@ -21,6 +23,7 @@ const ProjectQuotationEditingContext = createContext<ProjectQuotationEditingCont
 export function ProjectQuotationEditingProvider({ projectId, children }: { projectId: string; children: ReactNode }) {
   const [state, setState] = useState<ProjectQuotationEditingState>({ candidateId: null, activeCandidate: null, mode: null, prices: {}, pending: false, canManage: false });
   const [inlineState, setInlineStateValue] = useState<{ pending: boolean; status: "idle" | "saved" | "error" }>({ pending: false, status: "idle" });
+  const [projectTotal, setProjectTotal] = useState("");
   const setControlState = useCallback((next: Omit<ProjectQuotationEditingState, "mode" | "prices">) => setState((current) => setProjectQuotationControlState(current, next)), []);
   const setMode = useCallback((mode: ProjectQuotationPricingMode | null) => setState((current) => setProjectQuotationEditingMode(current, mode)), []);
   const setPrices = useCallback((prices: Record<string, string>) => setState((current) => setProjectQuotationEditingPrices(current, prices)), []);
@@ -33,10 +36,12 @@ export function ProjectQuotationEditingProvider({ projectId, children }: { proje
     setMode,
     setPrices,
     setActiveCandidate,
+    projectTotal,
+    setProjectTotal,
     inlinePending: inlineState.pending,
     inlineStatus: inlineState.status,
     setInlineState,
-  }), [inlineState, projectId, setActiveCandidate, setControlState, setInlineState, setMode, setPrices, state]);
+  }), [inlineState, projectId, projectTotal, setActiveCandidate, setControlState, setInlineState, setMode, setPrices, state]);
   return <ProjectQuotationEditingContext.Provider value={value}>{children}</ProjectQuotationEditingContext.Provider>;
 }
 

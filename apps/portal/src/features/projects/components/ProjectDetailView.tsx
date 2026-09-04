@@ -79,8 +79,6 @@ export function ProjectDetailView({
       ) : null}
 
       <ProjectQuotationEditingProvider projectId={project.id}>
-      <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={canManageRfq} canEnterCandidateQuotation={viewer.isPlatformAdmin} canInitializeOwnQuotation={viewerIsSeller} sellerOrganisationId={project.seller?.id ?? null} sellerOrganisationName={project.seller?.name ?? null} initialOptions={initialRfqCandidates} lines={project.lines} />
-
       <ProjectSpecificationEditor
         projectId={project.id}
         lines={project.lines}
@@ -89,6 +87,8 @@ export function ProjectDetailView({
         canEnterQuotation={viewer.isPlatformAdmin || viewerIsSeller}
         specificationRfq={partyWorkspace.specificationRfq}
       />
+
+      <ProjectRfqCard projectId={project.id} currency={currency || "EUR"} canManage={canManageRfq} canEnterCandidateQuotation={viewer.isPlatformAdmin} canInitializeOwnQuotation={viewerIsSeller} sellerOrganisationId={project.seller?.id ?? null} sellerOrganisationName={project.seller?.name ?? null} initialOptions={initialRfqCandidates} lines={project.lines} />
       </ProjectQuotationEditingProvider>
 
       {!isRfqCandidate ? <ProjectCommercialRollup projectId={project.id} currency={currency || "EUR"} /> : null}

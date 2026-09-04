@@ -36,6 +36,7 @@ export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnter
   const quoteErrorKeysRef = useRef(new Set<string>());
   const selectedCandidate = sharedQuotation.activeCandidate;
   const quoteMode = sharedQuotation.mode;
+  const lastLineKey = lineKeys.at(-1);
 
   useEffect(() => {
     if (!canEnterQuotation || sharedQuotation.projectId !== projectId || !sharedQuotation.activeCandidate) {
@@ -57,6 +58,16 @@ export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnter
     const next = { ...quotePricesRef.current, [key]: value };
     quotePricesRef.current = next; setQuotePrices(next); setQuoteStatus("idle");
     sharedQuotation.setPrices(next);
+  }
+
+  function setWholeQuotationTotal(value: string) {
+    const hasDetailedPrices = Object.values(quotePricesRef.current).some((price) => price.trim() !== "");
+    if (value.trim() && hasDetailedPrices) {
+      toast.error("Clear the line and process prices before entering a total for the whole quotation.");
+      return;
+    }
+    sharedQuotation.setProjectTotal(value);
+    sharedQuotation.setMode(value.trim() ? "total" : "itemized_total");
   }
 
   function saveQuotationEntry(entry: Omit<ProjectQuoteEntry, "unitPriceCents">, value: string, candidateOverride?: string) {
@@ -116,7 +127,7 @@ export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnter
       <div>
         <table className={`w-full border-collapse text-sm ${DENSE_TABLE_CLASS}`}>
           <thead className="sr-only"><tr><th scope="col">Specification line</th></tr></thead>
-          <tbody>{group.lines.map((line) => { const key = specificationLineKey(line); return <SpecificationProductRows key={key} projectId={projectId} line={line} fields={group.fields} canEdit={canEdit} currency={currency} expanded={expandedLines.has(key)||forceExpanded} onToggle={() => setExpandedLines((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} quotation={selectedCandidate&&quoteMode ? { candidateId: selectedCandidate.id, candidateName: selectedCandidate.organisationName, prices: quotePrices, setPrice: setQuotePrice, save: saveQuotationEntry, remove: removeQuotationEntry, pending: quotePending, disabled:quoteMode==="total" } : null} onEdit={onEdit} onDelete={onDelete} />; })}</tbody>
+          <tbody>{group.lines.map((line) => { const key = specificationLineKey(line); return <SpecificationProductRows key={key} projectId={projectId} line={line} fields={group.fields} canEdit={canEdit} currency={currency} expanded={expandedLines.has(key)||forceExpanded} onToggle={() => setExpandedLines((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} quotation={selectedCandidate&&quoteMode ? { candidateId: selectedCandidate.id, candidateName: selectedCandidate.organisationName, prices: quotePrices, setPrice: setQuotePrice, save: saveQuotationEntry, remove: removeQuotationEntry, pending: quotePending, disabled:quoteMode==="total", showWholeTotal:key===lastLineKey, wholeTotal:sharedQuotation.projectTotal, setWholeTotal:setWholeQuotationTotal } : null} onEdit={onEdit} onDelete={onDelete} />; })}</tbody>
         </table>
       </div>
     </section>)}
@@ -126,7 +137,7 @@ export function ProjectSpecificationTables({ projectId, lines, canEdit, canEnter
 function SpecificationProductRows({ projectId, line, fields, canEdit, currency, expanded, onToggle, quotation, onEdit, onDelete }: {
   projectId: string; line: ProjectLine; fields: ProjectSpecificationField[]; canEdit: boolean;
   expanded: boolean; onToggle: () => void;
-  currency: string; quotation: { candidateId: string; candidateName: string; prices: Record<string, string>; setPrice: (key: string, value: string) => void; save: (entry: Omit<ProjectQuoteEntry, "unitPriceCents">, value: string, candidateId?: string) => void; remove: (key: string, candidateId?: string) => void; pending: boolean; disabled:boolean } | null;
+  currency: string; quotation: { candidateId: string; candidateName: string; prices: Record<string, string>; setPrice: (key: string, value: string) => void; save: (entry: Omit<ProjectQuoteEntry, "unitPriceCents">, value: string, candidateId?: string) => void; remove: (key: string, candidateId?: string) => void; pending: boolean; disabled:boolean; showWholeTotal:boolean; wholeTotal:string; setWholeTotal:(value:string)=>void } | null;
   onEdit: (line: ProjectLine) => void; onDelete: (line: ProjectLine) => void;
 }) {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -304,12 +315,13 @@ function SpecificationProductRows({ projectId, line, fields, canEdit, currency, 
             {!quotation?<Button type="button" variant="outline" size="sm" aria-expanded={processesOpen} onClick={() => setProcessesOpen((open) => !open)}>{processesOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}{processesOpen ? "Hide processes" : "Show processes"}</Button>:null}
           </div>
         </div>
-        {processesOpen || quotation ? <div className="overflow-x-auto"><table className={`w-full min-w-[36rem] table-fixed border-collapse text-sm ${DENSE_TABLE_CLASS}`}><thead><tr className="border-b border-[#ded8d0] bg-[#f8faf9] text-left text-xs text-[#485358] dark:border-border dark:bg-muted/50 dark:text-muted-foreground"><th className="w-12 px-2 py-2 font-medium">Use</th><th className="px-2 py-2 font-medium">Process{quotation ? ` · ${quotation.candidateName}` : ""}</th><th className="w-24 px-2 py-2 font-medium">Quantity</th><th className="w-14 px-2 py-2 font-medium">Unit</th>{quotation ? <><th className="w-28 px-2 py-2 font-medium">Unit price</th><th className="w-28 px-2 py-2 font-medium">Process total</th></> : null}</tr></thead><tbody>
+        {processesOpen || quotation ? <div className="overflow-x-auto"><table className={`w-full min-w-[36rem] table-fixed border-collapse text-sm ${DENSE_TABLE_CLASS}`}><thead><tr className="border-b border-[#ded8d0] bg-[#f8faf9] text-left text-xs text-[#485358] dark:border-border dark:bg-muted/50 dark:text-muted-foreground"><th className="w-12 px-2 py-2 font-medium">Use</th><th className="px-2 py-2 font-medium">Process{quotation ? ` · ${quotation.candidateName}` : ""}</th><th className="w-24 px-2 py-2 font-medium">Quantity</th><th className="w-14 px-2 py-2 font-medium">Unit</th>{quotation ? <><th className="w-28 px-2 py-2 font-medium">Unit price</th><th className="w-28 px-2 py-2 font-medium">EUR total</th></> : null}</tr></thead><tbody>
           {visibleProcesses.map((process) => { const active = activeProcesses[process.fieldKey] !== false; return <tr key={process.id} className={`border-b border-[#ebe6e0] last:border-b-0 dark:border-border ${active ? "bg-white dark:bg-card" : "bg-[#fafafa] text-[#657078] dark:bg-muted/30 dark:text-muted-foreground"}`}>
             <td className="px-2 py-1.5">{editableSnapshot ? <input type="checkbox" className="h-3.5 w-3.5 accent-primary" aria-label={`Use ${process.name} for ${line.productName ?? "line"}`} checked={active} onChange={(event) => { const next = event.target.checked; const quoteCandidateId = quotation?.candidateId; setActiveProcesses((current) => ({ ...current, [process.fieldKey]: next })); valuesRef.current.active = { ...valuesRef.current.active, [process.fieldKey]: next }; saveStructuredFields(() => { if (!next && quoteCandidateId) quotation?.remove(`process:${process.id}`, quoteCandidateId); }, () => { setActiveProcesses((current) => ({ ...current, [process.fieldKey]: active })); valuesRef.current.active = { ...valuesRef.current.active, [process.fieldKey]: active }; }); }} /> : active ? <span className="text-primary">✓</span> : <span>—</span>}</td>
             <td className="px-2 py-1.5 font-medium">{process.name}</td><td className="p-0">{editableSnapshot ? <CompactInput aria-label={`${process.name} quantity for ${line.productName ?? "line"}`} type="number" min="0" step="any" disabled={!active} value={processValues[process.fieldKey] ?? "0"} onChange={(event) => { setProcessValues((current) => ({ ...current, [process.fieldKey]: event.target.value })); valuesRef.current.process = { ...valuesRef.current.process, [process.fieldKey]: event.target.value }; }} onBlur={() => saveStructuredFields(() => { const price = quotation?.prices[`process:${process.id}`] ?? ""; if (quotation && price && active) quotation.save({ targetType: "process", targetId: process.id, label: `${line.productName ?? `Line ${line.lineNo}`} · ${process.name}`, quantity: Number(valuesRef.current.process[process.fieldKey] ?? 0), unit: process.unit ?? "unit" }, price, quotation.candidateId); })} /> : <span className="block px-2 py-1.5">{processValues[process.fieldKey] ?? "0"}</span>}</td><td className="px-2 py-1.5">{process.unit ?? "—"}</td>{quotation ? (()=>{const key=`process:${process.id}`;const total=quotation.prices[key]??"";const processQuantity=Number(processValues[process.fieldKey]??0);const entry={targetType:"process" as const,targetId:process.id,label:`${line.productName??`Line ${line.lineNo}`} · ${process.name}`,quantity:processQuantity,unit:process.unit??"unit"};return <><td className="p-0"><CompactInput className="!rounded-md !border !border-[#b8c8bf] !bg-white dark:!border-border dark:!bg-background" aria-label={`Quotation unit price for ${process.name}`} type="number" min="0" step="0.01" disabled={!active||quotation.disabled||quotation.pending||saveStatus==="saving"||saveStatus==="error"} value={unitPriceFromDetailedTotal(total,processQuantity)} onChange={(event)=>quotation.setPrice(key,detailedTotalFromUnitPrice(event.target.value,processQuantity))} onBlur={()=>quotation.save(entry,total)}/></td><td className="p-0"><CompactInput className="!rounded-md !border !border-[#b8c8bf] !bg-white dark:!border-border dark:!bg-background" aria-label={`Quotation total price for ${process.name}`} type="number" min="0" step="0.01" disabled={!active||quotation.disabled||quotation.pending||saveStatus==="saving"||saveStatus==="error"} value={total} onChange={(event)=>quotation.setPrice(key,event.target.value)} onBlur={()=>quotation.save(entry,total)}/></td></>})() : null}
           </tr>; })}
           {visibleProcesses.length === 0 ? <tr><td colSpan={quotation ? 6 : 4} className="px-3 py-6 text-center text-sm text-muted-foreground">No applicable processes. Show inactive processes to add one.</td></tr> : null}
+          {quotation?.showWholeTotal ? <tr className="border-t-2 border-[#b8c8bf] bg-[#f4f8f5] font-medium dark:border-border dark:bg-primary/10"><td colSpan={5} className="px-2 py-2 text-right">Total EUR for the whole quotation</td><td className="p-0"><CompactInput className="!rounded-md !border !border-[#b8c8bf] !bg-white dark:!border-border dark:!bg-background" aria-label="Total EUR for the whole quotation" type="number" min="0" step="0.01" value={quotation.wholeTotal} onChange={(event)=>quotation.setWholeTotal(event.target.value)} /></td></tr> : null}
         </tbody></table></div> : null}
       </div>
     </td></tr> : null}</> : null}

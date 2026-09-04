@@ -3,7 +3,7 @@ import { useEffect, useId, useState, useTransition } from "react";
 import { Button, Input, Label } from "@timber/ui";
 import { Calculator, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { getProjectCommercialRollup, saveProjectCommercialRollup, type CommercialRollupState } from "../actions/projectCommercialActions";
+import { decideProjectCommercialOffer, getProjectCommercialRollup, publishProjectCommercialOffer, saveProjectCommercialRollup, type CommercialRollupState } from "../actions/projectCommercialActions";
 import { calculateCommercialRollup } from "../services/projectCommercialRollup";
 import { ProjectSectionBody, ProjectSectionCard, ProjectSectionHeader } from "./ProjectSectionCard";
 import { ProjectDisclosureButton } from "./ProjectDisclosureButton";
@@ -17,6 +17,8 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
   const marginModeName = useId();
   const [adjustment, setAdjustment] = useState("0");
   const [margin, setMargin] = useState("0");
+  const [buyerNotes, setBuyerNotes] = useState("");
+  const [offerNotes, setOfferNotes] = useState("");
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const bodyId = `project-commercial-offer-${projectId}`;
@@ -30,6 +32,9 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
           return;
         }
         setState(result.data);
+        setBuyerNotes(result.data.buyerNotes ?? "");
+        setOfferNotes(result.data.offerNotes ?? "");
+        if (result.data.canDecide) setOpen(true);
         setScope(result.data.scope ?? "full");
         setAdjustment(String((result.data.adjustmentCents ?? 0) / 100));
         const mode = result.data.marginMode ?? "percentage";
@@ -127,9 +132,11 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
         return;
       }
       setState(result.data);
-      toast.success("Selling price confirmed");
+      toast.success("Buyer offer draft saved");
     });
-  const summary = [state.state === "stale" ? "Source changed; review and reconfirm" : state.state === "confirmed" ? "Confirmed" : "Draft", state.scope ? `${state.scope === "full" ? "Full" : "Partial"} offer` : null, state.salesAmountCents != null ? `Buyer total ${format(state.salesAmountCents)}` : null, state.marginAmountCents != null ? `Margin ${format(state.marginAmountCents)}${state.marginPercent != null ? ` (${state.marginPercent.toFixed(2)}%)` : ""}` : null].filter(Boolean).join(" · ");
+  const publish = () => startTransition(async()=>{const result=await publishProjectCommercialOffer(projectId,offerNotes);if(!result.success){toast.error(result.error);return}setState(result.data);toast.success("Offer published to buyer")});
+  const decide = (decision:"accepted"|"rejected") => startTransition(async()=>{const result=await decideProjectCommercialOffer({projectId,decision,notes:buyerNotes});if(!result.success){toast.error(result.error);return}setState(result.data);toast.success(decision==="accepted"?"Offer accepted":"Offer rejected")});
+  const summary = [state.state === "stale" ? "Source changed; review and save again" : state.state === "published" ? "Awaiting buyer decision" : state.state === "accepted" ? "Accepted" : state.state === "rejected" ? "Rejected" : "Private draft", state.scope ? `${state.scope === "full" ? "Full" : "Partial"} offer` : null, state.salesAmountCents != null ? `Buyer total ${format(state.salesAmountCents)}` : null, state.canBuild&&state.marginAmountCents != null ? `Margin ${format(state.marginAmountCents)}${state.marginPercent != null ? ` (${state.marginPercent.toFixed(2)}%)` : ""}` : null].filter(Boolean).join(" · ");
   return (
     <ProjectSectionCard>
       <ProjectSectionHeader title="Commercial offer" subtitle={summary} actions={<>
@@ -143,7 +150,7 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
       {open ? (
         <ProjectSectionBody id={bodyId} className="space-y-3">
           {state.state === "stale" ? <p className="text-sm text-amber-700">Source changed; review and reconfirm.</p> : null}
-          {state.canBuild ? (
+          {state.canBuild && ["draft","rejected","stale"].includes(state.state) ? (
             <>
               <div className="space-y-2">
                 {state.sources?.map((source) => (
@@ -231,7 +238,7 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
                 </label>
                 <Button className="self-end" disabled={pending || !preview || invalidWholePackageSelection || (scope === "full" && missing.length > 0)} onClick={save}>
                   {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Confirm selling price
+                  Save private draft
                 </Button>
               </div>
               {preview ? (
@@ -269,6 +276,10 @@ export function ProjectCommercialRollup({ projectId, currency }: { projectId: st
               </div>
             </div>
           ) : null}
+          {state.offerNotes ? <p className="text-sm"><span className="font-medium">Offer notes:</span> {state.offerNotes}</p> : null}
+          {state.canBuild && state.state === "draft" && state.salesAmountCents != null ? <div className="space-y-3 border-t pt-3"><label className="grid gap-1"><Label>Offer notes (optional)</Label><textarea className="min-h-20 rounded-md border bg-background px-3 py-2 text-sm" value={offerNotes} maxLength={4000} onChange={(event)=>setOfferNotes(event.target.value)} /></label><div className="flex justify-end"><Button disabled={pending} onClick={publish}>Publish offer to buyer</Button></div></div> : null}
+          {state.canDecide ? <div className="space-y-3 border-t pt-3"><label className="grid gap-1"><Label>Decision notes (optional)</Label><textarea className="min-h-20 rounded-md border bg-background px-3 py-2 text-sm" value={buyerNotes} maxLength={4000} onChange={(event)=>setBuyerNotes(event.target.value)} /></label><div className="flex justify-end gap-2"><Button variant="outline" disabled={pending} onClick={()=>decide("rejected")}>Reject offer</Button><Button disabled={pending} onClick={()=>decide("accepted")}>Accept offer</Button></div></div> : null}
+          {state.buyerNotes ? <p className="text-sm"><span className="font-medium">Buyer notes:</span> {state.buyerNotes}</p> : null}
         </ProjectSectionBody>
       ) : null}
     </ProjectSectionCard>
