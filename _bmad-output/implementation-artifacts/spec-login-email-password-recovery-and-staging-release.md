@@ -2,7 +2,7 @@
 title: 'Login email password recovery and staging release'
 type: 'feature'
 created: '2026-09-04'
-status: 'in-progress'
+status: 'complete'
 baseline_commit: 'adfa597df6d414c0630142dc6e00c318775bffab'
 review_loop_iteration: 0
 context:
@@ -51,10 +51,10 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `apps/portal/src/features/auth/` and auth routes -- implement request, email delivery, recovery-token processing, password update, neutral feedback, accessibility, and tests.
-- [ ] `apps/portal/src/proxy.ts` and `supabase/config.toml` -- ensure recovery routes and redirect origins are accepted without changing protected-route behavior.
-- [ ] Current approved project/RFQ and authentication changes -- run focused regression checks, inspect the release diff, and commit without generated reports or local secrets.
-- [ ] Staging Supabase/Vercel -- verify required migrations/config, deploy the saved staging frontend, inspect deployment health, and run browser acceptance on `staging.nilitto.com` without exposing the live recovery link.
+- [x] `apps/portal/src/features/auth/` and auth routes -- implement request, email delivery, recovery-token processing, password update, neutral feedback, accessibility, and tests.
+- [x] `apps/portal/src/proxy.ts` and `supabase/config.toml` -- ensure recovery routes and redirect origins are accepted without changing protected-route behavior.
+- [x] Current approved project/RFQ and authentication changes -- run focused regression checks, inspect the release diff, and commit without generated reports or local secrets.
+- [x] Staging Supabase/Vercel -- verify required migrations/config, deploy the saved staging frontend, inspect deployment health, and run browser acceptance on `staging.nilitto.com` without exposing the live recovery link.
 
 **Acceptance Criteria:**
 - Given a signed-out user on Login, when they choose Forgot password and submit a valid email, then they see neutral confirmation and a branded recovery email is requested.
@@ -69,6 +69,8 @@ context:
 Supabase should remain the authority for recovery-token issuance and password mutation. The application controls presentation and email delivery so local Mailpit tests remain private and staging email remains branded. Recovery must not reuse invitation lifecycle updates: an active user stays active, while an invited user still follows the invitation activation rules.
 
 ## Verification
+
+Completed 2026-09-04: recovery and email tests, the full Timber MVP regression gate, portal type-check, production build, and `git diff --check` passed. Browser checks passed locally and on the staging alias for login entry, recovery request presentation, and invalid/expired-link handling. Vercel deployment `dpl_HqsXk3s26MUrZhiEYjAtLneyXQBi` is Ready and aliased to `https://staging.nilitto.com`.
 
 **Commands:**
 - `pnpm --filter @timber/portal exec tsx <focused auth tests>` -- expected: request validation, neutral responses, redirect safety, and recovery lifecycle pass.
