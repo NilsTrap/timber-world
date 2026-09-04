@@ -342,6 +342,8 @@ assert.doesNotMatch(marginMigration, /UPDATE public\.orders SET\s+value_cents\s*
 const rfqCard = readFileSync("src/features/projects/components/ProjectRfqCard.tsx", "utf8");
 const commercialAction = readFileSync("src/features/projects/actions/projectCommercialActions.ts", "utf8");
 const commercialCard = readFileSync("src/features/projects/components/ProjectCommercialRollup.tsx", "utf8");
+const commercialSaveFix = readFileSync("../../supabase/migrations/20260904093000_fix_commercial_rollup_source_ambiguity.sql", "utf8");
+const commercialSafeUpdateFix = readFileSync("../../supabase/migrations/20260904094500_fix_commercial_rollup_safe_update.sql", "utf8");
 assert.match(rfqCard, /Quotation requests created[\s\S]*router\.refresh\(\)/);
 assert.doesNotMatch(rfqCard, /Trader margin/);
 assert.match(commercialCard, /Gross margin/);
@@ -393,6 +395,8 @@ assert.match(commercialCard, /if \(!hasSupplierProposal\) return null/);
 assert.doesNotMatch(commercialCard, /Loading commercial offer/);
 assert.match(commercialCard, /Save private draft/);
 assert.match(commercialAction, /sourceUpdatedAt:z\.string\(\)\.datetime\(\{offset:true\}\)/);
+assert.match(commercialSaveFix, /pg_get_functiondef[\s\S]*#variable_conflict use_column[\s\S]*EXECUTE patched/);
+assert.match(commercialSafeUpdateFix, /pg_get_functiondef[\s\S]*WHERE true[\s\S]*EXECUTE patched/);
 assert.match(commercialCard, /Publish offer to buyer/);
 assert.match(commercialCard, /Accept offer/);
 assert.match(commercialCard, /Reject offer/);
