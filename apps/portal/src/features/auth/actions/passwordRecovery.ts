@@ -24,7 +24,13 @@ export async function requestPasswordRecovery(input: unknown): Promise<ActionRes
       options: { redirectTo },
     });
     const actionLink = data?.properties?.action_link;
-    if (error || !actionLink) return { success: true, data: { message: NEUTRAL_MESSAGE } };
+    if (error || !actionLink) {
+      const status = (error as { status?: number } | null)?.status;
+      if (status === 400 || status === 404 || status === 422) {
+        return { success: true, data: { message: NEUTRAL_MESSAGE } };
+      }
+      return { success: false, error: "We could not send the recovery email. Please try again later.", code: "MAIL_FAILED" };
+    }
 
     const mail = await sendNilittoRecoveryEmail(parsed.data.email, actionLink);
     if (!mail.success) return { success: false, error: "We could not send the recovery email. Please try again later.", code: "MAIL_FAILED" };

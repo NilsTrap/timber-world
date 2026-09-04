@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Input, Label } from "@timber/ui";
@@ -12,10 +12,11 @@ type State = "loading" | "ready" | "invalid";
 
 export function ResetPasswordForm() {
   const router = useRouter(); const [state, setState] = useState<State>("loading");
+  const tokenProcessingStarted = useRef(false);
   const [password, setPassword] = useState(""); const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null); const [isPending, setIsPending] = useState(false);
 
-  useEffect(() => { void (async () => {
+  useEffect(() => { if (tokenProcessingStarted.current) return; tokenProcessingStarted.current = true; void (async () => {
     const supabase = createClient(); const params = new URLSearchParams(window.location.search); const code = params.get("code");
     if (code) { const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code); if (exchangeError) { setState("invalid"); return; } window.history.replaceState(null, "", window.location.pathname); setState("ready"); return; }
     const hash = new URLSearchParams(window.location.hash.slice(1)); const accessToken = hash.get("access_token");
