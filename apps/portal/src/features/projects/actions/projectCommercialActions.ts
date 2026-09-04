@@ -8,7 +8,7 @@ import { resolveProjectsActor,resolveProjectsViewer } from "../access";
 
 const uuid=z.string().uuid();
 const createAdminClient=()=>createTypedAdminClient() as unknown as DbClient;
-const contribution=z.object({sourceOrderId:uuid,originLineItemId:uuid,selectedQuantity:z.number().finite().positive(),sourceVersion:z.number().int().nonnegative(),sourceUpdatedAt:z.string().datetime()});
+const contribution=z.object({sourceOrderId:uuid,originLineItemId:uuid,selectedQuantity:z.number().finite().positive(),sourceVersion:z.number().int().nonnegative(),sourceUpdatedAt:z.string().datetime({offset:true})});
 const saveSchema=z.object({projectId:uuid,scope:z.enum(["full","partial"]),sources:z.array(contribution).min(1).max(500),adjustmentCents:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),marginMode:z.enum(["amount","percentage"]),marginValue:z.number().finite().nonnegative()});
 const decisionSchema=z.object({projectId:uuid,decision:z.enum(["accepted","rejected"]),notes:z.string().max(4000).optional()});
 export type CommercialSourceLine={originLineItemId:string;availableQuantity:number;sourceAmountCents:number};

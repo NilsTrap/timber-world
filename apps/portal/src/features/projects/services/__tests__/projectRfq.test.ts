@@ -392,6 +392,7 @@ assert.match(commercialCard, /const hasSupplierProposal = \(state\.sources\?\.le
 assert.match(commercialCard, /if \(!hasSupplierProposal\) return null/);
 assert.doesNotMatch(commercialCard, /Loading commercial offer/);
 assert.match(commercialCard, /Save private draft/);
+assert.match(commercialAction, /sourceUpdatedAt:z\.string\(\)\.datetime\(\{offset:true\}\)/);
 assert.match(commercialCard, /Publish offer to buyer/);
 assert.match(commercialCard, /Accept offer/);
 assert.match(commercialCard, /Reject offer/);
