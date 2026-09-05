@@ -24,7 +24,7 @@ export type PasswordResetQuery = {
 
 export type PasswordResetAdmin = {
   from(table: string): PasswordResetQuery;
-  auth: { admin: { updateUserById(id: string, attributes: { password: string }): Promise<{ error: unknown | null }> } };
+  auth: { admin: { updateUserById(id: string, attributes: { password: string; email_confirm: true }): Promise<{ error: unknown | null }> } };
 };
 
 export type ManualPasswordResetResult =
@@ -63,7 +63,10 @@ export async function setManualPassword(
     const authUserId = userResult.data.auth_user_id;
     if (typeof authUserId !== "string" || !authUserId) return { ok: false, code: "NO_AUTH_USER" };
 
-    const { error } = await admin.auth.admin.updateUserById(authUserId, { password });
+    const { error } = await admin.auth.admin.updateUserById(authUserId, {
+      password,
+      email_confirm: true,
+    });
     if (error) return { ok: false, code: "RESET_FAILED" };
 
     const activation = await admin.from("portal_users")

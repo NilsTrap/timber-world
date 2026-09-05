@@ -32,7 +32,7 @@ class Query implements PasswordResetQuery {
 }
 
 function fixture(options?: { membership?: boolean; activeMembership?: boolean; otherMembership?: boolean; authId?: string | null; providerFails?: boolean; platformAdmin?: boolean; status?: string; queryFails?: boolean; resolvedQueryError?: boolean; providerThrows?: boolean }) {
-  const passwordCalls: Array<{ id: string; password: string }> = [];
+  const passwordCalls: Array<{ id: string; password: string; emailConfirm: true }> = [];
   const portalUsers: Row[] = [{ id: "user-a", auth_user_id: options?.authId === undefined ? "auth-a" : options.authId, is_active: true, status: options?.status ?? "active", is_platform_admin: options?.platformAdmin ?? false }];
   const memberships: Row[] = options?.membership === false ? [] : [{
     id: "membership-a", user_id: "user-a", organization_id: "org-a", is_active: options?.activeMembership !== false,
@@ -43,8 +43,8 @@ function fixture(options?: { membership?: boolean; activeMembership?: boolean; o
       if (options?.queryFails) throw new Error("database detail");
       return new Query(table === "portal_users" ? portalUsers : memberships, options?.resolvedQueryError ? new Error("resolved database detail") : null);
     },
-    auth: { admin: { async updateUserById(id, { password }) {
-      passwordCalls.push({ id, password });
+    auth: { admin: { async updateUserById(id, { password, email_confirm }) {
+      passwordCalls.push({ id, password, emailConfirm: email_confirm });
       if (options?.providerThrows) throw new Error("provider thrown detail");
       return { error: options?.providerFails ? new Error("provider detail") : null };
     } } },
@@ -105,7 +105,7 @@ await test("updates the exact auth identity for an active exact membership", asy
   const state = fixture();
   const result = await setManualPassword(state.admin, "user-a", "org-a", "Secret123", true);
   assert.deepEqual(result, { ok: true });
-  assert.deepEqual(state.passwordCalls, [{ id: "auth-a", password: "Secret123" }]);
+  assert.deepEqual(state.passwordCalls, [{ id: "auth-a", password: "Secret123", emailConfirm: true }]);
   assert.equal(typeof state.portalUsers[0]?.updated_at, "string");
   assert.equal(JSON.stringify(result).includes("Secret123"), false);
   assert.equal(JSON.stringify(result).includes("auth-a"), false);
@@ -115,7 +115,7 @@ await test("activates an invited user when an administrator assigns a password",
   const state = fixture({ status: "invited" });
   const result = await setManualPassword(state.admin, "user-a", "org-a", "Secret123", true);
   assert.deepEqual(result, { ok: true });
-  assert.deepEqual(state.passwordCalls, [{ id: "auth-a", password: "Secret123" }]);
+  assert.deepEqual(state.passwordCalls, [{ id: "auth-a", password: "Secret123", emailConfirm: true }]);
   assert.equal(state.portalUsers[0]?.status, "active");
   assert.equal(typeof state.portalUsers[0]?.updated_at, "string");
   assert.equal(JSON.stringify(result).includes("Secret123"), false);
