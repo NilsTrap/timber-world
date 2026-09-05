@@ -2,7 +2,7 @@
 title: 'Organisation user immediate password login'
 type: 'bugfix'
 created: '2026-09-05'
-status: 'in-review'
+status: 'done'
 baseline_commit: '74ae34f3ed1a2404fd73e0359cad98bd7a33525a'
 review_loop_iteration: 0
 context:
@@ -49,7 +49,7 @@ context:
 - [x] `apps/portal/src/features/organisations/services/manualPasswordReset.ts` -- confirm the auth email in the same privileged provider mutation that assigns the password.
 - [x] `apps/portal/src/features/organisations/services/__tests__/manualPasswordReset.test.ts` -- prove confirmation is requested on valid paths and never on denied paths.
 - [x] Reported DDC user in staging-backed Supabase -- confirm only the existing auth email without changing its password, then validate membership and Buyer group remain intact.
-- [ ] Staging deployment -- commit the focused fix, deploy the saved staging project, and verify deployment health plus login UI availability.
+- [x] Staging deployment -- commit the focused fix, deploy the saved staging project, and verify deployment health plus login UI availability.
 
 **Acceptance Criteria:**
 - Given a new person belongs to a single-role customer, trader, or supplier organisation, when an authorised administrator sets a password, then the auth identity is confirmed and the person can immediately authenticate with the organisation-derived access group.
@@ -63,7 +63,7 @@ Supabase password sign-in rejects an unconfirmed email before application role l
 
 ## Verification
 
-Completed locally 2026-09-05: 11 manual-password tests, 13 onboarding tests, portal TypeScript, and `git diff --check` passed. The reported DDC identity is email-confirmed without replacing its password and retains one active primary membership plus the Buyer system group.
+Completed 2026-09-05: 11 manual-password tests, 13 onboarding tests, portal TypeScript, and `git diff --check` passed. The reported DDC identity is email-confirmed without replacing its password and retains one active primary membership plus the Buyer system group. Vercel deployment `dpl_k7wjP93fSYERNBKVQV313NTxtZS3` is Ready and aliased to `https://staging.nilitto.com`; browser smoke testing confirmed the deployed Login page exposes email, password and login controls.
 
 **Commands:**
 - `pnpm --filter @timber/portal exec tsx apps/portal/src/features/organisations/services/__tests__/manualPasswordReset.test.ts` -- expected: confirmation and all existing security cases pass.
@@ -71,3 +71,21 @@ Completed locally 2026-09-05: 11 manual-password tests, 13 onboarding tests, por
 - `git diff --check` -- expected: clean.
 - Staging account state query -- expected: DDC portal identity active, one active primary membership, Buyer system group, confirmed auth email.
 - Staging deployment inspection and browser smoke test -- expected: Ready deployment and reachable login page.
+
+## Suggested Review Order
+
+**Authentication lifecycle**
+
+- Confirm password and auth email together before activating the portal identity.
+  [`manualPasswordReset.ts:66`](../../apps/portal/src/features/organisations/services/manualPasswordReset.ts#L66)
+
+- Preserve exact membership and target-account authorization before provider mutation.
+  [`manualPasswordReset.ts:44`](../../apps/portal/src/features/organisations/services/manualPasswordReset.ts#L44)
+
+**Regression coverage**
+
+- Assert every successful admin password assignment requests email confirmation.
+  [`manualPasswordReset.test.ts:104`](../../apps/portal/src/features/organisations/services/__tests__/manualPasswordReset.test.ts#L104)
+
+- Keep provider-call shape explicit in the reusable test fixture.
+  [`manualPasswordReset.test.ts:34`](../../apps/portal/src/features/organisations/services/__tests__/manualPasswordReset.test.ts#L34)
