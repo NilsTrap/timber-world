@@ -18,8 +18,10 @@ const draftRoot = {
 };
 
 assert.equal(canEditProjectSpecification({ ...draftRoot, isPlatformAdmin: true, actorOrganisationId: null, dealTermsEditable: false }), true, "platform admins may edit a draft buy/sell root");
+assert.equal(canEditProjectSpecification({ ...draftRoot, lifecycleStage: "specification", isPlatformAdmin: true, actorOrganisationId: null, dealTermsEditable: false }), true, "platform admins may edit a root in the specification stage");
 assert.equal(canEditProjectSpecification({ ...draftRoot, dealKind: "sale_only", isPlatformAdmin: true, actorOrganisationId: null, dealTermsEditable: false }), true, "legacy sale-only roots remain editable");
 assert.equal(canEditProjectSpecification({ ...draftRoot, isPlatformAdmin: false, actorOrganisationId: "seller", dealTermsEditable: true }), true, "the root seller may edit with deal-term permission");
+assert.equal(canEditProjectSpecification({ ...draftRoot, lifecycleStage: "specification", isPlatformAdmin: false, actorOrganisationId: "seller", dealTermsEditable: true }), true, "the root trader may edit in the specification stage");
 assert.equal(canEditProjectSpecification({ ...draftRoot, isPlatformAdmin: false, actorOrganisationId: "buyer", dealTermsEditable: true }), false, "the root buyer cannot edit");
 assert.equal(canEditProjectSpecification({ ...draftRoot, lifecycleStage: "confirmed", isPlatformAdmin: true, actorOrganisationId: null, dealTermsEditable: true }), false, "a non-draft root is read-only");
 assert.equal(canEditProjectSpecification({ ...draftRoot, dealKind: "purchase_only", isPlatformAdmin: true, actorOrganisationId: null, dealTermsEditable: true }), false, "purchase-only downstream legs are read-only even for admins");

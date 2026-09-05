@@ -18,6 +18,10 @@ export function isRootProjectSpecificationLeg(input: {
   return input.dealKind === "buy_sell" || input.dealKind === "sale_only";
 }
 
+export function isProjectSpecificationEditableStage(lifecycleStage: string): boolean {
+  return lifecycleStage === "draft" || lifecycleStage === "specification";
+}
+
 export function canEditProjectSpecification(input: {
   isPlatformAdmin: boolean;
   actorOrganisationId: string | null;
@@ -26,7 +30,7 @@ export function canEditProjectSpecification(input: {
   lifecycleStage: string;
   dealKind: string;
 }): boolean {
-  if (input.lifecycleStage !== "draft") return false;
+  if (!isProjectSpecificationEditableStage(input.lifecycleStage)) return false;
   if (!isRootProjectSpecificationLeg(input)) return false;
   if (input.isPlatformAdmin) return true;
   return Boolean(
@@ -40,7 +44,7 @@ export function projectSpecificationEditDenialCode(
   input: Parameters<typeof canEditProjectSpecification>[0],
 ): "FORBIDDEN" | "NOT_DRAFT" | null {
   if (canEditProjectSpecification(input)) return null;
-  return isRootProjectSpecificationLeg(input) && input.lifecycleStage !== "draft"
+  return isRootProjectSpecificationLeg(input) && !isProjectSpecificationEditableStage(input.lifecycleStage)
     ? "NOT_DRAFT"
     : "FORBIDDEN";
 }

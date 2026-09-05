@@ -76,7 +76,7 @@ async function editableProject(projectId: string): Promise<ActionResult<Editable
     }) ?? "FORBIDDEN";
     return {
       success: false,
-      error: code === "NOT_DRAFT" ? "Specification can only be changed while the project is a draft" : "Not allowed",
+      error: code === "NOT_DRAFT" ? "Specification can only be changed during the Draft or Specification stage" : "Not allowed",
       code,
     };
   }
@@ -102,14 +102,14 @@ function mapCatalogLineRpcError(message: string): ActionResult<never> {
   if (message.includes("UNSUPPORTED_PROCESS_FIELD_TYPE")) return { success: false, error: "This category contains an unsupported process field type", code: "VALIDATION_ERROR" };
   if (message.includes("TOO_MANY_PROCESS_FIELDS") || message.includes("PROCESS_VALUE_TOO_LONG")) return { success: false, error: "Catalogue process requirements exceed the supported limits", code: "VALIDATION_ERROR" };
   if (message.includes("CATALOG_VARIANT_INVALID") || message.includes("CATALOG_PRODUCT_INVALID") || message.includes("CATALOG_CATEGORY_INVALID")) return { success: false, error: "Catalogue selection is missing or inactive", code: "VALIDATION_ERROR" };
-  if (message.includes("PROJECT_NOT_DRAFT")) return { success: false, error: "Specification can only be changed while the project is a draft", code: "NOT_DRAFT" };
+  if (message.includes("PROJECT_NOT_DRAFT")) return { success: false, error: "Specification can only be changed during the Draft or Specification stage", code: "NOT_DRAFT" };
   if (message.includes("ROOT_PROJECT_REQUIRED")) return { success: false, error: "Specification lines can only be added to a root project", code: "FORBIDDEN" };
   if (message.includes("FORBIDDEN")) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
   return { success: false, error: "Could not add specification line", code: "INSERT_FAILED" };
 }
 
 function mapStructuredValueRpcError(message: string): ActionResult<never> {
-  if (message.includes("PROJECT_NOT_DRAFT")) return { success: false, error: "Specification can only be changed while the project is a draft", code: "NOT_DRAFT" };
+  if (message.includes("PROJECT_NOT_DRAFT")) return { success: false, error: "Specification can only be changed during the Draft or Specification stage", code: "NOT_DRAFT" };
   if (message.includes("ROOT_PROJECT_REQUIRED") || message.includes("LINE_NOT_EDITABLE")) return { success: false, error: "Only catalogue fields on the original specification can be changed", code: "FORBIDDEN" };
   if (message.includes("STALE_SPECIFICATION")) return { success: false, error: "The specification changed; refresh and try again", code: "CONFLICT" };
   if (message.includes("BASIC_SNAPSHOT_TOO_LARGE")) return { success: false, error: "Catalogue field values exceed the supported limits", code: "VALIDATION_ERROR" };
