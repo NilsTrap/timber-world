@@ -16,6 +16,7 @@ import {
   KeyRound,
   UserMinus,
   Star,
+  Trash2,
 } from "lucide-react";
 import {
   Button,
@@ -43,6 +44,7 @@ import {
   removeUserFromOrganisation,
   setMembershipActive,
   setPrimaryMembership,
+  deletePersonPermanently,
 } from "../actions";
 import dynamic from "next/dynamic";
 import type { OrganisationUser } from "../types";
@@ -140,6 +142,8 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
   const [isToggling, setIsToggling] = useState(false);
 
   // Delete confirmation state
+  const [deleteUser, setDeleteUser] = useState<OrganisationUser | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Remove-from-organisation confirmation state (K3)
   const [removeUser, setRemoveUser] = useState<OrganisationUser | null>(null);
@@ -236,6 +240,25 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
 
   const handleEdit = (user: OrganisationUser) => {
     setEditingUser(user);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!deleteUser) return;
+    setIsDeleting(true);
+    try {
+      const result = await deletePersonPermanently(deleteUser.id);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`${result.data.email} was permanently deleted`);
+      setDeleteUser(null);
+      await loadUsers();
+    } catch {
+      toast.error("Could not permanently delete person");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Handle send credentials (first time - no auth_user_id yet)
@@ -491,6 +514,16 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
                         >
                           {user.membershipActive === false ? <Power className="h-4 w-4" /> : <UserMinus className="h-4 w-4" />}
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setDeleteUser(user)}
+                          aria-label={`Permanently delete ${user.name}`}
+                          title="Delete permanently"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -600,6 +633,34 @@ export function OrganisationUsersTable({ organisationId }: OrganisationUsersTabl
               ) : (
                 "Remove"
               )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!deleteUser}
+        onOpenChange={(open) => {
+          if (!open && !isDeleting) setDeleteUser(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete <strong>{deleteUser?.name}</strong> ({deleteUser?.email})? Their login,
+              company memberships, access groups, and API keys will be removed. This cannot be undone, but the same
+              email can be invited again. Existing commercial records will remain.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeleteUser}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete permanently"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

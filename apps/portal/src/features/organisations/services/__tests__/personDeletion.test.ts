@@ -8,6 +8,7 @@ strictEqual(mayPermanentlyDeletePerson(null, "person-2"), false);
 
 const action = readFileSync("src/features/organisations/actions/deletePerson.ts", "utf8");
 const table = readFileSync("src/features/organisations/components/PeopleTable.tsx", "utf8");
+const organisationUsersTable = readFileSync("src/features/organisations/components/OrganisationUsersTable.tsx", "utf8");
 const migration = readFileSync("../../supabase/migrations/20260830100000_permanent_portal_user_deletion.sql", "utf8");
 strictEqual(action.includes("requirePlatformAdmin()"), true);
 strictEqual(action.includes("admin.auth.admin.deleteUser"), true);
@@ -17,6 +18,10 @@ strictEqual(table.includes("Permanently delete user?"), true);
 strictEqual(table.includes("This cannot be undone"), true);
 strictEqual(table.includes("!p.isCurrentUser"), true);
 strictEqual(table.includes("finally"), true);
+strictEqual(organisationUsersTable.includes("deletePersonPermanently(deleteUser.id)"), true);
+strictEqual(organisationUsersTable.includes("Permanently delete user?"), true);
+strictEqual(organisationUsersTable.includes("This cannot be undone"), true);
+strictEqual(organisationUsersTable.includes("await loadUsers()"), true);
 strictEqual(migration.includes("ON DELETE SET NULL"), true);
 strictEqual(migration.includes("array_length(constraint_definition.conkey, 1) = 1"), true);
 
