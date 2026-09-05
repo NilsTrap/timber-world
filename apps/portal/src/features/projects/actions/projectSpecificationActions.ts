@@ -57,11 +57,21 @@ async function editableProject(projectId: string): Promise<ActionResult<Editable
   if (!a.ok) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
   const deal = await getOrderDeal(a.db, a.actor, projectId);
   if (!deal.success) return { success: false, error: "Project not found", code: "NOT_FOUND" };
+  let sellerIsActiveTrader = false;
+  if (!a.isPlatformAdmin) {
+    const { data: seller, error: sellerError } = await a.db
+      .from("organisations")
+      .select("is_active,is_trader")
+      .eq("id", deal.data.seller.id)
+      .maybeSingle();
+    if (sellerError) return { success: false, error: "Could not verify trader access", code: "FORBIDDEN" };
+    sellerIsActiveTrader = seller?.is_active === true && seller?.is_trader === true;
+  }
   const allowed = canEditProjectSpecification({
     isPlatformAdmin: a.isPlatformAdmin,
     actorOrganisationId: a.orgId,
     sellerOrganisationId: deal.data.seller.id,
-    dealTermsEditable: a.access.domainEditable("deal_terms"),
+    sellerIsActiveTrader,
     lifecycleStage: deal.data.lifecycleStage,
     dealKind: deal.data.dealKind,
   });
@@ -70,7 +80,7 @@ async function editableProject(projectId: string): Promise<ActionResult<Editable
       isPlatformAdmin: a.isPlatformAdmin,
       actorOrganisationId: a.orgId,
       sellerOrganisationId: deal.data.seller.id,
-      dealTermsEditable: a.access.domainEditable("deal_terms"),
+      sellerIsActiveTrader,
       lifecycleStage: deal.data.lifecycleStage,
       dealKind: deal.data.dealKind,
     }) ?? "FORBIDDEN";

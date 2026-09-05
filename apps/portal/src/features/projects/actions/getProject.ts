@@ -162,6 +162,14 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
 
   const buyer = partyRef(raw.buyer, personasByOrgId);
   const seller = partyRef(raw.seller, personasByOrgId);
+  const sourceAdmin = createAdminClient();
+  const { data: sourceParties, error: sourcePartiesError } = raw.buyer.id && raw.seller.id
+    ? await sourceAdmin.from("organisations").select("id,is_active,is_customer,is_trader").in("id", [raw.buyer.id, raw.seller.id])
+    : { data: [], error: null };
+  if (sourcePartiesError) throw new Error("Could not verify project parties");
+  const partyRows=(sourceParties??[]) as Array<{id:string;is_active:boolean;is_customer:boolean;is_trader:boolean}>;
+  const eligibleBuyer=partyRows.some((row)=>row.id===raw.buyer.id&&row.is_active&&(row.is_customer||row.is_trader));
+  const eligibleTraderSeller=partyRows.some((row)=>row.id===raw.seller.id&&row.is_active&&row.is_trader);
   const isDraft = raw.lifecycleStage === "draft";
   const openRfqQuery = isDraft
     ? await a.db.from("project_rfqs").select("id").eq("order_id", projectId).eq("status", "open").limit(1).maybeSingle()
@@ -171,7 +179,7 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     isPlatformAdmin: a.isPlatformAdmin,
     actorOrganisationId: a.orgId,
     sellerOrganisationId: raw.seller.id,
-    dealTermsEditable: a.access.domainEditable("deal_terms"),
+    sellerIsActiveTrader: eligibleTraderSeller,
     lifecycleStage: raw.lifecycleStage,
     dealKind: raw.dealKind,
   });
@@ -209,14 +217,6 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     ? await loadProjectLegOptions(a.db, raw.spineId, projectId)
     : [];
   const hasDealCreate = a.isPlatformAdmin || a.profile.actions.has("deal:create");
-  const sourceAdmin = createAdminClient();
-  const { data: sourceParties, error: sourcePartiesError } = raw.buyer.id && raw.seller.id
-    ? await sourceAdmin.from("organisations").select("id,is_active,is_customer,is_trader").in("id", [raw.buyer.id, raw.seller.id])
-    : { data: [], error: null };
-  if (sourcePartiesError) throw new Error("Could not verify RFQ source parties");
-  const partyRows=(sourceParties??[]) as Array<{id:string;is_active:boolean;is_customer:boolean;is_trader:boolean}>;
-  const eligibleBuyer=partyRows.some((row)=>row.id===raw.buyer.id&&row.is_active&&(row.is_customer||row.is_trader));
-  const eligibleTraderSeller=partyRows.some((row)=>row.id===raw.seller.id&&row.is_active&&row.is_trader);
   const traderOwnsSource = Boolean(!a.isPlatformAdmin && isDraft && raw.spineId && !raw.upstreamDealId
     && raw.seller.id === a.orgId && viewer.personas.includes("trader") && hasDealCreate && eligibleBuyer && eligibleTraderSeller);
   const canCreateSpineLeg = a.isPlatformAdmin;

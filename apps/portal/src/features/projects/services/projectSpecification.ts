@@ -26,7 +26,7 @@ export function canEditProjectSpecification(input: {
   isPlatformAdmin: boolean;
   actorOrganisationId: string | null;
   sellerOrganisationId: string | null;
-  dealTermsEditable: boolean;
+  sellerIsActiveTrader: boolean;
   lifecycleStage: string;
   dealKind: string;
 }): boolean {
@@ -36,7 +36,7 @@ export function canEditProjectSpecification(input: {
   return Boolean(
     input.actorOrganisationId &&
     input.actorOrganisationId === input.sellerOrganisationId &&
-    input.dealTermsEditable,
+    input.sellerIsActiveTrader,
   );
 }
 
