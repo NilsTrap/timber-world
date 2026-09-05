@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/features/audit/logAudit";
 import type { OrganisationUser, ActionResult } from "../types";
 import { isValidUUID } from "../types";
-import { createPersonWithPrimaryMembership, getOrganisationRoleGroup, setMembershipGroups } from "../services/personOnboarding";
+import { createPersonWithPrimaryMembership, ensureOrganisationRoleModules, getOrganisationRoleGroup, setMembershipGroups } from "../services/personOnboarding";
 import { sendPasswordlessInvite } from "../services/passwordlessInvite";
 import { ADMIN_DENIED } from "./_platformAdmin";
 import { requirePersonOnboardingAccess } from "./_personOnboardingAccess";
@@ -34,6 +34,9 @@ export async function createOrganisationUser(
   if (!role.ok) {
     return { success: false, error: "Set one company role before inviting people", code: role.code };
   }
+
+  const modules = await ensureOrganisationRoleModules(admin, organisationId, role.group.key);
+  if (!modules.ok) return { success: false, error: "Company access could not be configured", code: modules.code };
 
   const created = await createPersonWithPrimaryMembership(admin, {
     email: parsed.data.email,

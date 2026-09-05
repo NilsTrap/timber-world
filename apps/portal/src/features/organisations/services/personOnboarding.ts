@@ -22,6 +22,24 @@ export interface OrganisationRoleGroup {
   name: string;
 }
 
+export function requiredRoleModuleCodes(role: OrganisationRoleGroup["key"]): string[] {
+  return role === "trader"
+    ? ["dashboard.view", "projects.view", "counterparties.clients", "counterparties.suppliers"]
+    : ["dashboard.view", "projects.view"];
+}
+
+export async function ensureOrganisationRoleModules(
+  db: PersonOnboardingDb,
+  organisationId: string,
+  role: OrganisationRoleGroup["key"],
+): Promise<{ ok: true } | { ok: false; code: "MODULE_ASSIGNMENT_FAILED" }> {
+  const { error } = await db.from("organization_modules").upsert(
+    requiredRoleModuleCodes(role).map((moduleCode) => ({ organization_id: organisationId, module_code: moduleCode, enabled: true })),
+    { onConflict: "organization_id,module_code" },
+  );
+  return error ? { ok: false, code: "MODULE_ASSIGNMENT_FAILED" } : { ok: true };
+}
+
 export interface OnboardingMembership {
   orgId: string;
   orgName: string;

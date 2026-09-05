@@ -7,20 +7,23 @@ type Row = Record<string, unknown>;
 class Query implements PasswordResetQuery {
   private filters: Array<[string, unknown]> = [];
   private exclusions: Array<[string, unknown]> = [];
+  private nullFilters: string[] = [];
   private rowLimit: number | null = null;
   private changes: Row | null = null;
-  constructor(private rows: Row[], private resolvedError: unknown = null) {}
+  constructor(private rows: Row[], private resolvedError: unknown = null, private updateError: unknown = null) {}
   select(_columns: string) { return this; }
   update(values: Row) { this.changes = values; return this; }
   eq(column: string, value: unknown) { this.filters.push([column, value]); return this; }
   neq(column: string, value: unknown) { this.exclusions.push([column, value]); return this; }
+  is(column: string, value: null) { if (value === null) this.nullFilters.push(column); return this; }
   limit(count: number) { this.rowLimit = count; return this; }
   private execute() {
     let rows = this.rows.filter((row) => this.filters.every(([key, value]) => row[key] === value)
-      && this.exclusions.every(([key, value]) => row[key] !== value));
+      && this.exclusions.every(([key, value]) => row[key] !== value)
+      && this.nullFilters.every((key) => row[key] === null));
     if (this.rowLimit !== null) rows = rows.slice(0, this.rowLimit);
     if (this.changes) rows.forEach((row) => Object.assign(row, this.changes));
-    return { data: rows[0] ?? null, error: this.resolvedError };
+    return { data: rows[0] ?? null, error: this.changes && this.updateError ? this.updateError : this.resolvedError };
   }
   async maybeSingle() { return this.execute(); }
   then<TResult1 = unknown, TResult2 = never>(
@@ -31,9 +34,11 @@ class Query implements PasswordResetQuery {
   }
 }
 
-function fixture(options?: { membership?: boolean; activeMembership?: boolean; otherMembership?: boolean; authId?: string | null; providerFails?: boolean; platformAdmin?: boolean; status?: string; queryFails?: boolean; resolvedQueryError?: boolean; providerThrows?: boolean }) {
+function fixture(options?: { membership?: boolean; activeMembership?: boolean; otherMembership?: boolean; authId?: string | null; providerFails?: boolean; createFails?: boolean; linkFails?: boolean; platformAdmin?: boolean; status?: string; queryFails?: boolean; resolvedQueryError?: boolean; providerThrows?: boolean }) {
   const passwordCalls: Array<{ id: string; password: string; emailConfirm: true }> = [];
-  const portalUsers: Row[] = [{ id: "user-a", auth_user_id: options?.authId === undefined ? "auth-a" : options.authId, is_active: true, status: options?.status ?? "active", is_platform_admin: options?.platformAdmin ?? false }];
+  const createCalls: string[] = [];
+  const deleteCalls: string[] = [];
+  const portalUsers: Row[] = [{ id: "user-a", email: "person@example.test", name: "Person", role: "user", auth_user_id: options?.authId === undefined ? "auth-a" : options.authId, is_active: true, status: options?.status ?? "active", is_platform_admin: options?.platformAdmin ?? false }];
   const memberships: Row[] = options?.membership === false ? [] : [{
     id: "membership-a", user_id: "user-a", organization_id: "org-a", is_active: options?.activeMembership !== false,
   }];
@@ -41,15 +46,26 @@ function fixture(options?: { membership?: boolean; activeMembership?: boolean; o
   const admin: PasswordResetAdmin = {
     from(table) {
       if (options?.queryFails) throw new Error("database detail");
-      return new Query(table === "portal_users" ? portalUsers : memberships, options?.resolvedQueryError ? new Error("resolved database detail") : null);
+      const error = options?.resolvedQueryError ? new Error("resolved database detail") : null;
+      const updateError = options?.linkFails && table === "portal_users" ? new Error("link detail") : null;
+      return new Query(table === "portal_users" ? portalUsers : memberships, error, updateError);
     },
-    auth: { admin: { async updateUserById(id, { password, email_confirm }) {
+    auth: { admin: {
+      async createUser({ email }: { email: string }) {
+        createCalls.push(email);
+        return options?.createFails
+          ? { data: { user: null }, error: new Error("provider detail") }
+          : { data: { user: { id: "auth-created" } }, error: null };
+      },
+      async deleteUser(id: string) { deleteCalls.push(id); return { error: null }; },
+      async updateUserById(id, { password, email_confirm }) {
       passwordCalls.push({ id, password, emailConfirm: email_confirm });
       if (options?.providerThrows) throw new Error("provider thrown detail");
       return { error: options?.providerFails ? new Error("provider detail") : null };
-    } } },
+      },
+    } },
   };
-  return { admin, passwordCalls, portalUsers };
+  return { admin, passwordCalls, createCalls, deleteCalls, portalUsers };
 }
 
 let passed = 0;
@@ -134,11 +150,20 @@ await test("denies missing, inactive, and wrong-company memberships before auth 
   }
 });
 
-await test("returns an actionable no-credentials result without hidden identity", async () => {
-  const state = fixture({ authId: null });
+await test("provisions and links credentials when a new user receives a manual password", async () => {
+  const state = fixture({ authId: null, status: "created" });
   const result = await setManualPassword(state.admin, "user-a", "org-a", "Secret123", false);
-  assert.deepEqual(result, { ok: false, code: "NO_AUTH_USER" });
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(state.createCalls, ["person@example.test"]);
+  assert.equal(state.portalUsers[0]?.auth_user_id, "auth-created");
+  assert.equal(state.portalUsers[0]?.status, "active");
   assert.equal(JSON.stringify(result).includes("Secret123"), false);
+});
+
+await test("rolls back a newly provisioned auth identity when portal linking fails", async () => {
+  const state = fixture({ authId: null, status: "created", linkFails: true });
+  assert.deepEqual(await setManualPassword(state.admin, "user-a", "org-a", "Secret123", true), { ok: false, code: "RESET_FAILED" });
+  assert.deepEqual(state.deleteCalls, ["auth-created"]);
 });
 
 await test("reports provider failure generically and does not update the portal record", async () => {
@@ -150,7 +175,7 @@ await test("reports provider failure generically and does not update the portal 
 });
 
 await test("requires an eligible status and blocks platform-admin targets from traders", async () => {
-  for (const state of [fixture({ status: "created" }), fixture({ platformAdmin: true })]) {
+  for (const state of [fixture({ status: "disabled" }), fixture({ platformAdmin: true })]) {
     const result = await setManualPassword(state.admin, "user-a", "org-a", "Secret123", false);
     assert.deepEqual(result, { ok: false, code: "DENIED" });
     assert.equal(state.passwordCalls.length, 0);

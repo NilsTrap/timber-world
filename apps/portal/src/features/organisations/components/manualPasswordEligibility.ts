@@ -5,6 +5,6 @@ export interface ManualPasswordEligibilityUser {
 }
 
 export function canManageManualPassword(user: ManualPasswordEligibilityUser, hasActiveMembership: boolean): boolean {
-  return user.isActive && hasActiveMembership && !!user.authUserId?.trim()
-    && (user.status === "active" || user.status === "invited");
+  return user.isActive && hasActiveMembership
+    && (user.status === "created" || user.status === "active" || user.status === "invited");
 }

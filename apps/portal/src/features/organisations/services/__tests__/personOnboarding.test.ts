@@ -24,10 +24,12 @@ class Query {
   private filters: Array<[string, unknown]> = [];
   private nullFilters: string[] = [];
   private updateValues: Record<string, unknown> | null = null;
+  private upsertValues: Array<Record<string, unknown>> | null = null;
 
   constructor(private readonly db: OnboardingMemoryDb, private readonly table: string) {}
   select(_columns?: string) { return this; }
   update(values: Record<string, unknown>) { this.updateValues = values; return this; }
+  upsert(values: Array<Record<string, unknown>>, _options?: { onConflict?: string }) { this.upsertValues = values; return this; }
   eq(column: string, value: unknown) { this.filters.push([column, value]); return this; }
   is(column: string, value: unknown) { if (value === null) this.nullFilters.push(column); return this; }
 
@@ -41,11 +43,20 @@ class Query {
     if (this.table === "organization_memberships") return this.db.memberships;
     if (this.table === "organisations") return [...this.db.organisations.values()];
     if (this.table === "access_groups") return [...this.db.accessGroups.values()];
+    if (this.table === "organization_modules") return this.db.organizationModules;
     throw new Error(`Unexpected table ${this.table}`);
   }
 
   private execute(): { data: Record<string, unknown>[]; error: null } {
     const matched = this.rows().filter((row) => this.matches(row));
+    if (this.upsertValues) {
+      for (const value of this.upsertValues) {
+        const existing = this.db.organizationModules.find((row) => row.organization_id === value.organization_id && row.module_code === value.module_code);
+        if (existing) Object.assign(existing, value);
+        else this.db.organizationModules.push({ ...value });
+      }
+      return { data: this.upsertValues, error: null };
+    }
     if (this.updateValues) Object.assign(matched[0] ?? {}, this.updateValues);
     return { data: matched, error: null };
   }
@@ -67,6 +78,7 @@ class OnboardingMemoryDb {
   users = new Map<string, User>();
   memberships: Membership[] = [];
   assignments = new Map<string, Set<string>>();
+  organizationModules: Array<Record<string, unknown>> = [];
   organisations = new Map([
     ["org-a", { id: "org-a", name: "Customer A", is_active: true, is_customer: true, is_trader: false, is_manufacturer: false, is_supplier: false, is_producer: false }],
     ["org-b", { id: "org-b", name: "Trader B", is_active: true, is_customer: false, is_trader: true, is_manufacturer: false, is_supplier: false, is_producer: false }],
@@ -236,13 +248,29 @@ async function main() {
     );
   });
 
+  const db = new OnboardingMemoryDb();
+
+  await test("repairs the module ceiling required by each organisation role", async () => {
+    assert.deepEqual(onboarding.requiredRoleModuleCodes("buyer"), ["dashboard.view", "projects.view"]);
+    assert.deepEqual(onboarding.requiredRoleModuleCodes("manufacturer"), ["dashboard.view", "projects.view"]);
+    assert.deepEqual(onboarding.requiredRoleModuleCodes("trader"), ["dashboard.view", "projects.view", "counterparties.clients", "counterparties.suppliers"]);
+    assert.deepEqual(await onboarding.ensureOrganisationRoleModules(db, "org-a", "buyer"), { ok: true });
+    assert.deepEqual(db.organizationModules, [
+      { organization_id: "org-a", module_code: "dashboard.view", enabled: true },
+      { organization_id: "org-a", module_code: "projects.view", enabled: true },
+    ]);
+    const failingDb = { from: () => ({ upsert: async () => ({ error: { message: "database detail" } }) }) };
+    assert.deepEqual(await onboarding.ensureOrganisationRoleModules(failingDb, "org-a", "buyer"), {
+      ok: false,
+      code: "MODULE_ASSIGNMENT_FAILED",
+    });
+  });
+
   await test("caps effective access at each organisation's module ceiling", () => {
     const grants = ["orders.view", "inventory.view", "counterparties.clients"];
     assert.deepEqual(onboarding.effectiveModuleIntersection(["orders.view"], grants), ["orders.view"]);
     assert.deepEqual(onboarding.effectiveModuleIntersection(["counterparties.clients"], grants), ["counterparties.clients"]);
   });
-
-  const db = new OnboardingMemoryDb();
 
   await test("inherits one system role from the target company", async () => {
     assert.deepEqual(await onboarding.getOrganisationRoleGroup(db, "org-a"), {
