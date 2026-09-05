@@ -13,6 +13,7 @@ import {
   projectSpecificationEditDenialCode,
 } from "../services/projectSpecification";
 import { specificationLineUpdate } from "../services/specificationLineEdit";
+import { createAdminClient as createTypedAdminClient } from "@/lib/supabase/admin";
 import {
   normalizeSpecificationVersion,
   structuredSpecificationPayload,
@@ -55,7 +56,14 @@ type EditableContext = {
 async function editableProject(projectId: string): Promise<ActionResult<EditableContext>> {
   const a = await resolveProjectsActor();
   if (!a.ok) return { success: false, error: "Not allowed", code: "FORBIDDEN" };
-  const deal = await getOrderDeal(a.db, a.actor, projectId);
+  const admin = createTypedAdminClient() as unknown as DbClient;
+  const { data: party, error: partyError } = !a.isPlatformAdmin && a.orgId
+    ? await admin.from("orders").select("seller_organisation_id").eq("id", projectId).is("deleted_at", null).maybeSingle()
+    : { data: null, error: null };
+  if (partyError || (!a.isPlatformAdmin && party?.seller_organisation_id !== a.orgId)) {
+    return { success: false, error: "Project not found", code: "NOT_FOUND" };
+  }
+  const deal = await getOrderDeal(a.isPlatformAdmin ? a.db : admin, a.actor, projectId);
   if (!deal.success) return { success: false, error: "Project not found", code: "NOT_FOUND" };
   let sellerIsActiveTrader = false;
   if (!a.isPlatformAdmin) {

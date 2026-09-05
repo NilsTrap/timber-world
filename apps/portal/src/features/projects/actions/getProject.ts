@@ -47,17 +47,23 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   if (!a.ok) return a;
   if (!isValidUUID(projectId)) return { ok: false, deny: "not_found" };
 
-  const res = await getOrderDeal(a.db, a.actor, projectId);
-  const actorIsDirectParty = res.success && isPartyOrg(res.data, a.orgId);
+  const projectAdmin = createAdminClient();
+  const { data: directPartyRow, error: directPartyError } = !a.isPlatformAdmin && a.orgId
+    ? await projectAdmin.from("orders").select("buyer_organisation_id,seller_organisation_id").eq("id", projectId).is("deleted_at", null).maybeSingle()
+    : { data: null, error: null };
+  if (directPartyError) return { ok: false, deny: "not_found" };
+  const actorIsDirectParty = Boolean(directPartyRow && (
+    directPartyRow.buyer_organisation_id === a.orgId || directPartyRow.seller_organisation_id === a.orgId
+  ));
+  const res = await getOrderDeal(!a.isPlatformAdmin && actorIsDirectParty ? projectAdmin : a.db, a.actor, projectId);
   if (!a.isPlatformAdmin && !actorIsDirectParty) {
-    const candidateAdmin = createAdminClient();
-    const candidate = await loadRfqCandidateProject(a.db, candidateAdmin, projectId, a.orgId);
+    const candidate = await loadRfqCandidateProject(a.db, projectAdmin, projectId, a.orgId);
     if (candidate) {
       const [files, viewer, officialImages] = await Promise.all([
         listProjectFiles(a.db, projectId, false, candidate.sourceOrderId),
         resolveProjectsViewer(a),
         candidate.spineId
-          ? loadSpineProjectImages(candidateAdmin, candidate.spineId)
+          ? loadSpineProjectImages(projectAdmin, candidate.spineId)
           : Promise.resolve([]),
       ]);
       const imageCapabilities = await projectOfficialImageCapabilities(a.db, {
