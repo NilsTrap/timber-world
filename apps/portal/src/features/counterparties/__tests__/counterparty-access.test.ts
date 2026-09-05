@@ -6,6 +6,7 @@ import {
   isOrganisationSelfInBook,
   isValidCounterpartyId,
 } from "../policy";
+import { readFileSync } from "node:fs";
 
 let passed = 0;
 let failed = 0;
@@ -41,6 +42,12 @@ ok("admin may manage", canAccessCounterpartyRecord({ mode: "admin", callerOrgId:
 ok("malformed direct IDs are rejected", !isValidCounterpartyId("not-an-id") && isValidCounterpartyId(ORG));
 ok("book predicates cannot be client-swapped", isOrganisationInBook({ is_customer: true }, "clients") && !isOrganisationInBook({ is_customer: true }, "suppliers") && isOrganisationInBook({ is_supplier: true }, "suppliers"));
 ok("manufacturer-only is self context, not a foreign supplier record", !isOrganisationInBook({ is_manufacturer: true }, "suppliers") && isOrganisationSelfInBook({ is_manufacturer: true }, "suppliers"));
+
+const profileSource = readFileSync("src/features/counterparties/components/CounterpartyProfile.tsx", "utf8");
+const usersSource = readFileSync("src/features/counterparties/components/CrmOrgUsersSection.tsx", "utf8");
+ok("all admin counterparty books select full user management by access mode", profileSource.includes('fullManagement={profile.accessMode === "admin"}'));
+ok("full management reuses the canonical organisation users table", usersSource.includes("? <OrganisationUsersTable organisationId={organisationId} />"));
+ok("full management is not selected from customer supplier or trader role flags", !profileSource.includes("fullManagement={profile.is"));
 
 console.log(`counterparty-access.test.ts: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

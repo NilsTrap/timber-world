@@ -15,6 +15,7 @@ import {
 } from "@timber/ui";
 import { getOrganisationUsers } from "@/features/organisations/actions";
 import type { OrganisationUser } from "@/features/organisations/types";
+import { OrganisationUsersTable } from "@/features/organisations/components/OrganisationUsersTable";
 
 // AddUserDialog (K3 one-pass flow, ~340 LOC) only mounts once the user clicks
 // "Add person" — keep it out of the CRM card's initial bundle.
@@ -45,7 +46,7 @@ function statusBadge(u: OrganisationUser): { label: string; variant: "success" |
  * server-side by the Q2 wall — this section adds no new capability, it is just
  * another entry point.
  */
-export function CrmOrgUsersSection({
+function ScopedCrmOrgUsersSection({
   organisationId,
   onChanged,
 }: {
@@ -152,4 +153,19 @@ export function CrmOrgUsersSection({
       />
     </div>
   );
+}
+
+export function CrmOrgUsersSection({
+  organisationId,
+  fullManagement = false,
+  onChanged,
+}: {
+  organisationId: string;
+  /** Platform administrators use the canonical organisation user-management UI. */
+  fullManagement?: boolean;
+  onChanged?: () => void;
+}) {
+  return fullManagement
+    ? <OrganisationUsersTable organisationId={organisationId} />
+    : <ScopedCrmOrgUsersSection organisationId={organisationId} onChanged={onChanged} />;
 }
