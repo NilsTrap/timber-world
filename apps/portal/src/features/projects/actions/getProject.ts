@@ -47,7 +47,9 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
   if (!a.ok) return a;
   if (!isValidUUID(projectId)) return { ok: false, deny: "not_found" };
 
-  if (!a.isPlatformAdmin) {
+  const res = await getOrderDeal(a.db, a.actor, projectId);
+  const actorIsDirectParty = res.success && isPartyOrg(res.data, a.orgId);
+  if (!a.isPlatformAdmin && !actorIsDirectParty) {
     const candidateAdmin = createAdminClient();
     const candidate = await loadRfqCandidateProject(a.db, candidateAdmin, projectId, a.orgId);
     if (candidate) {
@@ -98,7 +100,6 @@ export async function getProject(projectId: string): Promise<GetProjectResult> {
     }
   }
 
-  const res = await getOrderDeal(a.db, a.actor, projectId);
   if (!res.success) return { ok: false, deny: "not_found" };
 
   const raw = res.data;
